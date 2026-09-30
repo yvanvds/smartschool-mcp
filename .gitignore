@@ -1,2 +1,13 @@
 # Local Smartschool credentials for development — never commit
 credentials.yml
+
+# Dart tooling
+.dart_tool/
+build/
+
+# Compiled executables (`dart compile exe` writes bin/smartschool_mcp.exe)
+*.exe
+
+# Claude Desktop extension packaging
+*.mcpb
+bundle/

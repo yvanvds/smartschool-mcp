@@ -1,0 +1,6 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    # stdout is the MCP protocol channel; use log() (stderr) instead.
+    - avoid_print
