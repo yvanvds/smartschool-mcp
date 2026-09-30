@@ -7,6 +7,8 @@ import 'package:smartschool_mcp/src/options.dart';
 import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
@@ -33,7 +35,11 @@ Future<void> main(List<String> args) async {
       final session = SmartschoolSession(source);
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
-        tools: [statusTool(session)],
+        tools: [
+          statusTool(session),
+          listMessagesTool(session),
+          readMessageTool(session),
+        ],
       );
       log('version $packageVersion serving MCP on stdio');
       log('Smartschool settings: ${source.logDescription}');

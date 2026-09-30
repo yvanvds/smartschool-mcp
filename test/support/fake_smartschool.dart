@@ -7,6 +7,10 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
 
+import 'fake_messages.dart';
+
+export 'fake_messages.dart';
+
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
 
@@ -61,6 +65,9 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// Every request, as `METHOD path`.
   final List<String> requests = [];
+
+  /// The Messages module, served to logged-in requests.
+  final FakeMailbox mailbox = FakeMailbox();
 
   /// Simulates the session expiring on the server.
   void expireSession() {
@@ -130,7 +137,7 @@ class FakeSmartschool implements HttpClientAdapter {
       if (!loggedIn || path == '/always-401') {
         return ResponseBody.fromString('', 401);
       }
-      return _html('<ok/>');
+      return mailbox.respond(options) ?? _html('<ok/>');
     }
 
     // A GET anywhere else needs a session; without one the server redirects
@@ -147,7 +154,7 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == SmartschoolSession.sessionCheckPath) {
       return _json('[{"platformId":7}]');
     }
-    return _html(_homePage);
+    return mailbox.respond(options) ?? _html(_homePage);
   }
 
   @override

@@ -30,11 +30,23 @@ void main() {
       isA<Map<String, Object?>>(),
     );
 
-    final tools = await server.request('tools/list');
-    expect(
-      [for (final tool in tools['tools'] as List) (tool as Map)['name']],
-      ['smartschool_status'],
-    );
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    expect(tools.keys, ['smartschool_status', 'list_messages', 'read_message']);
+    final listSchema = tools['list_messages']!['inputSchema'] as Map;
+    expect((listSchema['properties'] as Map)['box'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'default': 'inbox',
+      'enum': ['inbox', 'sent', 'archive'],
+    });
+    final readSchema = tools['read_message']!['inputSchema'] as Map;
+    expect(readSchema['required'], ['message_id']);
+    for (final name in ['list_messages', 'read_message']) {
+      expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
+    }
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -69,6 +81,45 @@ void main() {
       await server.stderr,
       contains('Smartschool settings: extension settings'),
     );
+  });
+
+  test('the message tools without settings: an error result that names the '
+      'missing settings; invalid arguments: an error that says what to '
+      'fix', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    final (listError, listText) = await server.callTool(
+      'list_messages',
+      arguments: {'box': 'archive', 'unread_only': true},
+    );
+    final (readError, readText) = await server.callTool(
+      'read_message',
+      arguments: {'message_id': 123},
+    );
+    final (dateError, dateText) = await server.callTool(
+      'list_messages',
+      arguments: {'since': 'gisteren'},
+    );
+
+    for (final (isError, text) in [
+      (listError, listText),
+      (readError, readText),
+    ]) {
+      expect(isError, isTrue);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+    expect(dateError, isTrue);
+    expect(dateText, contains('"gisteren" is not'));
+
+    await server.stop();
   });
 
   test('smartschool_status with --credentials naming a missing file says '

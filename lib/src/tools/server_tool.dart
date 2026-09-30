@@ -20,3 +20,17 @@ class ServerTool {
   /// Runs the tool for a `tools/call` request.
   final ToolHandler handler;
 }
+
+/// A tool call that cannot be carried out as asked: an invalid argument, or
+/// something the arguments name that does not exist.
+///
+/// A handler throws it with a [message] for Claude that says what to change;
+/// the server turns it into an error result with that message.
+final class ToolError implements Exception {
+  const ToolError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}

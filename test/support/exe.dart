@@ -93,15 +93,16 @@ class ServerProcess {
     return message['result'] as Map<String, Object?>;
   }
 
-  /// Calls the tool [name] without arguments; returns `isError` and the text
+  /// Calls the tool [name] with [arguments]; returns `isError` and the text
   /// of its single content item.
   Future<(bool?, String)> callTool(
     String name, {
+    Map<String, Object?> arguments = const {},
     Duration timeout = const Duration(seconds: 30),
   }) async {
     final result = await request('tools/call', {
       'name': name,
-      'arguments': <String, Object?>{},
+      'arguments': arguments,
     }, timeout);
     final content = result['content'] as List;
     expect(content, hasLength(1));

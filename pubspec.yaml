@@ -23,6 +23,9 @@ dependencies:
     git:
       url: https://github.com/yvanvds/dartschool.git
       ref: bfd6258ea8679cd8b7bf1d442fa0a54ae2fe132b
+  # HTML parser for turning message bodies into plain text. flutter_smartschool
+  # already depends on it.
+  html: ^0.15.7
 
 dev_dependencies:
   async: ^2.13.0

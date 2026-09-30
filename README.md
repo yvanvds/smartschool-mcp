@@ -49,7 +49,10 @@ unless you opt in:
 SMARTSCHOOL_LIVE_CREDENTIALS=credentials.yml dart test test/live_test.dart
 ```
 
-Every run logs in with a fresh cookie cache, so do not run it in a loop.
+Every run logs in with a fresh cookie cache, so do not run it in a loop. Its
+message test only reads (it lists the inbox and archive and reads a few
+messages that are already read) and uses your own cookie cache; run just that
+one with `--name list_messages`.
 
 ### Build
 
@@ -94,6 +97,22 @@ server's stderr ends up in Claude Desktop's MCP log
 Then ask Claude "Werkt mijn Smartschool-verbinding?": the
 `smartschool_status` tool reports whether the settings are complete, whether
 the login works and who is logged in, or what to fix.
+
+### Tools
+
+- `smartschool_status`: whether the connection works, or what to fix.
+- `list_messages`: the headers of the inbox, sent box or archive, newest
+  first, filtered by words in subject or sender, unread, and date range.
+  Smartschool only returns the newest 50 messages of a box
+  (yvanvds/dartschool#15).
+- `read_message`: one message with its recipients, attachment names and the
+  body as plain text. It does not mark the message as read.
+
+Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
+(inbox / sent / archive, their headers and one message) and `withMessages`
+in `message_box.dart`, the HTML-to-text converter `htmlToText` in
+`html_to_text.dart`, the filters in `message_filter.dart` and the output
+lines in `message_format.dart`.
 
 ### Login
 

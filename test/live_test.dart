@@ -11,6 +11,11 @@
 ///
 /// The server's stderr is copied to this process's stderr as evidence of
 /// which login steps ran. It never contains secrets.
+///
+/// The message test only reads: it lists the inbox and the archive and reads
+/// a few messages that are already read, and it uses your own cookie cache,
+/// so it needs no new login while the saved session is valid. Run it on its
+/// own with `--name list_messages`. Its failures show message text masked.
 @Timeout(Duration(minutes: 5))
 library;
 
@@ -106,4 +111,124 @@ void main() {
       expect(secondLog, isNot(contains('sending a 2FA code')));
     },
   );
+
+  test(
+    'list_messages and read_message work on the real account, read-only',
+    () async {
+      // The user's own cookie cache, so this reuses the saved session when
+      // it is still valid. Only messages that are already read are read, so
+      // nothing changes on the account whatever getMessage does. Message
+      // content is personal: failures show masked text only.
+      final server = await ServerProcess.start(
+        exePath,
+        args: ['--credentials', credentialsPath],
+        environment: environmentWithoutSmartschool(),
+      );
+      await server.initialize();
+      Future<String> call(String tool, Map<String, Object?> arguments) async {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+          timeout: const Duration(minutes: 2),
+        );
+        expect(isError, isNot(true), reason: '$tool: ${_mask(text)}');
+        return text;
+      }
+
+      final inbox = await call('list_messages', {'limit': 200});
+      final inboxHeaders = _expectListShape(inbox, 'Inbox');
+
+      final archive = await call('list_messages', {'box': 'archive'});
+      final archiveHeaders = _expectListShape(archive, 'Archive');
+
+      // A word from an archived subject, searched for in upper case.
+      final word = archiveHeaders
+          .expand((h) => h.subject.toLowerCase().split(RegExp(r'\W+')))
+          .firstWhere((w) => w.length >= 5, orElse: () => '');
+      if (word.isNotEmpty) {
+        final found = _expectListShape(
+          await call('list_messages', {
+            'box': 'archive',
+            'query': word.toUpperCase(),
+          }),
+          'Archive',
+        );
+        expect(found, isNotEmpty);
+        expect(
+          found.every(
+            (h) => '${h.subject} ${h.who}'.toLowerCase().contains(word),
+          ),
+          isTrue,
+          reason: 'a listed message does not contain the query word',
+        );
+      }
+
+      final read = inboxHeaders.where((h) => !h.unread).take(3).toList();
+      expect(read, isNotEmpty, reason: 'no read message in the inbox');
+      for (final header in read) {
+        final text = await call('read_message', {'message_id': header.id});
+        expect(
+          text.startsWith('Message ${header.id} (Inbox)\nFrom: '),
+          isTrue,
+          reason: _mask(text),
+        );
+        for (final field in ['\nDate: ', '\nTo: ', '\nSubject: ']) {
+          expect(text.contains(field), isTrue, reason: 'no $field line');
+        }
+        expect(
+          RegExp(
+            r'<(p|div|br|span|table|a)\b',
+            caseSensitive: false,
+          ).hasMatch(text),
+          isFalse,
+          reason: 'HTML left in the text: ${_mask(text)}',
+        );
+      }
+
+      await server.stop();
+      // Only the login steps: on an unexpected error the log could quote a
+      // Smartschool response.
+      final steps = (await server.stderr)
+          .split('\n')
+          .where((line) => line.contains('] Smartschool: '));
+      stderr.writeln('--- messages: login steps ---\n${steps.join('\n')}');
+    },
+  );
+}
+
+/// [text] with every letter and digit replaced, to show its shape without
+/// its (personal) content.
+String _mask(String text) => text
+    .replaceAll(RegExp(r'\p{L}', unicode: true), 'x')
+    .replaceAll(RegExp(r'\d'), '9');
+
+typedef _Header = ({int id, String who, String subject, bool unread});
+
+final _headerLine = RegExp(
+  r'^- id (\d+) \| \d{4}-\d\d-\d\d \d\d:\d\d \| (?:from|to) (.*?) \| '
+  r'(.+?)(?: \| ((?:unread|attachments|flag \w+)(?:, (?:attachments|flag \w+))*))?$',
+);
+
+/// Checks the shape of a `list_messages` result for [label] and returns its
+/// headers.
+List<_Header> _expectListShape(String text, String label) {
+  final lines = text.split('\n');
+  expect(
+    RegExp('^$label: ').hasMatch(lines.first),
+    isTrue,
+    reason: 'summary: ${_mask(lines.first)}',
+  );
+  final headers = <_Header>[];
+  for (final line in lines.skip(1)) {
+    if (line.startsWith('Note: ')) continue;
+    final match = _headerLine.firstMatch(line);
+    expect(match, isNotNull, reason: 'line: ${_mask(line)}');
+    headers.add((
+      id: int.parse(match![1]!),
+      who: match[2]!,
+      subject: match[3]!,
+      unread: match[4]?.contains('unread') ?? false,
+    ));
+  }
+  return headers;
 }
