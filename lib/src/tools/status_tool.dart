@@ -4,23 +4,32 @@ import '../log.dart';
 import '../problems.dart';
 import '../session.dart';
 import '../settings.dart';
+import '../update_check.dart';
 import '../version.dart';
 import 'server_tool.dart';
 
 /// `smartschool_status`: whether the Smartschool connection works, and if
-/// not, what to fix.
-ServerTool statusTool(SmartschoolSession session) => ServerTool(
+/// not, what to fix; and whether a newer version of the server is available
+/// ([updates] asks GitHub on every call; null when the update check is
+/// turned off).
+ServerTool statusTool(
+  SmartschoolSession session, {
+  UpdateChecker? updates,
+}) => ServerTool(
   definition: Tool(
     name: 'smartschool_status',
     title: 'Smartschool connection status',
     description:
         'Checks whether the connection to Smartschool works: whether all '
         'settings are filled in, whether logging in succeeds, who is logged '
-        'in, the Smartschool address and the version of this server. Use it '
-        'when the user asks whether their Smartschool connection works (for '
-        'example "Werkt mijn Smartschool-verbinding?"), or when another '
-        'Smartschool tool reports a login problem. When the connection does '
-        'not work, the result says what to fix; pass that on to the user.',
+        'in, the Smartschool address, the version of this server and whether '
+        'a newer version is available. Use it when the user asks whether '
+        'their Smartschool connection works (for example "Werkt mijn '
+        'Smartschool-verbinding?") or whether there is an update, or when '
+        'another Smartschool tool reports a login problem. When the '
+        'connection does not work, the result says what to fix; pass that on '
+        'to the user. When a newer version is available, tell the user how '
+        'to update.',
     inputSchema: Schema.object(),
     annotations: ToolAnnotations(
       title: 'Smartschool connection status',
@@ -29,10 +38,15 @@ ServerTool statusTool(SmartschoolSession session) => ServerTool(
       openWorldHint: true,
     ),
   ),
-  handler: (_) => _status(session),
+  handler: (_) => _status(session, updates),
 );
 
-Future<CallToolResult> _status(SmartschoolSession session) async {
+Future<CallToolResult> _status(
+  SmartschoolSession session,
+  UpdateChecker? updates,
+) async {
+  // Asks GitHub while the connection is checked, so it adds no time.
+  final updateCheck = updates?.checkNow();
   SmartschoolSettings? settings;
   String? displayName;
   String? problem;
@@ -69,8 +83,26 @@ Future<CallToolResult> _status(SmartschoolSession session) async {
     'Settings: ${_describeSettings(source, settings)}',
     'Server version: $packageVersion',
   ];
+  final update = await updateCheck;
+  report.add(_describeUpdate(update));
+  if (update case UpdateAvailable(:final release)) {
+    // Shown here, so no tool result repeats it as a notice.
+    updates?.announced(release);
+  }
   return CallToolResult(content: [TextContent(text: report.join('\n'))]);
 }
+
+/// The `Updates:` line: what the update check found, or that it is off.
+String _describeUpdate(UpdateCheckResult? result) => switch (result) {
+  null => 'Updates: not checked (the update check is turned off)',
+  UpdateAvailable(:final release) =>
+    'Updates: version ${release.version} is available. To update, '
+        '${UpdateChecker.howToUpdate(release)}.',
+  UpToDate(latest: null) => 'Updates: up to date (no release published yet)',
+  UpToDate(:final latest?) =>
+    'Updates: up to date (latest release: ${latest.version})',
+  UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
+};
 
 /// Where the settings come from and which are filled in, without values.
 String _describeSettings(

@@ -10,6 +10,9 @@ environment:
   sdk: ^3.10.1
 
 dependencies:
+  # Unzips Word, Excel and PowerPoint files (Office Open XML) to read their
+  # text.
+  archive: ^4.3.0
   # MCP protocol over stdio. Still 0.x, so pinned to an exact version.
   dart_mcp: 0.5.2
   # HTTP client used by flutter_smartschool. Imported directly for its
@@ -26,6 +29,22 @@ dependencies:
   # HTML parser for turning message bodies into plain text. flutter_smartschool
   # already depends on it.
   html: ^0.15.7
+  # Scales down large images before they go to Claude. pdf_document already
+  # depends on it.
+  image: ^4.10.1
+  # Pure-Dart PDF reading and text extraction (the dart-pdf suite, no native
+  # library, works in `dart compile exe`). Its API changes with every major
+  # version (weekly in 2026), so pinned to exact versions.
+  pdf_cos: 5.1.1
+  pdf_document: 5.1.1
+  pdf_graphics: 5.1.1
+  # Compares the version of a GitHub release with this server's for the
+  # update check. The Dart team's package; the test tooling already
+  # depends on it.
+  pub_semver: ^2.2.0
+  # XML parser for the parts of Office files. flutter_smartschool already
+  # depends on it.
+  xml: ^6.6.1
 
 dev_dependencies:
   async: ^2.13.0

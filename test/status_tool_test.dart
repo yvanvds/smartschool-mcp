@@ -56,7 +56,8 @@ void main() {
       'Logged in as: $fakeDisplayName\n'
       'Smartschool address: $fakeHost\n'
       'Settings: extension settings (all filled in)\n'
-      'Server version: $packageVersion',
+      'Server version: $packageVersion\n'
+      'Updates: not checked (the update check is turned off)',
     );
     expect(server.logins, 1);
     expectNoSecretsOrTraces(text);

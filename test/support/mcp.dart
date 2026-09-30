@@ -1,16 +1,24 @@
 import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
 
 /// Connects a dart_mcp client to a [SmartschoolServer] over an in-memory
 /// channel and completes the initialize handshake.
+///
+/// Without [updates], the server has no update check.
 Future<(ServerConnection, InitializeResult)> connect({
   Iterable<ServerTool> tools = const [],
+  UpdateChecker? updates,
 }) async {
   final channel = StreamChannelController<String>();
-  final server = SmartschoolServer(channel.local, tools: tools);
+  final server = SmartschoolServer(
+    channel.local,
+    tools: tools,
+    updates: updates,
+  );
   final client = MCPClient(Implementation(name: 'test', version: '0.0.0'));
   final connection = client.connectServer(channel.foreign);
   addTearDown(() async {

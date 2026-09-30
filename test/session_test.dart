@@ -113,14 +113,92 @@ void main() {
       },
     );
 
-    test('a GET is logged in again by the library itself', () async {
+    test('a GET sent to /login logs in again with a new client and is '
+        'retried once', () async {
       final session = newSession();
       await session.run(_post);
       server.expireSession();
+      server.requests.clear();
+      var attempts = 0;
 
-      await session.run((client) => client.getRaw('/'));
+      await session.run((client) {
+        attempts++;
+        return client.getRaw('/some/page');
+      });
 
       expect(server.logins, 2);
+      expect(attempts, 2);
+      expect(clientsCreated, 2, reason: 'a new client for the new login');
+      expect(server.requests.first, 'GET /some/page');
+      expect(server.requests.last, 'GET /some/page');
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+    });
+
+    test('concurrent calls that find it expired share one new login, and '
+        'each is retried once', () async {
+      final session = newSession();
+      await session.run(_post);
+      server
+        ..expireSession()
+        ..latency = const Duration(milliseconds: 20);
+      final attempts = <String, int>{};
+      Future<String> call(
+        String name,
+        Future<String> Function(SmartschoolClient client) request,
+      ) => session.run((client) {
+        attempts.update(name, (n) => n + 1, ifAbsent: () => 1);
+        return request(client);
+      });
+
+      await Future.wait([
+        call('GET a', (client) => client.getRaw('/a')),
+        call('GET b', (client) => client.getRaw('/b')),
+        call('GET c', (client) => client.getRaw('/c')),
+        call('POST', _post),
+      ]);
+
+      expect(server.logins, 2);
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(2));
+      expect(clientsCreated, 2);
+      expect(attempts, {'GET a': 2, 'GET b': 2, 'GET c': 2, 'POST': 2});
+    });
+
+    test('requests of one call that find it expired at the same time share '
+        'one new login, and the call is retried once', () async {
+      final session = newSession();
+      await session.run(_post);
+      server
+        ..expireSession()
+        ..latency = const Duration(milliseconds: 20)
+        ..maxInFlight = 0;
+      var attempts = 0;
+
+      await session.run((client) {
+        attempts++;
+        return Future.wait([
+          for (final path in ['/a', '/b', '/c', '/d']) client.getRaw(path),
+        ]);
+      });
+
+      expect(server.maxInFlight, 4);
+      expect(server.logins, 2);
+      expect(attempts, 2);
+      expect(clientsCreated, 2);
+    });
+
+    test('a call that starts after the new login uses the new client without '
+        'logging in again', () async {
+      final session = newSession();
+      await session.run(_post);
+      server.expireSession();
+      await session.run((client) => client.getRaw('/a'));
+      server.requests.clear();
+
+      await session.run((client) => client.getRaw('/b'));
+
+      expect(server.logins, 2);
+      expect(clientsCreated, 2);
+      expect(server.requests, ['GET /b']);
     });
 
     test('a request that is still refused after logging in again is not '

@@ -3,12 +3,15 @@
 @Timeout(Duration(minutes: 5))
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
 
 import 'support/exe.dart';
+import 'support/fake_github.dart';
 
 void main() {
   late String exePath;
@@ -41,6 +44,9 @@ void main() {
       'search_messages',
       'archive_messages',
       'reply_to_message',
+      'search_intradesk',
+      'list_intradesk_folder',
+      'read_intradesk_file',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -51,7 +57,14 @@ void main() {
     });
     final readSchema = tools['read_message']!['inputSchema'] as Map;
     expect(readSchema['required'], ['message_id']);
-    for (final name in ['list_messages', 'read_message', 'search_messages']) {
+    for (final name in [
+      'list_messages',
+      'read_message',
+      'search_messages',
+      'search_intradesk',
+      'list_intradesk_folder',
+      'read_intradesk_file',
+    ]) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
     }
     final searchSchema = tools['search_messages']!['inputSchema'] as Map;
@@ -99,6 +112,22 @@ void main() {
       'reply_all',
       'box',
     ]);
+    final intradeskSearchSchema =
+        tools['search_intradesk']!['inputSchema'] as Map;
+    expect(intradeskSearchSchema['required'], ['query']);
+    expect((intradeskSearchSchema['properties'] as Map).keys, [
+      'query',
+      'folder_id',
+      'limit',
+      'refresh',
+    ]);
+    final intradeskListSchema =
+        tools['list_intradesk_folder']!['inputSchema'] as Map;
+    expect(intradeskListSchema, isNot(contains('required')));
+    expect((intradeskListSchema['properties'] as Map).keys, ['folder_id']);
+    final readFileSchema = tools['read_intradesk_file']!['inputSchema'] as Map;
+    expect(readFileSchema['required'], ['file_id']);
+    expect((readFileSchema['properties'] as Map).keys, ['file_id']);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -135,9 +164,9 @@ void main() {
     );
   });
 
-  test('the message tools without settings: an error result that names the '
-      'missing settings; invalid arguments: an error that says what to '
-      'fix', () async {
+  test('the message and Intradesk tools without settings: an error result '
+      'that names the missing settings; invalid arguments: an error that '
+      'says what to fix', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -177,6 +206,26 @@ void main() {
       'reply_to_message',
       arguments: {'message_id': 123, 'body': ' '},
     );
+    final (intradeskError, intradeskText) = await server.callTool(
+      'search_intradesk',
+      arguments: {'query': 'formulier uitstap', 'refresh': true},
+    );
+    final (folderError, folderText) = await server.callTool(
+      'list_intradesk_folder',
+      arguments: {'folder_id': 'aaaa1111-1111-4111-b111-111111111111'},
+    );
+    final (badIdError, badIdText) = await server.callTool(
+      'list_intradesk_folder',
+      arguments: {'folder_id': '../messages'},
+    );
+    final (fileError, fileText) = await server.callTool(
+      'read_intradesk_file',
+      arguments: {'file_id': 'cccc1111-1111-4111-b111-111111111111'},
+    );
+    final (badFileIdError, badFileIdText) = await server.callTool(
+      'read_intradesk_file',
+      arguments: {'file_id': 'welkom.docx'},
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
@@ -194,6 +243,9 @@ void main() {
       (searchError, searchText),
       (archiveError, archiveText),
       (replyError, replyText),
+      (intradeskError, intradeskText),
+      (folderError, folderText),
+      (fileError, fileText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -210,11 +262,15 @@ void main() {
     expect(emptyText, contains('body is empty'));
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
+    expect(badIdError, isTrue);
+    expect(badIdText, startsWith('folder_id must be an Intradesk id like '));
+    expect(badFileIdError, isTrue);
+    expect(badFileIdText, startsWith('file_id must be an Intradesk id like '));
 
     await server.stop();
   });
 
-  test('the message tools accept a whole number written with a decimal part '
+  test('the tools accept a whole number written with a decimal part '
       '(123.0) and get as far as the missing settings', () async {
     final server = await ServerProcess.start(
       exePath,
@@ -233,6 +289,7 @@ void main() {
         },
       ),
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),
+      ('search_intradesk', {'query': 'uitstap', 'limit': 10.0}),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 
@@ -270,6 +327,170 @@ void main() {
       await server.stderr,
       contains('Smartschool settings: credentials file $missing'),
     );
+  });
+
+  group('the update check, against a fake GitHub', () {
+    late FakeGitHub github;
+    late Directory home;
+
+    setUp(() async {
+      github = await FakeGitHub.start();
+      home = await Directory.systemTemp.createTemp('smartschool_mcp_home_');
+      addTearDown(() => home.delete(recursive: true));
+    });
+
+    /// A colleague's install without settings, with [github] instead of
+    /// GitHub and [home] as the home folder (for the cache folder).
+    Future<ServerProcess> start({bool checkForUpdates = true}) =>
+        ServerProcess.start(
+          exePath,
+          environment: {
+            ...environmentWithoutSmartschool(),
+            'HOME': home.path,
+            UpdateChecker.endpointVariable: github.latestRelease.toString(),
+          },
+          checkForUpdates: checkForUpdates,
+        );
+
+    File stateFile() => File(
+      [
+        home.path,
+        '.cache',
+        'smartschool',
+        UpdateChecker.stateFileName,
+      ].join(Platform.pathSeparator),
+    );
+
+    test('a newer release: asked at startup in the background, shown by '
+        'smartschool_status (without settings), saved in the cache folder; '
+        'a restart within 24 hours does not ask again', () async {
+      github.publish('v99.0.0');
+      final server = await start();
+      await server.initialize();
+      await github.received(1).timeout(const Duration(seconds: 30));
+
+      final (isError, text) = await server.callTool('smartschool_status');
+
+      expect(isError, isNot(true));
+      expect(text, startsWith('Smartschool connection: NOT working\n'));
+      expect(
+        text,
+        endsWith(
+          '\nServer version: $packageVersion\n'
+          'Updates: version 99.0.0 is available. To update, download '
+          'smartschool-mcp.mcpb from ${releasePage('v99.0.0')} and '
+          'double-click it.',
+        ),
+      );
+      expect(github.requests, hasLength(2), reason: 'startup and status');
+      expect(
+        github.requests.first.path,
+        '/repos/yvanvds/smartschool-mcp/releases/latest',
+      );
+      expect(
+        github.requests.first.userAgent,
+        startsWith('smartschool-mcp/$packageVersion '),
+      );
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('update check: version 99.0.0 is available'),
+      );
+      expect(jsonDecode(stateFile().readAsStringSync()), {
+        'format': UpdateChecker.stateFormat,
+        'endpoint': github.latestRelease.toString(),
+        'checked_at': isA<String>(),
+        'latest': {'tag': 'v99.0.0', 'url': releasePage('v99.0.0')},
+      });
+
+      final restarted = await start();
+      await restarted.initialize();
+      // An error result: stays a single text, without the notice.
+      final (listError, listText) = await restarted.callTool('list_messages');
+      expect(listError, isTrue);
+      expect(
+        listText,
+        startsWith('Not all Smartschool settings are filled in.'),
+      );
+      await restarted.stop();
+
+      expect(github.requests, hasLength(2));
+      expect(
+        await restarted.stderr,
+        contains('update check: skipped, last checked at '),
+      );
+    });
+
+    test('no release published yet (GitHub answers 404): up to date', () async {
+      github.noReleases();
+      final server = await start();
+      await server.initialize();
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith('\nUpdates: up to date (no release published yet)'),
+      );
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('update check: up to date (no release published yet)'),
+      );
+    });
+
+    test('while GitHub does not answer, startup and tool calls do not wait '
+        'for it, smartschool_status gives up after 5 seconds, and the '
+        'server still exits at once', () async {
+      github
+        ..publish('v99.0.0')
+        ..hold();
+      final server = await start();
+      final watch = Stopwatch()..start();
+
+      await server.initialize();
+      await server.request('tools/list');
+      await github.received(1).timeout(const Duration(seconds: 30));
+      final (listError, _) = await server.callTool('list_messages');
+
+      expect(listError, isTrue);
+      expect(
+        watch.elapsed,
+        lessThan(const Duration(seconds: 4)),
+        reason: 'the check waits up to 5 seconds for GitHub',
+      );
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith(
+          '\nUpdates: could not check (no answer from 127.0.0.1 within '
+          '5 seconds)',
+        ),
+      );
+      await server.stop();
+    });
+
+    test('SMARTSCHOOL_MCP_UPDATE_CHECK=off: GitHub is not asked', () async {
+      github.publish('v99.0.0');
+      final server = await start(checkForUpdates: false);
+      await server.initialize();
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith('\nUpdates: not checked (the update check is turned off)'),
+      );
+      await server.stop();
+      expect(github.requests, isEmpty);
+      expect(stateFile().existsSync(), isFalse);
+      expect(
+        await server.stderr,
+        contains('update check: turned off (SMARTSCHOOL_MCP_UPDATE_CHECK=off)'),
+      );
+    });
   });
 
   test(

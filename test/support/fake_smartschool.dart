@@ -7,8 +7,10 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
 
+import 'fake_intradesk.dart';
 import 'fake_messages.dart';
 
+export 'fake_intradesk.dart';
 export 'fake_messages.dart';
 
 const fakeHost = 'school.smartschool.be';
@@ -68,6 +70,9 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The Messages module, served to logged-in requests.
   final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
+
+  /// The Intradesk module, served to logged-in requests.
+  final FakeIntradesk intradesk = FakeIntradesk();
 
   /// How long every request takes, so that concurrent requests overlap.
   Duration latency = Duration.zero;
@@ -183,7 +188,9 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == SmartschoolSession.sessionCheckPath) {
       return _json('[{"platformId":7}]');
     }
-    return mailbox.respond(options) ?? _html(_homePage);
+    return mailbox.respond(options) ??
+        intradesk.respond(options) ??
+        _html(_homePage);
   }
 
   @override

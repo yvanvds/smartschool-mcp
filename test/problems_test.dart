@@ -88,7 +88,7 @@ void main() {
         classifyFailure(
           DioException(
             requestOptions: RequestOptions(path: '/'),
-            error: const SessionExpiredError(),
+            error: const SessionExpiredError.unauthorized(),
           ),
         ),
         ProblemKind.sessionRejected,

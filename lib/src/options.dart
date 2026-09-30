@@ -48,5 +48,9 @@ SMARTSCHOOL_MFA environment variables (the Claude Desktop extension settings).
 
   --credentials <path>  Read the settings from this credentials.yml instead
                         (keys: main_url, username, password, mfa). For
-                        development.''';
+                        development.
+
+Once a day the server asks GitHub whether a newer release exists.
+SMARTSCHOOL_MCP_UPDATE_CHECK=off turns that off; SMARTSCHOOL_MCP_UPDATE_URL
+asks another address instead of the GitHub API. For tests and development.''';
 }

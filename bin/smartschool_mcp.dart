@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_mcp/stdio.dart';
+import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/log.dart';
 import 'package:smartschool_mcp/src/messages/message_cache.dart';
 import 'package:smartschool_mcp/src/options.dart';
@@ -9,11 +10,15 @@ import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
 /// Serves MCP over stdin/stdout until the client closes stdin.
@@ -37,20 +42,29 @@ Future<void> main(List<String> args) async {
         null => const ExtensionSettings(),
       };
       final session = SmartschoolSession(source);
+      final intradeskIndex = IntradeskIndexCache.of(session);
+      final updates = UpdateChecker.fromEnvironment();
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
         tools: [
-          statusTool(session),
+          statusTool(session, updates: updates),
           listMessagesTool(session),
           readMessageTool(session),
           searchMessagesTool(session, MessageTextCache.of(session)),
           archiveMessagesTool(session),
           replyToMessageTool(session),
+          searchIntradeskTool(session, intradeskIndex),
+          listIntradeskFolderTool(session, intradeskIndex),
+          readIntradeskFileTool(session, intradeskIndex),
         ],
+        updates: updates,
       );
       log('version $packageVersion serving MCP on stdio');
       log('Smartschool settings: ${source.logDescription}');
+      // In the background: startup never waits for GitHub.
+      updates?.checkInBackground();
       await server.done;
+      await updates?.close();
       await session.close();
       log('client disconnected, shutting down');
     },

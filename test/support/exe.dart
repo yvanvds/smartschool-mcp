@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:test/test.dart';
 
 /// Compiles the server with `dart compile exe` into a temporary directory
@@ -43,15 +44,23 @@ class ServerProcess {
 
   /// Starts the server at [exePath]. With [environment], the server gets
   /// exactly that environment.
+  ///
+  /// The update check is turned off unless [checkForUpdates], so a test
+  /// never asks the real GitHub: a test that checks passes an [environment]
+  /// with `SMARTSCHOOL_MCP_UPDATE_URL` (a `FakeGitHub`) and its own `HOME`.
   static Future<ServerProcess> start(
     String exePath, {
     List<String> args = const [],
     Map<String, String>? environment,
+    bool checkForUpdates = false,
   }) async {
     final process = await Process.start(
       exePath,
       args,
-      environment: environment,
+      environment: {
+        ...?environment,
+        if (!checkForUpdates) UpdateChecker.disableVariable: 'off',
+      },
       includeParentEnvironment: environment == null,
     );
     addTearDown(process.kill);
