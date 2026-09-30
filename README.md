@@ -22,7 +22,8 @@ dart test
 
 `dart test` includes an end-to-end test that compiles the executable and
 talks to it over stdio. It never contacts Smartschool: the other tests use a
-fake Smartschool.
+fake Smartschool. No test asks the real GitHub for updates either (see
+*Update check* below).
 
 ### Local credentials
 
@@ -111,7 +112,8 @@ the login works and who is logged in, or what to fix.
 
 ### Tools
 
-- `smartschool_status`: whether the connection works, or what to fix.
+- `smartschool_status`: whether the connection works, or what to fix, and
+  whether a newer version is available (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool only returns the newest 50 messages of a box
@@ -283,6 +285,54 @@ teacher which setting to fix. When Smartschool rejects an expired session,
 to repeat. Sending is not: `reply_to_message` turns every failure after the
 submit into a result that is not retried (see `_send` in
 `lib/src/tools/reply_to_message_tool.dart`).
+
+### Update check
+
+At startup, in the background (startup never waits for it), the server asks
+GitHub for the latest release of this repository
+(`https://api.github.com/repos/yvanvds/smartschool-mcp/releases/latest`,
+unauthenticated; GitHub leaves out drafts and pre-releases) and compares its
+tag (`vX.Y.Z`) with the built-in version (`lib/src/version.dart`). A tag that
+is not a version is ignored. GitHub answers 404 while no release has been
+published: nothing to report. A check waits at most 5 seconds; offline, rate
+limited or an answer it does not understand is only logged.
+
+It asks at most once a day. The time and result of the last successful check
+are kept in
+
+```
+%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json
+```
+
+(`%HOME%` instead of `%USERPROFILE%` when `HOME` is set), so a restart within
+24 hours does not ask again. It needs no Smartschool settings. A server that
+keeps running asks again after 24 hours, on a tool call.
+
+When a newer release exists, the first successful tool result after the
+check gets one extra text after its content: the new version, the release
+page and "download `smartschool-mcp.mcpb` and double-click it", for Claude to
+pass on. That happens once per server process (Claude Desktop starts one per
+session), and not at all after `smartschool_status` showed it. Error results
+never get it. `smartschool_status` always asks GitHub (while it checks the
+login, so it takes no longer) and shows the result on its `Updates:` line.
+The code is in `lib/src/update_check.dart`; the server adds the notice in
+`lib/src/server.dart`.
+
+For tests and development:
+
+- `SMARTSCHOOL_MCP_UPDATE_CHECK=off` turns the check off;
+- `SMARTSCHOOL_MCP_UPDATE_URL=<address>` asks that address instead of the
+  GitHub API (it must answer the same way).
+
+The tests use a local fake GitHub (`test/support/fake_github.dart`).
+`ServerProcess.start` in `test/support/exe.dart` turns the check off unless a
+test asks for it with its own fake, so no test and no CI run asks the real
+GitHub.
+
+A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
+full release (not a draft or pre-release), and carry the extension as
+`smartschool-mcp.mcpb`: the notice names that file and links to the release
+page.
 
 ## License
 

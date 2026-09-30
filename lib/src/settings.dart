@@ -202,8 +202,7 @@ final class SmartschoolSettings {
   String get cacheDirectory => userCacheDirectory(username);
 
   /// The library's per-user cache folder for [username]:
-  /// `~/.cache/smartschool/<username>`, where `~` is `HOME`, else
-  /// `USERPROFILE` (on Windows `C:\Users\<name>`), else the current folder.
+  /// `~/.cache/smartschool/<username>` (see [cacheRoot]).
   ///
   /// The library does not tell where it is, so this repeats its rule
   /// (`SmartschoolClient._defaultCachePath`, yvanvds/dartschool#30).
@@ -211,15 +210,18 @@ final class SmartschoolSettings {
   static String userCacheDirectory(
     String username, [
     Map<String, String>? environment,
-  ]) {
+  ]) => [cacheRoot(environment), username].join(Platform.pathSeparator);
+
+  /// The folder that holds the library's per-user cache folders:
+  /// `~/.cache/smartschool`, where `~` is `HOME`, else `USERPROFILE` (on
+  /// Windows `C:\Users\<name>`), else the current folder.
+  ///
+  /// The server keeps data that belongs to no Smartschool user here, such as
+  /// the update check's state; it needs no settings.
+  static String cacheRoot([Map<String, String>? environment]) {
     final variables = environment ?? Platform.environment;
     final home = variables['HOME'] ?? variables['USERPROFILE'] ?? '.';
-    return [
-      home,
-      '.cache',
-      'smartschool',
-      username,
-    ].join(Platform.pathSeparator);
+    return [home, '.cache', 'smartschool'].join(Platform.pathSeparator);
   }
 
   /// The credentials for the library. Only valid when [missing] is empty.

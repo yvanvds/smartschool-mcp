@@ -3,12 +3,15 @@
 @Timeout(Duration(minutes: 5))
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
 
 import 'support/exe.dart';
+import 'support/fake_github.dart';
 
 void main() {
   late String exePath;
@@ -324,6 +327,170 @@ void main() {
       await server.stderr,
       contains('Smartschool settings: credentials file $missing'),
     );
+  });
+
+  group('the update check, against a fake GitHub', () {
+    late FakeGitHub github;
+    late Directory home;
+
+    setUp(() async {
+      github = await FakeGitHub.start();
+      home = await Directory.systemTemp.createTemp('smartschool_mcp_home_');
+      addTearDown(() => home.delete(recursive: true));
+    });
+
+    /// A colleague's install without settings, with [github] instead of
+    /// GitHub and [home] as the home folder (for the cache folder).
+    Future<ServerProcess> start({bool checkForUpdates = true}) =>
+        ServerProcess.start(
+          exePath,
+          environment: {
+            ...environmentWithoutSmartschool(),
+            'HOME': home.path,
+            UpdateChecker.endpointVariable: github.latestRelease.toString(),
+          },
+          checkForUpdates: checkForUpdates,
+        );
+
+    File stateFile() => File(
+      [
+        home.path,
+        '.cache',
+        'smartschool',
+        UpdateChecker.stateFileName,
+      ].join(Platform.pathSeparator),
+    );
+
+    test('a newer release: asked at startup in the background, shown by '
+        'smartschool_status (without settings), saved in the cache folder; '
+        'a restart within 24 hours does not ask again', () async {
+      github.publish('v99.0.0');
+      final server = await start();
+      await server.initialize();
+      await github.received(1).timeout(const Duration(seconds: 30));
+
+      final (isError, text) = await server.callTool('smartschool_status');
+
+      expect(isError, isNot(true));
+      expect(text, startsWith('Smartschool connection: NOT working\n'));
+      expect(
+        text,
+        endsWith(
+          '\nServer version: $packageVersion\n'
+          'Updates: version 99.0.0 is available. To update, download '
+          'smartschool-mcp.mcpb from ${releasePage('v99.0.0')} and '
+          'double-click it.',
+        ),
+      );
+      expect(github.requests, hasLength(2), reason: 'startup and status');
+      expect(
+        github.requests.first.path,
+        '/repos/yvanvds/smartschool-mcp/releases/latest',
+      );
+      expect(
+        github.requests.first.userAgent,
+        startsWith('smartschool-mcp/$packageVersion '),
+      );
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('update check: version 99.0.0 is available'),
+      );
+      expect(jsonDecode(stateFile().readAsStringSync()), {
+        'format': UpdateChecker.stateFormat,
+        'endpoint': github.latestRelease.toString(),
+        'checked_at': isA<String>(),
+        'latest': {'tag': 'v99.0.0', 'url': releasePage('v99.0.0')},
+      });
+
+      final restarted = await start();
+      await restarted.initialize();
+      // An error result: stays a single text, without the notice.
+      final (listError, listText) = await restarted.callTool('list_messages');
+      expect(listError, isTrue);
+      expect(
+        listText,
+        startsWith('Not all Smartschool settings are filled in.'),
+      );
+      await restarted.stop();
+
+      expect(github.requests, hasLength(2));
+      expect(
+        await restarted.stderr,
+        contains('update check: skipped, last checked at '),
+      );
+    });
+
+    test('no release published yet (GitHub answers 404): up to date', () async {
+      github.noReleases();
+      final server = await start();
+      await server.initialize();
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith('\nUpdates: up to date (no release published yet)'),
+      );
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('update check: up to date (no release published yet)'),
+      );
+    });
+
+    test('while GitHub does not answer, startup and tool calls do not wait '
+        'for it, smartschool_status gives up after 5 seconds, and the '
+        'server still exits at once', () async {
+      github
+        ..publish('v99.0.0')
+        ..hold();
+      final server = await start();
+      final watch = Stopwatch()..start();
+
+      await server.initialize();
+      await server.request('tools/list');
+      await github.received(1).timeout(const Duration(seconds: 30));
+      final (listError, _) = await server.callTool('list_messages');
+
+      expect(listError, isTrue);
+      expect(
+        watch.elapsed,
+        lessThan(const Duration(seconds: 4)),
+        reason: 'the check waits up to 5 seconds for GitHub',
+      );
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith(
+          '\nUpdates: could not check (no answer from 127.0.0.1 within '
+          '5 seconds)',
+        ),
+      );
+      await server.stop();
+    });
+
+    test('SMARTSCHOOL_MCP_UPDATE_CHECK=off: GitHub is not asked', () async {
+      github.publish('v99.0.0');
+      final server = await start(checkForUpdates: false);
+      await server.initialize();
+
+      final (_, text) = await server.callTool('smartschool_status');
+
+      expect(
+        text,
+        endsWith('\nUpdates: not checked (the update check is turned off)'),
+      );
+      await server.stop();
+      expect(github.requests, isEmpty);
+      expect(stateFile().existsSync(), isFalse);
+      expect(
+        await server.stderr,
+        contains('update check: turned off (SMARTSCHOOL_MCP_UPDATE_CHECK=off)'),
+      );
+    });
   });
 
   test(

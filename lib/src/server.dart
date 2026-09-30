@@ -3,6 +3,7 @@ import 'package:dart_mcp/server.dart';
 import 'log.dart';
 import 'problems.dart';
 import 'tools/server_tool.dart';
+import 'update_check.dart';
 import 'version.dart';
 
 /// The Smartschool MCP server.
@@ -16,17 +17,25 @@ import 'version.dart';
 /// [ToolError] (an invalid argument) likewise becomes an error result with
 /// its message. Any other exception becomes a generic error result; its
 /// details and stack trace go to the log only, never into tool output.
+///
+/// With [updates], the server adds the update notice
+/// ([UpdateChecker.takeNotice]) to the first successful tool result after a
+/// newer release became known.
 base class SmartschoolServer extends MCPServer with ToolsSupport {
-  SmartschoolServer(super.channel, {Iterable<ServerTool> tools = const []})
-    : super.fromStreamChannel(
-        implementation: Implementation(
-          name: serverName,
-          version: packageVersion,
-        ),
-        instructions:
-            'Tools for working with Smartschool on behalf of the signed-in '
-            'teacher.',
-      ) {
+  SmartschoolServer(
+    super.channel, {
+    Iterable<ServerTool> tools = const [],
+    UpdateChecker? updates,
+  }) : _updates = updates,
+       super.fromStreamChannel(
+         implementation: Implementation(
+           name: serverName,
+           version: packageVersion,
+         ),
+         instructions:
+             'Tools for working with Smartschool on behalf of the signed-in '
+             'teacher.',
+       ) {
     for (final tool in tools) {
       registerTool(tool.definition, (request) => _call(tool, request));
     }
@@ -35,7 +44,14 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
   /// The server name reported to MCP clients.
   static const String serverName = 'smartschool';
 
-  static Future<CallToolResult> _call(
+  final UpdateChecker? _updates;
+
+  Future<CallToolResult> _call(
+    ServerTool tool,
+    CallToolRequest request,
+  ) async => _withUpdateNotice(tool, await _run(tool, request));
+
+  static Future<CallToolResult> _run(
     ServerTool tool,
     CallToolRequest request,
   ) async {
@@ -57,4 +73,30 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
 
   static CallToolResult _error(String message) =>
       CallToolResult(isError: true, content: [TextContent(text: message)]);
+
+  /// [result] with the update notice, if there is one, as a text of its own
+  /// after the tool's content, which is kept as it is (an image stays an
+  /// image). An error result gets no notice, which would read as part of the
+  /// error: the notice waits for the next successful result.
+  CallToolResult _withUpdateNotice(ServerTool tool, CallToolResult result) {
+    final updates = _updates;
+    if (updates == null || result.isError == true) return result;
+    try {
+      final notice = updates.takeNotice();
+      if (notice == null) return result;
+      log('update notice added to the ${tool.definition.name} result');
+      return CallToolResult(
+        meta: result.meta,
+        content: [
+          ...result.content,
+          TextContent(text: notice),
+        ],
+        structuredContent: result.structuredContent,
+        isError: result.isError,
+      );
+    } catch (error, stackTrace) {
+      log('update notice failed: $error\n$stackTrace');
+      return result;
+    }
+  }
 }

@@ -38,6 +38,10 @@ dependencies:
   pdf_cos: 5.1.1
   pdf_document: 5.1.1
   pdf_graphics: 5.1.1
+  # Compares the version of a GitHub release with this server's for the
+  # update check. The Dart team's package; the test tooling already
+  # depends on it.
+  pub_semver: ^2.2.0
   # XML parser for the parts of Office files. flutter_smartschool already
   # depends on it.
   xml: ^6.6.1

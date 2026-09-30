@@ -18,6 +18,7 @@ import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
+import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
 /// Serves MCP over stdin/stdout until the client closes stdin.
@@ -42,10 +43,11 @@ Future<void> main(List<String> args) async {
       };
       final session = SmartschoolSession(source);
       final intradeskIndex = IntradeskIndexCache.of(session);
+      final updates = UpdateChecker.fromEnvironment();
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
         tools: [
-          statusTool(session),
+          statusTool(session, updates: updates),
           listMessagesTool(session),
           readMessageTool(session),
           searchMessagesTool(session, MessageTextCache.of(session)),
@@ -55,10 +57,14 @@ Future<void> main(List<String> args) async {
           listIntradeskFolderTool(session, intradeskIndex),
           readIntradeskFileTool(session, intradeskIndex),
         ],
+        updates: updates,
       );
       log('version $packageVersion serving MCP on stdio');
       log('Smartschool settings: ${source.logDescription}');
+      // In the background: startup never waits for GitHub.
+      updates?.checkInBackground();
       await server.done;
+      await updates?.close();
       await session.close();
       log('client disconnected, shutting down');
     },
