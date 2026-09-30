@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "smartschool": {
+      "type": "stdio",
+      "command": "dart",
+      "args": [
+        "run",
+        "bin/smartschool_mcp.dart",
+        "--credentials",
+        "credentials.yml"
+      ],
+      "env": {}
+    }
+  }
+}

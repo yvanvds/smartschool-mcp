@@ -12,6 +12,9 @@ environment:
 dependencies:
   # MCP protocol over stdio. Still 0.x, so pinned to an exact version.
   dart_mcp: 0.5.2
+  # HTTP client used by flutter_smartschool. Imported directly for its
+  # exception types and to add an interceptor to the library's client.
+  dio: ^5.11.1
   # Smartschool client library (pure Dart despite the name). pub.dev only has
   # 0.2.6, which lacks the 2FA-detection fix (yvanvds/dartschool#1) and the
   # login-302 fix (yvanvds/dartschool#6). Switch to pub.dev once 0.2.10 or
