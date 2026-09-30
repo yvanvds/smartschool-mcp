@@ -41,6 +41,8 @@ void main() {
       'search_messages',
       'archive_messages',
       'reply_to_message',
+      'search_intradesk',
+      'list_intradesk_folder',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -51,7 +53,13 @@ void main() {
     });
     final readSchema = tools['read_message']!['inputSchema'] as Map;
     expect(readSchema['required'], ['message_id']);
-    for (final name in ['list_messages', 'read_message', 'search_messages']) {
+    for (final name in [
+      'list_messages',
+      'read_message',
+      'search_messages',
+      'search_intradesk',
+      'list_intradesk_folder',
+    ]) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
     }
     final searchSchema = tools['search_messages']!['inputSchema'] as Map;
@@ -99,6 +107,19 @@ void main() {
       'reply_all',
       'box',
     ]);
+    final intradeskSearchSchema =
+        tools['search_intradesk']!['inputSchema'] as Map;
+    expect(intradeskSearchSchema['required'], ['query']);
+    expect((intradeskSearchSchema['properties'] as Map).keys, [
+      'query',
+      'folder_id',
+      'limit',
+      'refresh',
+    ]);
+    final intradeskListSchema =
+        tools['list_intradesk_folder']!['inputSchema'] as Map;
+    expect(intradeskListSchema, isNot(contains('required')));
+    expect((intradeskListSchema['properties'] as Map).keys, ['folder_id']);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -135,9 +156,9 @@ void main() {
     );
   });
 
-  test('the message tools without settings: an error result that names the '
-      'missing settings; invalid arguments: an error that says what to '
-      'fix', () async {
+  test('the message and Intradesk tools without settings: an error result '
+      'that names the missing settings; invalid arguments: an error that '
+      'says what to fix', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -177,6 +198,18 @@ void main() {
       'reply_to_message',
       arguments: {'message_id': 123, 'body': ' '},
     );
+    final (intradeskError, intradeskText) = await server.callTool(
+      'search_intradesk',
+      arguments: {'query': 'formulier uitstap', 'refresh': true},
+    );
+    final (folderError, folderText) = await server.callTool(
+      'list_intradesk_folder',
+      arguments: {'folder_id': 'aaaa1111-1111-4111-b111-111111111111'},
+    );
+    final (badIdError, badIdText) = await server.callTool(
+      'list_intradesk_folder',
+      arguments: {'folder_id': '../messages'},
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
@@ -194,6 +227,8 @@ void main() {
       (searchError, searchText),
       (archiveError, archiveText),
       (replyError, replyText),
+      (intradeskError, intradeskText),
+      (folderError, folderText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -210,11 +245,13 @@ void main() {
     expect(emptyText, contains('body is empty'));
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
+    expect(badIdError, isTrue);
+    expect(badIdText, startsWith('folder_id must be an Intradesk id like '));
 
     await server.stop();
   });
 
-  test('the message tools accept a whole number written with a decimal part '
+  test('the tools accept a whole number written with a decimal part '
       '(123.0) and get as far as the missing settings', () async {
     final server = await ServerProcess.start(
       exePath,
@@ -233,6 +270,7 @@ void main() {
         },
       ),
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),
+      ('search_intradesk', {'query': 'uitstap', 'limit': 10.0}),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 

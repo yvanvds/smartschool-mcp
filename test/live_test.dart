@@ -23,6 +23,15 @@
 /// word that occurs nowhere. Run it on its own with
 /// `--name search_messages`. It prints counts and timings, never the word or
 /// any message text.
+///
+/// The Intradesk test only reads as well (it downloads no file): it lists the
+/// top of Intradesk and a folder, and searches for a word of a name there
+/// with `refresh: true`, which walks all of Intradesk (minutes on a large
+/// one; the test waits for the walk by searching again every 20 s), then
+/// again from the index in memory, after a restart from the index on disk
+/// (`~/.cache/smartschool/<username>/intradesk/<host>`), and for a word that
+/// occurs nowhere. Run it on its own with `--name intradesk`. It prints
+/// counts and timings, never a name.
 @Timeout(Duration(minutes: 5))
 library;
 
@@ -294,7 +303,178 @@ void main() {
       expect(searches[2], contains(', 0 downloaded,'));
     },
   );
+
+  test('list_intradesk_folder and search_intradesk work on the real account, '
+      'read-only: a refresh walks Intradesk in the background, later '
+      'searches use the index, also after a restart', () async {
+    // The user's own cookie cache and Intradesk index
+    // (~/.cache/smartschool/<username>/intradesk/<host>). Nothing is
+    // downloaded or changed. The names are the school's: failures show
+    // masked text only, and only counts and timings are printed.
+    Future<ServerProcess> start() async {
+      final server = await ServerProcess.start(
+        exePath,
+        args: ['--credentials', credentialsPath],
+        environment: environmentWithoutSmartschool(),
+      );
+      await server.initialize();
+      return server;
+    }
+
+    final timings = <String>[];
+    Future<(bool?, String)> call(
+      ServerProcess server,
+      String tool,
+      Map<String, Object?> arguments,
+    ) async {
+      final watch = Stopwatch()..start();
+      final result = await server.callTool(
+        tool,
+        arguments: arguments,
+        timeout: const Duration(minutes: 2),
+      );
+      timings.add('$tool ${watch.elapsedMilliseconds} ms');
+      // Every call answers well within the minute Claude Desktop waits.
+      expect(watch.elapsed, lessThan(const Duration(seconds: 50)));
+      return result;
+    }
+
+    Future<String> ok(
+      ServerProcess server,
+      String tool,
+      Map<String, Object?> arguments,
+    ) async {
+      final (isError, text) = await call(server, tool, arguments);
+      expect(isError, isNot(true), reason: '$tool: ${_mask(text)}');
+      return text;
+    }
+
+    bool walking(String text) =>
+        text.startsWith('Intradesk is being indexed') ||
+        text.contains('A new index is being built');
+
+    final server = await start();
+    final root = await ok(server, 'list_intradesk_folder', {});
+    expect(root, startsWith('Intradesk, top level: '), reason: _mask(root));
+    final rootItems = _intradeskLines(root);
+    expect(rootItems, isNotEmpty, reason: _mask(root));
+
+    final (bogusError, bogus) = await call(server, 'list_intradesk_folder', {
+      'folder_id': '00000000-0000-4000-8000-000000000000',
+    });
+    expect(bogusError, isTrue);
+    expect(
+      bogus,
+      startsWith('Smartschool could not list an Intradesk folder with id '),
+    );
+
+    // A word from a name at the top level, never printed.
+    final word = rootItems
+        .expand(
+          (item) => RegExp(
+            r'\p{L}{4,}',
+            unicode: true,
+          ).allMatches(item.name).map((m) => m[0]!),
+        )
+        .first;
+    final query = {'query': word.toUpperCase(), 'limit': 100};
+
+    // The refresh walks Intradesk; the call answers after at most 40 s,
+    // from the old index or with how far the walk is.
+    var first = await ok(server, 'search_intradesk', {
+      ...query,
+      'refresh': true,
+    });
+    final walk = Stopwatch()..start();
+    while (walking(first)) {
+      expect(walk.elapsed, lessThan(const Duration(minutes: 12)));
+      await Future<void>.delayed(const Duration(seconds: 20));
+      first = await ok(server, 'search_intradesk', query);
+    }
+    final second = await ok(server, 'search_intradesk', query);
+    final nothing = await ok(server, 'search_intradesk', {
+      'query': 'qzxj${DateTime.now().microsecondsSinceEpoch}',
+    });
+    final folder = rootItems.firstWhere((item) => item.kind == 'folder');
+    final sub = await ok(server, 'list_intradesk_folder', {
+      'folder_id': folder.id,
+    });
+    await server.stop();
+    final log = await server.stderr;
+
+    final restarted = await start();
+    final third = await ok(restarted, 'search_intradesk', query);
+    await restarted.stop();
+    final restartedLog = await restarted.stderr;
+
+    final hits = RegExp(
+      r'^- (folder|file|weblink) \| ',
+      multiLine: true,
+    ).allMatches(first).length;
+    expect(
+      RegExp(
+        r'^Intradesk: \d+ of the \d+ names searched match(es)? all of: ',
+      ).hasMatch(first),
+      isTrue,
+      reason: _mask(first),
+    );
+    expect(hits, greaterThan(0));
+    expect(
+      RegExp(
+        r'^Index of \d{4}-\d\d-\d\d \d\d:\d\d: \d+ folders, \d+ files, '
+        r'\d+ weblinks?\. ',
+        multiLine: true,
+      ).hasMatch(first),
+      isTrue,
+      reason: _mask(first),
+    );
+    expect(second == first, isTrue, reason: 'second: ${_mask(second)}');
+    expect(third == first, isTrue, reason: 'third: ${_mask(third)}');
+    expect(
+      RegExp(
+        r'^Intradesk: no name matches all of: qzxj\d+ \(\d+ names searched\)',
+      ).hasMatch(nothing),
+      isTrue,
+      reason: _mask(nothing),
+    );
+    expect(
+      sub,
+      startsWith('Intradesk folder ${folder.name} (id ${folder.id}): '),
+      reason: 'the index names the folder: ${_mask(sub)}',
+    );
+
+    // Counts and timings only: names and the query are the school's.
+    final lines = [
+      for (final line in '$log\n$restartedLog'.split('\n'))
+        if (line.contains('] search_intradesk: ') ||
+            line.contains('] intradesk index: '))
+          line,
+    ];
+    stderr.writeln(
+      '--- intradesk: counts ---\n${lines.join('\n')}\n'
+      '${timings.join('\n')}\nwalk waited ${walk.elapsed.inSeconds} s',
+    );
+    final searches = [
+      for (final line in lines)
+        if (line.contains('] search_intradesk: ')) line,
+    ];
+    expect(lines, contains(contains('] intradesk index: built in ')));
+    expect(searches.last, contains('index from the disk ('));
+    expect(searches[searches.length - 2], contains('index from the memory ('));
+  }, timeout: const Timeout(Duration(minutes: 20)));
 }
+
+typedef _IntradeskLine = ({String kind, String name, String id});
+
+/// The folders and files of a `list_intradesk_folder` result.
+List<_IntradeskLine> _intradeskLines(String text) => [
+  for (final line in text.split('\n').skip(1))
+    if (RegExp(
+          r'^- (folder|file) \| (.+?) \| id ([0-9a-f-]{36})(?: \| |$)',
+        ).firstMatch(line)
+        case final match?)
+      (kind: match[1]!, name: match[2]!, id: match[3]!),
+];
 
 /// [text] with every letter and digit replaced, to show its shape without
 /// its (personal) content.

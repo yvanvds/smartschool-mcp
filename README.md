@@ -55,7 +55,11 @@ messages that are already read) and uses your own cookie cache; run just that
 one with `--name list_messages`. The search test only reads as well: it
 searches for a word of a read message twice (the second time from your
 message text cache) and for a word that occurs nowhere, and prints counts and
-timings only; run it with `--name search_messages`.
+timings only; run it with `--name search_messages`. The Intradesk test only
+reads too (no file is downloaded): it lists the top of Intradesk and a folder,
+searches with `refresh: true` (a full walk of Intradesk, a few minutes on a
+large one) and then from the index, and prints counts and timings only; run
+it with `--name intradesk`.
 
 ### Build
 
@@ -132,6 +136,16 @@ the login works and who is logged in, or what to fix.
   Smartschool does not confirm a send, it says the reply may have been sent
   and to check the sent box. Replies are new messages, not linked to the
   original (yvanvds/dartschool#26).
+- `search_intradesk`: searches the names of the folders, files and weblinks
+  on Intradesk (not what is in the files), ignoring case and accents. Every
+  word must occur in the full path and at least one in the name itself, so
+  `formulier uitstap` finds `Leerkrachten / Formulieren / uitstap.docx`, while
+  `formulieren` finds the folder but not every file in it. Optionally within
+  one folder (`folder_id`). Returns the matches with their full path, id, size
+  and date changed. It searches the Intradesk index (see below).
+- `list_intradesk_folder`: what is in one Intradesk folder (the top level
+  without `folder_id`), live from Smartschool: folders, files and weblinks
+  with their ids.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -143,6 +157,16 @@ filters and date-range arguments in `message_filter.dart`, the output lines in
 `message_format.dart`, full-text matching and snippets (`SearchQuery`) in
 `message_search.dart` and the message text cache (`MessageTextCache`) in
 `message_cache.dart`.
+
+Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
+argument (`intradeskIdArgument`) and listing-to-items conversion
+(`intradeskItems`) in `intradesk_access.dart`; `IntradeskItem` (kind, id,
+name with extension, path, size, date changed, `extension`, `mimeType`) and
+`IntradeskIndex` (lookup by id, the items inside a folder) in
+`intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
+`intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
+`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
+lines in `intradesk_format.dart`.
 
 ### Message text cache
 
@@ -166,6 +190,31 @@ read it, just like the session cookies next to it. Deleting the folder is safe
 at any time: the next search downloads the texts again. The log only shows
 counts, never a search query or message text. The colleague guide (#11) must
 say where the folder is and what it holds.
+
+### Intradesk index
+
+The library has no Intradesk search (a server-side search endpoint has not
+been researched), so `search_intradesk` walks the whole tree (every folder, 4
+listings at a time) and keeps an index of the names, paths, ids, sizes and
+dates. A walk takes minutes on a large Intradesk: about 3 minutes for one of
+5900 folders and 22000 files. A tool call waits at most 40 seconds for it,
+within the 60 seconds after which MCP clients such as Claude Desktop usually
+give up on a call; the walk then goes on in the background. Until the first index is ready, a search says how
+far the walk is and to search again; while a newer index is built, the old
+one is searched, with a note.
+
+The index is used for 24 hours, then rebuilt on the next search (which is
+answered from the old index meanwhile); `refresh: true` rebuilds it at once.
+It is kept in memory and in
+
+```
+%USERPROFILE%\.cache\smartschool\<username>\intradesk\<school address>\index.json
+```
+
+(`%HOME%` instead of `%USERPROFILE%` when `HOME` is set; about 10 MB for the
+Intradesk above). The server logs the folder on first use. It holds the names and paths of what
+you can see on Intradesk, not file contents. Deleting it is safe: the next
+search builds it again. The log only shows counts, never a name or a query.
 
 ### Login
 
