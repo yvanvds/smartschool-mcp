@@ -43,6 +43,7 @@ void main() {
       'reply_to_message',
       'search_intradesk',
       'list_intradesk_folder',
+      'read_intradesk_file',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -59,6 +60,7 @@ void main() {
       'search_messages',
       'search_intradesk',
       'list_intradesk_folder',
+      'read_intradesk_file',
     ]) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
     }
@@ -120,6 +122,9 @@ void main() {
         tools['list_intradesk_folder']!['inputSchema'] as Map;
     expect(intradeskListSchema, isNot(contains('required')));
     expect((intradeskListSchema['properties'] as Map).keys, ['folder_id']);
+    final readFileSchema = tools['read_intradesk_file']!['inputSchema'] as Map;
+    expect(readFileSchema['required'], ['file_id']);
+    expect((readFileSchema['properties'] as Map).keys, ['file_id']);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -210,6 +215,14 @@ void main() {
       'list_intradesk_folder',
       arguments: {'folder_id': '../messages'},
     );
+    final (fileError, fileText) = await server.callTool(
+      'read_intradesk_file',
+      arguments: {'file_id': 'cccc1111-1111-4111-b111-111111111111'},
+    );
+    final (badFileIdError, badFileIdText) = await server.callTool(
+      'read_intradesk_file',
+      arguments: {'file_id': 'welkom.docx'},
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
@@ -229,6 +242,7 @@ void main() {
       (replyError, replyText),
       (intradeskError, intradeskText),
       (folderError, folderText),
+      (fileError, fileText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -247,6 +261,8 @@ void main() {
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
     expect(badIdError, isTrue);
     expect(badIdText, startsWith('folder_id must be an Intradesk id like '));
+    expect(badFileIdError, isTrue);
+    expect(badFileIdText, startsWith('file_id must be an Intradesk id like '));
 
     await server.stop();
   });

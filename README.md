@@ -59,7 +59,11 @@ timings only; run it with `--name search_messages`. The Intradesk test only
 reads too (no file is downloaded): it lists the top of Intradesk and a folder,
 searches with `refresh: true` (a full walk of Intradesk, a few minutes on a
 large one) and then from the index, and prints counts and timings only; run
-it with `--name intradesk`.
+it with `--name list_intradesk_folder`. The file test downloads (never
+changes) the two smallest Word, Excel, PowerPoint, PDF, PNG and JPEG files it
+finds, reads them with `read_intradesk_file`, checks that a file above the
+size limit is refused without downloading it, and prints formats, sizes,
+character counts and timings only; run it with `--name read_intradesk_file`.
 
 ### Build
 
@@ -146,6 +150,10 @@ the login works and who is logged in, or what to fix.
 - `list_intradesk_folder`: what is in one Intradesk folder (the top level
   without `folder_id`), live from Smartschool: folders, files and weblinks
   with their ids.
+- `read_intradesk_file`: opens one Intradesk file (id from
+  `search_intradesk` or `list_intradesk_folder`) and returns its text, or an
+  image, so Claude can check what is in it, quote from it or summarise it
+  (see *Reading Intradesk files* below).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -165,8 +173,18 @@ name with extension, path, size, date changed, `extension`, `mimeType`) and
 `IntradeskIndex` (lookup by id, the items inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
-`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
-lines in `intradesk_format.dart`.
+`intradesk_cache.dart`; name matching in `intradesk_search.dart`, output
+lines in `intradesk_format.dart`, and the size-limited download
+(`downloadIntradeskFile`) in `intradesk_download.dart`.
+
+Reading documents lives in `lib/src/documents/`, independent of Intradesk so
+that message attachments can use it too: `readDocument(bytes, name: ...)` in
+`document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
+`UnreadableDocument` with the reason (in `document_content.dart`); the
+readers per format are `docx_text.dart`, `xlsx_text.dart`, `pptx_text.dart`,
+`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. The
+size-limited download itself (`downloadCapped`, for any Smartschool path) is
+in `lib/src/capped_download.dart`.
 
 ### Message text cache
 
@@ -215,6 +233,40 @@ It is kept in memory and in
 Intradesk above). The server logs the folder on first use. It holds the names and paths of what
 you can see on Intradesk, not file contents. Deleting it is safe: the next
 search builds it again. The log only shows counts, never a name or a query.
+
+### Reading Intradesk files
+
+`read_intradesk_file` downloads the file into memory (never to disk), reads
+it and forgets it. What a file is follows from its content, not its name:
+
+- Word (`.docx`), Excel (`.xlsx`) and PowerPoint (`.pptx`), and their
+  macro and template variants, as text: paragraphs with `#` headings and
+  `- ` list items, table rows as `cell | cell`, text boxes; every sheet under
+  its name, with dates, times and percentages as Excel shows them; every
+  slide with its tables and speaker notes.
+- PDF, as the text of every page under its number, read by the pure-Dart
+  `pdf_graphics` package (fonts, encodings and Unicode maps included). A
+  scanned PDF has no text, and says so. Claude Desktop is not handed the PDF
+  itself: returning it as an MCP embedded resource (`application/pdf` blob)
+  did not reach the model reliably in 2026 (Claude read one as a broken
+  image, modelcontextprotocol/csharp-sdk#1261; the hosted connectors drop
+  the blob, anthropics/claude-ai-mcp#1086), and Anthropic's connector docs
+  only promise text and image tool results.
+- Text files (`.txt`, `.csv`, `.md`; UTF-8, UTF-16 or Windows-1252) as they
+  are, web pages (`.html`) through the same converter as message bodies.
+- Images (`.png`, `.jpg`, `.gif`, `.webp`) as MCP image content; one larger
+  than 700 KB is scaled down to a JPEG (Claude Desktop refuses a tool result
+  over 1 MB).
+- Old Office files (`.doc`, `.xls`, `.ppt`), password-protected Office files,
+  OpenDocument files and other formats are refused with the reason.
+
+Files larger than 25 MB are not opened: refused before downloading when the
+index knows the size, else as soon as Smartschool announces it or the
+download goes past it (the library cannot limit a download,
+yvanvds/dartschool#41). Text longer than 100,000 characters (Claude Desktop
+accepts about 150,000 per tool result) is cut off with a note, and a PDF
+stops after 30 seconds of reading. The log shows formats, sizes and counts,
+never a name or any text.
 
 ### Login
 

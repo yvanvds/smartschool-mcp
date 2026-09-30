@@ -30,8 +30,15 @@
 /// one; the test waits for the walk by searching again every 20 s), then
 /// again from the index in memory, after a restart from the index on disk
 /// (`~/.cache/smartschool/<username>/intradesk/<host>`), and for a word that
-/// occurs nowhere. Run it on its own with `--name intradesk`. It prints
-/// counts and timings, never a name.
+/// occurs nowhere. Run it on its own with `--name list_intradesk_folder`.
+/// It prints counts and timings, never a name.
+///
+/// The file test only reads as well: it searches Intradesk for files of
+/// each format `read_intradesk_file` reads (with the index on disk, or a
+/// walk when there is none), opens the two smallest of each (above 5 KB)
+/// and one above the size limit, which must be refused without downloading.
+/// Run it on its own with `--name read_intradesk_file`. It prints formats,
+/// sizes, character counts and timings, never a name or any text.
 @Timeout(Duration(minutes: 5))
 library;
 
@@ -462,9 +469,143 @@ void main() {
     expect(searches.last, contains('index from the disk ('));
     expect(searches[searches.length - 2], contains('index from the memory ('));
   }, timeout: const Timeout(Duration(minutes: 20)));
+
+  test('read_intradesk_file opens real Word, Excel, PowerPoint, PDF and '
+      'image files, read-only, and refuses one above the size limit '
+      'without downloading it', () async {
+    // The user's own cookie cache and Intradesk index. Files are only
+    // downloaded, never changed. Names and contents are the school's:
+    // failures show masked text only, and only formats, sizes, counts and
+    // timings are printed.
+    final server = await ServerProcess.start(
+      exePath,
+      args: ['--credentials', credentialsPath],
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    Future<(bool?, String, int)> call(
+      String tool,
+      Map<String, Object?> arguments,
+    ) async {
+      final watch = Stopwatch()..start();
+      final result = await server.request('tools/call', {
+        'name': tool,
+        'arguments': arguments,
+      }, const Duration(minutes: 2));
+      final content = result['content'] as List;
+      final text = (content.first as Map)['text'] as String;
+      return (result['isError'] as bool?, text, watch.elapsedMilliseconds);
+    }
+
+    Future<String> search(String extension) async {
+      var (isError, text, _) = await call('search_intradesk', {
+        'query': extension,
+        'limit': 100,
+      });
+      final walk = Stopwatch()..start();
+      while (text.startsWith('Intradesk is being indexed')) {
+        expect(walk.elapsed, lessThan(const Duration(minutes: 12)));
+        await Future<void>.delayed(const Duration(seconds: 20));
+        (isError, text, _) = await call('search_intradesk', {
+          'query': extension,
+          'limit': 100,
+        });
+      }
+      expect(isError, isNot(true), reason: _mask(text));
+      return text;
+    }
+
+    final report = <String>[];
+    final tooLarge = <({String id, String extension, int size})>[];
+    const labels = {
+      'docx': 'Word document',
+      'xlsx': 'Excel workbook',
+      'pptx': 'PowerPoint presentation',
+      'pdf': 'PDF',
+      'png': 'image',
+      'jpg': 'image',
+    };
+    for (final MapEntry(key: extension, value: label) in labels.entries) {
+      final files = [
+        for (final file in _intradeskFiles(await search(extension)))
+          if (file.extension == extension) file,
+      ]..sort((a, b) => a.size.compareTo(b.size));
+      tooLarge.addAll(files.where((file) => file.size > 25 * 1024 * 1024));
+      final small = files.where((file) => file.size > 5 * 1024).take(2);
+      if (small.isEmpty) {
+        report.add('$extension: no file found');
+        continue;
+      }
+      for (final file in small) {
+        final (isError, text, ms) = await call('read_intradesk_file', {
+          'file_id': file.id,
+        });
+        expect(isError, isNot(true), reason: _mask(text));
+        final header = text.split('\n').first;
+        expect(
+          RegExp(
+            r'^Intradesk file .+ \(id '
+            '${file.id}'
+            r', .+\): '
+            '${RegExp.escape(label)}[,.( ]',
+          ).hasMatch(header),
+          isTrue,
+          reason: _mask(header),
+        );
+        expect(ms, lessThan(50000), reason: 'within Claude Desktop\'s wait');
+        report.add(
+          '$extension: ${file.size} bytes -> ${text.length} characters of '
+          'output in $ms ms',
+        );
+      }
+    }
+    if (tooLarge.isNotEmpty) {
+      final file = tooLarge.first;
+      final (isError, text, ms) = await call('read_intradesk_file', {
+        'file_id': file.id,
+      });
+      expect(isError, isTrue);
+      expect(text, contains(' is too large to open here: files up to 25 MB'));
+      report.add('refused ${file.extension} of ${file.size} bytes in $ms ms');
+    } else {
+      report.add('no file above the size limit found');
+    }
+    await server.stop();
+    final log = await server.stderr;
+
+    final downloads = [
+      for (final line in log.split('\n'))
+        if (line.contains('] read_intradesk_file: ')) line,
+    ];
+    stderr.writeln(
+      '--- read_intradesk_file: formats, sizes, counts ---\n'
+      '${report.join('\n')}\n${downloads.join('\n')}',
+    );
+    // The refused file was never downloaded.
+    expect(downloads, hasLength(report.where((r) => r.contains('->')).length));
+  }, timeout: const Timeout(Duration(minutes: 20)));
 }
 
 typedef _IntradeskLine = ({String kind, String name, String id});
+
+/// The files of a `search_intradesk` result: id, extension and size.
+List<({String id, String extension, int size})> _intradeskFiles(String text) {
+  const units = {'byte': 1, 'bytes': 1, 'KB': 1024, 'MB': 1024 * 1024};
+  return [
+    for (final line in text.split('\n'))
+      if (RegExp(
+            r'^- file \| .*\.(\w+) \| id ([0-9a-f-]{36}) \| ([\d.]+) '
+            r'(bytes?|KB|MB)(?: \||$)',
+          ).firstMatch(line)
+          case final match?)
+        (
+          id: match[2]!,
+          extension: match[1]!.toLowerCase(),
+          size: (double.parse(match[3]!) * units[match[4]]!).round(),
+        ),
+  ];
+}
 
 /// The folders and files of a `list_intradesk_folder` result.
 List<_IntradeskLine> _intradeskLines(String text) => [

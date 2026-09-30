@@ -12,6 +12,7 @@ import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
@@ -52,6 +53,7 @@ Future<void> main(List<String> args) async {
           replyToMessageTool(session),
           searchIntradeskTool(session, intradeskIndex),
           listIntradeskFolderTool(session, intradeskIndex),
+          readIntradeskFileTool(session, intradeskIndex),
         ],
       );
       log('version $packageVersion serving MCP on stdio');
