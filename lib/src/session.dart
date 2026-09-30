@@ -82,6 +82,13 @@ final class SmartschoolSession {
   /// rejected request did not take effect on the server, but [action] runs
   /// again from the start, so it must be safe to repeat.
   ///
+  /// Calls that find the session expired at the same time, and concurrent
+  /// requests within one [action], share one new login: several logins at
+  /// once would send the same one-time 2FA code, and repeated logins count
+  /// towards locking the account (#20). That is why the library itself
+  /// never logs in on a client whose session worked (see
+  /// [SessionInterceptor.allowLogin]).
+  ///
   /// Login and connection failures are thrown as [SmartschoolProblem]s; other
   /// errors from [action] are rethrown unchanged.
   Future<T> run<T>(Future<T> Function(SmartschoolClient client) action) async {
@@ -194,6 +201,9 @@ final class SmartschoolSession {
             ? 'Smartschool: reused the saved session, no login needed'
             : 'Smartschool: logged in',
       );
+      // From now on a request sent to the login chain fails, so that [run]
+      // logs in again once for all requests that find the session expired.
+      trace.allowLogin = false;
       return client;
     }
 
@@ -257,7 +267,7 @@ String _describe(Object error) => switch (error) {
 /// - turns a `401` on a regular request into a [SessionExpiredError], so the
 ///   session logs in again (see [SessionExpiredError] for why the library
 ///   does not);
-/// - with `allowLogin: false`, turns being sent to the login chain into a
+/// - unless [allowLogin], turns being sent to the login chain into a
 ///   [SessionExpiredError] as well, before the library's auth interceptor
 ///   can start a login.
 final class SessionInterceptor extends Interceptor {
@@ -266,7 +276,15 @@ final class SessionInterceptor extends Interceptor {
   final SmartschoolClient _client;
 
   /// Whether the library may log in when Smartschool asks for it.
-  final bool allowLogin;
+  ///
+  /// Only while [SmartschoolSession] checks a new client's session: once
+  /// that works, the session turns it off. The library logs in for every
+  /// request that lands on the login chain, so requests in progress when
+  /// the session expires would each log in, all with the same 2FA code
+  /// (yvanvds/dartschool#36). Instead they fail with a
+  /// [SessionExpiredError], and [SmartschoolSession.run] logs in once for
+  /// all of them with a new client and retries each call.
+  bool allowLogin;
 
   /// How many responses landed on a page of the login chain; 0 means the
   /// saved session was valid.
@@ -298,8 +316,12 @@ final class SessionInterceptor extends Interceptor {
       if (_client.isAuthUri(response.realUri)) {
         loginPagesSeen++;
         if (!allowLogin) {
-          log('Smartschool: the saved session is not valid (sent to $page)');
-          return _reject(response, handler);
+          log('Smartschool: the session is not valid (sent to $page)');
+          return _reject(
+            response,
+            handler,
+            const SessionExpiredError.sentToLogin(),
+          );
         }
         log(
           page.endsWith('/login')
@@ -307,18 +329,26 @@ final class SessionInterceptor extends Interceptor {
               : 'Smartschool: login continues at $page',
         );
       } else if (response.statusCode == 401) {
-        return _reject(response, handler);
+        return _reject(
+          response,
+          handler,
+          const SessionExpiredError.unauthorized(),
+        );
       }
     }
     handler.next(response);
   }
 
-  void _reject(Response<dynamic> response, ResponseInterceptorHandler handler) {
+  void _reject(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+    SessionExpiredError error,
+  ) {
     handler.reject(
       DioException(
         requestOptions: response.requestOptions,
         response: response,
-        error: const SessionExpiredError(),
+        error: error,
       ),
     );
   }

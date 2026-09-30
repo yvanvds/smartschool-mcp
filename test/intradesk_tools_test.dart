@@ -484,20 +484,45 @@ void main() {
       );
     });
 
-    test('when the session expires during the walk, it logs in again and '
-        'walks again', () async {
+    test('when the session expires during the walk, the listings in progress '
+        'share one new login and the walk starts again', () async {
+      for (var i = 1; i <= 6; i++) {
+        server.intradesk.addFolder('Map $i');
+      }
       await list(); // logs in
-      server.expireSessionBefore(
-        (request) => request.uri.path.endsWith('/$_documenten'),
-      );
+      server
+        ..latency = const Duration(milliseconds: 20)
+        ..maxInFlight = 0
+        ..expireSessionBefore(
+          (request) => request.uri.path.endsWith('/$_documenten'),
+        );
+      server.requests.clear();
+      server.intradesk.listed.clear();
 
       final text = await search({'query': 'info'});
 
       expect(hits(text), hasLength(1));
-      expect(text, contains(': 3 folders, 2 files, 0 weblinks.'));
-      // Should be 2: the two folders listed at the same time each log in
-      // (yvanvds/dartschool#36, #20).
-      expect(server.logins, greaterThanOrEqualTo(2));
+      expect(text, contains(': 9 folders, 2 files, 0 weblinks.'));
+      expect(
+        server.maxInFlight,
+        intradeskWalkConcurrency,
+        reason: 'several listings were in progress when the session expired',
+      );
+      // One new login, not one per listing that found the session expired:
+      // each would send the same 2FA code (yvanvds/dartschool#36, #20).
+      expect(server.logins, 2);
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+      expect(
+        server.requests.where(
+          (r) => r == 'POST /2fa/api/v1/google-authenticator',
+        ),
+        hasLength(1),
+      );
+      expect(
+        server.intradesk.listed.where((id) => id == ''),
+        hasLength(2),
+        reason: 'the walk starts again from the root',
+      );
     });
 
     test('without Smartschool settings: the missing settings, before the '

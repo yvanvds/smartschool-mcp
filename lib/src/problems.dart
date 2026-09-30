@@ -142,19 +142,30 @@ final class SmartschoolProblem implements Exception {
   }
 }
 
-/// Smartschool answered a regular request with `401 Unauthorized`: the
-/// session is missing or expired.
+/// Smartschool did not accept the session of a regular request: it is
+/// missing or expired.
 ///
 /// Smartschool answers an XML or form POST without a valid session with a
 /// bare 401 instead of redirecting to `/login`, so the library's auth
 /// interceptor, which only reacts to landing on a login page, never logs in
-/// again. The session's interceptor turns that 401 into this error. Belongs
-/// in the library: #13.
+/// again. The session's interceptor turns that 401 into this error
+/// ([SessionExpiredError.unauthorized]). Belongs in the library: #13.
+///
+/// The session's interceptor also turns a request sent to the login chain
+/// into this error ([SessionExpiredError.sentToLogin]) instead of letting
+/// the library log in, so that concurrent requests share one new login
+/// (yvanvds/dartschool#36, #20).
 final class SessionExpiredError extends SmartschoolAuthenticationError {
-  const SessionExpiredError()
+  const SessionExpiredError.unauthorized()
     : super(
         'Smartschool answered 401 Unauthorized: the session is missing or '
         'expired',
+      );
+
+  const SessionExpiredError.sentToLogin()
+    : super(
+        'Smartschool sent the request to its login page: the session is '
+        'missing or expired',
       );
 }
 
