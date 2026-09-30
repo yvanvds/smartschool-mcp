@@ -7,6 +7,10 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
 
+import 'fake_messages.dart';
+
+export 'fake_messages.dart';
+
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
 
@@ -62,11 +66,28 @@ class FakeSmartschool implements HttpClientAdapter {
   /// Every request, as `METHOD path`.
   final List<String> requests = [];
 
+  /// The Messages module, served to logged-in requests.
+  final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
+
+  /// How long every request takes, so that concurrent requests overlap.
+  Duration latency = Duration.zero;
+
+  /// The most requests that were in progress at the same time.
+  int maxInFlight = 0;
+  int _inFlight = 0;
+
   /// Simulates the session expiring on the server.
   void expireSession() {
     _validSession = null;
     _passwordDone = false;
   }
+
+  bool Function(RequestOptions request)? _expireBefore;
+
+  /// Simulates the session expiring right before the first request that
+  /// [matches] arrives, so that request is the first one without a session.
+  void expireSessionBefore(bool Function(RequestOptions request) matches) =>
+      _expireBefore = matches;
 
   bool _hasSession(RequestOptions options) {
     final cookie = options.headers[HttpHeaders.cookieHeader];
@@ -81,7 +102,21 @@ class FakeSmartschool implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    if (++_inFlight > maxInFlight) maxInFlight = _inFlight;
+    try {
+      if (latency > Duration.zero) await Future<void>.delayed(latency);
+      return _respond(options);
+    } finally {
+      _inFlight--;
+    }
+  }
+
+  ResponseBody _respond(RequestOptions options) {
     final path = options.uri.path;
+    if (_expireBefore?.call(options) ?? false) {
+      _expireBefore = null;
+      expireSession();
+    }
     final loggedIn = _hasSession(options);
     requests.add('${options.method} $path');
     if (unreachable) {
@@ -91,6 +126,7 @@ class FakeSmartschool implements HttpClientAdapter {
         error: const SocketException("Failed host lookup: 'fake'"),
       );
     }
+    if (FakeMailbox.isSubmit(options)) mailbox.submits++;
 
     if (options.method == 'POST' && path == '/login') {
       _passwordDone = passwordAccepted;
@@ -130,7 +166,7 @@ class FakeSmartschool implements HttpClientAdapter {
       if (!loggedIn || path == '/always-401') {
         return ResponseBody.fromString('', 401);
       }
-      return _html('<ok/>');
+      return mailbox.respond(options) ?? _html('<ok/>');
     }
 
     // A GET anywhere else needs a session; without one the server redirects
@@ -147,7 +183,7 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == SmartschoolSession.sessionCheckPath) {
       return _json('[{"platformId":7}]');
     }
-    return _html(_homePage);
+    return mailbox.respond(options) ?? _html(_homePage);
   }
 
   @override

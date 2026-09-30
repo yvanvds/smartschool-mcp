@@ -10,7 +10,9 @@ typedef ToolHandler =
 ///
 /// Each tool lives in its own file under `lib/src/tools/` and exposes a
 /// [ServerTool]; the entry point passes the list of tools to
-/// `SmartschoolServer`, which registers them.
+/// `SmartschoolServer`, which registers them. A handler reads integer
+/// arguments with the functions in `arguments.dart`, never with `as int`:
+/// a whole number can arrive as a double (`101.0`).
 class ServerTool {
   const ServerTool({required this.definition, required this.handler});
 
@@ -19,4 +21,18 @@ class ServerTool {
 
   /// Runs the tool for a `tools/call` request.
   final ToolHandler handler;
+}
+
+/// A tool call that cannot be carried out as asked: an invalid argument, or
+/// something the arguments name that does not exist.
+///
+/// A handler throws it with a [message] for Claude that says what to change;
+/// the server turns it into an error result with that message.
+final class ToolError implements Exception {
+  const ToolError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

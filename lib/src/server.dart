@@ -12,9 +12,10 @@ import 'version.dart';
 ///
 /// A tool may simply let a [SmartschoolProblem] (a login or connection
 /// failure) propagate: the server turns it into an error result carrying the
-/// problem's message, so every tool reports those the same way. Any other
-/// exception becomes a generic error result; its details and stack trace go
-/// to the log only, never into tool output.
+/// problem's message, so every tool reports those the same way. A
+/// [ToolError] (an invalid argument) likewise becomes an error result with
+/// its message. Any other exception becomes a generic error result; its
+/// details and stack trace go to the log only, never into tool output.
 base class SmartschoolServer extends MCPServer with ToolsSupport {
   SmartschoolServer(super.channel, {Iterable<ServerTool> tools = const []})
     : super.fromStreamChannel(
@@ -42,6 +43,8 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
       return await tool.handler(request);
     } on SmartschoolProblem catch (problem) {
       return _error(problem.message);
+    } on ToolError catch (error) {
+      return _error(error.message);
     } catch (error, stackTrace) {
       final name = tool.definition.name;
       log('tool $name failed: $error\n$stackTrace');

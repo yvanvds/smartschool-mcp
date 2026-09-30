@@ -29,12 +29,15 @@ Future<(ServerConnection, InitializeResult)> connect({
   return (connection, result);
 }
 
-/// Calls the tool [name] without arguments and returns the result and its
+/// Calls the tool [name] with [arguments] and returns the result and its
 /// single text content.
 Future<(CallToolResult, String)> callTool(
   ServerConnection connection,
-  String name,
-) async {
-  final result = await connection.callTool(CallToolRequest(name: name));
+  String name, [
+  Map<String, Object?>? arguments,
+]) async {
+  final result = await connection.callTool(
+    CallToolRequest(name: name, arguments: arguments),
+  );
   return (result, (result.content.single as TextContent).text);
 }

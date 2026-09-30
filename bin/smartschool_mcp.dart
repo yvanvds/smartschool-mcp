@@ -3,10 +3,16 @@ import 'dart:io';
 
 import 'package:dart_mcp/stdio.dart';
 import 'package:smartschool_mcp/src/log.dart';
+import 'package:smartschool_mcp/src/messages/message_cache.dart';
 import 'package:smartschool_mcp/src/options.dart';
 import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
@@ -33,7 +39,14 @@ Future<void> main(List<String> args) async {
       final session = SmartschoolSession(source);
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
-        tools: [statusTool(session)],
+        tools: [
+          statusTool(session),
+          listMessagesTool(session),
+          readMessageTool(session),
+          searchMessagesTool(session, MessageTextCache.of(session)),
+          archiveMessagesTool(session),
+          replyToMessageTool(session),
+        ],
       );
       log('version $packageVersion serving MCP on stdio');
       log('Smartschool settings: ${source.logDescription}');
