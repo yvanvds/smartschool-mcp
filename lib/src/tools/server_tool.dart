@@ -10,7 +10,9 @@ typedef ToolHandler =
 ///
 /// Each tool lives in its own file under `lib/src/tools/` and exposes a
 /// [ServerTool]; the entry point passes the list of tools to
-/// `SmartschoolServer`, which registers them.
+/// `SmartschoolServer`, which registers them. A handler reads integer
+/// arguments with the functions in `arguments.dart`, never with `as int`:
+/// a whole number can arrive as a double (`101.0`).
 class ServerTool {
   const ServerTool({required this.definition, required this.handler});
 

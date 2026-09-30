@@ -247,6 +247,17 @@ void main() {
       );
     });
 
+    test('a limit written with a decimal part (2.0) works like 2', () async {
+      expect(
+        await ok('list_messages', {'limit': 2.0}),
+        'Inbox: 3 messages; showing the newest 2 (raise limit or narrow the '
+        'filters to see the rest), newest first.\n'
+        '- id 102 | 2024-03-15 08:00 | from An Claes | Re: Toets wiskunde\n'
+        '- id 101 | 2024-03-14 16:05 | from Jan Peeters | Oudercontact '
+        'donderdag | unread, attachments, flag red',
+      );
+    });
+
     test('no match', () async {
       expect(
         await ok('list_messages', {'query': 'zwembad'}),
@@ -312,6 +323,8 @@ void main() {
         'an unknown box': ({'box': 'trash'}, 'trash'),
         'a limit of 0': ({'limit': 0}, 'limit'),
         'a limit above 200': ({'limit': 201}, 'limit'),
+        'a limit with a fraction': ({'limit': 2.5}, 'limit'),
+        'a limit that is not a number': ({'limit': 'tien'}, 'limit'),
       };
       for (final MapEntry(key: name, value: (arguments, message))
           in cases.entries) {
@@ -440,12 +453,34 @@ void main() {
       expect(text, startsWith('There is no message with id 101 in the sent '));
     });
 
-    test('without message_id: an error', () async {
-      final (result, text) = await call('read_message', {'box': 'inbox'});
+    test('an id written with a decimal part (102.0) works like 102', () async {
+      final text = await ok('read_message', {'message_id': 102.0});
 
-      expect(result.isError, isTrue);
-      expect(text, contains('message_id'));
-      expect(server.mailbox.actions, isEmpty);
+      expect(text, startsWith('Message 102 (Inbox)\nFrom: An Claes\n'));
+      expect(text, endsWith('\n\nPrima, bedankt!'));
+      expect(server.mailbox.actions, [
+        'show message boxType=inbox limitList=false msgID=102',
+      ]);
+    });
+
+    group('invalid message_id: an error that says what to fix, and nothing '
+        'is sent to Smartschool', () {
+      final cases = <String, Map<String, Object?>>{
+        'absent': {'box': 'inbox'},
+        'with a fraction': {'message_id': 101.5},
+        'not a number': {'message_id': 'honderd'},
+        'zero': {'message_id': 0},
+      };
+      for (final MapEntry(key: name, value: arguments) in cases.entries) {
+        test(name, () async {
+          final (result, text) = await call('read_message', arguments);
+
+          expect(result.isError, isTrue);
+          expect(text, contains('message_id'));
+          expect(text, isNot(contains('unexpected error')));
+          expect(server.mailbox.actions, isEmpty);
+        });
+      }
     });
 
     test('a very long body is cut off with a note', () async {

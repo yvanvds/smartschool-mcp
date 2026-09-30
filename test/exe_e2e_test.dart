@@ -159,6 +159,38 @@ void main() {
     await server.stop();
   });
 
+  test('the message tools accept a whole number written with a decimal part '
+      '(123.0) and get as far as the missing settings', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+      ('read_message', {'message_id': 123.0}),
+      ('list_messages', {'limit': 10.0}),
+      (
+        'archive_messages',
+        {
+          'message_ids': [123.0, 456],
+        },
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+
+      expect(isError, isTrue, reason: tool);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: tool,
+      );
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('is not a subtype')));
+  });
+
   test('smartschool_status with --credentials naming a missing file says '
       'so, without looking for another credentials.yml', () async {
     final missing = File('does-not-exist.yml').absolute.path;

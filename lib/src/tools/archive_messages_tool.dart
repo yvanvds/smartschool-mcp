@@ -4,6 +4,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../messages/message_box.dart';
 import '../messages/message_format.dart';
 import '../session.dart';
+import 'arguments.dart';
 import 'server_tool.dart';
 
 /// At most this many message ids per `archive_messages` call.
@@ -57,12 +58,9 @@ Future<CallToolResult> _archive(
   SmartschoolSession session,
   Map<String, Object?> arguments,
 ) async {
-  // The input schema guarantees a list of 1 to maxArchiveIds whole numbers;
-  // it also lets through one written as 101.0, which JSON decodes to a
-  // double. Duplicates are dropped, keeping the order.
-  final ids = {
-    for (final id in arguments['message_ids'] as List) (id as num).toInt(),
-  }.toList();
+  // The input schema guarantees a list of 1 to maxArchiveIds whole numbers.
+  // Duplicates (also 101 and 101.0) are dropped, keeping the order.
+  final ids = {...intListArgument(arguments, 'message_ids')}.toList();
   final report = await withMessages(
     session,
     (messages) => _archiveIds(messages, ids),

@@ -4,6 +4,7 @@ import '../messages/message_box.dart';
 import '../messages/message_filter.dart';
 import '../messages/message_format.dart';
 import '../session.dart';
+import 'arguments.dart';
 import 'server_tool.dart';
 
 /// `list_messages`: the headers of the messages in a box, newest first,
@@ -88,7 +89,7 @@ Future<CallToolResult> _list(
       final String until => parseDateArgument('until', until, endOfDay: true),
       _ => null,
     },
-    limit: arguments['limit'] as int? ?? MessageFilter.defaultLimit,
+    limit: intArgument(arguments, 'limit') ?? MessageFilter.defaultLimit,
   );
   if ((filter.since, filter.until) case (
     final since?,

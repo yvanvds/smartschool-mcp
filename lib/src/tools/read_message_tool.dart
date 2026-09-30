@@ -5,6 +5,7 @@ import '../messages/html_to_text.dart';
 import '../messages/message_box.dart';
 import '../messages/message_format.dart';
 import '../session.dart';
+import 'arguments.dart';
 import 'server_tool.dart';
 
 /// Message text longer than this is cut off, with a note.
@@ -49,7 +50,7 @@ Future<CallToolResult> _read(
   SmartschoolSession session,
   Map<String, Object?> arguments,
 ) async {
-  final id = arguments['message_id'] as int;
+  final id = requiredIntArgument(arguments, 'message_id');
   final box = MessageBox.parse(arguments['box']);
 
   // Neither call changes the read state: getMessage does not mark the
