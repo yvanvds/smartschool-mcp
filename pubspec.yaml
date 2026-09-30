@@ -1,0 +1,28 @@
+name: smartschool_mcp
+description: >-
+  A local MCP server that gives Claude Desktop access to Smartschool, for
+  teachers on Windows.
+version: 0.1.0
+repository: https://github.com/yvanvds/smartschool-mcp
+publish_to: none
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  # MCP protocol over stdio. Still 0.x, so pinned to an exact version.
+  dart_mcp: 0.5.2
+  # Smartschool client library (pure Dart despite the name). pub.dev only has
+  # 0.2.6, which lacks the 2FA-detection fix (yvanvds/dartschool#1) and the
+  # login-302 fix (yvanvds/dartschool#6). Switch to pub.dev once 0.2.10 or
+  # later is published there.
+  flutter_smartschool:
+    git:
+      url: https://github.com/yvanvds/dartschool.git
+      ref: bfd6258ea8679cd8b7bf1d442fa0a54ae2fe132b
+
+dev_dependencies:
+  async: ^2.13.0
+  lints: ^6.1.0
+  stream_channel: ^2.1.4
+  test: ^1.32.0
