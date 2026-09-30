@@ -38,6 +38,7 @@ void main() {
       'smartschool_status',
       'list_messages',
       'read_message',
+      'search_messages',
       'archive_messages',
       'reply_to_message',
     ]);
@@ -50,9 +51,21 @@ void main() {
     });
     final readSchema = tools['read_message']!['inputSchema'] as Map;
     expect(readSchema['required'], ['message_id']);
-    for (final name in ['list_messages', 'read_message']) {
+    for (final name in ['list_messages', 'read_message', 'search_messages']) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
     }
+    final searchSchema = tools['search_messages']!['inputSchema'] as Map;
+    expect(searchSchema['required'], ['query']);
+    expect((searchSchema['properties'] as Map)['boxes'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'default': ['inbox', 'archive'],
+      'minItems': 1,
+      'items': {
+        'enum': ['inbox', 'sent', 'archive'],
+        'type': 'string',
+      },
+    });
     final archive = tools['archive_messages'] as Map;
     expect(archive['annotations'], {
       'title': isA<String>(),
@@ -139,6 +152,17 @@ void main() {
       'read_message',
       arguments: {'message_id': 123},
     );
+    final (searchError, searchText) = await server.callTool(
+      'search_messages',
+      arguments: {
+        'query': 'facultatieve verlofdag',
+        'boxes': ['inbox', 'sent'],
+      },
+    );
+    final (emptyQueryError, emptyQueryText) = await server.callTool(
+      'search_messages',
+      arguments: {'query': '  '},
+    );
     final (archiveError, archiveText) = await server.callTool(
       'archive_messages',
       arguments: {
@@ -167,6 +191,7 @@ void main() {
     for (final (isError, text) in [
       (listError, listText),
       (readError, readText),
+      (searchError, searchText),
       (archiveError, archiveText),
       (replyError, replyText),
     ]) {
@@ -183,6 +208,8 @@ void main() {
     expect(tooManyText, contains('List has 101 items'));
     expect(emptyError, isTrue);
     expect(emptyText, contains('body is empty'));
+    expect(emptyQueryError, isTrue);
+    expect(emptyQueryText, 'query is empty: pass the words to look for.');
 
     await server.stop();
   });
@@ -198,6 +225,7 @@ void main() {
     for (final (tool, arguments) in <(String, Map<String, Object?>)>[
       ('read_message', {'message_id': 123.0}),
       ('list_messages', {'limit': 10.0}),
+      ('search_messages', {'query': 'verlof', 'limit': 10.0}),
       (
         'archive_messages',
         {

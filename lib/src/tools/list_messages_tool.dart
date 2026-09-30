@@ -78,25 +78,14 @@ Future<CallToolResult> _list(
 ) async {
   final box = MessageBox.parse(arguments['box']);
   final query = (arguments['query'] as String?)?.trim();
+  final (:since, :until) = dateRangeArguments(arguments);
   final filter = MessageFilter(
     query: query,
     unreadOnly: arguments['unread_only'] as bool? ?? false,
-    since: switch (arguments['since']) {
-      final String since => parseDateArgument('since', since),
-      _ => null,
-    },
-    until: switch (arguments['until']) {
-      final String until => parseDateArgument('until', until, endOfDay: true),
-      _ => null,
-    },
+    since: since,
+    until: until,
     limit: intArgument(arguments, 'limit') ?? MessageFilter.defaultLimit,
   );
-  if ((filter.since, filter.until) case (
-    final since?,
-    final until?,
-  ) when since.isAfter(until)) {
-    throw const ToolError('since must not be later than until.');
-  }
   final filtered =
       (query?.isNotEmpty ?? false) ||
       filter.unreadOnly ||

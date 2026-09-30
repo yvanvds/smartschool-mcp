@@ -52,7 +52,10 @@ SMARTSCHOOL_LIVE_CREDENTIALS=credentials.yml dart test test/live_test.dart
 Every run logs in with a fresh cookie cache, so do not run it in a loop. Its
 message test only reads (it lists the inbox and archive and reads a few
 messages that are already read) and uses your own cookie cache; run just that
-one with `--name list_messages`.
+one with `--name list_messages`. The search test only reads as well: it
+searches for a word of a read message twice (the second time from your
+message text cache) and for a word that occurs nowhere, and prints counts and
+timings only; run it with `--name search_messages`.
 
 ### Build
 
@@ -107,6 +110,14 @@ the login works and who is logged in, or what to fix.
   (yvanvds/dartschool#15).
 - `read_message`: one message with its recipients, attachment names and the
   body as plain text. It does not mark the message as read.
+- `search_messages`: searches the text, subject and sender of the messages
+  in the inbox and archive (or the boxes named) for words, ignoring case and
+  accents, optionally within a date range, and returns the matching messages
+  newest first with a snippet around the words. It downloads each message
+  text once (at most 100 per search, 4 at a time, newest first) and keeps it
+  in the message text cache (see below), so later searches are quick; the
+  result says when messages were left unsearched. Like `list_messages` it
+  only sees the newest 50 messages of a box.
 - `archive_messages`: moves up to 100 inbox messages (ids from
   `list_messages`) to the archive and reports per id whether it was
   archived, was already in the archive, or why not. Only the newest 50 inbox
@@ -128,8 +139,33 @@ in `message_box.dart`, the HTML-to-text converter `htmlToText` in
 `html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
 writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
 who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
-filters in `message_filter.dart` and the output lines in
-`message_format.dart`.
+filters and date-range arguments in `message_filter.dart`, the output lines in
+`message_format.dart`, full-text matching and snippets (`SearchQuery`) in
+`message_search.dart` and the message text cache (`MessageTextCache`) in
+`message_cache.dart`.
+
+### Message text cache
+
+`search_messages` keeps the plain text of every message it downloads, so each
+message is downloaded only once (Smartschool messages do not change once
+sent). The texts are in
+
+```
+%USERPROFILE%\.cache\smartschool\<username>\messages\<school address>\
+```
+
+(`%HOME%` instead of `%USERPROFILE%` when `HOME` is set), one small JSON file
+per message (`inbox-<id>.json`, also for archived messages, and
+`outbox-<id>.json` for sent ones), next to the session cookies. The server
+logs the folder on first use.
+
+Privacy: the folder holds the text of your messages, unencrypted, on this PC.
+It is inside your own Windows profile, never in the project folder, and
+nothing is sent anywhere; anyone who can sign in to your Windows account can
+read it, just like the session cookies next to it. Deleting the folder is safe
+at any time: the next search downloads the texts again. The log only shows
+counts, never a search query or message text. The colleague guide (#11) must
+say where the folder is and what it holds.
 
 ### Login
 

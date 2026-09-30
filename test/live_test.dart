@@ -16,6 +16,13 @@
 /// a few messages that are already read, and it uses your own cookie cache,
 /// so it needs no new login while the saved session is valid. Run it on its
 /// own with `--name list_messages`. Its failures show message text masked.
+///
+/// The search test only reads as well: it searches the inbox and the archive
+/// for a word of a read message, twice (the second time from the message
+/// text cache, `~/.cache/smartschool/<username>/messages/<host>`), and for a
+/// word that occurs nowhere. Run it on its own with
+/// `--name search_messages`. It prints counts and timings, never the word or
+/// any message text.
 @Timeout(Duration(minutes: 5))
 library;
 
@@ -192,6 +199,99 @@ void main() {
           .split('\n')
           .where((line) => line.contains('] Smartschool: '));
       stderr.writeln('--- messages: login steps ---\n${steps.join('\n')}');
+    },
+  );
+
+  test(
+    'search_messages works on the real account, read-only: it finds a word '
+    'of a message, and a second search is served from the text cache',
+    () async {
+      // The user's own cookie cache and message text cache
+      // (~/.cache/smartschool/<username>/messages/<host>). Only messages
+      // that are already read are read. Failures show masked text only.
+      final server = await ServerProcess.start(
+        exePath,
+        args: ['--credentials', credentialsPath],
+        environment: environmentWithoutSmartschool(),
+      );
+      await server.initialize();
+      Future<String> call(String tool, Map<String, Object?> arguments) async {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+          timeout: const Duration(minutes: 2),
+        );
+        expect(isError, isNot(true), reason: '$tool: ${_mask(text)}');
+        return text;
+      }
+
+      // A long word from the text of a read inbox message.
+      final inbox = _expectListShape(await call('list_messages', {}), 'Inbox');
+      String? word;
+      int? wordId;
+      for (final header in inbox.where((h) => !h.unread).take(5)) {
+        final text = await call('read_message', {'message_id': header.id});
+        final body = text.substring(text.indexOf('\n\n') + 2);
+        if (body.startsWith('(The message has no text.)')) continue;
+        word = RegExp(r'\p{L}{7,}', unicode: true).firstMatch(body)?[0];
+        if (word != null) {
+          wordId = header.id;
+          break;
+        }
+      }
+      expect(word, isNotNull, reason: 'no read inbox message with a word');
+      final query = {'query': word!.toUpperCase(), 'limit': 100};
+
+      final watch = Stopwatch()..start();
+      final first = await call('search_messages', query);
+      final firstTime = watch.elapsedMilliseconds;
+      watch.reset();
+      final second = await call('search_messages', query);
+      final secondTime = watch.elapsedMilliseconds;
+      final nothing = await call('search_messages', {
+        'query': 'qzxj${DateTime.now().microsecondsSinceEpoch}',
+      });
+
+      final hits = [
+        for (final match in RegExp(
+          r'^- (inbox|archive) \| id (\d+) \| \d{4}-\d\d-\d\d \d\d:\d\d \| '
+          r'from ',
+          multiLine: true,
+        ).allMatches(first))
+          int.parse(match[2]!),
+      ];
+      expect(
+        RegExp(
+          r'^Inbox and Archive: \d+ of the \d+ messages? searched contains? '
+          r'all of: ',
+        ).hasMatch(first),
+        isTrue,
+        reason: _mask(first),
+      );
+      expect(hits, contains(wordId), reason: _mask(first));
+      expect(second == first, isTrue, reason: 'second: ${_mask(second)}');
+      expect(
+        RegExp(
+          r'^Inbox and Archive: none of the \d+ messages searched contains '
+          r'all of: qzxj\d+\.',
+        ).hasMatch(nothing),
+        isTrue,
+        reason: _mask(nothing),
+      );
+
+      await server.stop();
+      // Counts and timings only: the query and the texts are personal.
+      final searches = (await server.stderr)
+          .split('\n')
+          .where((line) => line.contains('] search_messages: '))
+          .toList();
+      stderr.writeln(
+        '--- search_messages: counts ---\n${searches.join('\n')}\n'
+        'first search $firstTime ms, second $secondTime ms',
+      );
+      expect(searches, hasLength(3));
+      expect(searches[1], contains(', 0 downloaded,'));
+      expect(searches[2], contains(', 0 downloaded,'));
     },
   );
 }

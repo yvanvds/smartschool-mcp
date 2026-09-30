@@ -69,6 +69,13 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The Messages module, served to logged-in requests.
   final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
 
+  /// How long every request takes, so that concurrent requests overlap.
+  Duration latency = Duration.zero;
+
+  /// The most requests that were in progress at the same time.
+  int maxInFlight = 0;
+  int _inFlight = 0;
+
   /// Simulates the session expiring on the server.
   void expireSession() {
     _validSession = null;
@@ -95,6 +102,16 @@ class FakeSmartschool implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    if (++_inFlight > maxInFlight) maxInFlight = _inFlight;
+    try {
+      if (latency > Duration.zero) await Future<void>.delayed(latency);
+      return _respond(options);
+    } finally {
+      _inFlight--;
+    }
+  }
+
+  ResponseBody _respond(RequestOptions options) {
     final path = options.uri.path;
     if (_expireBefore?.call(options) ?? false) {
       _expireBefore = null;

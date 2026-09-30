@@ -58,8 +58,11 @@ enum MessageBox {
         _ => messages.getHeaders(boxType: boxType),
       };
 
-  /// Message [id] in this box with all its recipients, or null when the box
-  /// has no such message.
+  /// Message [id] in this box, or null when the box has no such message.
+  ///
+  /// With [allRecipients] (the default) the message lists all its
+  /// recipients; without, Smartschool names a few and counts the rest (a
+  /// lighter request, for when the recipients do not matter).
   ///
   /// For an unknown id Smartschool does not answer with nothing but with a
   /// placeholder message ("Niet beschikbaar", "* Bericht zonder onderwerp *",
@@ -68,11 +71,15 @@ enum MessageBox {
   /// before 1971 without text is taken to be that placeholder: no real
   /// message is that old, and the placeholder's texts presumably depend on
   /// the platform's language.
-  Future<FullMessage?> message(MessagesService messages, int id) async {
+  Future<FullMessage?> message(
+    MessagesService messages,
+    int id, {
+    bool allRecipients = true,
+  }) async {
     final message = await messages.getMessage(
       id,
       boxType: boxType,
-      includeAllRecipients: true,
+      includeAllRecipients: allRecipients,
     );
     if (message == null) return null;
     if (message.date.isBefore(DateTime.utc(1971)) &&

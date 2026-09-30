@@ -68,6 +68,31 @@ final class MessageFilter {
   }
 }
 
+/// The `since` and `until` arguments of a message tool, parsed with
+/// [parseDateArgument] (a date without a time: the whole day counts).
+///
+/// Throws a [ToolError] for an invalid date, or when since is later than
+/// until.
+({DateTime? since, DateTime? until}) dateRangeArguments(
+  Map<String, Object?> arguments,
+) {
+  final since = switch (arguments['since']) {
+    final String since => parseDateArgument('since', since),
+    _ => null,
+  };
+  final until = switch (arguments['until']) {
+    final String until => parseDateArgument('until', until, endOfDay: true),
+    _ => null,
+  };
+  if ((since, until) case (
+    final since?,
+    final until?,
+  ) when since.isAfter(until)) {
+    throw const ToolError('since must not be later than until.');
+  }
+  return (since: since, until: until);
+}
+
 final _dateOnly = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
 final _dateTime = RegExp(
   r'^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$',

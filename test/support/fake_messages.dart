@@ -117,6 +117,11 @@ class FakeMailbox {
   /// them out of its `success` list.
   final Set<int> refuseToArchive = {};
 
+  /// Messages the box lists but `show message` no longer finds (it answers
+  /// with the placeholder), like a message deleted between the two
+  /// requests.
+  final Set<int> vanished = {};
+
   /// Every dispatcher call, as `action param=value ...` (params sorted),
   /// every archive request, as `archive msgIDs=1,2`, and every message sent,
   /// as `send to=A,B cc=C subject=S`.
@@ -289,7 +294,7 @@ ${page.map(_header).join('\n')}
 </message>''';
 
   String _show(int id, String boxType, {required bool limitList}) {
-    final m = _find(id, boxType);
+    final m = vanished.contains(id) ? null : _find(id, boxType);
     if (m == null) {
       // What Smartschool answers for an unknown id (seen live), with a
       // date the library reads as 1970-01-01.
