@@ -1,0 +1,40 @@
+import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/server.dart';
+import 'package:smartschool_mcp/src/tools/server_tool.dart';
+import 'package:stream_channel/stream_channel.dart';
+import 'package:test/test.dart';
+
+/// Connects a dart_mcp client to a [SmartschoolServer] over an in-memory
+/// channel and completes the initialize handshake.
+Future<(ServerConnection, InitializeResult)> connect({
+  Iterable<ServerTool> tools = const [],
+}) async {
+  final channel = StreamChannelController<String>();
+  final server = SmartschoolServer(channel.local, tools: tools);
+  final client = MCPClient(Implementation(name: 'test', version: '0.0.0'));
+  final connection = client.connectServer(channel.foreign);
+  addTearDown(() async {
+    await connection.shutdown();
+    await server.shutdown();
+  });
+
+  final result = await connection.initialize(
+    InitializeRequest(
+      protocolVersion: ProtocolVersion.latestSupported,
+      capabilities: client.capabilities,
+      clientInfo: client.implementation,
+    ),
+  );
+  connection.notifyInitialized();
+  return (connection, result);
+}
+
+/// Calls the tool [name] without arguments and returns the result and its
+/// single text content.
+Future<(CallToolResult, String)> callTool(
+  ServerConnection connection,
+  String name,
+) async {
+  final result = await connection.callTool(CallToolRequest(name: name));
+  return (result, (result.content.single as TextContent).text);
+}

@@ -1,34 +1,16 @@
 import 'package:dart_mcp/client.dart';
-import 'package:smartschool_mcp/src/server.dart';
+import 'package:smartschool_mcp/src/problems.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
 import 'package:smartschool_mcp/src/version.dart';
-import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
 
-/// Connects a dart_mcp client to a [SmartschoolServer] over an in-memory
-/// channel and completes the initialize handshake.
-Future<(ServerConnection, InitializeResult)> connect({
-  Iterable<ServerTool> tools = const [],
-}) async {
-  final channel = StreamChannelController<String>();
-  final server = SmartschoolServer(channel.local, tools: tools);
-  final client = MCPClient(Implementation(name: 'test', version: '0.0.0'));
-  final connection = client.connectServer(channel.foreign);
-  addTearDown(() async {
-    await connection.shutdown();
-    await server.shutdown();
-  });
+import 'support/mcp.dart';
 
-  final result = await connection.initialize(
-    InitializeRequest(
-      protocolVersion: ProtocolVersion.latestSupported,
-      capabilities: client.capabilities,
-      clientInfo: client.implementation,
-    ),
-  );
-  connection.notifyInitialized();
-  return (connection, result);
-}
+/// A tool without arguments whose handler is [handler].
+ServerTool _tool(String name, ToolHandler handler) => ServerTool(
+  definition: Tool(name: name, inputSchema: Schema.object()),
+  handler: handler,
+);
 
 void main() {
   test(
@@ -75,5 +57,43 @@ void main() {
     );
     expect(result.isError, isNot(true));
     expect((result.content.single as TextContent).text, 'hallo');
+  });
+
+  group('a tool that throws', () {
+    test('a SmartschoolProblem becomes an error result with exactly its '
+        'message', () async {
+      const problem = SmartschoolProblem(
+        ProblemKind.wrongPassword,
+        'Smartschool did not accept the username or password.',
+      );
+      final (connection, _) = await connect(
+        tools: [_tool('login_fails', (_) => throw problem)],
+      );
+
+      final (result, text) = await callTool(connection, 'login_fails');
+
+      expect(result.isError, isTrue);
+      expect(text, problem.message);
+    });
+
+    test('anything else becomes a generic error result without the '
+        'exception or its stack trace', () async {
+      final (connection, _) = await connect(
+        tools: [
+          _tool('crashes', (_) async {
+            await Future<void>.delayed(Duration.zero);
+            throw StateError('internal detail');
+          }),
+        ],
+      );
+
+      final (result, text) = await callTool(connection, 'crashes');
+
+      expect(result.isError, isTrue);
+      expect(text, contains('crashes failed with an unexpected error'));
+      expect(text, isNot(contains('internal detail')));
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+      expect(text, isNot(contains('.dart')), reason: 'no stack trace');
+    });
   });
 }
