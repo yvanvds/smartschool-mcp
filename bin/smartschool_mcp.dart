@@ -10,6 +10,7 @@ import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
@@ -41,6 +42,7 @@ Future<void> main(List<String> args) async {
           listMessagesTool(session),
           readMessageTool(session),
           archiveMessagesTool(session),
+          replyToMessageTool(session),
         ],
       );
       log('version $packageVersion serving MCP on stdio');

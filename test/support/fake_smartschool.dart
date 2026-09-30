@@ -67,7 +67,7 @@ class FakeSmartschool implements HttpClientAdapter {
   final List<String> requests = [];
 
   /// The Messages module, served to logged-in requests.
-  final FakeMailbox mailbox = FakeMailbox();
+  final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
 
   /// Simulates the session expiring on the server.
   void expireSession() {
@@ -109,6 +109,7 @@ class FakeSmartschool implements HttpClientAdapter {
         error: const SocketException("Failed host lookup: 'fake'"),
       );
     }
+    if (FakeMailbox.isSubmit(options)) mailbox.submits++;
 
     if (options.method == 'POST' && path == '/login') {
       _passwordDone = passwordAccepted;

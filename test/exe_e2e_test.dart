@@ -39,6 +39,7 @@ void main() {
       'list_messages',
       'read_message',
       'archive_messages',
+      'reply_to_message',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -69,6 +70,22 @@ void main() {
       'minItems': 1,
       'maxItems': 100,
     });
+    final reply = tools['reply_to_message'] as Map;
+    expect(reply['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': true,
+      'idempotentHint': false,
+      'openWorldHint': true,
+    });
+    final replySchema = reply['inputSchema'] as Map;
+    expect(replySchema['required'], ['message_id', 'body']);
+    expect((replySchema['properties'] as Map).keys, [
+      'message_id',
+      'body',
+      'reply_all',
+      'box',
+    ]);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -128,6 +145,14 @@ void main() {
         'message_ids': [123, 456],
       },
     );
+    final (replyError, replyText) = await server.callTool(
+      'reply_to_message',
+      arguments: {'message_id': 123, 'body': 'Donderdag kan ik.'},
+    );
+    final (emptyError, emptyText) = await server.callTool(
+      'reply_to_message',
+      arguments: {'message_id': 123, 'body': ' '},
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
@@ -143,6 +168,7 @@ void main() {
       (listError, listText),
       (readError, readText),
       (archiveError, archiveText),
+      (replyError, replyText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -155,6 +181,8 @@ void main() {
     expect(dateText, contains('"gisteren" is not'));
     expect(tooManyError, isTrue);
     expect(tooManyText, contains('List has 101 items'));
+    expect(emptyError, isTrue);
+    expect(emptyText, contains('body is empty'));
 
     await server.stop();
   });
@@ -176,6 +204,7 @@ void main() {
           'message_ids': [123.0, 456],
         },
       ),
+      ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 

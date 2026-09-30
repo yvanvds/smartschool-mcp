@@ -112,12 +112,24 @@ the login works and who is logged in, or what to fix.
   archived, was already in the archive, or why not. Only the newest 50 inbox
   messages can be archived, the ones `list_messages` shows. Claude proposes
   candidates when asked for advice and archives when asked to.
+- `reply_to_message`: sends a reply (plain text or simple Markdown) to the
+  sender of a message, or with `reply_all` to everyone on it, with one `Re:`
+  before the subject. A reply to a sent message goes to its recipients. The
+  tool is marked destructive, so Claude Desktop asks for approval every
+  time, and Claude is told to show the text and recipients and wait for the
+  user's confirmation first. It never sends a reply twice by itself: when
+  Smartschool does not confirm a send, it says the reply may have been sent
+  and to check the sent box. Replies are new messages, not linked to the
+  original (yvanvds/dartschool#26).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
 in `message_box.dart`, the HTML-to-text converter `htmlToText` in
-`html_to_text.dart`, the filters in `message_filter.dart` and the output
-lines in `message_format.dart`.
+`html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
+writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
+who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
+filters in `message_filter.dart` and the output lines in
+`message_format.dart`.
 
 ### Login
 
@@ -130,7 +142,10 @@ Tools use the shared `SmartschoolSession` (`lib/src/session.dart`): call
 `session.run((client) => ...)` and let its `SmartschoolProblem` propagate;
 the server turns it into an error result with a message that tells the
 teacher which setting to fix. When Smartschool rejects an expired session,
-`run` logs in again and runs the action once more.
+`run` logs in again and runs the action once more, so an action must be safe
+to repeat. Sending is not: `reply_to_message` turns every failure after the
+submit into a result that is not retried (see `_send` in
+`lib/src/tools/reply_to_message_tool.dart`).
 
 ## License
 

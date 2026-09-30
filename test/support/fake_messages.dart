@@ -25,6 +25,7 @@ class FakeMessage {
     this.cc = const [],
     this.bcc = const [],
     this.attachments = const [],
+    this.canReply = true,
   });
 
   final int id;
@@ -46,24 +47,64 @@ class FakeMessage {
   final List<String> cc;
   final List<String> bcc;
   final List<FakeAttachment> attachments;
+
+  /// Whether Smartschool allows replies to the message (`canReply`).
+  final bool canReply;
+}
+
+/// How the fake answers a submit of the compose form (sending a message).
+enum SubmitAnswer {
+  /// Sends the message and answers with the page that closes the compose
+  /// window, like the live platform.
+  sent,
+
+  /// Sends the message, but the connection fails before the answer arrives.
+  responseLost,
+
+  /// Does not send it and answers with an error page (`var error`).
+  errorPage,
+
+  /// Does not send it and answers with some other page.
+  otherPage,
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`), the archive endpoint
-/// and the module page the archive's box id is read from.
+/// (`message list`, `show message`, `attachment list`), the archive endpoint,
+/// the module page the archive's box id is read from, and sending: the
+/// compose forms, adding recipients to a form and submitting it.
 ///
 /// Responses have the shape of the dartschool fixtures under
-/// `test/fixtures/smartschool/requests/post/postboxes/` and
-/// `.../post/messages/xhr/archivemessages.json`, and the behaviour seen
-/// live: a box returns its newest [pageSize] messages only, an unknown
-/// message id gets a placeholder message instead of nothing, and the archive
-/// endpoint lists only the ids it moved from the inbox as successful (for a
-/// message already in the archive it answers `{"success":[]}`).
+/// `test/fixtures/smartschool/requests/post/postboxes/`,
+/// `.../post/messages/xhr/archivemessages.json` and
+/// `.../{get,post}/composemessage/`, and the behaviour seen live: a box
+/// returns its newest [pageSize] messages only, an unknown message id gets a
+/// placeholder message instead of nothing, and the archive endpoint lists
+/// only the ids it moved from the inbox as successful (for a message already
+/// in the archive it answers `{"success":[]}`).
+///
+/// The reply forms are filled in as seen live: the reply form
+/// (`composeType=1`) names the sender (for a sent message, that is the
+/// [owner]); the reply-all form (`composeType=2`) of a received message
+/// names the To recipients except the [owner] and then the sender in To, and
+/// the CC recipients except the [owner] in CC; that of a sent message names
+/// its To recipients and then the [owner] in To, and its CC recipients in CC.
+/// A message sent to the [owner] also lands in the inbox, with the same id.
 class FakeMailbox {
+  FakeMailbox({this.owner = 'Jan Peeters'});
+
   static const pageSize = 50;
 
   /// The archive endpoint, a form POST outside the XML dispatcher.
   static const archivePath = '/Messages/Xhr/archivemessages';
+
+  /// The platform id (`ssID`) of every fake user.
+  static const platformId = 4069;
+
+  /// The user id of the [owner].
+  static const ownerId = 146;
+
+  /// The logged-in user's name.
+  final String owner;
 
   final List<FakeMessage> inbox = [];
   final List<FakeMessage> sent = [];
@@ -76,9 +117,47 @@ class FakeMailbox {
   /// them out of its `success` list.
   final Set<int> refuseToArchive = {};
 
-  /// Every dispatcher call, as `action param=value ...` (params sorted), and
-  /// every archive request, as `archive msgIDs=1,2`.
+  /// Every dispatcher call, as `action param=value ...` (params sorted),
+  /// every archive request, as `archive msgIDs=1,2`, and every message sent,
+  /// as `send to=A,B cc=C subject=S`.
   final List<String> actions = [];
+
+  /// The names the reply form of a received message shows in To instead
+  /// of its sender, by message id.
+  final Map<int, List<String>> replyFormNames = {};
+
+  /// How the next submits of the compose form are answered.
+  SubmitAnswer submitAnswer = SubmitAnswer.sent;
+
+  /// How many submits of the compose form reached the server, sent or not
+  /// (counted by the fake server, also without a valid session).
+  int submits = 0;
+
+  /// The HTML bodies of the messages sent, in order.
+  final List<String> sentBodies = [];
+
+  /// The recipients added to each open compose form, by its `uniqueUsc`.
+  final Map<String, ({List<int> to, List<int> cc})> _forms = {};
+  int _formsOpened = 0;
+  int _messagesSent = 0;
+
+  /// User ids by name, given out on first use.
+  late final Map<String, int> _userIds = {owner: ownerId};
+
+  /// The user id of [name].
+  int userId(String name) =>
+      _userIds.putIfAbsent(name, () => 200 + _userIds.length);
+
+  String _userName(int id) =>
+      _userIds.entries.firstWhere((entry) => entry.value == id).key;
+
+  /// Whether [options] submits a compose form, which sends a message.
+  static bool isSubmit(RequestOptions options) =>
+      options.method == 'POST' && _isCompose(options);
+
+  static bool _isCompose(RequestOptions options) =>
+      options.uri.queryParameters['module'] == 'Messages' &&
+      options.uri.queryParameters['file'] == 'composeMessage';
 
   /// Answers [options] if it is a request for the Messages module.
   ResponseBody? respond(RequestOptions options) {
@@ -89,6 +168,18 @@ class FakeMailbox {
     if (options.uri.path != '/' || query['module'] != 'Messages') return null;
     if (options.method == 'GET' && query['file'] == 'index') {
       return _response(_modulePage(), 'text/html');
+    }
+    if (options.method == 'GET' && _isCompose(options)) {
+      return _response(_composePage(query), 'text/html');
+    }
+    if (isSubmit(options)) return _submit(options);
+    if (options.method == 'POST' &&
+        query['file'] == 'searchUsers' &&
+        query['function'] == 'addUserToSelected') {
+      return _response(
+        _addUser((options.data as Map).cast<String, String>()),
+        'text/xml',
+      );
     }
     if (options.method == 'POST' && query['file'] == 'dispatcher') {
       final data = options.data;
@@ -251,7 +342,7 @@ ${page.map(_header).join('\n')}
   <totalNrOtherToReciviers>${others(m.to)}</totalNrOtherToReciviers>
   <totalnrOtherCcReceivers>${others(m.cc)}</totalnrOtherCcReceivers>
   <totalnrOtherBccReceivers>${others(m.bcc)}</totalnrOtherBccReceivers>
-  <canReply>1</canReply>
+  <canReply>${m.canReply ? 1 : 0}</canReply>
   <hasReply>0</hasReply>
   <hasForward>0</hasForward>
   <sendDate/>
@@ -274,6 +365,152 @@ ${[for (final (i, a) in attachments.indexed) '''
   <order>$i</order>
 </attachment>'''].join('\n')}
 </attachmentlist>''');
+  }
+
+  /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
+  /// all), with a new `uniqueUsc` and the recipients of a reply filled in.
+  String _composePage(Map<String, String> query) {
+    final usc = 'usc${++_formsOpened}';
+    _forms[usc] = (to: [], cc: []);
+    final id = int.tryParse(query['msgID'] ?? '');
+    final sentBox = query['boxType'] == 'outbox';
+    final message = id == null ? null : _find(id, query['boxType']!);
+    var to = const <String>[];
+    var cc = const <String>[];
+    if (message != null) {
+      switch ((query['composeType'], sentBox)) {
+        case ('1', true):
+          to = [owner];
+        case ('1', false):
+          to = replyFormNames[id] ?? [message.sender];
+        case ('2', true):
+          to = [...message.to, owner];
+          cc = message.cc;
+        case ('2', false):
+          to = {
+            ...message.to.where((name) => name != owner),
+            message.sender,
+          }.toList();
+          cc = [...message.cc.where((name) => name != owner)];
+      }
+    }
+    String spans(List<String> names, String type) => [
+      for (final name in names)
+        '<div class="receiverSpan" realuserid="${userId(name)}" '
+            'ssidatt="$platformId" userltatt="0" typeatt="$type">'
+            '<div class="receiverSpanName userm">${_escape(name)}</div>'
+            '<div class="receiverSpanDelete" title="Verwijder"></div></div>',
+    ].join('\n');
+    return '''
+<!DOCTYPE html>
+<html lang="nl"><head>
+<script>
+window.tinymceInitConfig = {
+  userID\t: '$ownerId',
+  userLT\t: '0',
+  ssID\t: '$platformId',
+  lang\t: 'nl'
+};
+</script>
+</head><body>
+<form id="composeForm" method="post">
+<input type="hidden" name="randomDir" value="dir$_formsOpened">
+<input type="hidden" name="uniqueUsc" value="$usc">
+<input type="hidden" name="encryptedSender" value="76542a9717766d29">
+<input type="hidden" name="origMsgID" value="${message?.id ?? 0}">
+<input type="hidden" name="composeAction" value="${message == null ? 0 : 2}">
+<div id="insertSearchFieldContainer_0_0">
+${spans(to, '0')}
+</div>
+<div id="insertSearchFieldContainer_2_0">
+${spans(cc, '2')}
+</div>
+</form>
+</body></html>''';
+  }
+
+  /// Adds a recipient to the compose form named by `uniqueUsc`.
+  String _addUser(Map<String, String> fields) {
+    final form = _forms[fields['uniqueUsc']];
+    final id = int.parse(fields['id']!);
+    if (form == null ||
+        fields['typeId'] != 'users' ||
+        fields['ssid'] != '$platformId') {
+      throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
+    }
+    (fields['type'] == '2' ? form.cc : form.to).add(id);
+    return '''
+<users>
+<user>
+<type>${fields['type']}</type>
+<ssID>$platformId</ssID>
+<parentNodeId>${fields['parentNodeId']}</parentNodeId>
+<userID>U$id</userID>
+<name>${_escape(_userName(id))}</name>
+<userLT>0</userLT>
+<userType>U</userType>
+<typeId>users</typeId>
+<realUserId>$id</realUserId>
+</user>
+</users>''';
+  }
+
+  /// Sends the message of the submitted compose form (or not, see
+  /// [submitAnswer]).
+  ResponseBody _submit(RequestOptions options) {
+    final fields = {
+      for (final MapEntry(:key, :value) in (options.data as FormData).fields)
+        key: value,
+    };
+    final form = _forms.remove(fields['uniqueUsc']);
+    if (form == null) {
+      throw UnsupportedError('fake mailbox: submit of an unknown form');
+    }
+    switch (submitAnswer) {
+      case SubmitAnswer.errorPage:
+        return _response(
+          '<html><body><script>var error = "Er is een onbekende fout '
+              'opgetreden";</script></body></html>',
+          'text/html',
+        );
+      case SubmitAnswer.otherPage:
+        return _response('<html><body>Berichten</body></html>', 'text/html');
+      case SubmitAnswer.sent || SubmitAnswer.responseLost:
+        break;
+    }
+    final to = [for (final id in form.to) _userName(id)];
+    final cc = [for (final id in form.cc) _userName(id)];
+    final subject = fields['subject']!;
+    final body = fields['message']!;
+    final id = 9000 + ++_messagesSent;
+    final date = '2024-04-01 10:${_messagesSent.toString().padLeft(2, '0')}';
+    sentBodies.add(body);
+    actions.add('send to=${to.join(',')} cc=${cc.join(',')} subject=$subject');
+    FakeMessage copy({required bool unread}) => FakeMessage(
+      id: id,
+      sender: owner,
+      listedAs: unread ? null : to.join(', '),
+      subject: subject,
+      date: date,
+      body: body,
+      unread: unread,
+      to: to,
+      cc: cc,
+    );
+    sent.add(copy(unread: false));
+    if (to.contains(owner) || cc.contains(owner)) inbox.add(copy(unread: true));
+    if (submitAnswer == SubmitAnswer.responseLost) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'Connection reset by peer',
+      );
+    }
+    return _response(
+      '<!DOCTYPE html><html lang="nl"><body><div id="smscMain">'
+          '<script>\$(document).ready(function() { checkOpenerActions(); '
+          'window.close(); });</script></div></body></html>',
+      'text/html',
+    );
   }
 
   String _modulePage() =>
