@@ -49,15 +49,21 @@ class FakeMessage {
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`) and the module page
-/// the archive's box id is read from.
+/// (`message list`, `show message`, `attachment list`), the archive endpoint
+/// and the module page the archive's box id is read from.
 ///
 /// Responses have the shape of the dartschool fixtures under
-/// `test/fixtures/smartschool/requests/post/postboxes/`, and the behaviour
-/// seen live: a box returns its newest [pageSize] messages only, and an
-/// unknown message id gets a placeholder message instead of nothing.
+/// `test/fixtures/smartschool/requests/post/postboxes/` and
+/// `.../post/messages/xhr/archivemessages.json`, and the behaviour seen
+/// live: a box returns its newest [pageSize] messages only, an unknown
+/// message id gets a placeholder message instead of nothing, and the archive
+/// endpoint lists only the ids it moved from the inbox as successful (for a
+/// message already in the archive it answers `{"success":[]}`).
 class FakeMailbox {
   static const pageSize = 50;
+
+  /// The archive endpoint, a form POST outside the XML dispatcher.
+  static const archivePath = '/Messages/Xhr/archivemessages';
 
   final List<FakeMessage> inbox = [];
   final List<FakeMessage> sent = [];
@@ -66,11 +72,19 @@ class FakeMailbox {
   /// The archive folder's box id, shown on the Messages module page.
   int archiveBoxId = 305;
 
-  /// Every dispatcher call, as `action param=value ...` (params sorted).
+  /// Inbox messages the archive endpoint leaves where they are, leaving
+  /// them out of its `success` list.
+  final Set<int> refuseToArchive = {};
+
+  /// Every dispatcher call, as `action param=value ...` (params sorted), and
+  /// every archive request, as `archive msgIDs=1,2`.
   final List<String> actions = [];
 
   /// Answers [options] if it is a request for the Messages module.
   ResponseBody? respond(RequestOptions options) {
+    if (options.method == 'POST' && options.uri.path == archivePath) {
+      return _response(_archive('${options.data}'), Headers.jsonContentType);
+    }
     final query = options.uri.queryParameters;
     if (options.uri.path != '/' || query['module'] != 'Messages') return null;
     if (options.method == 'GET' && query['file'] == 'index') {
@@ -109,6 +123,29 @@ class FakeMailbox {
       'attachment list' => _attachments(id!, params['boxType']!),
       _ => throw UnsupportedError('fake mailbox: no action "$action"'),
     };
+  }
+
+  /// Moves the inbox messages named in [body] (`msgIDs%5B%5D=1&...`) to the
+  /// archive and answers with the ids it moved.
+  String _archive(String body) {
+    final ids = [
+      for (final field in body.split('&'))
+        if (field.split('=') case [
+          final key,
+          final value,
+        ] when Uri.decodeQueryComponent(key) == 'msgIDs[]')
+          int.parse(value),
+    ];
+    actions.add('archive msgIDs=${ids.join(',')}');
+    final moved = <int>[];
+    for (final id in ids) {
+      if (refuseToArchive.contains(id)) continue;
+      final index = inbox.indexWhere((m) => m.id == id);
+      if (index < 0) continue;
+      archive.add(inbox.removeAt(index));
+      moved.add(id);
+    }
+    return '{"success":[${moved.join(',')}]}';
   }
 
   List<FakeMessage> _box(String boxType, String boxId) =>

@@ -34,7 +34,12 @@ void main() {
       for (final tool in (await server.request('tools/list'))['tools'] as List)
         (tool as Map)['name']: tool,
     };
-    expect(tools.keys, ['smartschool_status', 'list_messages', 'read_message']);
+    expect(tools.keys, [
+      'smartschool_status',
+      'list_messages',
+      'read_message',
+      'archive_messages',
+    ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
       'type': 'string',
@@ -47,6 +52,23 @@ void main() {
     for (final name in ['list_messages', 'read_message']) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
     }
+    final archive = tools['archive_messages'] as Map;
+    expect(archive['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': false,
+      'idempotentHint': true,
+      'openWorldHint': true,
+    });
+    final archiveSchema = archive['inputSchema'] as Map;
+    expect(archiveSchema['required'], ['message_ids']);
+    expect((archiveSchema['properties'] as Map)['message_ids'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'integer', 'minimum': 1},
+      'minItems': 1,
+      'maxItems': 100,
+    });
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -100,14 +122,27 @@ void main() {
       'read_message',
       arguments: {'message_id': 123},
     );
+    final (archiveError, archiveText) = await server.callTool(
+      'archive_messages',
+      arguments: {
+        'message_ids': [123, 456],
+      },
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
+    );
+    final (tooManyError, tooManyText) = await server.callTool(
+      'archive_messages',
+      arguments: {
+        'message_ids': [for (var id = 1; id <= 101; id++) id],
+      },
     );
 
     for (final (isError, text) in [
       (listError, listText),
       (readError, readText),
+      (archiveError, archiveText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -118,6 +153,8 @@ void main() {
     }
     expect(dateError, isTrue);
     expect(dateText, contains('"gisteren" is not'));
+    expect(tooManyError, isTrue);
+    expect(tooManyText, contains('List has 101 items'));
 
     await server.stop();
   });

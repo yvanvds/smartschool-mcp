@@ -107,6 +107,11 @@ the login works and who is logged in, or what to fix.
   (yvanvds/dartschool#15).
 - `read_message`: one message with its recipients, attachment names and the
   body as plain text. It does not mark the message as read.
+- `archive_messages`: moves up to 100 inbox messages (ids from
+  `list_messages`) to the archive and reports per id whether it was
+  archived, was already in the archive, or why not. Only the newest 50 inbox
+  messages can be archived, the ones `list_messages` shows. Claude proposes
+  candidates when asked for advice and archives when asked to.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`

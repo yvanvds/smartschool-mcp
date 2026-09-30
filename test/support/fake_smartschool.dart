@@ -75,6 +75,13 @@ class FakeSmartschool implements HttpClientAdapter {
     _passwordDone = false;
   }
 
+  bool Function(RequestOptions request)? _expireBefore;
+
+  /// Simulates the session expiring right before the first request that
+  /// [matches] arrives, so that request is the first one without a session.
+  void expireSessionBefore(bool Function(RequestOptions request) matches) =>
+      _expireBefore = matches;
+
   bool _hasSession(RequestOptions options) {
     final cookie = options.headers[HttpHeaders.cookieHeader];
     return _validSession != null &&
@@ -89,6 +96,10 @@ class FakeSmartschool implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     final path = options.uri.path;
+    if (_expireBefore?.call(options) ?? false) {
+      _expireBefore = null;
+      expireSession();
+    }
     final loggedIn = _hasSession(options);
     requests.add('${options.method} $path');
     if (unreachable) {
