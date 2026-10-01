@@ -172,9 +172,32 @@ class FakeIntradesk {
     return id;
   }
 
-  /// Adds the weblink [raw] to [parent] (the root when empty).
+  /// Adds a weblink to [parent] (the root when empty), with the keys every
+  /// weblink of a live listing has; [raw] sets some of them, such as `id`,
+  /// `name` and `url`.
   void addWeblink(Map<String, Object?> raw, {String parent = ''}) =>
-      _listings[parent]!['weblinks']!.add(raw);
+      _listings[parent]!['weblinks']!.add({
+        'id': '',
+        'platform': {'id': 7, 'name': 'Testschool'},
+        'name': '',
+        'url': '',
+        'icon': 'folder_orange',
+        'state': 'active',
+        'parentFolderId': parent,
+        'dateCreated': '2024-08-29T17:01:56+02:00',
+        'dateStateChanged': '2024-08-29T17:01:56+02:00',
+        'dateChanged': '2024-08-29T17:01:56+02:00',
+        'isFavourite': false,
+        'confidential': false,
+        'ownerId': '7_1001_0',
+        'capabilities': {
+          'canManage': false,
+          'canMove': false,
+          'canSeeHistory': false,
+          'canSeeViewHistory': false,
+        },
+        ...raw,
+      });
 
   /// Answers [options] if it is a request for an Intradesk listing or
   /// download.

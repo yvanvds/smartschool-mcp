@@ -39,8 +39,8 @@ List<IntradeskItem> intradeskItems(
     IntradeskItem.folder(folder, parentId: folderId, parentPath: path),
   for (final file in listing.files)
     IntradeskItem.file(file, parentId: folderId, parentPath: path),
-  for (final raw in listing.weblinks)
-    ?IntradeskItem.weblink(raw, parentId: folderId, parentPath: path),
+  for (final link in listing.weblinks)
+    ?IntradeskItem.weblink(link, parentId: folderId, parentPath: path),
 ];
 
 /// The Intradesk folder or file id argument [name] of [arguments], in

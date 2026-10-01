@@ -143,8 +143,10 @@ Future<CallToolResult> _reply(
 /// out, every failure becomes a [_NotConfirmed], which the session does not
 /// retry: the message may have reached Smartschool, so the user must check
 /// the sent box instead. A submit is only taken as sent when Smartschool
-/// answers it with its "sent" page, because `sendMessage` reports success
-/// for any answer that is not an error page (yvanvds/dartschool#25).
+/// answers it with its "sent" page. Since flutter_smartschool 0.3.0,
+/// `sendMessage` checks that too and throws a
+/// [SmartschoolSendUnconfirmedError] otherwise, which is such a failure
+/// after the submit; using that instead of the watch is #17.
 ///
 /// Everything that goes wrong before the submit is a [ToolError] or a
 /// login or connection problem, and nothing was sent.
@@ -181,8 +183,9 @@ Future<({ReplyRecipients recipients, String subject})> _send(
     if (recipients.to.isEmpty) {
       throw ToolError(
         'Smartschool gives no one to send a reply to message $id to'
-        '${box == MessageBox.sent ? ' (it does not for some sent messages, '
-                  'for example when the user was the only recipient)' : ''}. '
+        '${box == MessageBox.sent ? ' (a reply to a sent message goes to its '
+                  'To recipients, and it has none, for example when it only '
+                  'went to BCC recipients)' : ''}. '
         'Nothing was sent. The user can reply in Smartschool itself.',
       );
     }
@@ -219,11 +222,14 @@ Future<({ReplyRecipients recipients, String subject})> _send(
         throw _NotConfirmed(recipients, subject);
       }
       if (error is SmartschoolComposeError) {
-        log('reply_to_message: no compose form: ${_oneLine(error)}');
+        // The form did not open, or Smartschool did not take a recipient on
+        // it; either way the library stopped before the submit.
+        log('reply_to_message: compose form refused: ${_oneLine(error)}');
         throw const ToolError(
-          'Smartschool did not open its form for a new message, so nothing '
-          'was sent. The account may not be allowed to send messages; the '
-          'details are in the server log.',
+          'Smartschool did not open its form for a new message, or did not '
+          'accept a recipient on it, so nothing was sent. The account may '
+          'not be allowed to send messages, or to send to one of the '
+          'recipients; the details are in the server log.',
         );
       }
       rethrow;

@@ -69,6 +69,22 @@ void main() {
           date: '2024-03-11 11:00',
           to: [_me],
         ),
+        FakeMessage(
+          id: 303,
+          sender: _me,
+          subject: 'Oudercontact',
+          date: '2024-03-10 11:00',
+          to: ['Els Wouters'],
+          cc: ['An Claes'],
+          bcc: ['Piet Janssens'],
+        ),
+        FakeMessage(
+          id: 304,
+          sender: _me,
+          subject: 'Rapport',
+          date: '2024-03-09 11:00',
+          bcc: ['Els Wouters', 'An Claes'],
+        ),
       ]);
     session = SmartschoolSession(
       fakeExtensionSettings(),
@@ -172,19 +188,36 @@ void main() {
       );
     });
 
-    test('sent only to the user: no one', () async {
+    test('sent only to the user: both go to the user, as for its inbox '
+        'copy', () async {
       expect(
         await recipients(MessageBox.sent, 302, replyAll: false),
-        'to: - | cc: -',
+        'to: $_me | cc: -',
       );
       expect(
         await recipients(MessageBox.sent, 302, replyAll: true),
+        'to: $_me | cc: -',
+      );
+    });
+
+    test('the BCC recipients are left out, so a reply never reveals '
+        'them', () async {
+      expect(
+        await recipients(MessageBox.sent, 303, replyAll: false),
+        'to: Els Wouters | cc: -',
+      );
+      expect(
+        await recipients(MessageBox.sent, 303, replyAll: true),
+        'to: Els Wouters | cc: An Claes',
+      );
+      expect(
+        await recipients(MessageBox.sent, 304, replyAll: true),
         'to: - | cc: -',
       );
     });
   });
 
-  test('only loads the reply forms of the message: nothing is sent and no '
+  test('only loads the reply forms and the message: nothing is sent and no '
       'recipient is added to a form', () async {
     for (final box in [MessageBox.inbox, MessageBox.sent]) {
       for (final replyAll in [false, true]) {
@@ -196,10 +229,14 @@ void main() {
       }
     }
 
-    expect(
-      server.requests.where((r) => !r.contains('/login') && !r.contains('2fa')),
-      everyElement(startsWith('GET ')),
+    // GETs of the forms, and for a sent message the message itself (a
+    // `show message` POST to the XML dispatcher).
+    final posts = server.requests.where(
+      (r) =>
+          r.startsWith('POST ') && !r.contains('/login') && !r.contains('2fa'),
     );
+    expect(server.mailbox.actions, everyElement(startsWith('show message ')));
+    expect(posts, hasLength(server.mailbox.actions.length));
     expect(server.mailbox.submits, 0);
   });
 }

@@ -525,6 +525,28 @@ void main() {
       );
     });
 
+    test('when the server shuts down during the walk, the walk stops and '
+        'saves no partial index', () async {
+      for (var i = 1; i <= 12; i++) {
+        server.intradesk.addFolder('Map $i');
+      }
+      buildWait = const Duration(milliseconds: 30);
+      final connection = await start();
+      server.latency = const Duration(milliseconds: 40);
+
+      final (_, text) = await callTool(connection, 'search_intradesk', {
+        'query': 'info',
+      });
+      expect(text, startsWith('Intradesk is being indexed'));
+      // What the server does when Claude Desktop disconnects; the library
+      // then refuses every request of the walk.
+      await session.close();
+      await cache.walkDone;
+
+      expect(await cache.read(), isNull);
+      expect(server.intradesk.listed.length, lessThan(1 + 2 + 12 + 1));
+    });
+
     test('without Smartschool settings: the missing settings, before the '
         'cache is touched', () async {
       final session = SmartschoolSession(

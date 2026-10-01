@@ -88,8 +88,14 @@ Future<IntradeskIndex> buildIntradeskIndex(
           : await intradesk.getFolderListing(folder.id);
     } catch (error) {
       // The root must work; for another folder only a login or connection
-      // problem stops the walk.
-      if (folder == null || classifyFailure(error) != null) rethrow;
+      // problem stops the walk, or the client being disposed (the server
+      // shuts down), which the library reports with a plain StateError
+      // (yvanvds/dartschool#73, #26).
+      if (folder == null ||
+          error is StateError ||
+          classifyFailure(error) != null) {
+        rethrow;
+      }
       unlisted++;
       log('intradesk index: a folder could not be listed (${_kind(error)})');
       return;

@@ -37,12 +37,13 @@ final class ReplyRecipients {
 /// - A message in the sent box: Smartschool's reply form for it names the
 ///   user, the sender. So, as in most mail programs, a plain reply goes to
 ///   the message's To recipients and a reply to all to its To and CC
-///   recipients, from the sent box's reply-all form without the user
-///   ([MessagesService.getSentMessageRecipients]). For some sent messages
-///   that form names no one but the user (seen live); then the result is
-///   empty (yvanvds/dartschool#27).
+///   recipients ([MessagesService.getSentMessageRecipients], which reads
+///   the sent box's reply-all form and the message). The user is among them
+///   only when the message went to the user too. The BCC recipients are
+///   left out, so a reply never reveals them; a message sent to BCC
+///   recipients only has no one to reply to.
 ///
-/// Only loads compose pages: nothing is sent.
+/// Only loads compose pages and the message: nothing is sent.
 Future<ReplyRecipients> loadReplyRecipients(
   SmartschoolClient client,
   MessagesService messages,
@@ -50,18 +51,19 @@ Future<ReplyRecipients> loadReplyRecipients(
   int id, {
   required bool replyAll,
 }) async {
+  // The reply forms of a received message name no BCC recipients.
   switch ((box, replyAll)) {
     case (MessageBox.sent, _):
-      final (to, cc) = await messages.getSentMessageRecipients(id);
+      final (to, cc, _) = await messages.getSentMessageRecipients(id);
       return ReplyRecipients(to: to, cc: replyAll ? cc : const []);
     case (_, true):
-      final (to, cc) = await messages.getReplyAllRecipients(
+      final (to, cc, _) = await messages.getReplyAllRecipients(
         id,
         boxType: box.boxType,
       );
       return ReplyRecipients(to: to, cc: cc);
     case (_, false):
-      final (to, cc) = MessagesService.parseReplyAllRecipients(
+      final (to, cc, _) = MessagesService.parseReplyAllRecipients(
         await client.getRaw(replyFormPath(box, id)),
       );
       return ReplyRecipients(to: to, cc: cc);

@@ -57,33 +57,24 @@ final class IntradeskItem {
     confidential: file.confidential,
   );
 
-  /// The weblink [raw], listed in the folder [parentId] at [parentPath]
+  /// The weblink [link], listed in the folder [parentId] at [parentPath]
   /// (both empty at the root); null when it has no name.
-  ///
-  /// The library keeps weblinks as raw JSON (yvanvds/dartschool#37, #21).
-  /// Seen live, they have (among others) the keys `id`, `name`, `url`,
-  /// `dateChanged` and `confidential`.
   static IntradeskItem? weblink(
-    Map<String, dynamic> raw, {
+    IntradeskWeblink link, {
     required String parentId,
     required String parentPath,
   }) {
-    String text(String key) => switch (raw[key]) {
-      final Object value => '$value'.trim(),
-      null => '',
-    };
-
-    final name = text('name');
+    final name = link.name.trim();
     if (name.isEmpty) return null;
-    final url = text('url');
+    final url = link.url.trim();
     return IntradeskItem(
       kind: IntradeskItemKind.weblink,
-      id: text('id'),
+      id: link.id.trim(),
       name: name,
       parentId: parentId,
       parentPath: parentPath,
-      changed: DateTime.tryParse(text('dateChanged')),
-      confidential: raw['confidential'] == true,
+      changed: link.dateChanged,
+      confidential: link.confidential,
       url: url.isEmpty ? null : url,
     );
   }
