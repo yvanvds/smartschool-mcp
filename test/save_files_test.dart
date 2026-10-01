@@ -510,14 +510,21 @@ void main() {
   });
 
   group('save_message_attachment', () {
+    // Each sample is built once and compared with the same bytes: a sample
+    // zip carries the time it was built (in 2-second steps), so a second
+    // sampleDocx() can differ from the one served (#37).
     late Uint8List planning;
     late Uint8List lokalen;
+    late Uint8List agenda;
+    late Uint8List route;
 
     setUp(() {
       planning = samplePdf([
         ['Planning'],
       ]);
       lokalen = sampleXlsx();
+      agenda = sampleDocx();
+      route = samplePng(4, 4);
       server.mailbox.inbox.addAll([
         FakeMessage(
           id: 101,
@@ -565,7 +572,7 @@ void main() {
           subject: 'Personeelsvergadering',
           date: '2024-02-20 12:00',
           attachments: [
-            FakeAttachment('agenda.docx', '9 KiB', content: sampleDocx()),
+            FakeAttachment('agenda.docx', '9 KiB', content: agenda),
           ],
         ),
       );
@@ -576,9 +583,7 @@ void main() {
           subject: 'Uitstap',
           date: '2024-03-12 11:00',
           to: ['Els Wouters'],
-          attachments: [
-            FakeAttachment('route.png', '1 KiB', content: samplePng(4, 4)),
-          ],
+          attachments: [FakeAttachment('route.png', '1 KiB', content: route)],
         ),
       );
     });
@@ -663,9 +668,9 @@ void main() {
         'box': 'sent',
       });
 
-      expect(savedFile('agenda.docx').readAsBytesSync(), sampleDocx());
+      expect(savedFile('agenda.docx').readAsBytesSync(), agenda);
       expect(sent, startsWith('Saved attachment 1 of message 301 (Sent), '));
-      expect(savedFile('route.png').readAsBytesSync(), samplePng(4, 4));
+      expect(savedFile('route.png').readAsBytesSync(), route);
     });
 
     test('a name that is not there, or that two attachments have, or a '
