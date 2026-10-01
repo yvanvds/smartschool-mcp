@@ -175,6 +175,67 @@ void main() {
     expect(home.listSync(), isEmpty);
   });
 
+  test('installed with the 6-digit code of the app in "2FA-sleutel": '
+      'smartschool_status and the other tools name that field and say it '
+      'is not the code, without logging in anywhere', () async {
+    final home = await tempHome();
+    const password = 'not-a-real-password';
+    final server = await startInstalled({
+      // A host that cannot exist (RFC 2606), so that the server would not
+      // reach a real school if it did try to log in.
+      'main_url': 'school.invalid',
+      'username': 'jan.peeters',
+      'password': password,
+      'mfa': '123 456',
+    }, home);
+    await server.initialize();
+
+    final (statusError, status) = await server.callTool('smartschool_status');
+    final (listError, list) = await server.callTool('list_messages');
+    final (searchError, search) = await server.callTool(
+      'search_intradesk',
+      arguments: {'query': 'uitstap'},
+    );
+
+    final title = fields()['mfa']!['title'];
+    final problem =
+        'The two-factor authentication (2FA) key is not valid, so Smartschool '
+        'was not contacted. Check "$title" (SMARTSCHOOL_MFA) in the '
+        'Smartschool extension settings in Claude Desktop (Settings → '
+        'Extensions): it must be the key Smartschool shows when you add an '
+        'authenticator app, made of letters and the digits 2 to 7 (spaces do '
+        'not matter), not the 6-digit code the app shows. Then restart Claude '
+        'Desktop.';
+    expect(statusError, isNot(true));
+    expect(
+      status,
+      startsWith(
+        'Smartschool connection: NOT working\n'
+        'Problem: $problem\n'
+        'Smartschool address: school.invalid\n'
+        'Settings: extension settings (all filled in)\n',
+      ),
+    );
+    expect(listError, isTrue);
+    expect(list, problem);
+    expect(searchError, isTrue);
+    expect(search, problem);
+
+    await server.stop();
+    final log = await server.stderr;
+    expect(
+      log,
+      contains('Smartschool settings: the 2FA key is not valid (not Base32'),
+    );
+    expect(log, isNot(contains('Smartschool: checking the session')));
+    expect(log, isNot(contains('sending username and password')));
+    for (final text in [status, list, search, log]) {
+      expect(text, isNot(contains(password)));
+      expect(text, isNot(contains('123 456')));
+    }
+    expect(home.listSync(), isEmpty, reason: 'no session saved');
+  });
+
   test('installed with a folder picked for "Downloadmap": '
       'smartschool_status shows it under that title, writable', () async {
     final home = await tempHome();

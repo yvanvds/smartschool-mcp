@@ -17,6 +17,11 @@ enum ProblemKind {
   /// The file named with `--credentials` is not a valid credentials file.
   credentialsFileInvalid(permanent: true),
 
+  /// The 2FA key in the settings cannot be a TOTP secret (not Base32, or a
+  /// code of the authenticator app): found before logging in, see
+  /// [SmartschoolSettings.mfaProblem].
+  twoFactorKeyInvalid(permanent: true),
+
   /// Smartschool rejected the username or password.
   wrongPassword(permanent: true),
 
@@ -72,6 +77,13 @@ final class SmartschoolProblem implements Exception {
         'kind',
         'use SmartschoolProblem.credentialsFile',
       ),
+      ProblemKind.twoFactorKeyInvalid =>
+        'The two-factor authentication (2FA) key is not valid, so Smartschool '
+            'was not contacted. Check ${name(Setting.mfa)} ${source.where}: '
+            'it must be the key Smartschool shows when you add an '
+            'authenticator app, made of letters and the digits 2 to 7 (spaces '
+            'do not matter), not the 6-digit code the app shows. Then '
+            '$restart.',
       ProblemKind.wrongPassword =>
         'Smartschool did not accept the username or password. Check '
             '${name(Setting.username)} and ${name(Setting.password)} '
@@ -179,7 +191,9 @@ ProblemKind? classifyFailure(Object error) {
     case SmartschoolInvalidCredentialsError():
       return ProblemKind.wrongPassword;
     // A missing TOTP secret cannot happen: an empty key is caught as a
-    // missing setting first.
+    // missing setting first. Nor can a key that is not Base32, which the
+    // library reports as a bare FormatException (yvanvds/dartschool#79):
+    // SmartschoolSettings.mfaProblem catches it first.
     case SmartschoolTwoFactorRejectedError() ||
         SmartschoolTwoFactorRequiredError():
       return ProblemKind.twoFactorRejected;

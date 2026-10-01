@@ -11,9 +11,12 @@ import 'support/fake_smartschool.dart';
 
 /// Logs in with the library's real login chain against [server] and returns
 /// what the login threw.
-Future<Object> _loginError(FakeSmartschool server) async {
+Future<Object> _loginError(
+  FakeSmartschool server, [
+  Credentials? credentials,
+]) async {
   final client = await fakeClientFactory(server, await tempCache())(
-    FakeCredentials(),
+    credentials ?? FakeCredentials(),
   );
   try {
     await client.platformId;
@@ -67,6 +70,29 @@ void main() {
       final error = await _loginError(FakeSmartschool()..rejectsAfterLogin = 1);
       expect(error, isA<SmartschoolSessionExpiredError>());
       expect(classifyFailure(error), ProblemKind.sessionRejected);
+    });
+
+    test('a 2FA key that is not Base32: still a bare FormatException, after '
+        'the password was posted (yvanvds/dartschool#79)', () async {
+      // Why SmartschoolSettings strips the white space from the key and
+      // checks it before logging in. When this fails, the library reports
+      // such a key its own way: map that in classifyFailure, and remove the
+      // workaround (yvanvds/smartschool-mcp#34).
+      for (final key in ['JBSW Y3DP EHPK 3PXP', '123456']) {
+        final server = FakeSmartschool();
+        final error = await _loginError(server, FakeCredentials(mfa: key));
+        expect(
+          error,
+          isA<DioException>().having(
+            (e) => e.error,
+            'error',
+            isA<FormatException>(),
+          ),
+          reason: key,
+        );
+        expect(server.requests, contains('POST /login'), reason: key);
+        expect(classifyFailure(error), isNull, reason: key);
+      }
     });
   });
 
@@ -254,6 +280,7 @@ void main() {
         ),
       );
       for (final kind in [
+        ProblemKind.twoFactorKeyInvalid,
         ProblemKind.twoFactorRejected,
         ProblemKind.twoFactorUnsupported,
         ProblemKind.accountVerification,
@@ -275,6 +302,31 @@ void main() {
 
     test('a rejected 2FA code points at the PC clock', () {
       expect(message(ProblemKind.twoFactorRejected), contains('clock'));
+    });
+
+    test('a 2FA key that is not valid: not a 6-digit code, spaces do not '
+        'matter, nothing about the clock', () {
+      final text = message(ProblemKind.twoFactorKeyInvalid);
+      expect(
+        text,
+        allOf(
+          contains('key is not valid, so Smartschool was not contacted'),
+          contains('not the 6-digit code'),
+          contains('spaces do not matter'),
+          contains('restart Claude Desktop'),
+        ),
+      );
+      expect(text, isNot(contains('clock')));
+      expect(
+        message(ProblemKind.twoFactorKeyInvalid, fromFile),
+        allOf(
+          contains(
+            'Check mfa in the credentials file '
+            '${(fromFile.source as CredentialsFile).path}:',
+          ),
+          contains('restart the server'),
+        ),
+      );
     });
 
     test('account verification says what Smartschool asks for', () {

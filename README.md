@@ -9,6 +9,11 @@ It is written in Dart on top of
 [`dart_mcp`](https://pub.dev/packages/dart_mcp), and compiles to a standalone
 Windows executable, so users do not need Node, Python or Dart installed.
 
+**Colleagues:** the installation guide, in Dutch, is
+[docs/installatie.md](docs/installatie.md). It covers what you need, finding
+the 2FA key, installing, testing, example questions, updating,
+troubleshooting, security and privacy, and uninstalling.
+
 ## Development
 
 Requires the Dart SDK (3.10.1 or later).
@@ -118,7 +123,8 @@ via *Settings → Developer → Edit Config*
 ```
 
 `SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP); MFA
-is mandatory for teachers. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
+is mandatory for teachers. Spaces in it are ignored; a value that is not
+Base32 (such as the app's 6-digit code) is reported before any login. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
 *Saving files* below). Restart Claude Desktop after editing the file. The
 server's stderr ends up in Claude Desktop's MCP log
 (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
@@ -238,8 +244,8 @@ It is inside your own Windows profile, never in the project folder, and
 nothing is sent anywhere; anyone who can sign in to your Windows account can
 read it, just like the session cookies next to it. Deleting the folder is safe
 at any time: the next search downloads the texts again. The log only shows
-counts, never a search query or message text. The colleague guide (#11) must
-say where the folder is and what it holds.
+counts, never a search query or message text. The colleague guide
+(`docs/installatie.md`) says where the folder is and what it holds.
 
 ### Intradesk index
 
@@ -358,8 +364,8 @@ in `lib/src/tools/save_intradesk_file_tool.dart` and
 `save_message_attachment_tool.dart`.
 
 Privacy: saved files are personal or school data, unencrypted, in a folder
-of the teacher's choice; the colleague guide (#11) must say so, and that
-they disappear after 7 days.
+of the teacher's choice; the colleague guide (`docs/installatie.md`) says so,
+and that they disappear after 7 days.
 
 ### Login
 
@@ -450,6 +456,14 @@ the ones the server's messages use (`Setting.formTitle` in
 against the server: a field per setting with that title, the variables, the
 tools of *Tools* above (add a tool to both, in the same order) and the icon.
 
+The colleague guide, `docs/installatie.md`, names the same form fields, the
+release asset, the question that runs `smartschool_status`, the cache and
+download files, and the size and time limits. `test/guide_test.dart` checks
+those against the server, and that the README, the release notes and the
+manifest's `documentation` link to the guide. Parts that wait for the manual
+install checks (#30) are marked `TE BEVESTIGEN (#30)` in HTML comments, and
+missing screenshots `SCHERMAFBEELDING (#33)`.
+
 "Downloadmap" is the only optional field, and its default is empty on
 purpose: Claude Desktop passes a field without a value or a default literally,
 as `${user_config.download_dir}` (modelcontextprotocol/mcpb#250), and does not
@@ -483,9 +497,11 @@ To release:
 The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
 checks the tag against the version, runs the tests, builds the extension,
 validates and packs it with `mcpb`, and publishes a full GitHub release with
-generated release notes and the extension attached as `smartschool-mcp.mcpb`
-(always that name: the update notice links to it). Both workflows pin the
-same `mcpb` version. The executable is not signed.
+the extension attached as `smartschool-mcp.mcpb` (always that name: the
+update notice links to it). Its notes start with `.github/release-notes.md`
+(how to install, in Dutch, with a link to the colleague guide), followed by
+the generated release notes. Both workflows pin the same `mcpb` version. The
+executable is not signed.
 
 ## License
 

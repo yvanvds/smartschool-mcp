@@ -211,9 +211,13 @@ class FakeMailbox {
   /// of the attachment's own.
   String? attachmentDownloadName;
 
+  /// The attachment downloads cancelled before all of the file was sent; a
+  /// test waits for them with `attachmentStops.reached`.
+  final attachmentStops = StoppedDownloads();
+
   /// How many attachment downloads were cancelled before all of the file
   /// was sent.
-  int stoppedAttachmentDownloads = 0;
+  int get stoppedAttachmentDownloads => attachmentStops.count;
 
   /// How many headers of each box the current session was sent since the
   /// box was last listed, by `boxType/boxID`: the box's paging position.
@@ -253,8 +257,10 @@ class FakeMailbox {
       options.uri.queryParameters['module'] == 'Messages' &&
       options.uri.queryParameters['file'] == 'composeMessage';
 
-  /// Answers [options] if it is a request for the Messages module.
-  ResponseBody? respond(RequestOptions options) {
+  /// Answers [options] if it is a request for the Messages module; an
+  /// attachment download stops sending once [cancelled] completes (see
+  /// [fakeDownload]).
+  ResponseBody? respond(RequestOptions options, {Future<void>? cancelled}) {
     if (options.method == 'POST' && options.uri.path == archivePath) {
       return _response(_archive('${options.data}'), Headers.jsonContentType);
     }
@@ -267,7 +273,7 @@ class FakeMailbox {
       return _response(_composePage(query), 'text/html');
     }
     if (options.method == 'GET' && query['file'] == 'download') {
-      return _downloadAttachment(int.parse(query['fileID']!));
+      return _downloadAttachment(int.parse(query['fileID']!), cancelled);
     }
     if (isSubmit(options)) return _submit(options);
     if (options.method == 'POST' &&
@@ -553,7 +559,7 @@ ${[for (final (i, a) in attachments.indexed) '''
 
   /// The download of the attachment with [fileId]; a 404 for one without
   /// content (what Smartschool answers then has not been seen).
-  ResponseBody _downloadAttachment(int fileId) {
+  ResponseBody _downloadAttachment(int fileId, Future<void>? cancelled) {
     for (final message in [...inbox, ...archive, ...sent]) {
       for (final (index, attachment) in message.attachments.indexed) {
         if (_fileId(message, index) != fileId) continue;
@@ -564,7 +570,8 @@ ${[for (final (i, a) in attachments.indexed) '''
           content,
           name: attachmentDownloadName ?? attachment.name,
           announce: announceAttachmentDownloads,
-          stopped: () => stoppedAttachmentDownloads++,
+          stopped: attachmentStops.add,
+          cancelled: cancelled,
         );
       }
     }

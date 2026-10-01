@@ -194,7 +194,8 @@ final class CredentialsFileException implements Exception {
 }
 
 /// The settings as read from a [CredentialSource]: trimmed, with the
-/// Smartschool address reduced to a host name.
+/// Smartschool address reduced to a host name and the 2FA key without white
+/// space.
 final class SmartschoolSettings {
   SmartschoolSettings._(
     this.source, {
@@ -215,7 +216,7 @@ final class SmartschoolSettings {
       host: normalizeHost(credentials.mainUrl),
       username: credentials.username.trim(),
       password: credentials.password.trim(),
-      mfa: (credentials.mfa ?? '').trim(),
+      mfa: normalizeTotpSecret(credentials.mfa ?? ''),
     );
   }
 
@@ -226,8 +227,23 @@ final class SmartschoolSettings {
   final String username;
   final String password;
 
-  /// The TOTP secret (Base32).
+  /// The TOTP secret (Base32), without white space: see
+  /// [normalizeTotpSecret].
   final String mfa;
+
+  /// Why [mfa] cannot be a TOTP secret, in a few words for the log (it never
+  /// quotes the key); null when it can be one, or when it is empty (see
+  /// [missing]).
+  ///
+  /// Checked before logging in: the library would post the password first
+  /// and then fail on the key with a bare `FormatException`, on every
+  /// attempt (yvanvds/dartschool#79). See [isTotpSecret].
+  String? get mfaProblem => mfa.isEmpty || isTotpSecret(mfa)
+      ? null
+      : _base32.hasMatch(mfa)
+      ? 'digits only, like a code of the authenticator app'
+      : 'not Base32: a character other than the letters A to Z, the digits '
+            '2 to 7 and "=" padding at the end';
 
   /// The login settings that are empty, in form order. All four are
   /// required: MFA is mandatory for teachers.
@@ -245,6 +261,32 @@ final class SmartschoolSettings {
     mainUrl: host,
     mfa: mfa,
   );
+
+  /// Removes all white space from a 2FA key, so that a key copied the way
+  /// authenticator setup screens often show it, in groups
+  /// (`JBSW Y3DP EHPK 3PXP`), works: authenticator apps ignore the spaces
+  /// too.
+  ///
+  /// A workaround for yvanvds/dartschool#79: the library passes the key on
+  /// unchanged, and the otp package rejects white space. Remove it, with
+  /// [mfaProblem], once the library normalises and checks the key itself
+  /// (yvanvds/smartschool-mcp#34).
+  static String normalizeTotpSecret(String key) =>
+      key.replaceAll(RegExp(r'\s'), '');
+
+  /// Whether [key], without white space, can be a TOTP secret: RFC 4648
+  /// Base32 in upper or lower case (the library upper-cases it, and
+  /// authenticator apps take either), optionally with `=` padding at the end
+  /// (which the library accepts), and not digits only.
+  ///
+  /// Digits only is a code of the authenticator app typed instead of its
+  /// key: a 6-digit code made of the digits 2 to 7 is valid Base32, but a
+  /// random 16-character key has no letter at all with a chance of less than
+  /// 1 in 10^11.
+  static bool isTotpSecret(String key) =>
+      _base32.hasMatch(key) && key.contains(RegExp('[A-Za-z]'));
+
+  static final _base32 = RegExp(r'^[A-Za-z2-7]+=*$');
 
   /// Reduces what a teacher may type as the Smartschool address
   /// (`https://school.smartschool.be/`, with spaces, ...) to the host name

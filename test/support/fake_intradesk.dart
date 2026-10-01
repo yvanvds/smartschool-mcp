@@ -58,8 +58,12 @@ class FakeIntradesk {
   /// 64 KB.
   int bytesSent = 0;
 
+  /// The downloads cancelled before all of the file was sent; a test waits
+  /// for them with `stops.reached`.
+  final stops = StoppedDownloads();
+
   /// How many downloads were cancelled before all of the file was sent.
-  int stoppedDownloads = 0;
+  int get stoppedDownloads => stops.count;
 
   /// When set, the connection of a download fails once this many bytes of
   /// it were sent, with the [HttpException] `dart:io` throws for a
@@ -210,11 +214,12 @@ class FakeIntradesk {
       });
 
   /// Answers [options] if it is a request for an Intradesk listing or
-  /// download.
-  ResponseBody? respond(RequestOptions options) {
+  /// download; a download stops sending once [cancelled] completes (see
+  /// [fakeDownload]).
+  ResponseBody? respond(RequestOptions options, {Future<void>? cancelled}) {
     if (options.method != 'GET') return null;
     if (_downloadPath.firstMatch(options.uri.path) case final download?) {
-      return _download(download[2]!);
+      return _download(download[2]!, cancelled);
     }
     if (_parentsPath.firstMatch(options.uri.path) case final parents?) {
       return _parents(parents[2]!);
@@ -264,7 +269,7 @@ class FakeIntradesk {
     return null;
   }
 
-  ResponseBody _download(String id) {
+  ResponseBody _download(String id, Future<void>? cancelled) {
     downloaded.add(id);
     final content = contents[id];
     // Seen live: an unknown file id gets a 404.
@@ -275,7 +280,8 @@ class FakeIntradesk {
       announce: announceDownloads,
       failAfter: failDownloadsAfter,
       sent: (bytes) => bytesSent += bytes,
-      stopped: () => stoppedDownloads++,
+      stopped: stops.add,
+      cancelled: cancelled,
     );
   }
 
