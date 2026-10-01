@@ -108,7 +108,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Smartschool-adres** | Het adres van je school op Smartschool, bijvoorbeeld `school.smartschool.be`. Je mag het ook uit de adresbalk van je browser kopiëren. |
    | **Gebruikersnaam** | De gebruikersnaam waarmee je inlogt op Smartschool. |
    | **Wachtwoord** | Je wachtwoord voor Smartschool. |
-   | **2FA-sleutel** | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers, en zonder spaties. |
+   | **2FA-sleutel** | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. |
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
@@ -289,11 +289,18 @@ Na een geweigerd wachtwoord probeert de extensie het niet opnieuw tot je
 Claude Desktop herstart. Pas dus eerst je gegevens aan en herstart dan pas:
 te veel mislukte pogingen na elkaar kunnen je Smartschool-account blokkeren.
 
+### De 2FA-sleutel is niet geldig
+
+Dan staat bij **2FA-sleutel** iets anders dan de sleutel uit
+[stap 2](#2-je-2fa-sleutel-opzoeken): vaak de code van zes cijfers uit je app,
+of een tikfout. De sleutel bestaat alleen uit letters en de cijfers 2 tot 7;
+spaties mogen. Vul de juiste sleutel in en herstart Claude Desktop. Zolang de
+sleutel niet klopt, probeert de extensie niet in te loggen.
+
 ### Smartschool weigert de 2FA-code
 
 - Controleer de **2FA-sleutel**: het moet de sleutel uit
-  [stap 2](#2-je-2fa-sleutel-opzoeken) zijn, niet een code van zes cijfers, en
-  zonder spaties.
+  [stap 2](#2-je-2fa-sleutel-opzoeken) zijn.
 - Controleer de klok van je pc. De codes hangen af van de juiste tijd. Open de
   Windows-instellingen, kies **Tijd en taal → Datum en tijd** en zet **Tijd
   automatisch instellen** aan. Klik eventueel op **Nu synchroniseren**.
@@ -302,14 +309,8 @@ te veel mislukte pogingen na elkaar kunnen je Smartschool-account blokkeren.
 
 ### Claude meldt een onverwachte fout
 
-- Gebeurt het meteen bij de eerste test? Controleer dan eerst je
-  **2FA-sleutel**: zonder spaties, en niet de code van zes cijfers. Een
-  verkeerd ingevulde sleutel geeft voorlopig ook deze melding.
-- Probeer het anders over een ogenblik opnieuw. Blijft het gebeuren, herstart
-  dan Claude Desktop.
-
-<!-- Zodra #32 opgelost is, krijgt een verkeerd ingevulde 2FA-sleutel een
-eigen melding: pas het eerste punt hierboven dan aan. -->
+Probeer het over een ogenblik opnieuw. Blijft het gebeuren, herstart dan
+Claude Desktop.
 
 ### Smartschool vraagt een geboortedatum, of een andere soort tweestapsverificatie
 

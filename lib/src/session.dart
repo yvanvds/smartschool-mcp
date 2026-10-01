@@ -23,7 +23,9 @@ typedef ClientFactory =
 ///
 /// Every failure surfaces as a [SmartschoolProblem] whose message tells the
 /// teacher what to fix. A failure that retrying cannot fix
-/// ([ProblemKind.permanent]: wrong settings, rejected password or 2FA code) is
+/// ([ProblemKind.permanent]: wrong settings, such as an empty setting or a
+/// 2FA key that is not valid, both found before logging in; a rejected
+/// password or 2FA code) is
 /// remembered and returned to later calls without contacting Smartschool
 /// again, so a wrong password cannot lock the account through repeated
 /// attempts.
@@ -152,6 +154,13 @@ final class SmartschoolSession {
       );
       throw _permanentProblem = SmartschoolProblem.of(
         ProblemKind.missingSettings,
+        settings,
+      );
+    }
+    if (settings.mfaProblem case final problem?) {
+      log('Smartschool settings: the 2FA key is not valid ($problem)');
+      throw _permanentProblem = SmartschoolProblem.of(
+        ProblemKind.twoFactorKeyInvalid,
         settings,
       );
     }

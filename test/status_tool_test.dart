@@ -221,6 +221,52 @@ void main() {
     },
   );
 
+  test('with the 2FA key copied in groups: working', () async {
+    final (result, text) = await status(
+      source: fakeExtensionSettings(
+        FakeCredentials(mfa: 'JBSW Y3DP EHPK 3PXP'),
+      ),
+    );
+
+    expect(result.isError, isNot(true));
+    expect(text, startsWith('Smartschool connection: working\n'));
+    expect(server.logins, 1);
+  });
+
+  test('with a 6-digit code as 2FA key: names "2FA-sleutel", says it is not '
+      'the code, and does not contact Smartschool, also on a second '
+      'call', () async {
+    final session = SmartschoolSession(
+      fakeExtensionSettings(FakeCredentials(mfa: '123456')),
+      createClient: fakeClientFactory(server, await tempCache()),
+    );
+    addTearDown(session.close);
+    final (connection, _) = await connect(tools: [statusTool(session)]);
+
+    final (result, text) = await callTool(connection, 'smartschool_status');
+    final (_, again) = await callTool(connection, 'smartschool_status');
+
+    expect(result.isError, isNot(true));
+    expect(
+      text,
+      startsWith(
+        'Smartschool connection: NOT working\n'
+        'Problem: The two-factor authentication (2FA) key is not valid, so '
+        'Smartschool was not contacted. Check "2FA-sleutel" (SMARTSCHOOL_MFA) '
+        'in the Smartschool extension settings in Claude Desktop (Settings → '
+        'Extensions): it must be the key Smartschool shows when you add an '
+        'authenticator app, made of letters and the digits 2 to 7 (spaces do '
+        'not matter), not the 6-digit code the app shows. Then restart Claude '
+        'Desktop.\n'
+        'Smartschool address: $fakeHost\n',
+      ),
+    );
+    expect(text, isNot(contains('123456')));
+    expectNoSecretsOrTraces(text);
+    expect(again, text);
+    expect(server.requests, isEmpty);
+  });
+
   test('with a missing credentials file: says so', () async {
     final missing = File('does-not-exist.yml').absolute.path;
 

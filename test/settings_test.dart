@@ -52,6 +52,67 @@ void main() {
       expect(credentials.mfa, fakeTotpSecret);
     });
 
+    test('a 2FA key copied in groups: the white space is removed', () {
+      // Also a non-breaking space and a tab, as a copy from a web page may
+      // hold.
+      for (final key in ['JBSW Y3DP EHPK 3PXP', ' JBSW Y3DP\tEHPK  3PXP ']) {
+        final settings = SmartschoolSettings.read(
+          fakeExtensionSettings(FakeCredentials(mfa: key)),
+        );
+
+        expect(settings.mfa, fakeTotpSecret, reason: key);
+        expect(settings.toCredentials().mfa, fakeTotpSecret, reason: key);
+        expect(settings.mfaProblem, isNull, reason: key);
+        expect(settings.missing, isEmpty, reason: key);
+      }
+    });
+
+    test('a 2FA key in lower case or with "=" padding is valid', () {
+      for (final key in [
+        fakeTotpSecret,
+        fakeTotpSecret.toLowerCase(),
+        'jbsw y3dp EHPK 3pxp',
+        // 26 characters, padded to 32 the way RFC 4648 pads them.
+        'JBSWY3DPEHPK3PXPJBSWY3DPEH======',
+      ]) {
+        expect(
+          SmartschoolSettings.isTotpSecret(key.replaceAll(' ', '')),
+          isTrue,
+        );
+        expect(
+          SmartschoolSettings.read(
+            fakeExtensionSettings(FakeCredentials(mfa: key)),
+          ).mfaProblem,
+          isNull,
+          reason: key,
+        );
+      }
+    });
+
+    test('a 6-digit code or a key with other characters is not valid, and '
+        'is not missing either', () {
+      final problems = {
+        // A code of the authenticator app: with a 1, 8, 9 or 0 it is not
+        // Base32, with only 2 to 7 it is.
+        '123456': 'not Base32',
+        '234 567': 'digits only',
+        // Hyphens, a 0 for an O, a date of birth.
+        'JBSW-Y3DP-EHPK-3PXP': 'not Base32',
+        'JBSWY3DPEHPK3PX0': 'not Base32',
+        '2010-05-15': 'not Base32',
+        '=JBSWY3DPEHPK3PXP': 'not Base32',
+      };
+      for (final MapEntry(key: key, value: problem) in problems.entries) {
+        final settings = SmartschoolSettings.read(
+          fakeExtensionSettings(FakeCredentials(mfa: key)),
+        );
+
+        expect(settings.mfaProblem, startsWith(problem), reason: key);
+        expect(settings.mfaProblem, isNot(contains(key)), reason: key);
+        expect(settings.missing, isEmpty, reason: key);
+      }
+    });
+
     test('name each setting by its install-form title and variable', () {
       const source = ExtensionSettings();
       expect(source.name(Setting.mfa), '"2FA-sleutel" (SMARTSCHOOL_MFA)');
@@ -87,6 +148,28 @@ void main() {
       expect(settings.missing, isEmpty);
       expect(source.name(Setting.mfa), 'mfa');
       expect(source.where, contains(file.absolute.path));
+    });
+
+    test('a 2FA key in groups works there too; a 6-digit code (a number in '
+        'YAML) is not valid', () {
+      SmartschoolSettings readWithKey(String mfa) {
+        final file = File('${dir.path}/dev.yml')
+          ..writeAsStringSync(
+            'username: jan.peeters\n'
+            'password: $fakePassword\n'
+            'main_url: $fakeHost\n'
+            'mfa: $mfa\n',
+          );
+        return SmartschoolSettings.read(CredentialsFile(file.path));
+      }
+
+      final grouped = readWithKey('JBSW Y3DP EHPK 3PXP');
+      expect(grouped.mfa, fakeTotpSecret);
+      expect(grouped.mfaProblem, isNull);
+
+      final code = readWithKey('123456');
+      expect(code.missing, isEmpty);
+      expect(code.mfaProblem, startsWith('not Base32'));
     });
 
     test('a relative path is resolved against the working directory', () {

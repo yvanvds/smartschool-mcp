@@ -410,6 +410,52 @@ void main() {
     },
   );
 
+  test('a 2FA key that is not valid is reported without contacting '
+      'Smartschool, also on later calls, and the log does not quote '
+      'it', () async {
+    final session = newSession(
+      source: fakeExtensionSettings(FakeCredentials(mfa: '123 456')),
+    );
+    final key = _problem(ProblemKind.twoFactorKeyInvalid).having(
+      (p) => p.message,
+      'message',
+      contains('Check "2FA-sleutel" (SMARTSCHOOL_MFA) in the Smartschool'),
+    );
+
+    final log = await _logOf(() async {
+      await expectLater(session.run(_post), throwsA(key));
+      await expectLater(session.run(_post), throwsA(key));
+    });
+
+    expect(clientsCreated, 0);
+    expect(server.requests, isEmpty);
+    expect(log, [
+      'Smartschool settings: the 2FA key is not valid (not Base32: a '
+          'character other than the letters A to Z, the digits 2 to 7 and '
+          '"=" padding at the end)',
+    ]);
+  });
+
+  test('a 2FA key copied in groups, in lower case or with "=" padding: the '
+      'library logs in with it', () async {
+    // The keys SmartschoolSettings accepts must be keys the library can
+    // make a code with.
+    for (final key in [
+      'JBSW Y3DP EHPK 3PXP',
+      'jbswy3dpehpk3pxp',
+      'JBSWY3DPEHPK3PXPJBSWY3DPEH======',
+    ]) {
+      server = FakeSmartschool();
+      cache = await tempCache();
+      final session = newSession(
+        source: fakeExtensionSettings(FakeCredentials(mfa: key)),
+      );
+
+      expect(await session.run(_post), '<ok/>', reason: key);
+      expect(server.logins, 1, reason: key);
+    }
+  });
+
   test('a missing credentials file is reported', () async {
     final session = newSession(
       source: CredentialsFile('${cache.path}/missing.yml'),
