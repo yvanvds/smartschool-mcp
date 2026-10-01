@@ -7,8 +7,10 @@ import 'package:yaml/yaml.dart';
 /// Smartschool ([login]), and the optional download folder.
 ///
 /// [formTitle] is the field's title in the Claude Desktop extension's install
-/// form. The extension manifest must use exactly these titles, because the
-/// error messages tell the teacher which field to fix by that name.
+/// form. The extension manifest (`manifest.json`, its `user_config` keyed by
+/// [fileKey]) must use exactly these titles, because the error messages tell
+/// the teacher which field to fix by that name; `test/manifest_test.dart`
+/// checks it.
 enum Setting {
   mainUrl('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL', 'main_url'),
   username('Gebruikersnaam', 'SMARTSCHOOL_USERNAME', 'username'),

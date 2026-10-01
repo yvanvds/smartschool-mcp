@@ -18,5 +18,9 @@ jobs:
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze
         run: dart analyze
+      - name: Check that the versions agree
+        run: dart run tool/check_version.dart
+      - name: Validate the extension manifest
+        run: npx --yes @anthropic-ai/mcpb@2.1.2 validate manifest.json
       - name: Test
         run: dart test
