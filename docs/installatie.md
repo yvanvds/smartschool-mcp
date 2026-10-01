@@ -117,9 +117,9 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
 Assets, het installatievenster van Claude Desktop en het formulier (zonder
 echte gegevens). -->
 
-<!-- TE BEVESTIGEN (#30): de links hierboven werken pas na de eerste release
-(v*-tag). Waarschuwt de browser, SmartScreen of Defender bij het downloaden of
-installeren, beschrijf dan hier wat de collega ziet en wat die moet doen. -->
+<!-- TE BEVESTIGEN (#30): waarschuwt de browser, SmartScreen of Defender bij
+het downloaden of installeren, beschrijf dan hier wat de collega ziet en wat
+die moet doen. -->
 
 Waarschuwt Windows of je virusscanner bij het downloaden of installeren? Lees
 dan eerst [Windows of je virusscanner waarschuwt](#windows-of-je-virusscanner-waarschuwt).
