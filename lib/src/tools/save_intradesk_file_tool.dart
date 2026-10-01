@@ -102,10 +102,12 @@ Future<CallToolResult> _save(
       try {
         // The library refuses a larger announced size before reading any of
         // the file, and otherwise stops the transfer once past the limit.
-        final download = await IntradeskService(
-          client,
-        ).downloadFileStream(id, maxBytes: maxBytes);
-        await writeDownload(download, temporary);
+        final download = await writeDownload(
+          temporary,
+          () => IntradeskService(
+            client,
+          ).downloadFileStream(id, maxBytes: maxBytes),
+        );
         return known?.name ?? download.fileName;
       } on SmartschoolDownloadError catch (error) {
         throw ToolError(

@@ -121,13 +121,13 @@ class FakeSmartschool implements HttpClientAdapter {
     if (++_inFlight > maxInFlight) maxInFlight = _inFlight;
     try {
       if (latency > Duration.zero) await Future<void>.delayed(latency);
-      return _respond(options);
+      return _respond(options, cancelFuture);
     } finally {
       _inFlight--;
     }
   }
 
-  ResponseBody _respond(RequestOptions options) {
+  ResponseBody _respond(RequestOptions options, Future<void>? cancelled) {
     final path = options.uri.path;
     if (_expireBefore?.call(options) ?? false) {
       _expireBefore = null;
@@ -204,8 +204,8 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == SmartschoolSession.sessionCheckPath) {
       return _json('[{"platformId":7}]');
     }
-    return mailbox.respond(options) ??
-        intradesk.respond(options) ??
+    return mailbox.respond(options, cancelled: cancelled) ??
+        intradesk.respond(options, cancelled: cancelled) ??
         _html(_homePage);
   }
 

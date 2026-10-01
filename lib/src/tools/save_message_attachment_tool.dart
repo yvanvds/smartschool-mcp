@@ -117,11 +117,10 @@ Future<CallToolResult> _save(
       try {
         // The library refuses a larger announced size before reading any of
         // the file, and otherwise stops the transfer once past the limit.
-        final download = await attachment.downloadStream(
-          client,
-          maxBytes: maxBytes,
+        final download = await writeDownload(
+          temporary,
+          () => attachment.downloadStream(client, maxBytes: maxBytes),
         );
-        await writeDownload(download, temporary);
         final name = attachment.name.trim();
         return name.isEmpty ? download.fileName : name;
       } on SmartschoolDownloadError catch (error) {

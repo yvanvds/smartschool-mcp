@@ -658,11 +658,33 @@ String _reason(FileSystemException error) {
   return os == null || os.isEmpty ? error.message : os;
 }
 
-/// Writes [download]'s content into [file], replacing what is in it.
+/// Writes the download that [start] begins into [file], replacing what is
+/// in it, and returns that download.
 ///
-/// Completes with the download's error when its stream ends with one (it is
-/// too large, or the connection failed), and the library then stops the
-/// transfer; or with a [FileSystemException] when the file cannot be
-/// written, and the transfer is stopped too.
-Future<void> writeDownload(SmartschoolDownload download, File file) =>
-    download.stream.pipe(file.openWrite());
+/// The file is opened before the download begins, and the download is read
+/// as soon as it is handed over. Until it is read, the HTTP client keeps
+/// whatever comes in in memory, also past the download's `maxBytes`; it
+/// was seen to read a whole 17 MB file while a 1 MB download waited for its
+/// file to open (#36, yvanvds/dartschool#81).
+///
+/// Throws what [start] throws. Fails with the download's error when its
+/// stream ends with one (it is too large, or the connection failed), and
+/// the library then stops the transfer. Fails with a [FileSystemException]
+/// when the file cannot be written, and the transfer is stopped too. The
+/// file is closed either way.
+Future<SmartschoolDownload> writeDownload(
+  File file,
+  Future<SmartschoolDownload> Function() start,
+) async {
+  final output = await file.open(mode: FileMode.write);
+  try {
+    final download = await start();
+    // Listened to at once; paused while a chunk is written.
+    await for (final chunk in download.stream) {
+      await output.writeFrom(chunk);
+    }
+    return download;
+  } finally {
+    await output.close();
+  }
+}

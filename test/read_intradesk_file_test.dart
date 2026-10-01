@@ -263,7 +263,7 @@ void main() {
     );
     expect(server.intradesk.downloaded, [id]);
     // The download is cancelled, not left running in the background.
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await server.intradesk.stops.reached(1);
     expect(server.intradesk.stoppedDownloads, 1);
     expect(server.intradesk.bytesSent, lessThan(1024 * 1024));
   });
@@ -279,7 +279,7 @@ void main() {
       'Intradesk file (id $id) is too large to open here (more than 25 MB): '
       'files up to 25 MB can be read. The teacher can open it in Smartschool.',
     );
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await server.intradesk.stops.reached(1);
     expect(server.intradesk.stoppedDownloads, 1);
     expect(
       server.intradesk.bytesSent,
@@ -301,7 +301,7 @@ void main() {
     server.intradesk.failDownloadsAfter = 64 * 1024;
 
     expect(await error(id), startsWith('Could not reach Smartschool at '));
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await server.intradesk.stops.reached(1);
     expect(server.intradesk.stoppedDownloads, 1);
     expect(server.intradesk.bytesSent, 64 * 1024);
 

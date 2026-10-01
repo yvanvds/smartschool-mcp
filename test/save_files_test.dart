@@ -325,7 +325,7 @@ void main() {
         'to 1.0 MB can be saved. The teacher can download it in Smartschool.',
       );
       expect(saved(), isEmpty, reason: 'no temporary file left');
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await server.intradesk.stops.reached(1);
       expect(server.intradesk.stoppedDownloads, 1);
     });
 
@@ -344,14 +344,15 @@ void main() {
         'in Smartschool.',
       );
       expect(saved(), isEmpty, reason: 'no temporary file left');
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await server.intradesk.stops.reached(1);
       expect(server.intradesk.stoppedDownloads, 1);
-      // Up to a few MB more than the limit come in before the transfer
-      // stops (seen: 1 to 2 MB), more than for read_intradesk_file, which
-      // reads into memory instead of writing a file; far from all 17 MB.
+      // The download is read as soon as it comes in, so little more than the
+      // limit is sent, as for read_intradesk_file; far from all 17 MB. (When
+      // it was read only once the file was open, the HTTP client took in up
+      // to all of it meanwhile, #36.)
       expect(
         server.intradesk.bytesSent,
-        inInclusiveRange(_limit, _limit + 4 * 1024 * 1024),
+        inInclusiveRange(_limit, _limit + 1024 * 1024),
       );
     });
 
@@ -744,7 +745,7 @@ void main() {
         'can download it in Smartschool.',
       );
       expect(saved(), isEmpty);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await server.mailbox.attachmentStops.reached(1);
       expect(server.mailbox.stoppedAttachmentDownloads, 1);
 
       server.mailbox.announceAttachmentDownloads = false;
