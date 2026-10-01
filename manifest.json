@@ -1,0 +1,133 @@
+{
+  "manifest_version": "0.3",
+  "name": "smartschool-mcp",
+  "display_name": "Smartschool",
+  "version": "0.1.0",
+  "description": "Geeft Claude toegang tot je Smartschool-berichten en Intradesk.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, archiveren en beantwoorden (een antwoord gaat pas weg na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "author": {
+    "name": "Yvan Vander Sanden",
+    "url": "https://github.com/yvanvds"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yvanvds/smartschool-mcp.git"
+  },
+  "homepage": "https://github.com/yvanvds/smartschool-mcp",
+  "documentation": "https://github.com/yvanvds/smartschool-mcp#readme",
+  "support": "https://github.com/yvanvds/smartschool-mcp/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/smartschool-mcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/smartschool-mcp.exe",
+      "args": [],
+      "env": {
+        "SMARTSCHOOL_MAIN_URL": "${user_config.main_url}",
+        "SMARTSCHOOL_USERNAME": "${user_config.username}",
+        "SMARTSCHOOL_PASSWORD": "${user_config.password}",
+        "SMARTSCHOOL_MFA": "${user_config.mfa}",
+        "SMARTSCHOOL_DOWNLOAD_DIR": "${user_config.download_dir}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "smartschool_status",
+      "description": "Controleert of de verbinding met Smartschool werkt (of wat je moet aanpassen), toont de downloadmap en of er een nieuwere versie is."
+    },
+    {
+      "name": "list_messages",
+      "description": "Toont de berichten in je postvak, verzonden berichten of archief, met filters op onderwerp, afzender, ongelezen en datum."
+    },
+    {
+      "name": "read_message",
+      "description": "Leest één bericht met zijn ontvangers, bijlagen en tekst, zonder het als gelezen te markeren."
+    },
+    {
+      "name": "save_message_attachment",
+      "description": "Bewaart een bijlage van een bericht in de downloadmap."
+    },
+    {
+      "name": "search_messages",
+      "description": "Zoekt woorden in de tekst, het onderwerp en de afzender van je berichten."
+    },
+    {
+      "name": "archive_messages",
+      "description": "Verplaatst berichten uit je postvak naar het archief."
+    },
+    {
+      "name": "reply_to_message",
+      "description": "Beantwoordt een bericht, aan de afzender of aan iedereen, pas na jouw bevestiging."
+    },
+    {
+      "name": "search_intradesk",
+      "description": "Zoekt mappen, bestanden en weblinks op Intradesk op naam."
+    },
+    {
+      "name": "list_intradesk_folder",
+      "description": "Toont wat er in een map op Intradesk staat."
+    },
+    {
+      "name": "read_intradesk_file",
+      "description": "Leest een bestand van Intradesk: Word, Excel, PowerPoint, PDF, tekst of een afbeelding."
+    },
+    {
+      "name": "save_intradesk_file",
+      "description": "Bewaart een bestand van Intradesk in de downloadmap."
+    }
+  ],
+  "keywords": [
+    "smartschool",
+    "school",
+    "onderwijs",
+    "berichten",
+    "intradesk"
+  ],
+  "license": "GPL-3.0",
+  "privacy_policies": [
+    "https://www.smartschool.be/privacybeleid/",
+    "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement"
+  ],
+  "compatibility": {
+    "platforms": [
+      "win32"
+    ]
+  },
+  "user_config": {
+    "main_url": {
+      "type": "string",
+      "title": "Smartschool-adres",
+      "description": "Het adres van je school op Smartschool, bijvoorbeeld school.smartschool.be.",
+      "required": true
+    },
+    "username": {
+      "type": "string",
+      "title": "Gebruikersnaam",
+      "description": "De gebruikersnaam waarmee je inlogt op Smartschool.",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "Wachtwoord",
+      "description": "Je wachtwoord voor Smartschool.",
+      "required": true,
+      "sensitive": true
+    },
+    "mfa": {
+      "type": "string",
+      "title": "2FA-sleutel",
+      "description": "De geheime sleutel van je authenticator-app, niet de code van zes cijfers. Je vindt hem in Smartschool: je profiel, Tweestapsverificatie, een authenticator-app toevoegen; kies bij de QR-code voor de optie zonder camera en neem de code die dan verschijnt.",
+      "required": true,
+      "sensitive": true
+    },
+    "download_dir": {
+      "type": "directory",
+      "title": "Downloadmap",
+      "description": "Map waarin Claude bestanden uit Smartschool (Intradesk-bestanden, bijlagen) bewaart om ze te openen. Kies bij voorkeur een (tijdelijke) map in je Cowork-project. Leeg: Downloads\\Smartschool in je gebruikersmap. De extensie verwijdert de bestanden die ze zelf bewaarde na 7 dagen en raakt andere bestanden nooit aan.",
+      "required": false,
+      "default": ""
+    }
+  }
+}

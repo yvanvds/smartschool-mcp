@@ -20,10 +20,11 @@ dart analyze
 dart test
 ```
 
-`dart test` includes an end-to-end test that compiles the executable and
-talks to it over stdio. It never contacts Smartschool: the other tests use a
-fake Smartschool. No test asks the real GitHub for updates either (see
-*Update check* below).
+`dart test` includes end-to-end tests that compile the executable and talk
+to it over stdio, one of them in the extension folder, started the way
+Claude Desktop starts it (see *Extension and releases* below). They never
+contact Smartschool: the other tests use a fake Smartschool. No test asks the
+real GitHub for updates either (see *Update check* below).
 
 ### Local credentials
 
@@ -84,7 +85,8 @@ dart compile exe bin/smartschool_mcp.dart
 ```
 
 This writes `bin/smartschool_mcp.exe` (git-ignored). Use `-o <path>` to put
-it elsewhere.
+it elsewhere. To build the Claude Desktop extension instead, see *Extension
+and releases* below.
 
 The server speaks MCP over stdin/stdout, so **stdout is reserved for the
 protocol**: log to stderr (`log()` in `lib/src/log.dart`), never `print` to
@@ -92,7 +94,9 @@ stdout.
 
 ### Try it in Claude Desktop
 
-Open Claude Desktop's config file via *Settings → Developer → Edit Config*
+Build the extension and double-click `smartschool-mcp.mcpb` (see *Extension
+and releases* below). Or, without packing, open Claude Desktop's config file
+via *Settings → Developer → Edit Config*
 (`%APPDATA%\Claude\claude_desktop_config.json`) and add the server, pointing
 `command` at the executable you built:
 
@@ -431,7 +435,57 @@ GitHub.
 A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
 full release (not a draft or pre-release), and carry the extension as
 `smartschool-mcp.mcpb`: the notice names that file and links to the release
-page.
+page. The release workflow takes care of all three (see below).
+
+### Extension and releases
+
+The Claude Desktop extension is described by `manifest.json` in the project
+root ([MCPB manifest 0.3](https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md)),
+next to its icon `icon.png` (a placeholder for now). Claude Desktop runs
+`server/smartschool-mcp.exe` from the installed extension and passes the
+fields of the install form as the `SMARTSCHOOL_*` variables. Colleagues fill
+in that form, so its titles and descriptions are in Dutch, and the titles are
+the ones the server's messages use (`Setting.formTitle` in
+`lib/src/settings.dart`). `test/manifest_test.dart` checks the manifest
+against the server: a field per setting with that title, the variables, the
+tools of *Tools* above (add a tool to both, in the same order) and the icon.
+
+"Downloadmap" is the only optional field, and its default is empty on
+purpose: Claude Desktop passes a field without a value or a default literally,
+as `${user_config.download_dir}` (modelcontextprotocol/mcpb#250), and does not
+replace `${HOME}` in a default (modelcontextprotocol/mcpb#251). Empty, the
+server uses its own default (see *Saving files*).
+
+Build and pack the extension locally (`npx` needs Node):
+
+```
+dart run tool/build_bundle.dart
+npx @anthropic-ai/mcpb@2.1.2 validate bundle/manifest.json
+npx @anthropic-ai/mcpb@2.1.2 pack bundle smartschool-mcp.mcpb
+```
+
+`tool/build_bundle.dart` fills `bundle/` with `manifest.json`, `icon.png`,
+`LICENSE` and the server, compiled to the manifest's `server.entry_point`.
+`bundle/` and `*.mcpb` are git-ignored. `test/bundle_e2e_test.dart` builds
+such a folder and starts the server in it from the manifest, the way Claude
+Desktop does.
+
+The version is in three files: `pubspec.yaml`, `lib/src/version.dart` and
+`manifest.json`. `dart run tool/check_version.dart` fails when they differ,
+and with `--tag vX.Y.Z` also when the tag does; CI runs it, and
+`test/version_test.dart` checks the same.
+
+To release:
+
+1. Set the new version in the three files; commit and merge.
+2. Tag that commit `vX.Y.Z` and push the tag.
+
+The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
+checks the tag against the version, runs the tests, builds the extension,
+validates and packs it with `mcpb`, and publishes a full GitHub release with
+generated release notes and the extension attached as `smartschool-mcp.mcpb`
+(always that name: the update notice links to it). Both workflows pin the
+same `mcpb` version. The executable is not signed.
 
 ## License
 
