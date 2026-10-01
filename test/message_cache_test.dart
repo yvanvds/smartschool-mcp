@@ -106,8 +106,9 @@ void main() {
     expect(await broken.read(BoxType.inbox, 101), isNull);
   });
 
-  test('of a session: messages/<host> in the user\'s cache folder, worked '
-      'out on first use', () async {
+  test('of a session: messages/<host> in the cache folder of the logged-in '
+      'client, worked out on first use', () async {
+    final cookies = await tempCache();
     var reads = 0;
     final session = SmartschoolSession(
       ExtensionSettings(
@@ -116,22 +117,22 @@ void main() {
           return FakeCredentials();
         },
       ),
+      createClient: fakeClientFactory(FakeSmartschool(), cookies),
     );
+    addTearDown(session.close);
     final cache = MessageTextCache.of(session);
     expect(reads, 0, reason: 'the settings are read on first use');
+    expect(
+      () => cache.directory,
+      throwsStateError,
+      reason: 'the folder is the logged-in client\'s',
+    );
 
-    final settings = session.settings;
+    await session.run((_) async {});
+
     expect(
       cache.directory.path,
-      [
-        settings.cacheDirectory,
-        'messages',
-        fakeHost,
-      ].join(Platform.pathSeparator),
-    );
-    expect(
-      settings.cacheDirectory,
-      SmartschoolSettings.userCacheDirectory('jan.peeters'),
+      [cookies.path, 'messages', fakeHost].join(Platform.pathSeparator),
     );
   });
 }

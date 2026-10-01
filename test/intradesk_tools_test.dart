@@ -332,6 +332,44 @@ void main() {
       expect(hits(refreshed), hasLength(2));
     });
 
+    test('wired like the server (IntradeskIndexCache.of): the index is saved '
+        'in intradesk/<host> in the cache folder of the library\'s client, '
+        'next to the session cookies, where a restart finds it', () async {
+      Future<ServerConnection> startOfSession() async {
+        final session = SmartschoolSession(
+          fakeExtensionSettings(),
+          createClient: fakeClientFactory(server, cookies),
+        );
+        addTearDown(session.close);
+        final cache = IntradeskIndexCache.of(session, buildWait: buildWait);
+        addTearDown(() => cache.walkDone);
+        final (connection, _) = await connect(
+          tools: [
+            searchIntradeskTool(session, cache),
+            listIntradeskFolderTool(session, cache),
+          ],
+        );
+        return connection;
+      }
+
+      final first = await search({'query': 'welkom'}, await startOfSession());
+
+      final index = File(
+        [
+          cookies.path,
+          'intradesk',
+          fakeHost,
+          'index.json',
+        ].join(Platform.pathSeparator),
+      );
+      expect(index.existsSync(), isTrue);
+      expect(cacheFolder.listSync(), isEmpty);
+
+      server.intradesk.listed.clear();
+      expect(await search({'query': 'welkom'}, await startOfSession()), first);
+      expect(server.intradesk.listed, isEmpty);
+    });
+
     test('an index older than a day answers at once, with a note, while a '
         'new one is built; the next search uses the new one', () async {
       await search({'query': 'welkom'});

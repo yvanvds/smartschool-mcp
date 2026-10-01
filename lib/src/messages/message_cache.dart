@@ -5,7 +5,6 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
 import '../session.dart';
-import '../settings.dart';
 
 /// The plain text of messages (from `htmlToText`), kept on disk so a message
 /// is downloaded once and later searches read it from here.
@@ -27,20 +26,20 @@ final class MessageTextCache {
 
   /// The cache of the user [session] logs in as: the folder
   /// `messages/<host>` in the user's cache folder
-  /// ([SmartschoolSettings.cacheDirectory]), next to the library's session
+  /// ([SmartschoolSession.cacheDirectory]), next to the library's session
   /// cookies. The host keeps the message ids of two schools apart.
   ///
-  /// The folder is worked out on first use, when the settings have been
-  /// read.
+  /// The folder is worked out on first use: use the cache only once the
+  /// session has logged in.
   MessageTextCache.of(SmartschoolSession session)
-    : _resolve = (() => directoryFor(session.settings));
+    : _resolve = (() => directoryFor(session));
 
-  /// The folder [MessageTextCache.of] uses for [settings].
-  static Directory directoryFor(SmartschoolSettings settings) => Directory(
+  /// The folder [MessageTextCache.of] uses for [session].
+  static Directory directoryFor(SmartschoolSession session) => Directory(
     [
-      settings.cacheDirectory,
+      session.cacheDirectory,
       'messages',
-      settings.host,
+      session.settings.host,
     ].join(Platform.pathSeparator),
   );
 

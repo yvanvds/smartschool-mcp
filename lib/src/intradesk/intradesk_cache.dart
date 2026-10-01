@@ -4,7 +4,6 @@ import 'dart:io';
 
 import '../log.dart';
 import '../session.dart';
-import '../settings.dart';
 import 'intradesk_index.dart';
 import 'intradesk_walk.dart';
 
@@ -71,25 +70,25 @@ final class IntradeskIndexCache {
 
   /// The cache of the user [session] logs in as: the folder
   /// `intradesk/<host>` in the user's cache folder
-  /// ([SmartschoolSettings.cacheDirectory]), next to the library's session
+  /// ([SmartschoolSession.cacheDirectory]), next to the library's session
   /// cookies.
   ///
-  /// The folder is worked out on first use, from the settings: use the cache
-  /// only once the session has logged in.
+  /// The folder is worked out on first use: use the cache only once the
+  /// session has logged in.
   IntradeskIndexCache.of(
     SmartschoolSession session, {
     this.maxAge = defaultMaxAge,
     this.buildWait = defaultBuildWait,
     DateTime Function()? now,
-  }) : _resolve = (() => directoryFor(session.settings)),
+  }) : _resolve = (() => directoryFor(session)),
        _now = now ?? DateTime.now;
 
-  /// The folder [IntradeskIndexCache.of] uses for [settings].
-  static Directory directoryFor(SmartschoolSettings settings) => Directory(
+  /// The folder [IntradeskIndexCache.of] uses for [session].
+  static Directory directoryFor(SmartschoolSession session) => Directory(
     [
-      settings.cacheDirectory,
+      session.cacheDirectory,
       'intradesk',
-      settings.host,
+      session.settings.host,
     ].join(Platform.pathSeparator),
   );
 

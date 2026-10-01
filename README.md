@@ -281,6 +281,13 @@ step (TOTP from `SMARTSCHOOL_MFA`). The session cookies are kept in
 `%USERPROFILE%\.cache\smartschool\<username>`, so a restart only logs in
 again when the saved session has expired. The log shows which happened.
 
+That folder is the one `flutter_smartschool` chooses
+(`SmartschoolClient.cacheDir`); the server does not work it out itself. Its
+own data for the user (the message texts, the Intradesk index) goes in
+subfolders of it (`SmartschoolSession.cacheDirectory`), and data that
+belongs to no user (the update check) in the folder above it
+(`sharedCacheDirectory` in `lib/src/cache_folder.dart`).
+
 Tools use the shared `SmartschoolSession` (`lib/src/session.dart`): call
 `session.run((client) => ...)` and let its `SmartschoolProblem` propagate;
 the server turns it into an error result with a message that tells the

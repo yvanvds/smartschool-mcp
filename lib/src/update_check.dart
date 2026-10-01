@@ -5,8 +5,8 @@ import 'dart:typed_data';
 
 import 'package:pub_semver/pub_semver.dart';
 
+import 'cache_folder.dart';
 import 'log.dart';
-import 'settings.dart';
 import 'version.dart';
 
 /// A release of this server published on GitHub.
@@ -94,7 +94,8 @@ final class UpdateChecker {
   /// Null, so no check at all, when [disableVariable] is `off` (or `false`,
   /// `no`, `0`), or when [endpointVariable] is set but is not an http(s)
   /// address. The state file is [stateFileName] in
-  /// [SmartschoolSettings.cacheRoot]: the check needs no Smartschool
+  /// [sharedCacheDirectory] (worked out by the library from this process's
+  /// environment, not from [environment]): the check needs no Smartschool
   /// settings.
   static UpdateChecker? fromEnvironment([Map<String, String>? environment]) {
     final variables = environment ?? Platform.environment;
@@ -124,10 +125,7 @@ final class UpdateChecker {
     return UpdateChecker(
       endpoint: endpoint,
       stateFile: File(
-        [
-          SmartschoolSettings.cacheRoot(variables),
-          stateFileName,
-        ].join(Platform.pathSeparator),
+        [sharedCacheDirectory(), stateFileName].join(Platform.pathSeparator),
       ),
     );
   }
@@ -144,7 +142,7 @@ final class UpdateChecker {
   /// instead of GitHub (tests, development).
   static const endpointVariable = 'SMARTSCHOOL_MCP_UPDATE_URL';
 
-  /// The file in [SmartschoolSettings.cacheRoot] with the last check.
+  /// The file in [sharedCacheDirectory] with the last check.
   static const stateFileName = 'smartschool-mcp-update-check.json';
 
   /// The name of the extension file attached to every release.

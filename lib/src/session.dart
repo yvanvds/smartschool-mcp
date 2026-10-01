@@ -16,9 +16,10 @@ typedef ClientFactory =
 /// Nothing happens at startup, so the server starts even with incomplete
 /// settings. The first [run] reads the settings, creates the client and logs
 /// in; later calls reuse that client for the lifetime of the process. The
-/// library keeps the session cookies in `~/.cache/smartschool/<username>`,
-/// so a new process only goes through the password and 2FA steps when the
-/// saved session has expired.
+/// library keeps the session cookies in the user's cache folder
+/// ([cacheDirectory], `~/.cache/smartschool/<username>`), so a new process
+/// only goes through the password and 2FA steps when the saved session has
+/// expired.
 ///
 /// Every failure surfaces as a [SmartschoolProblem] whose message tells the
 /// teacher what to fix. A failure that retrying cannot fix
@@ -42,6 +43,26 @@ final class SmartschoolSession {
   SmartschoolProblem? _permanentProblem;
   SmartschoolClient? _client;
   Future<SmartschoolClient>? _connecting;
+  String? _cacheDirectory;
+
+  /// The folder the library keeps the logged-in user's data in, such as the
+  /// saved session cookies: the client's [SmartschoolClient.cacheDir],
+  /// `~/.cache/smartschool/<username>` unless the [ClientFactory] chose
+  /// another one.
+  ///
+  /// The server keeps its own data for the user in subfolders of it (the
+  /// message texts, the Intradesk index), so that it is found and removed
+  /// together with the library's. Taken from the library rather than worked
+  /// out here, so it cannot drift from the folder the library uses.
+  ///
+  /// Known once [run] has logged in, and still after [close]; before that,
+  /// a [StateError]: use it only inside [run].
+  String get cacheDirectory =>
+      _cacheDirectory ??
+      (throw StateError(
+        'The Smartschool cache folder is only known once the session has '
+        'logged in',
+      ));
 
   /// The settings, read from [source] on first use.
   ///
@@ -134,7 +155,9 @@ final class SmartschoolSession {
         settings,
       );
     }
-    return _client = await _open(settings);
+    final client = _client = await _open(settings);
+    _cacheDirectory = client.cacheDir;
+    return client;
   }
 
   /// Creates a client and checks its session, logging in if needed.

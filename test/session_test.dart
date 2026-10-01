@@ -115,6 +115,18 @@ void main() {
     expect(server.requests, isNot(contains(startsWith('POST /2fa'))));
   });
 
+  test('the cache folder is the one the library\'s client uses: unknown '
+      'before the login, still known after closing', () async {
+    final session = newSession();
+    expect(() => session.cacheDirectory, throwsStateError);
+
+    await session.run(_post);
+    expect(session.cacheDirectory, cache.path);
+
+    await session.close();
+    expect(session.cacheDirectory, cache.path);
+  });
+
   test('the log tells a new login from a reused session, and shows a '
       'session that expired', () async {
     final first = await _logOf(() => newSession().run(_post));

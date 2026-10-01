@@ -225,6 +225,45 @@ void main() {
     }
   });
 
+  test('wired like the server (MessageTextCache.of): the texts are saved in '
+      'messages/<host> in the cache folder of the library\'s client, next '
+      'to the session cookies, where a restart finds them', () async {
+    Future<ServerConnection> startOfSession() async {
+      final session = SmartschoolSession(
+        fakeExtensionSettings(),
+        createClient: fakeClientFactory(server, cookies),
+      );
+      addTearDown(session.close);
+      final (connection, _) = await connect(
+        tools: [searchMessagesTool(session, MessageTextCache.of(session))],
+      );
+      return connection;
+    }
+
+    final first = await ok({
+      'query': 'facultatieve verlofdag',
+    }, await startOfSession());
+
+    final folder = Directory(
+      [cookies.path, 'messages', fakeHost].join(Platform.pathSeparator),
+    );
+    for (final id in [101, 102, 103, 201, 202]) {
+      expect(
+        await MessageTextCache(folder).read(BoxType.inbox, id),
+        isNotNull,
+        reason: 'text of $id saved',
+      );
+    }
+    expect(cacheFolder.listSync(), isEmpty);
+
+    server.mailbox.actions.clear();
+    expect(
+      await ok({'query': 'facultatieve verlofdag'}, await startOfSession()),
+      first,
+    );
+    expect(downloads(), isEmpty);
+  });
+
   test('matches the subject and the sender too; an empty message shows '
       '"(no text)"', () async {
     expect(
