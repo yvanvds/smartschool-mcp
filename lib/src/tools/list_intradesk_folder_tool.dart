@@ -64,16 +64,14 @@ Future<CallToolResult> _list(
     final IntradeskListing listing;
     try {
       listing = await intradesk.getFolderListing(folderId);
-    } on SmartschoolDownloadError catch (error) {
-      // Smartschool answers an id that is not a folder (unknown, or a file)
-      // with a 500, which the library reports like any other failed request
-      // (yvanvds/dartschool#37, #21).
+    } on SmartschoolIntradeskFolderNotFoundError {
+      // Any other failure is Smartschool's, not the id's: the server reports
+      // it as an unexpected error.
       throw ToolError(
-        'Smartschool could not list an Intradesk folder with id $folderId '
-        '(status ${error.statusCode}). Most likely it is not the id of a '
-        'folder you can open, for example a file\'s id or a folder that was '
-        'removed: take the id of a folder from list_intradesk_folder or '
-        'search_intradesk. If the id is right, try again later.',
+        'Intradesk has no folder with id $folderId: it is the id of a file '
+        'or a weblink, or of a folder that does not exist (any more). Take '
+        'the id of a folder from list_intradesk_folder or search_intradesk; '
+        'to read a file, use read_intradesk_file.',
       );
     }
     // The folder's path, when the index knows it; inside the session, as

@@ -382,7 +382,10 @@ void main() {
     expect(bogusError, isTrue);
     expect(
       bogus,
-      startsWith('Smartschool could not list an Intradesk folder with id '),
+      startsWith(
+        'Intradesk has no folder with id '
+        '00000000-0000-4000-8000-000000000000: ',
+      ),
     );
 
     // A word from a name at the top level, never printed.

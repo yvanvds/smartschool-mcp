@@ -235,27 +235,45 @@ void main() {
       expect(server.intradesk.listed, isEmpty);
     });
 
-    test('an id Smartschool cannot list (unknown, or a file) is an error '
-        'that says so', () async {
+    test('an id that is not a folder (unknown, a file or a weblink) is an '
+        'error that says so', () async {
       const unknown = '00000000-0000-4000-8000-000000000000';
-      expect(
-        await error('list_intradesk_folder', {'folder_id': unknown}),
-        'Smartschool could not list an Intradesk folder with id $unknown '
-        '(status 500). Most likely it is not the id of a folder you can open, '
-        "for example a file's id or a folder that was removed: take the id of "
-        'a folder from list_intradesk_folder or search_intradesk. If the id '
-        'is right, try again later.',
-      );
-      expect(
-        await error('list_intradesk_folder', {'folder_id': _welkom}),
-        contains('(status 500)'),
-      );
+      const weblink = 'eeee1111-1111-4111-b111-111111111111';
+      server.intradesk.addWeblink({
+        'id': weblink,
+        'name': 'Schoolsite',
+        'url': 'https://www.example.com',
+      }, parent: _documenten);
+      String notAFolder(String id) =>
+          'Intradesk has no folder with id $id: it is the id of a file or a '
+          'weblink, or of a folder that does not exist (any more). Take the '
+          'id of a folder from list_intradesk_folder or search_intradesk; to '
+          'read a file, use read_intradesk_file.';
 
-      server.intradesk.failing[_documenten] = 403;
-      expect(
-        await error('list_intradesk_folder', {'folder_id': _documenten}),
-        contains('(status 403)'),
-      );
+      for (final id in [unknown, _welkom, weblink]) {
+        expect(
+          await error('list_intradesk_folder', {'folder_id': id}),
+          notAFolder(id),
+        );
+      }
+      expect(server.intradesk.listed, [unknown, _welkom, weblink]);
+    });
+
+    test('a folder Smartschool fails to list is an error, not a wrong '
+        'id', () async {
+      // The library asks for the parents of a folder whose listing fails
+      // with a 500: Smartschool knows the folder, so the failure is its own.
+      server.intradesk
+        ..failing[_documenten] = 500
+        ..failing[_archief] = 500
+        ..failing[_examens] = 403;
+      const failed =
+          'The tool list_intradesk_folder failed with an unexpected error. '
+          'The technical details are in the server log.';
+
+      for (final id in [_documenten, _archief, _examens]) {
+        expect(await error('list_intradesk_folder', {'folder_id': id}), failed);
+      }
     });
 
     test('an id in capitals is the same folder', () async {
