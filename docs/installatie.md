@@ -99,8 +99,9 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    [smartschool-mcp.mcpb](https://github.com/yvanvds/smartschool-mcp/releases/latest/download/smartschool-mcp.mcpb).
    Download de extensie alleen van die releasepagina.
 2. Dubbelklik op het gedownloade bestand (meestal in je map Downloads).
-   Claude Desktop opent en toont de Smartschool-extensie. Klik op
-   **Installeren** (*Install*).
+   Vraagt Windows met welke app je het bestand wilt openen? Kies dan
+   **Claude**. Dat vraagt Windows alleen de eerste keer. Claude Desktop opent
+   en toont de Smartschool-extensie. Klik op **Installeren** (*Install*).
 3. Vul het formulier in:
 
    | Veld | Wat vul je in? |
@@ -116,10 +117,6 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
 <!-- SCHERMAFBEELDING (#33): de releasepagina met smartschool-mcp.mcpb onder
 Assets, het installatievenster van Claude Desktop en het formulier (zonder
 echte gegevens). -->
-
-<!-- TE BEVESTIGEN (#30): waarschuwt de browser, SmartScreen of Defender bij
-het downloaden of installeren, beschrijf dan hier wat de collega ziet en wat
-die moet doen. -->
 
 Waarschuwt Windows of je virusscanner bij het downloaden of installeren? Lees
 dan eerst [Windows of je virusscanner waarschuwt](#windows-of-je-virusscanner-waarschuwt).
@@ -348,16 +345,14 @@ bewaren. Kies een andere map bij **Downloadmap** en herstart Claude Desktop.
 
 ### Windows of je virusscanner waarschuwt
 
-Het programma in de extensie is niet digitaal ondertekend, dus Windows kent
-de maker niet. Download de extensie alleen van de
+Normaal waarschuwt Windows (SmartScreen) niet: `smartschool-mcp.mcpb` is
+zelf geen programma, en je opent het met Claude Desktop. Het programma in de
+extensie is wel niet digitaal ondertekend, dus Windows kent de maker niet.
+Download de extensie daarom alleen van de
 [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
-Waarschuwt Windows (SmartScreen) of je virusscanner toch, of verdwijnt de
-extensie meteen na het installeren? Klik dan niet zomaar verder, maar vraag
-eerst raad (zie [Hulp nodig?](#10-hulp-nodig)).
-
-<!-- TE BEVESTIGEN (#30): hoe behandelen SmartScreen en Defender het niet
-ondertekende programma? Beschrijf hier wat de collega ziet en wat die moet
-doen, of schrap dit stuk als er niets gebeurt. -->
+Waarschuwt Windows of je virusscanner toch, of verdwijnt de extensie meteen
+na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
+[Hulp nodig?](#10-hulp-nodig)).
 
 ## 8. Veiligheid en privacy
 
