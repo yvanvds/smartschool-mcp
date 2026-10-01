@@ -179,18 +179,19 @@ name with extension, path, size, date changed, `extension`, `mimeType`) and
 `IntradeskIndex` (lookup by id, the items inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
-`intradesk_cache.dart`; name matching in `intradesk_search.dart`, output
-lines in `intradesk_format.dart`, and the size-limited download
-(`downloadIntradeskFile`) in `intradesk_download.dart`.
+`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
+lines in `intradesk_format.dart`.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
 `document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
 `UnreadableDocument` with the reason (in `document_content.dart`); the
 readers per format are `docx_text.dart`, `xlsx_text.dart`, `pptx_text.dart`,
-`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. The
-size-limited download itself (`downloadCapped`, for any Smartschool path) is
-in `lib/src/capped_download.dart`.
+`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. Downloads go
+through `flutter_smartschool`'s streamed download with a size limit
+(`IntradeskService.downloadFileStream`, `MessageAttachment.downloadStream`,
+both with `maxBytes`), which also gives the file name from the
+`Content-Disposition` header.
 
 ### Message text cache
 
@@ -268,11 +269,10 @@ it and forgets it. What a file is follows from its content, not its name:
 
 Files larger than 25 MB are not opened: refused before downloading when the
 index knows the size, else as soon as Smartschool announces it or the
-download goes past it (the library cannot limit a download,
-yvanvds/dartschool#41). Text longer than 100,000 characters (Claude Desktop
-accepts about 150,000 per tool result) is cut off with a note, and a PDF
-stops after 30 seconds of reading. The log shows formats, sizes and counts,
-never a name or any text.
+download goes past it, and `flutter_smartschool` then stops the transfer.
+Text longer than 100,000 characters (Claude Desktop accepts about 150,000
+per tool result) is cut off with a note, and a PDF stops after 30 seconds of
+reading. The log shows formats, sizes and counts, never a name or any text.
 
 ### Login
 

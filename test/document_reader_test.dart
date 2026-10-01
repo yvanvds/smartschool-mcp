@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
-import 'package:smartschool_mcp/src/capped_download.dart';
 import 'package:smartschool_mcp/src/documents/document_reader.dart';
 import 'package:smartschool_mcp/src/documents/image_content.dart';
 import 'package:smartschool_mcp/src/documents/plain_text.dart';
@@ -378,38 +377,6 @@ void main() {
       expect(
         (content as UnreadableDocument).reason,
         'Reading it took too long (more than 0 seconds).',
-      );
-    });
-  });
-
-  group('contentDispositionFileName', () {
-    test('reads filename* (RFC 5987) before filename', () {
-      expect(contentDispositionFileName(null), isNull);
-      expect(contentDispositionFileName('attachment'), isNull);
-      expect(
-        contentDispositionFileName('attachment; filename="uitstap.docx"'),
-        'uitstap.docx',
-      );
-      expect(
-        contentDispositionFileName('inline; filename=verslag 2024.pdf'),
-        'verslag 2024.pdf',
-      );
-      expect(
-        contentDispositionFileName(
-          'attachment; filename="caf_.docx"; '
-          "filename*=UTF-8''caf%C3%A9%20menu.docx",
-        ),
-        'café menu.docx',
-      );
-      expect(
-        contentDispositionFileName(
-          "attachment; filename*=iso-8859-1'nl'caf%E9.txt",
-        ),
-        'café.txt',
-      );
-      expect(
-        contentDispositionFileName(r'attachment; filename="een \"x\".txt"'),
-        'een "x".txt',
       );
     });
   });

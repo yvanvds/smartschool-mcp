@@ -60,6 +60,11 @@ class FakeIntradesk {
   /// How many downloads were cancelled before all of the file was sent.
   int stoppedDownloads = 0;
 
+  /// When set, the connection of a download fails once this many bytes of
+  /// it were sent, with the [HttpException] `dart:io` throws for a
+  /// connection that closes early.
+  int? failDownloadsAfter;
+
   int _folders = 0;
   int _files = 0;
 
@@ -270,6 +275,9 @@ class FakeIntradesk {
       try {
         for (var start = 0; start < content.length; start += 64 * 1024) {
           await Future<void>.delayed(Duration.zero);
+          if (failDownloadsAfter case final limit? when start >= limit) {
+            throw const HttpException('Connection closed while receiving data');
+          }
           final end = start + 64 * 1024 < content.length
               ? start + 64 * 1024
               : content.length;

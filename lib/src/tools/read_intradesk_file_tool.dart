@@ -1,13 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
-import '../capped_download.dart';
 import '../documents/document_reader.dart';
 import '../intradesk/intradesk_access.dart';
 import '../intradesk/intradesk_cache.dart';
-import '../intradesk/intradesk_download.dart';
 import '../intradesk/intradesk_format.dart';
 import '../intradesk/intradesk_index.dart';
 import '../log.dart';
@@ -81,19 +80,19 @@ Future<CallToolResult> _read(
   }
 
   final watch = Stopwatch()..start();
-  final (known, file) = await session.run((client) async {
+  final (known, download, bytes) = await session.run((client) async {
     // Inside the session, as the cache folder is the logged-in user's.
     final known = (await cache.saved())?.find(id);
     _refuseBeforeDownload(id, known);
+    final intradesk = IntradeskService(client);
     try {
-      return (
-        known,
-        await downloadIntradeskFile(
-          client,
-          id,
-          maxBytes: maxIntradeskFileBytes,
-        ),
+      // The library refuses a larger announced size before reading any of
+      // the file, and otherwise stops the transfer once past the limit.
+      final download = await intradesk.downloadFileStream(
+        id,
+        maxBytes: maxIntradeskFileBytes,
       );
+      return (known, download, await _readAll(download));
     } on SmartschoolDownloadError catch (error) {
       throw ToolError(
         'Smartschool could not download an Intradesk file with id $id '
@@ -102,25 +101,31 @@ Future<CallToolResult> _read(
         'removed: take the id of a file from search_intradesk or '
         'list_intradesk_folder. If the id is right, try again later.',
       );
-    } on FileTooLargeError catch (error) {
+    } on SmartschoolDownloadTooLargeError catch (error) {
+      // The announced size, when it is what was too large; otherwise more
+      // bytes came in than allowed, and how many more is unknown.
+      final size = switch (error.contentLength) {
+        final size? when size > error.maxBytes => size,
+        _ => null,
+      };
       throw ToolError(
-        '${_title(id, known, size: error.size)} is too large to open here'
-        '${error.size == null ? ' (more than ${formatFileSize(error.maxBytes)})' : ''}: '
+        '${_title(id, known, size: size)} is too large to open here'
+        '${size == null ? ' (more than ${formatFileSize(error.maxBytes)})' : ''}: '
         '${_limit()} The teacher can open it in Smartschool.',
       );
     }
   });
   final downloaded = watch.elapsedMilliseconds;
 
-  final name = known?.name ?? file.fileName;
-  final title = _title(id, known, name: name, size: file.bytes.length);
-  final content = await readDocument(file.bytes, name: name);
+  final name = known?.name ?? download.fileName;
+  final title = _title(id, known, name: name, size: bytes.length);
+  final content = await readDocument(bytes, name: name);
   log(
-    'read_intradesk_file: ${file.bytes.length} bytes '
+    'read_intradesk_file: ${bytes.length} bytes '
     '(${known == null ? 'not in the index' : 'in the index'}, size '
-    '${file.announcedSize == null ? 'not announced' : 'announced'}, '
-    'type ${file.contentType ?? 'none'}, file name '
-    '${file.fileName == null ? 'not given' : 'given'}) downloaded in '
+    '${download.contentLength == null ? 'not announced' : 'announced'}, '
+    'type ${download.contentType ?? 'none'}, file name '
+    '${download.fileName == null ? 'not given' : 'given'}) downloaded in '
     '$downloaded ms; ${_describeForLog(content)} in '
     '${watch.elapsedMilliseconds - downloaded} ms',
   );
@@ -166,6 +171,19 @@ void _refuseBeforeDownload(String id, IntradeskItem? known) {
   if (unreadableExtensionReason(fileExtension(known.name)) case final reason?) {
     throw ToolError('${_title(id, known, size: known.size)}: $reason');
   }
+}
+
+/// All of [download]'s content. Its stream ends with a
+/// [SmartschoolDownloadTooLargeError] once more than the allowed bytes came
+/// in, or a [SmartschoolConnectionError] when the connection fails halfway;
+/// the library then stops the transfer. Read inside the session's run, so
+/// that a failed connection is reported like any other.
+Future<Uint8List> _readAll(SmartschoolDownload download) async {
+  final bytes = BytesBuilder(copy: false);
+  await for (final chunk in download.stream) {
+    bytes.add(chunk);
+  }
+  return bytes.takeBytes();
 }
 
 String _limit() =>
