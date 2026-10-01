@@ -38,8 +38,11 @@ jobs:
       - name: Pack the extension
         run: npx --yes "$env:MCPB" pack bundle smartschool-mcp.mcpb
       - name: Publish the release
+        # The notes start with .github/release-notes.md (how to install, with
+        # a link to the colleague guide); gh puts the generated notes after it.
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release create "$env:TAG" smartschool-mcp.mcpb
-          --title "$env:TAG" --generate-notes --verify-tag
+          --title "$env:TAG" --notes-file .github/release-notes.md
+          --generate-notes --verify-tag

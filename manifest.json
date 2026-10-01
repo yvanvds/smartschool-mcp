@@ -14,7 +14,7 @@
     "url": "https://github.com/yvanvds/smartschool-mcp.git"
   },
   "homepage": "https://github.com/yvanvds/smartschool-mcp",
-  "documentation": "https://github.com/yvanvds/smartschool-mcp#readme",
+  "documentation": "https://github.com/yvanvds/smartschool-mcp/blob/main/docs/installatie.md",
   "support": "https://github.com/yvanvds/smartschool-mcp/issues",
   "icon": "icon.png",
   "server": {

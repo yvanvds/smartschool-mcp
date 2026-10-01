@@ -1,0 +1,454 @@
+# Smartschool in Claude Desktop
+
+Met de Smartschool-extensie werkt Claude Desktop met je Smartschool-account.
+Je vraagt het gewoon in een gesprek:
+
+- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, archiveren en
+  beantwoorden. Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+- **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
+  lezen.
+- **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
+  Claude of jijzelf ze kan openen.
+
+Deze gids legt uit hoe je de extensie installeert, test, gebruikt, bijwerkt en
+weer verwijdert. Lees zeker ook [Veiligheid en privacy](#8-veiligheid-en-privacy)
+voor je begint.
+
+De extensie is niet officieel: ze is niet gemaakt door Smartschool en er ook
+niet mee verbonden.
+
+## Inhoud
+
+1. [Wat heb je nodig?](#1-wat-heb-je-nodig)
+2. [Je 2FA-sleutel opzoeken](#2-je-2fa-sleutel-opzoeken)
+3. [De extensie installeren](#3-de-extensie-installeren)
+4. [Testen](#4-testen)
+5. [Wat kun je vragen?](#5-wat-kun-je-vragen)
+6. [Bijwerken naar een nieuwe versie](#6-bijwerken-naar-een-nieuwe-versie)
+7. [Problemen oplossen](#7-problemen-oplossen)
+8. [Veiligheid en privacy](#8-veiligheid-en-privacy)
+9. [Verwijderen](#9-verwijderen)
+10. [Hulp nodig?](#10-hulp-nodig)
+
+## 1. Wat heb je nodig?
+
+- **Een Windows-pc** die alleen jij gebruikt, met je eigen Windows-account. De
+  extensie werkt niet op een Mac.
+- **Claude Desktop**, het programma van Claude voor Windows
+  ([downloaden](https://claude.ai/download)), en een Claude-account.
+- **Een Smartschool-account waarmee je inlogt met een gebruikersnaam en een
+  wachtwoord.** Kun je alleen inloggen via Microsoft of Google, dan werkt de
+  extensie niet.
+- **Tweestapsverificatie met een authenticator-app** op je telefoon, zoals
+  Microsoft Authenticator of Google Authenticator. Gebruik je nog geen
+  authenticator-app, dan stel je er een in bij stap 2.
+
+## 2. Je 2FA-sleutel opzoeken
+
+Bij het inloggen vraagt Smartschool een code van zes cijfers uit je
+authenticator-app. De extensie logt zelf voor je in en maakt die code zelf.
+Daarvoor heeft ze de **2FA-sleutel** nodig: de geheime sleutel waarmee je app
+de codes maakt. Dat is een lange reeks letters en cijfers, niet de code van
+zes cijfers.
+
+Smartschool toont die sleutel alleen op het moment dat je een
+authenticator-app toevoegt. Heb je tweestapsverificatie al ingesteld met een
+app op je telefoon, dan stel je ze dus opnieuw in. Je zet dezelfde sleutel
+daarna in je telefoonapp én in de extensie, zodat ze allebei werken.
+
+> **Tip:** doe stap 2 en 3 na elkaar, zonder tussendoor iets anders te
+> kopiëren. Dan staat de sleutel nog op je klembord als je het formulier van
+> de extensie invult.
+
+1. Log in op Smartschool in je browser, op de pc waarop je de extensie
+   installeert.
+2. Open je **profiel** en kies **Tweestapsverificatie**.
+3. Kies om een **authenticator-app toe te voegen**.
+4. Smartschool toont een QR-code. Scan die niet, maar kies de optie voor als
+   je **geen camera** hebt. Smartschool toont dan de sleutel.
+5. Selecteer de sleutel en kopieer hem (Ctrl+C).
+6. Neem je telefoon en open je authenticator-app. Voeg een account toe en kies
+   om een sleutel **zelf in te voeren**, in plaats van een QR-code te scannen.
+   Geef het account een naam, bijvoorbeeld Smartschool, en typ de sleutel
+   over.
+7. Smartschool vraagt een code van zes cijfers om te bevestigen. Typ de code
+   die je telefoonapp nu toont.
+
+De knoppen kunnen in jouw Smartschool iets anders heten.
+
+<!-- SCHERMAFBEELDING (#33): het profiel met Tweestapsverificatie, een
+authenticator-app toevoegen, de QR-code met de optie zonder camera, en de
+sleutel (onleesbaar gemaakt). Controleer daarbij de namen van de knoppen
+hierboven. -->
+
+Gebruik voortaan dit nieuwe account in je telefoonapp. Werkt een ouder
+Smartschool-account in je app niet meer, dan mag je dat verwijderen.
+
+> **Bewaar de sleutel nergens anders:** niet in een bestand, niet in een
+> e-mail en niet op papier. Wie je wachtwoord en deze sleutel heeft, kan in
+> jouw naam inloggen op Smartschool. Ben je de sleutel kwijt voor je hem in de
+> extensie hebt ingevuld? Begin dan opnieuw bij punt 2. Je krijgt een nieuwe
+> sleutel, die je ook weer in je telefoonapp zet.
+
+## 3. De extensie installeren
+
+1. Ga naar de
+   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest)
+   en klik onder **Assets** op `smartschool-mcp.mcpb`, of download het bestand
+   meteen:
+   [smartschool-mcp.mcpb](https://github.com/yvanvds/smartschool-mcp/releases/latest/download/smartschool-mcp.mcpb).
+   Download de extensie alleen van die releasepagina.
+2. Dubbelklik op het gedownloade bestand (meestal in je map Downloads).
+   Claude Desktop opent en toont de Smartschool-extensie. Klik op
+   **Installeren** (*Install*).
+3. Vul het formulier in:
+
+   | Veld | Wat vul je in? |
+   | --- | --- |
+   | **Smartschool-adres** | Het adres van je school op Smartschool, bijvoorbeeld `school.smartschool.be`. Je mag het ook uit de adresbalk van je browser kopiëren. |
+   | **Gebruikersnaam** | De gebruikersnaam waarmee je inlogt op Smartschool. |
+   | **Wachtwoord** | Je wachtwoord voor Smartschool. |
+   | **2FA-sleutel** | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers, en zonder spaties. |
+   | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
+
+4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
+
+<!-- SCHERMAFBEELDING (#33): de releasepagina met smartschool-mcp.mcpb onder
+Assets, het installatievenster van Claude Desktop en het formulier (zonder
+echte gegevens). -->
+
+<!-- TE BEVESTIGEN (#30): de links hierboven werken pas na de eerste release
+(v*-tag). Waarschuwt de browser, SmartScreen of Defender bij het downloaden of
+installeren, beschrijf dan hier wat de collega ziet en wat die moet doen. -->
+
+Waarschuwt Windows of je virusscanner bij het downloaden of installeren? Lees
+dan eerst [Windows of je virusscanner waarschuwt](#windows-of-je-virusscanner-waarschuwt).
+
+### Welke downloadmap kies je?
+
+Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
+bewaren, dan zet de extensie het in de downloadmap.
+
+- **Werk je met Cowork in Claude Desktop?** Kies dan een (tijdelijke) map in
+  je Cowork-project. Claude kan de bestanden die het daar bewaart dan zelf
+  openen: PDF's, scans, Word, Excel en afbeeldingen.
+- **Laat je het veld leeg,** dan komen de bestanden in `Downloads\Smartschool`
+  in je gebruikersmap. Claude zegt dan waar een bestand staat, zodat je het
+  zelf kunt openen of in het gesprek kunt slepen.
+
+De extensie verwijdert de bestanden die ze zelf bewaarde na 7 dagen (zie
+[Bestanden bewaren](#bestanden-bewaren)).
+
+### Later iets aanpassen
+
+Je kunt alles later aanpassen in Claude Desktop, via **Instellingen →
+Extensies → Smartschool** (*Settings → Extensions*). Herstart Claude Desktop
+daarna.
+
+**Claude Desktop herstarten:** sluit het helemaal af en open het opnieuw.
+Klik om af te sluiten met de rechtermuisknop op het Claude-pictogram
+rechtsonder in de taakbalk en kies **Afsluiten** (*Quit*), of gebruik in
+Claude Desktop het menu **Bestand → Afsluiten** (*File → Exit*). Het venster
+sluiten met het kruisje is niet altijd genoeg: Claude kan dan op de
+achtergrond blijven draaien.
+
+## 4. Testen
+
+Open een nieuw gesprek in Claude Desktop en vraag:
+
+> Werkt mijn Smartschool-verbinding?
+
+Vraagt Claude Desktop of Claude de Smartschool-extensie mag gebruiken? Sta dat
+toe. De eerste keer duurt het inloggen enkele seconden. Daarna onthoudt de
+extensie je sessie.
+
+Claude antwoordt met:
+
+- of de verbinding werkt, en als wie je bent ingelogd;
+- het adres van je school;
+- je downloadmap, en of de extensie daar bestanden kan bewaren;
+- de versie van de extensie, en of er een nieuwere is.
+
+Werkt de verbinding niet, dan zegt Claude wat je moet aanpassen. Zie ook
+[Problemen oplossen](#7-problemen-oplossen).
+
+<!-- SCHERMAFBEELDING (#33): het antwoord op "Werkt mijn
+Smartschool-verbinding?". -->
+
+## 5. Wat kun je vragen?
+
+Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
+
+### Berichten
+
+- "Zoek mijn berichten van deze week over het oudercontact en vat ze samen."
+- "Heb ik ongelezen berichten van de directie?"
+- "Welke berichten in mijn postvak mag ik archiveren?"
+  Claude stelt dan berichten voor. Pas als je zegt "Archiveer ze", verplaatst
+  het ze naar je archief in Smartschool. Daar vind je ze terug.
+- "Beantwoord het bericht van An over de uitstap: ik ga graag mee."
+  Claude toont eerst de tekst en de ontvangers, en wacht op jouw akkoord.
+  Daarna vraagt Claude Desktop nog eens toestemming om te versturen. Kies daar
+  liefst niet om het altijd toe te staan, dan blijft Claude Desktop het elke
+  keer vragen. Het antwoord vertrekt vanuit jouw account, als antwoord op het
+  oorspronkelijke bericht.
+- "Open de bijlage van het bericht van de directie."
+
+### Intradesk
+
+- "Zoek op Intradesk het formulier voor een uitstap."
+- "Wat staat er in de map Vergaderingen op Intradesk?"
+- "Vat het verslag van de laatste personeelsvergadering op Intradesk samen."
+- "Bewaar het formulier voor de uitstap van Intradesk."
+
+### Bestanden bewaren
+
+Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
+bewaren, dan zet de extensie het in je downloadmap. Staat die map in je
+Cowork-project, dan opent Claude het bestand zelf. In een gewoon gesprek zegt
+Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
+
+> **Bewaarde bestanden verdwijnen na 7 dagen.** De extensie verwijdert de
+> bestanden die ze zelf bewaarde 7 dagen later. Andere bestanden in die map
+> raakt ze nooit aan, en een bewaard bestand dat jij intussen veranderd hebt,
+> laat ze staan. Wil je een bestand houden, verplaats het dan of bewaar het
+> ergens anders. Laat het bestandje `.smartschool-mcp-downloads.json` in die
+> map staan: daarin houdt de extensie bij welke bestanden van haar zijn.
+
+### Goed om te weten
+
+- Claude leest een bericht zonder het als gelezen te markeren.
+- De eerste zoekopdracht in een volle mailbox kan onvolledig zijn: per keer
+  haalt de extensie de tekst van hoogstens 100 berichten op. Claude zegt het
+  als niet alles doorzocht is; vraag het dan gewoon nog eens. Daarna gaat
+  zoeken snel, want de extensie onthoudt de tekst (zie
+  [Veiligheid en privacy](#8-veiligheid-en-privacy)).
+- Op Intradesk zoekt de extensie op de **namen** van mappen en bestanden, niet
+  in de tekst van de bestanden. De eerste keer maakt ze een lijst van alles op
+  Intradesk. Dat duurt enkele minuten, en tot die lijst klaar is, kunnen
+  resultaten onvolledig zijn; Claude zegt dat dan. De lijst wordt elke dag
+  vernieuwd. Mist er iets nieuws, vraag Claude dan om de lijst te vernieuwen.
+- Claude kan deze bestanden lezen: Word, Excel, PowerPoint, PDF (alleen de
+  tekst: een ingescande PDF heeft geen tekst), tekstbestanden (`.txt`, `.csv`,
+  `.md`), webpagina's en afbeeldingen.
+- Niet: oude Office-bestanden (`.doc`, `.xls`, `.ppt`), bestanden met een
+  wachtwoord, OpenDocument-bestanden (`.odt`, `.ods`, ...) en bestanden groter
+  dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
+  zelf.
+- De extensie werkt alleen met berichten en Intradesk. Andere onderdelen van
+  Smartschool, zoals de agenda, kent ze niet.
+
+## 6. Bijwerken naar een nieuwe versie
+
+Eén keer per dag kijkt de extensie op GitHub of er een nieuwe versie is. Is
+die er, dan meldt Claude dat in een antwoord, met het nieuwe versienummer en
+een link naar de releasepagina. Dat gebeurt één keer, niet bij elk antwoord.
+Ook "Werkt mijn Smartschool-verbinding?" toont altijd of er een nieuwere
+versie is.
+
+<!-- SCHERMAFBEELDING (#33): een antwoord van Claude met de melding dat er
+een nieuwe versie is. -->
+
+Zo werk je bij:
+
+1. Open de link uit het antwoord van Claude, of de
+   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
+2. Download `smartschool-mcp.mcpb` (onder **Assets**).
+3. Dubbelklik op het bestand. Claude Desktop installeert de nieuwe versie over
+   de oude; volg wat het op het scherm vraagt.
+4. Herstart Claude Desktop en vraag "Werkt mijn Smartschool-verbinding?".
+   Controleer dat de verbinding werkt en dat de nieuwe versie draait.
+
+**Je instellingen.** Vraagt Claude Desktop bij het bijwerken opnieuw om het
+formulier, of meldt de test daarna dat er instellingen ontbreken? Vul ze dan
+opnieuw in via **Instellingen → Extensies → Smartschool** en herstart Claude
+Desktop. Heb je je 2FA-sleutel niet meer, stel dan je authenticator-app
+opnieuw in zoals in [stap 2](#2-je-2fa-sleutel-opzoeken).
+
+<!-- TE BEVESTIGEN (#30): bewaart Claude Desktop de ingevulde instellingen
+als je een nieuwere .mcpb over een oudere installeert? Zodra dat bekend is:
+schrijf hier wat er gebeurt, en schrap wat niet van toepassing is. -->
+
+Wat de extensie onthield (je sessie, de tekst van doorzochte berichten, de
+lijst van Intradesk) blijft bewaard.
+
+## 7. Problemen oplossen
+
+Werkt er iets niet, vraag dan eerst "Werkt mijn Smartschool-verbinding?".
+Claude zegt wat er misloopt en wat je moet aanpassen. Je instellingen pas je
+aan via **Instellingen → Extensies → Smartschool**; herstart Claude Desktop
+daarna.
+
+### Smartschool aanvaardt je gebruikersnaam of wachtwoord niet
+
+- Controleer **Gebruikersnaam** en **Wachtwoord**. Veranderde je onlangs je
+  Smartschool-wachtwoord, vul dan ook hier het nieuwe in.
+- Kun je alleen inloggen via Microsoft of Google, dan werkt de extensie niet.
+
+Na een geweigerd wachtwoord probeert de extensie het niet opnieuw tot je
+Claude Desktop herstart. Pas dus eerst je gegevens aan en herstart dan pas:
+te veel mislukte pogingen na elkaar kunnen je Smartschool-account blokkeren.
+
+### Smartschool weigert de 2FA-code
+
+- Controleer de **2FA-sleutel**: het moet de sleutel uit
+  [stap 2](#2-je-2fa-sleutel-opzoeken) zijn, niet een code van zes cijfers, en
+  zonder spaties.
+- Controleer de klok van je pc. De codes hangen af van de juiste tijd. Open de
+  Windows-instellingen, kies **Tijd en taal → Datum en tijd** en zet **Tijd
+  automatisch instellen** aan. Klik eventueel op **Nu synchroniseren**.
+- Stelde je tweestapsverificatie in Smartschool opnieuw in? Dan heb je een
+  nieuwe sleutel: vul die in.
+
+### Claude meldt een onverwachte fout
+
+- Gebeurt het meteen bij de eerste test? Controleer dan eerst je
+  **2FA-sleutel**: zonder spaties, en niet de code van zes cijfers. Een
+  verkeerd ingevulde sleutel geeft voorlopig ook deze melding.
+- Probeer het anders over een ogenblik opnieuw. Blijft het gebeuren, herstart
+  dan Claude Desktop.
+
+<!-- Zodra #32 opgelost is, krijgt een verkeerd ingevulde 2FA-sleutel een
+eigen melding: pas het eerste punt hierboven dan aan. -->
+
+### Smartschool vraagt een geboortedatum, of een andere soort tweestapsverificatie
+
+De extensie werkt alleen met een authenticator-app. Stel er een in zoals in
+[stap 2](#2-je-2fa-sleutel-opzoeken), vul de sleutel in en herstart Claude
+Desktop.
+
+### Smartschool is niet bereikbaar
+
+Controleer de internetverbinding van je pc, en controleer of
+**Smartschool-adres** het adres van je school is, zoals
+`school.smartschool.be`.
+
+### Er ontbreken instellingen
+
+Vul de velden in die Claude noemt en herstart Claude Desktop.
+
+### De downloadmap is niet beschrijfbaar
+
+Meldt de test dat de downloadmap niet beschrijfbaar is (in het Engels:
+"Download folder: ... NOT writable"), dan kan de extensie daar geen bestanden
+bewaren. Kies een andere map bij **Downloadmap** en herstart Claude Desktop.
+
+### Claude kent Smartschool niet, of de extensie verschijnt niet
+
+- Kijk bij **Instellingen → Extensies** of Smartschool er staat en aan staat.
+- Herstart Claude Desktop helemaal (zie
+  [Later iets aanpassen](#later-iets-aanpassen)).
+- Opent dubbelklikken op `smartschool-mcp.mcpb` Claude Desktop niet? Open dan
+  Claude Desktop, ga naar **Instellingen → Extensies** en installeer het
+  bestand van daaruit: sleep het in het venster, of zoek bij de geavanceerde
+  instellingen de knop om een extensie te installeren.
+- Gebruik je een Claude-account van je school of organisatie? Dan kan de
+  beheerder extensies uitgeschakeld hebben. Vraag het na.
+
+### Windows of je virusscanner waarschuwt
+
+Het programma in de extensie is niet digitaal ondertekend, dus Windows kent
+de maker niet. Download de extensie alleen van de
+[releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
+Waarschuwt Windows (SmartScreen) of je virusscanner toch, of verdwijnt de
+extensie meteen na het installeren? Klik dan niet zomaar verder, maar vraag
+eerst raad (zie [Hulp nodig?](#10-hulp-nodig)).
+
+<!-- TE BEVESTIGEN (#30): hoe behandelen SmartScreen en Defender het niet
+ondertekende programma? Beschrijf hier wat de collega ziet en wat die moet
+doen, of schrap dit stuk als er niets gebeurt. -->
+
+## 8. Veiligheid en privacy
+
+### Wat bewaart de extensie, en waar?
+
+| Wat | Waar |
+| --- | --- |
+| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel en downloadmap | In Claude Desktop, op deze pc |
+| Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
+| De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
+| De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |
+| Wanneer de extensie het laatst naar een nieuwe versie keek | `%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json` |
+| De bijlagen en Intradesk-bestanden die Claude bewaarde | Je downloadmap, 7 dagen lang |
+
+`%USERPROFILE%` is je gebruikersmap, bijvoorbeeld `C:\Users\jan.peeters`.
+Typ `%USERPROFILE%\.cache\smartschool` in de adresbalk van Verkenner om die
+map te openen.
+
+- **De tekst van je berichten, de lijst van Intradesk en de bewaarde
+  bestanden zijn niet versleuteld.** Ze staan zoals ze zijn op je pc, in je
+  Windows-profiel of in je downloadmap. Iedereen die op je Windows-account kan
+  inloggen, en wie beheerder is van de pc, kan ze lezen. Staat je downloadmap
+  in een Cowork-project, dan horen de bewaarde bestanden ook bij dat project.
+- **Je mag alles in `%USERPROFILE%\.cache\smartschool` altijd verwijderen,**
+  liefst met Claude Desktop afgesloten. De extensie logt dan opnieuw in en
+  haalt opnieuw op wat ze nodig heeft.
+- Bewaarde bestanden zijn persoonlijke gegevens of gegevens van de school.
+  Ze verdwijnen na 7 dagen; verplaats wat je wilt houden.
+
+### Je pc wordt je tweede factor
+
+Tweestapsverificatie beschermt je account doordat je naast je wachtwoord iets
+nodig hebt dat alleen jij hebt: je telefoon. De extensie bewaart je wachtwoord
+én je 2FA-sleutel op je pc. Wie op je pc kan, heeft dus allebei. Daarom:
+
+- **Vergrendel je pc altijd als je wegloopt:** Windows-toets + L.
+- Bescherm je Windows-account met een wachtwoord of een pincode.
+- Installeer de extensie niet op een pc die je met anderen deelt, zoals de pc
+  in een klaslokaal, en niet op een gedeeld Windows-account.
+- Is je pc gestolen of kwijt? Verander dan je Smartschool-wachtwoord en stel
+  je tweestapsverificatie opnieuw in.
+
+### Wat gaat er naar Claude?
+
+- Vraag je Claude iets over een bericht, een bijlage of een document, dan
+  geeft de extensie de inhoud daarvan aan Claude. Die gaat dan naar de servers
+  van Anthropic, het bedrijf achter Claude, net zoals alles wat je zelf in het
+  gesprek typt. Daar horen ook namen en gegevens van collega's, leerlingen en
+  ouders bij.
+- **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
+  bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
+  school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
+  hun gezondheid, zorg of thuissituatie.
+- Kijk in de privacy-instellingen van je Claude-account wat er met je
+  gesprekken mag gebeuren.
+- Je wachtwoord en je 2FA-sleutel gaan nooit naar Claude: de extensie gebruikt
+  ze alleen om in te loggen op Smartschool.
+
+### Met wie praat de extensie?
+
+- Alleen met Smartschool, en één keer per dag met GitHub, om te vragen wat de
+  nieuwste versie is. Aan GitHub stuurt ze niets over jou of je school.
+- De extensie handelt in jouw naam: een antwoord vertrekt vanuit jouw
+  account, en archiveren verplaatst jouw berichten. Claude vraagt je akkoord
+  voordat het iets verstuurt.
+
+## 9. Verwijderen
+
+1. Verwijder de extensie in Claude Desktop: **Instellingen → Extensies →
+   Smartschool → Verwijderen** (*Uninstall*).
+2. Sluit Claude Desktop af. Typ `%USERPROFILE%\.cache` in de adresbalk van
+   Verkenner en verwijder daar de map `smartschool`. Daarin staan je sessie,
+   de tekst van doorzochte berichten, de lijst van Intradesk en de
+   update-controle.
+3. Ruim je downloadmap op. Zonder extensie verwijdert niemand de bewaarde
+   bestanden na 7 dagen. Liet je het veld **Downloadmap** leeg, verwijder dan
+   de map `Downloads\Smartschool` in je gebruikersmap. Koos je zelf een map,
+   verwijder daar dan de bestanden die Claude bewaarde en het bestandje
+   `.smartschool-mcp-downloads.json`.
+4. Wil je zeker zijn dat je 2FA-sleutel nergens meer gebruikt kan worden?
+   Stel dan tweestapsverificatie in Smartschool opnieuw in
+   ([stap 2](#2-je-2fa-sleutel-opzoeken)) en zet de nieuwe sleutel alleen in
+   je telefoonapp.
+
+Wat je verwijdert, gaat naar de Prullenbak. Maak die daarna leeg als je zeker
+wilt zijn dat het van je pc weg is.
+
+## 10. Hulp nodig?
+
+Kom je er niet uit, of vind je een fout? Meld het op
+[GitHub](https://github.com/yvanvds/smartschool-mcp/issues), of laat het de
+maker, Yvan Vander Sanden, weten.
+
+Zet nooit je wachtwoord, je 2FA-sleutel of berichten van anderen in een
+melding of een schermafbeelding.
