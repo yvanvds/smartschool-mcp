@@ -35,7 +35,12 @@ main_url: yourschool.smartschool.be
 username: your.username
 password: your-password
 mfa: YOUR-TOTP-BASE32-SECRET
+# Optional: where save_intradesk_file and save_message_attachment save.
+download_dir: C:\Users\you\Downloads\Smartschool
 ```
+
+`SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
+*Saving files* below).
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -66,6 +71,11 @@ changes) the two smallest Word, Excel, PowerPoint, PDF, PNG and JPEG files it
 finds, reads them with `read_intradesk_file`, checks that a file above the
 size limit is refused without downloading it, and prints formats, sizes,
 character counts and timings only; run it with `--name read_intradesk_file`.
+The save test saves (never changes) the smallest PDF and Word file above 5 KB
+on Intradesk and the first attachment of a read message (twice, to see the
+second copy get a name of its own) into a temporary download folder that is
+deleted afterwards, checks their sizes and first bytes, and prints
+extensions, sizes and timings only; run it with `--name save_intradesk_file`.
 
 ### Build
 
@@ -95,7 +105,8 @@ Open Claude Desktop's config file via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_MAIN_URL": "yourschool.smartschool.be",
         "SMARTSCHOOL_USERNAME": "your.username",
         "SMARTSCHOOL_PASSWORD": "your-password",
-        "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET"
+        "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
+        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder"
       }
     }
   }
@@ -103,7 +114,8 @@ Open Claude Desktop's config file via *Settings → Developer → Edit Config*
 ```
 
 `SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP); MFA
-is mandatory for teachers. Restart Claude Desktop after editing the file. The
+is mandatory for teachers. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
+*Saving files* below). Restart Claude Desktop after editing the file. The
 server's stderr ends up in Claude Desktop's MCP log
 (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -113,15 +125,20 @@ the login works and who is logged in, or what to fix.
 
 ### Tools
 
-- `smartschool_status`: whether the connection works, or what to fix, and
-  whether a newer version is available (see *Update check* below).
+- `smartschool_status`: whether the connection works, or what to fix, the
+  download folder and whether it is writable, and whether a newer version
+  is available (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool lists a box 50 messages at a time; the tool asks for the next
   50 only while they can change the result (more messages to show, or not
   yet past `since`), and Claude reaches older messages with `until`.
-- `read_message`: one message with its recipients, attachment names and the
-  body as plain text. It does not mark the message as read.
+- `read_message`: one message with its recipients, its attachments
+  (numbered, with name and size) and the body as plain text. It does not
+  mark the message as read.
+- `save_message_attachment`: saves one attachment of a message (by its
+  number in `read_message`, or its file name) into the download folder and
+  returns its full path, name and size (see *Saving files* below).
 - `search_messages`: searches the text, subject and sender of the messages
   in the inbox and archive (or the boxes named) for words, ignoring case and
   accents, optionally within a date range, and returns the matching messages
@@ -160,6 +177,10 @@ the login works and who is logged in, or what to fix.
   `search_intradesk` or `list_intradesk_folder`) and returns its text, or an
   image, so Claude can check what is in it, quote from it or summarise it
   (see *Reading Intradesk files* below).
+- `save_intradesk_file`: saves one Intradesk file into the download folder
+  and returns its full path, name and size, for a file `read_intradesk_file`
+  cannot read (a scan, an old Office file, any other format) or when the
+  user wants the file itself (see *Saving files* below).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -273,6 +294,68 @@ download goes past it, and `flutter_smartschool` then stops the transfer.
 Text longer than 100,000 characters (Claude Desktop accepts about 150,000
 per tool result) is cut off with a note, and a PDF stops after 30 seconds of
 reading. The log shows formats, sizes and counts, never a name or any text.
+
+### Saving files
+
+`save_intradesk_file` and `save_message_attachment` save a file into the
+download folder on this PC instead of returning what is in it. They are meant
+for a Claude Cowork project: Claude there reads the files in the project's
+folders (PDFs, scans, Word, Excel, images) far better than a tool result can
+carry them, so point the download folder at a (temporary) folder inside the
+project, and Claude opens the saved file from the path the tool returns. In a
+plain chat Claude tells the user where the file is, to open it or drag it into
+the chat. `read_intradesk_file` stays the quick option that works in every
+chat.
+
+The download folder is:
+
+1. `SMARTSCHOOL_DOWNLOAD_DIR`, when set and not empty: the extension setting
+   "Downloadmap" (in the extension manifest a `directory` field, so the
+   install form shows a folder picker);
+2. otherwise, with `--credentials`, the file's `download_dir`;
+3. otherwise `%USERPROFILE%\Downloads\Smartschool` (`$HOME/Downloads/Smartschool`
+   elsewhere).
+
+`smartschool_status` shows the folder, where it was set, and whether it is
+writable (it creates and deletes a test file; a folder that does not exist
+yet is created on the first save).
+
+- **Never overwrites:** a name that is taken (also by a folder, or in another
+  case) gets ` (2)`, ` (3)`, ... before the extension, and the result says so.
+- **Safe names:** the name Smartschool gives is made into one Windows
+  accepts: `<>:"/\|?*` and control characters become `_` (so a name never
+  holds a folder), dots and spaces at the end go, device names such as `CON`
+  or `nul.txt` and names like the server's own files get a `_` in front, and
+  a name longer than 120 characters is cut short, keeping its extension. The
+  result says what changed. No name at all: `intradesk-<id>` or
+  `attachment-<message id>-<number>`.
+- **Size limit:** 200 MB (higher than `read_intradesk_file`'s 25 MB: nothing
+  goes through the tool result). Refused before downloading when the
+  Intradesk index knows the size, else as soon as Smartschool announces it
+  or the download goes past it; `flutter_smartschool`'s streamed download
+  (`downloadFileStream`, `MessageAttachment.downloadStream`, both with
+  `maxBytes`) then stops the transfer.
+- **Written under a temporary name** (`.smartschool-mcp-<random>.part`) and
+  renamed once complete; a failed download leaves nothing behind.
+- **Temporary by design:** the folder holds `.smartschool-mcp-downloads.json`,
+  the list of the files the server saved there (name, time saved, size, time
+  changed). At startup, and at most once a day (also on a save), the server
+  deletes the listed files saved more than 7 days ago. It never touches any
+  other file in the folder, nor a listed file that was changed since it was
+  saved (that is the teacher's now: it is taken off the list). Its own
+  temporary files left behind by a server that was stopped while saving are
+  deleted after a day. Two servers sharing the folder each keep the list up
+  to date; a save one of them misses is only never cleaned up.
+
+The log shows sizes, timings and whether a name was changed, never a name.
+The code is in `lib/src/downloads/` (`DownloadFolder` in
+`download_folder.dart`, `safeFileName` in `file_names.dart`) and the tools
+in `lib/src/tools/save_intradesk_file_tool.dart` and
+`save_message_attachment_tool.dart`.
+
+Privacy: saved files are personal or school data, unencrypted, in a folder
+of the teacher's choice; the colleague guide (#11) must say so, and that
+they disappear after 7 days.
 
 ### Login
 

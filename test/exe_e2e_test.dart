@@ -6,6 +6,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
@@ -41,12 +42,14 @@ void main() {
       'smartschool_status',
       'list_messages',
       'read_message',
+      'save_message_attachment',
       'search_messages',
       'archive_messages',
       'reply_to_message',
       'search_intradesk',
       'list_intradesk_folder',
       'read_intradesk_file',
+      'save_intradesk_file',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -128,6 +131,29 @@ void main() {
     final readFileSchema = tools['read_intradesk_file']!['inputSchema'] as Map;
     expect(readFileSchema['required'], ['file_id']);
     expect((readFileSchema['properties'] as Map).keys, ['file_id']);
+    for (final name in ['save_intradesk_file', 'save_message_attachment']) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': false,
+        'destructiveHint': false,
+        'idempotentHint': false,
+        'openWorldHint': true,
+      });
+      expect(tools[name]!['description'], contains('200 MB'));
+    }
+    final saveFileSchema = tools['save_intradesk_file']!['inputSchema'] as Map;
+    expect(saveFileSchema['required'], ['file_id']);
+    expect((saveFileSchema['properties'] as Map).keys, ['file_id']);
+    final saveAttachmentSchema =
+        tools['save_message_attachment']!['inputSchema'] as Map;
+    expect(saveAttachmentSchema['required'], ['message_id', 'attachment']);
+    expect((saveAttachmentSchema['properties'] as Map)['attachment'], {
+      'description': isA<String>(),
+      'anyOf': [
+        {'type': 'integer', 'minimum': 1},
+        {'type': 'string', 'minLength': 1},
+      ],
+    });
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -154,6 +180,13 @@ void main() {
       ),
     );
     expect(text, contains('Settings: extension settings'));
+    expect(
+      text,
+      contains(
+        '\nDownload folder: ${server.downloads} (set in "Downloadmap" '
+        '(SMARTSCHOOL_DOWNLOAD_DIR); writable)\n',
+      ),
+    );
     expect(text, contains('Server version: $packageVersion'));
     expect(text, isNot(contains('#0')), reason: 'no stack trace');
 
@@ -161,6 +194,98 @@ void main() {
     expect(
       await server.stderr,
       contains('Smartschool settings: extension settings'),
+    );
+  });
+
+  test('smartschool_status without a download folder set: the default, '
+      'Downloads\\Smartschool in the user\'s folder, created only when a '
+      'file is saved', () async {
+    final home = await Directory.systemTemp.createTemp('smartschool_mcp_home_');
+    addTearDown(() => home.delete(recursive: true));
+    final server = await ServerProcess.start(
+      exePath,
+      environment: {
+        ...environmentWithoutSmartschool(),
+        'USERPROFILE': home.path,
+        'HOME': home.path,
+        // Empty, as Claude Desktop passes a field left empty.
+        'SMARTSCHOOL_DOWNLOAD_DIR': '',
+      },
+    );
+    await server.initialize();
+
+    final (_, text) = await server.callTool('smartschool_status');
+
+    final folder = [
+      home.path,
+      'Downloads',
+      'Smartschool',
+    ].join(Platform.pathSeparator);
+    expect(
+      text,
+      contains(
+        '\nDownload folder: $folder (the default; does not exist yet: it is '
+        'created when the first file is saved)\n',
+      ),
+    );
+    await server.stop();
+    expect(home.listSync(), isEmpty);
+    expect(
+      await server.stderr,
+      contains('downloads: saving in $folder (the default)'),
+    );
+  });
+
+  test('at startup, the files the server saved more than 7 days ago are '
+      'deleted from the download folder, and no other file', () async {
+    final folder = await Directory.systemTemp.createTemp(
+      'smartschool_mcp_cleanup_',
+    );
+    addTearDown(() => folder.delete(recursive: true));
+    File file(String name) =>
+        File('${folder.path}${Platform.pathSeparator}$name');
+    final old = file('rapport.pdf')..writeAsStringSync('oud');
+    final recent = file('brief.docx')..writeAsStringSync('recent');
+    final teachers = file('eigen bestand.pdf')..writeAsStringSync('van mij');
+    teachers.setLastModifiedSync(DateTime(2020));
+    final now = DateTime.now().toUtc();
+    Map<String, Object?> entry(File file, Duration age) => {
+      'name': file.uri.pathSegments.last,
+      'saved_at': now.subtract(age).toIso8601String(),
+      'size': file.lengthSync(),
+      'modified': file.lastModifiedSync().microsecondsSinceEpoch,
+    };
+    file(DownloadFolder.manifestName).writeAsStringSync(
+      jsonEncode({
+        'format': DownloadFolder.manifestFormat,
+        'cleaned_at': now.subtract(const Duration(days: 2)).toIso8601String(),
+        'files': [
+          entry(old, const Duration(days: 8)),
+          entry(recent, const Duration(days: 1)),
+        ],
+      }),
+    );
+
+    final server = await ServerProcess.start(
+      exePath,
+      environment: {
+        ...environmentWithoutSmartschool(),
+        'SMARTSCHOOL_DOWNLOAD_DIR': folder.path,
+      },
+    );
+    await server.initialize();
+    await server.stop();
+
+    expect(old.existsSync(), isFalse);
+    expect(recent.readAsStringSync(), 'recent');
+    expect(teachers.readAsStringSync(), 'van mij');
+    final manifest =
+        jsonDecode(file(DownloadFolder.manifestName).readAsStringSync())
+            as Map<String, Object?>;
+    expect(manifest['files'], [containsPair('name', 'brief.docx')]);
+    expect(
+      await server.stderr,
+      contains('downloads: cleanup deleted 1 file, 1 still listed'),
     );
   });
 
@@ -226,6 +351,22 @@ void main() {
       'read_intradesk_file',
       arguments: {'file_id': 'welkom.docx'},
     );
+    final (saveFileError, saveFileText) = await server.callTool(
+      'save_intradesk_file',
+      arguments: {'file_id': 'cccc1111-1111-4111-b111-111111111111'},
+    );
+    final (badSaveIdError, badSaveIdText) = await server.callTool(
+      'save_intradesk_file',
+      arguments: {'file_id': 'C:\\Windows\\win.ini'},
+    );
+    final (saveAttachmentError, saveAttachmentText) = await server.callTool(
+      'save_message_attachment',
+      arguments: {'message_id': 123, 'attachment': 'planning.pdf'},
+    );
+    final (noAttachmentError, noAttachmentText) = await server.callTool(
+      'save_message_attachment',
+      arguments: {'message_id': 123, 'attachment': 0},
+    );
     final (dateError, dateText) = await server.callTool(
       'list_messages',
       arguments: {'since': 'gisteren'},
@@ -246,6 +387,8 @@ void main() {
       (intradeskError, intradeskText),
       (folderError, folderText),
       (fileError, fileText),
+      (saveFileError, saveFileText),
+      (saveAttachmentError, saveAttachmentText),
     ]) {
       expect(isError, isTrue);
       expect(
@@ -266,6 +409,11 @@ void main() {
     expect(badIdText, startsWith('folder_id must be an Intradesk id like '));
     expect(badFileIdError, isTrue);
     expect(badFileIdText, startsWith('file_id must be an Intradesk id like '));
+    expect(badSaveIdError, isTrue);
+    expect(badSaveIdText, startsWith('file_id must be an Intradesk id like '));
+    expect(noAttachmentError, isTrue);
+    expect(noAttachmentText, isNot(startsWith('Not all Smartschool')));
+    expect(Directory(server.downloads!).listSync(), isEmpty);
 
     await server.stop();
   });
@@ -290,6 +438,7 @@ void main() {
       ),
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),
       ('search_intradesk', {'query': 'uitstap', 'limit': 10.0}),
+      ('save_message_attachment', {'message_id': 123.0, 'attachment': 2.0}),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 
@@ -497,13 +646,25 @@ void main() {
     'an unknown argument prints the usage to stderr and exits with 64',
     () async {
       final process = await Process.start(exePath, ['--bogus']);
+      addTearDown(process.kill);
+      // Read while it runs: on Windows, the usage (longer since the download
+      // folder) fills the stderr pipe when nobody reads it, and the server
+      // waits for that forever instead of exiting.
+      final stdoutChunks = process.stdout.toList();
+      final stderrText = process.stderr
+          .transform(systemEncoding.decoder)
+          .join();
       await process.stdin.close();
 
       expect(await process.exitCode.timeout(const Duration(seconds: 30)), 64);
-      expect(await process.stdout.toList(), isEmpty);
+      expect(await stdoutChunks, isEmpty);
       expect(
-        await process.stderr.transform(systemEncoding.decoder).join(),
-        allOf(contains('unknown argument: --bogus'), contains('--credentials')),
+        await stderrText,
+        allOf(
+          contains('unknown argument: --bogus'),
+          contains('--credentials'),
+          contains('SMARTSCHOOL_DOWNLOAD_DIR'),
+        ),
       );
     },
   );

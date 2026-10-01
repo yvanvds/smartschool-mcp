@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
@@ -16,14 +17,19 @@ void main() {
   setUp(() => server = FakeSmartschool());
 
   /// Calls `smartschool_status` over MCP on a server whose session reads
-  /// [source] and talks to [server].
-  Future<(CallToolResult, String)> status({CredentialSource? source}) async {
+  /// [source] and talks to [server], with [downloads] when given.
+  Future<(CallToolResult, String)> status({
+    CredentialSource? source,
+    DownloadFolder? Function()? downloads,
+  }) async {
     final session = SmartschoolSession(
       source ?? fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
     );
     addTearDown(session.close);
-    final (connection, _) = await connect(tools: [statusTool(session)]);
+    final (connection, _) = await connect(
+      tools: [statusTool(session, downloads: downloads)],
+    );
     return callTool(connection, 'smartschool_status');
   }
 
@@ -61,6 +67,105 @@ void main() {
     );
     expect(server.logins, 1);
     expectNoSecretsOrTraces(text);
+  });
+
+  group('with a download folder', () {
+    late Directory root;
+
+    setUp(() async {
+      root = await Directory.systemTemp.createTemp('smartschool_status_');
+      addTearDown(() => root.delete(recursive: true));
+    });
+
+    DownloadFolder folderAt(String path) => DownloadFolder(
+      path,
+      origin: const DownloadFolderOrigin(
+        'set in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR)',
+        fix:
+            'choose another folder in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR) '
+            'in the Smartschool extension settings',
+      ),
+    );
+
+    test('shows the folder, where it is set and that it is writable, after '
+        'the settings', () async {
+      final (result, text) = await status(downloads: () => folderAt(root.path));
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        'Smartschool connection: working\n'
+        'Logged in as: $fakeDisplayName\n'
+        'Smartschool address: $fakeHost\n'
+        'Settings: extension settings (all filled in)\n'
+        'Download folder: ${root.path} (set in "Downloadmap" '
+        '(SMARTSCHOOL_DOWNLOAD_DIR); writable)\n'
+        'Server version: $packageVersion\n'
+        'Updates: not checked (the update check is turned off)',
+      );
+      expect(root.listSync(), isEmpty, reason: 'the check leaves nothing');
+    });
+
+    test('one that does not exist yet: created on the first save, not '
+        'now', () async {
+      final path = '${root.path}${Platform.pathSeparator}Smartschool';
+
+      final (_, text) = await status(downloads: () => folderAt(path));
+
+      expect(
+        text,
+        contains(
+          '\nDownload folder: $path (set in "Downloadmap" '
+          '(SMARTSCHOOL_DOWNLOAD_DIR); does not exist yet: it is created when '
+          'the first file is saved)\n',
+        ),
+      );
+      expect(Directory(path).existsSync(), isFalse);
+    });
+
+    test('one that cannot be used: NOT writable, why, and how to choose '
+        'another', () async {
+      final file = File('${root.path}${Platform.pathSeparator}bestand')
+        ..writeAsStringSync('x');
+
+      final (_, text) = await status(downloads: () => folderAt(file.path));
+
+      expect(
+        text,
+        contains(
+          '\nDownload folder: ${file.path} (set in "Downloadmap" '
+          '(SMARTSCHOOL_DOWNLOAD_DIR); NOT writable: it is a file, not a '
+          'folder). To save files, choose another folder in "Downloadmap" '
+          '(SMARTSCHOOL_DOWNLOAD_DIR) in the Smartschool extension '
+          'settings.\n',
+        ),
+      );
+    });
+
+    test('also when the connection does not work', () async {
+      final (_, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(password: '')),
+        downloads: () => folderAt(root.path),
+      );
+
+      expect(text, startsWith('Smartschool connection: NOT working\n'));
+      expect(text, contains('\nDownload folder: ${root.path} ('));
+    });
+
+    test('none: says so and how to set one', () async {
+      final (_, text) = await status(downloads: () => null);
+
+      expect(
+        text,
+        contains(
+          '\nDownload folder: none (there is no home folder for the '
+          'default). To save files, set "Downloadmap" '
+          '(SMARTSCHOOL_DOWNLOAD_DIR) in the Smartschool extension settings '
+          'in Claude Desktop (Settings → Extensions), then restart Claude '
+          'Desktop.\n',
+        ),
+      );
+    });
   });
 
   test('with a credentials file: shows the file, never its values', () async {

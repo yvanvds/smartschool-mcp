@@ -29,6 +29,27 @@ String formatIntradeskTime(DateTime date) {
 
 String _two(int n) => n.toString().padLeft(2, '0');
 
+/// `Intradesk file <path> (id …, 178 KB, changed 2024-08-29)`: the file
+/// [id] with what is known about it, from the index ([known]) or the
+/// download ([name], [size]).
+String intradeskFileTitle(
+  String id,
+  IntradeskItem? known, {
+  String? name,
+  int? size,
+}) {
+  final what = known?.path ?? name;
+  final details = [
+    'id $id',
+    if (size ?? known?.size case final size?) formatFileSize(size),
+    if (known?.changed case final changed?)
+      'changed ${formatIntradeskDate(changed)}',
+    if (known?.confidential ?? false) 'confidential',
+  ];
+  return 'Intradesk file ${what == null ? '' : '$what '}'
+      '(${details.join(', ')})';
+}
+
 /// One line describing [item]: kind, path (with [fullPath]) or name, id,
 /// size, date changed and whether it is confidential.
 ///

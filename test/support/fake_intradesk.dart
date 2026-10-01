@@ -1,9 +1,10 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+
+import 'fake_download.dart';
 
 /// The Intradesk module of a fake Smartschool: the directory listings of
 /// the root and of each folder, and file downloads.
@@ -268,38 +269,13 @@ class FakeIntradesk {
     final content = contents[id];
     // Seen live: an unknown file id gets a 404.
     if (content == null) return _json('{"error":"not found"}', status: 404);
-    // Chunk by chunk, each in its own turn of the event loop, like data
-    // arriving from a socket.
-    Stream<Uint8List> chunks() async* {
-      var complete = false;
-      try {
-        for (var start = 0; start < content.length; start += 64 * 1024) {
-          await Future<void>.delayed(Duration.zero);
-          if (failDownloadsAfter case final limit? when start >= limit) {
-            throw const HttpException('Connection closed while receiving data');
-          }
-          final end = start + 64 * 1024 < content.length
-              ? start + 64 * 1024
-              : content.length;
-          bytesSent += end - start;
-          yield Uint8List.sublistView(content, start, end);
-        }
-        complete = true;
-      } finally {
-        if (!complete) stoppedDownloads++;
-      }
-    }
-
-    return ResponseBody(
-      chunks(),
-      200,
-      headers: {
-        Headers.contentTypeHeader: ['application/octet-stream'],
-        if (announceDownloads) ...{
-          Headers.contentLengthHeader: ['${content.length}'],
-          'content-disposition': ['attachment; filename="${_names[id]}"'],
-        },
-      },
+    return fakeDownload(
+      content,
+      name: _names[id],
+      announce: announceDownloads,
+      failAfter: failDownloadsAfter,
+      sent: (bytes) => bytesSent += bytes,
+      stopped: () => stoppedDownloads++,
     );
   }
 

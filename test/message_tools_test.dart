@@ -449,8 +449,8 @@ void main() {
         'Status: unread\n'
         'Flag: red\n'
         'Attachments (2):\n'
-        '- Planning oudercontact.pdf (123.48 KiB)\n'
-        '- Lokalen.xlsx (8.2 KiB)\n'
+        '1. Planning oudercontact.pdf (123.48 KiB)\n'
+        '2. Lokalen.xlsx (8.2 KiB)\n'
         '\n'
         "Beste collega's,\n"
         '\n'

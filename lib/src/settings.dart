@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:yaml/yaml.dart';
 
-/// One of the four values the server needs to log in to Smartschool.
+/// A setting of the server: the four values it needs to log in to
+/// Smartschool ([login]), and the optional download folder.
 ///
 /// [formTitle] is the field's title in the Claude Desktop extension's install
 /// form. The extension manifest must use exactly these titles, because the
@@ -11,9 +13,25 @@ enum Setting {
   mainUrl('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL', 'main_url'),
   username('Gebruikersnaam', 'SMARTSCHOOL_USERNAME', 'username'),
   password('Wachtwoord', 'SMARTSCHOOL_PASSWORD', 'password'),
-  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa');
+  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa'),
 
-  const Setting(this.formTitle, this.envVar, this.fileKey);
+  /// The folder `save_intradesk_file` and `save_message_attachment` save
+  /// into; optional (see `DownloadFolder.resolve`). In the extension
+  /// manifest a `directory` field, so the install form shows a folder
+  /// picker.
+  downloadDir(
+    'Downloadmap',
+    'SMARTSCHOOL_DOWNLOAD_DIR',
+    'download_dir',
+    required: false,
+  );
+
+  const Setting(
+    this.formTitle,
+    this.envVar,
+    this.fileKey, {
+    this.required = true,
+  });
 
   /// The title of the field in the extension's install form.
   final String formTitle;
@@ -21,8 +39,18 @@ enum Setting {
   /// The environment variable Claude Desktop fills from that field.
   final String envVar;
 
-  /// The key in a `credentials.yml` file (the library's `PathCredentials`).
+  /// The key in a `credentials.yml` file (the library's `PathCredentials`
+  /// for the login settings).
   final String fileKey;
+
+  /// Whether the server needs it to log in.
+  final bool required;
+
+  /// The settings the server needs to log in, in form order.
+  static final List<Setting> login = [
+    for (final setting in values)
+      if (setting.required) setting,
+  ];
 }
 
 /// Where the Smartschool settings come from.
@@ -126,6 +154,22 @@ final class CredentialsFile extends CredentialSource {
 
   @override
   String get logDescription => 'credentials file $path (--credentials)';
+
+  /// The download folder in the file ([Setting.downloadDir]'s key), or null
+  /// when it has none, or when the file cannot be read: [read] reports
+  /// that.
+  String? downloadDirectory() {
+    try {
+      final yaml = loadYaml(File(path).readAsStringSync());
+      if (yaml is! YamlMap) return null;
+      final value = yaml[Setting.downloadDir.fileKey];
+      return value is String ? value : null;
+    } catch (_) {
+      // Never the message: a YAML error quotes the file, which holds the
+      // password.
+      return null;
+    }
+  }
 }
 
 /// A credentials file named with `--credentials` could not be used.
@@ -183,19 +227,14 @@ final class SmartschoolSettings {
   /// The TOTP secret (Base32).
   final String mfa;
 
-  /// The settings that are empty, in form order. All four are required: MFA
-  /// is mandatory for teachers.
+  /// The login settings that are empty, in form order. All four are
+  /// required: MFA is mandatory for teachers.
   List<Setting> get missing => [
-    for (final setting in Setting.values)
-      if (_value(setting).isEmpty) setting,
+    if (host.isEmpty) Setting.mainUrl,
+    if (username.isEmpty) Setting.username,
+    if (password.isEmpty) Setting.password,
+    if (mfa.isEmpty) Setting.mfa,
   ];
-
-  String _value(Setting setting) => switch (setting) {
-    Setting.mainUrl => host,
-    Setting.username => username,
-    Setting.password => password,
-    Setting.mfa => mfa,
-  };
 
   /// The credentials for the library. Only valid when [missing] is empty.
   Credentials toCredentials() => AppCredentials(

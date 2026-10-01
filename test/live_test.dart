@@ -40,12 +40,23 @@
 /// and one above the size limit, which must be refused without downloading.
 /// Run it on its own with `--name read_intradesk_file`. It prints formats,
 /// sizes, character counts and timings, never a name or any text.
+///
+/// The save test only reads as well: it saves the smallest PDF and Word file
+/// above 5 KB on Intradesk (from the index, or a walk when there is none)
+/// and the first attachment of a read message in the inbox or the archive
+/// (twice) into a temporary download folder, which is deleted afterwards,
+/// and checks their sizes and first bytes. Run it on its own with
+/// `--name save_intradesk_file`. It prints extensions, sizes and timings,
+/// never a name or any content.
 @Timeout(Duration(minutes: 5))
 library;
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:test/test.dart';
 
 import 'support/exe.dart';
@@ -598,6 +609,231 @@ void main() {
     // The refused file was never downloaded.
     expect(downloads, hasLength(report.where((r) => r.contains('->')).length));
   }, timeout: const Timeout(Duration(minutes: 20)));
+
+  test('save_intradesk_file and save_message_attachment save real files into '
+      'a temporary download folder, read-only, with the right bytes', () async {
+    // The user's own cookie cache and Intradesk index. Files are only
+    // downloaded, never changed, into a temporary download folder that
+    // ServerProcess.start deletes after the test. Names and contents are
+    // the user's: failures show masked text only, and only extensions,
+    // sizes and timings are printed.
+    final server = await ServerProcess.start(
+      exePath,
+      args: ['--credentials', credentialsPath],
+      environment: environmentWithoutSmartschool(),
+    );
+    final downloads = server.downloads!;
+    await server.initialize();
+
+    Future<(bool?, String, int)> call(
+      String tool,
+      Map<String, Object?> arguments,
+    ) async {
+      final watch = Stopwatch()..start();
+      final result = await server.request('tools/call', {
+        'name': tool,
+        'arguments': arguments,
+      }, const Duration(minutes: 2));
+      final content = result['content'] as List;
+      final text = (content.first as Map)['text'] as String;
+      return (result['isError'] as bool?, text, watch.elapsedMilliseconds);
+    }
+
+    Future<String> ok(String tool, Map<String, Object?> arguments) async {
+      final (isError, text, _) = await call(tool, arguments);
+      expect(isError, isNot(true), reason: '$tool: ${_mask(text)}');
+      return text;
+    }
+
+    final report = <String>[];
+
+    /// Checks the result of a save: the file is in [downloads], has the
+    /// size the result gives, about [expectedSize], and starts like a file
+    /// of its extension. Returns the file.
+    File checkSaved(String text, {int? expectedSize, String? what}) {
+      final path = RegExp(r'^Path: (.+)$', multiLine: true).firstMatch(text);
+      final size = RegExp(
+        r'^Size: .*?(?:\((\d+) bytes\)|(\d+) bytes?)$',
+        multiLine: true,
+      ).firstMatch(text);
+      expect(path, isNotNull, reason: _mask(text));
+      expect(size, isNotNull, reason: _mask(text));
+      final file = File(path![1]!);
+      expect(file.parent.path, downloads, reason: 'saved outside the folder');
+      expect(file.existsSync(), isTrue);
+      final bytes = file.readAsBytesSync();
+      expect(bytes.length, int.parse(size![1] ?? size[2]!));
+      // Smartschool and the index give sizes rounded.
+      if (expectedSize != null) {
+        expect(
+          (bytes.length - expectedSize).abs(),
+          lessThanOrEqualTo(max(1024, expectedSize ~/ 20)),
+          reason: '${bytes.length} bytes saved, about $expectedSize expected',
+        );
+      }
+      // Only a short extension is printed, never more of the name.
+      final name = file.uri.pathSegments.last;
+      final dot = name.lastIndexOf('.');
+      final extension = dot < 0 || name.length - dot > 6
+          ? '(other)'
+          : name.substring(dot + 1).toLowerCase();
+      final magic = switch (extension) {
+        'pdf' => '%PDF',
+        'docx' || 'xlsx' || 'pptx' => 'PK\x03\x04',
+        'png' => '\x89PNG',
+        _ => null,
+      };
+      if (magic != null) {
+        expect(
+          String.fromCharCodes(bytes.take(magic.length)),
+          magic,
+          reason: 'not a .$extension file',
+        );
+      }
+      report.add(
+        '${what ?? 'file'} .$extension: ${bytes.length} bytes saved'
+        '${magic == null ? '' : ', starts like a .$extension file'}',
+      );
+      return file;
+    }
+
+    // Intradesk: the smallest PDF and Word file above 5 KB the index has.
+    for (final extension in ['pdf', 'docx']) {
+      var text = await ok('search_intradesk', {
+        'query': extension,
+        'limit': 100,
+      });
+      final walk = Stopwatch()..start();
+      while (text.startsWith('Intradesk is being indexed')) {
+        expect(walk.elapsed, lessThan(const Duration(minutes: 12)));
+        await Future<void>.delayed(const Duration(seconds: 20));
+        text = await ok('search_intradesk', {'query': extension, 'limit': 100});
+      }
+      final files = [
+        for (final file in _intradeskFiles(text))
+          if (file.extension == extension && file.size > 5 * 1024) file,
+      ]..sort((a, b) => a.size.compareTo(b.size));
+      if (files.isEmpty) {
+        report.add('intradesk .$extension: no file found');
+        continue;
+      }
+      final (isError, saved, ms) = await call('save_intradesk_file', {
+        'file_id': files.first.id,
+      });
+      expect(isError, isNot(true), reason: _mask(saved));
+      checkSaved(saved, expectedSize: files.first.size, what: 'intradesk');
+      report.add('  in $ms ms');
+    }
+
+    // An attachment of a read message in the inbox or the archive, saved
+    // twice: the second copy gets a name of its own, with the same bytes.
+    _Header? withAttachment;
+    var box = 'inbox';
+    for (final candidate in ['inbox', 'archive']) {
+      final headers = _expectListShape(
+        await ok('list_messages', {'box': candidate, 'limit': 200}),
+        candidate == 'inbox' ? 'Inbox' : 'Archive',
+      );
+      withAttachment = headers
+          .where((h) => !h.unread && h.attachments)
+          .firstOrNull;
+      if (withAttachment != null) {
+        box = candidate;
+        break;
+      }
+    }
+    expect(withAttachment, isNotNull, reason: 'no read message with files');
+    final message = await ok('read_message', {
+      'message_id': withAttachment!.id,
+      'box': box,
+    });
+    expect(
+      RegExp(r'^1\. ', multiLine: true).hasMatch(message),
+      isTrue,
+      reason: _mask(message),
+    );
+    // The size as Smartschool gives it, such as `3.87 KiB`, when it reads
+    // like that.
+    final first = RegExp(
+      r'^1\. .+ \(([\d.]+) (bytes?|B|KiB|KB|MiB|MB)\)$',
+      multiLine: true,
+    ).firstMatch(message);
+    const units = {
+      'B': 1,
+      'byte': 1,
+      'bytes': 1,
+      'KiB': 1024,
+      'KB': 1024,
+      'MiB': 1024 * 1024,
+      'MB': 1024 * 1024,
+    };
+    final listedSize = first == null
+        ? null
+        : (double.parse(first[1]!) * units[first[2]]!).round();
+    if (listedSize == null) report.add('attachment size not in a known form');
+    final arguments = {
+      'message_id': withAttachment.id,
+      'attachment': 1,
+      'box': box,
+    };
+    final (isError, once, ms) = await call(
+      'save_message_attachment',
+      arguments,
+    );
+    expect(isError, isNot(true), reason: _mask(once));
+    final saved = checkSaved(
+      once,
+      expectedSize: listedSize,
+      what: 'attachment',
+    );
+    report.add('  in $ms ms');
+    final twice = await ok('save_message_attachment', arguments);
+    final again = checkSaved(twice, expectedSize: listedSize, what: 'again');
+    // Booleans only: a failing matcher would print the names or bytes.
+    expect(again.path == saved.path, isFalse, reason: 'saved over the first');
+    expect(
+      twice.contains('was already in the download folder'),
+      isTrue,
+      reason: _mask(twice),
+    );
+    final (one, two) = (saved.readAsBytesSync(), again.readAsBytesSync());
+    expect(
+      one.length == two.length &&
+          Iterable.generate(one.length).every((i) => one[i] == two[i]),
+      isTrue,
+      reason: 'the second copy has other bytes',
+    );
+
+    final status = await ok('smartschool_status', {});
+    expect(
+      status.contains(
+        '\nDownload folder: $downloads (set in SMARTSCHOOL_DOWNLOAD_DIR; '
+        'writable)\n',
+      ),
+      isTrue,
+      reason: _mask(status),
+    );
+    await server.stop();
+    final log = await server.stderr;
+
+    final manifest =
+        jsonDecode(
+              File(
+                '$downloads${Platform.pathSeparator}'
+                '${DownloadFolder.manifestName}',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final saves = [
+      for (final line in log.split('\n'))
+        if (line.contains('] save_')) line,
+    ];
+    expect(manifest['files'], hasLength(saves.length));
+    stderr.writeln(
+      '--- save tools: extensions, sizes, timings ---\n'
+      '${report.join('\n')}\n${saves.join('\n')}',
+    );
+  }, timeout: const Timeout(Duration(minutes: 20)));
 }
 
 typedef _IntradeskLine = ({String kind, String name, String id});
@@ -642,6 +878,7 @@ typedef _Header = ({
   String who,
   String subject,
   bool unread,
+  bool attachments,
 });
 
 final _headerLine = RegExp(
@@ -668,6 +905,7 @@ List<_Header> _expectListShape(String text, String label) {
       who: match[3]!,
       subject: match[4]!,
       unread: match[5]?.contains('unread') ?? false,
+      attachments: match[5]?.contains('attachments') ?? false,
     ));
   }
   return headers;

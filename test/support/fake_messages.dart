@@ -1,13 +1,21 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+
+import 'fake_download.dart';
 
 /// An attachment of a [FakeMessage].
 class FakeAttachment {
-  const FakeAttachment(this.name, this.size);
+  const FakeAttachment(this.name, this.size, {this.content});
 
   final String name;
 
   /// As Smartschool formats it, like `123.48 KiB`.
   final String size;
+
+  /// What a download of it gets; without it, the download is answered with
+  /// a 404.
+  final Uint8List? content;
 }
 
 /// A message in a [FakeMailbox].
@@ -99,7 +107,8 @@ enum SubmitAnswer {
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`), the archive endpoint,
+/// (`message list`, `show message`, `attachment list`), attachment
+/// downloads, the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
 /// compose forms, adding recipients to a form and taking them off, and
 /// submitting it.
@@ -190,6 +199,22 @@ class FakeMailbox {
   /// The HTML bodies of the messages sent, in order.
   final List<String> sentBodies = [];
 
+  /// The attachments downloaded, in order, as `<message id>/<number>`
+  /// (counting from 1).
+  final List<String> attachmentDownloads = [];
+
+  /// Whether attachment downloads announce their size (`Content-Length`)
+  /// and name (`Content-Disposition`).
+  bool announceAttachmentDownloads = true;
+
+  /// The name attachment downloads give in `Content-Disposition`, instead
+  /// of the attachment's own.
+  String? attachmentDownloadName;
+
+  /// How many attachment downloads were cancelled before all of the file
+  /// was sent.
+  int stoppedAttachmentDownloads = 0;
+
   /// How many headers of each box the current session was sent since the
   /// box was last listed, by `boxType/boxID`: the box's paging position.
   final Map<String, int> _paging = {};
@@ -240,6 +265,9 @@ class FakeMailbox {
     }
     if (options.method == 'GET' && _isCompose(options)) {
       return _response(_composePage(query), 'text/html');
+    }
+    if (options.method == 'GET' && query['file'] == 'download') {
+      return _downloadAttachment(int.parse(query['fileID']!));
     }
     if (isSubmit(options)) return _submit(options);
     if (options.method == 'POST' &&
@@ -508,7 +536,7 @@ $headers
 <attachmentlist>
 ${[for (final (i, a) in attachments.indexed) '''
 <attachment>
-  <fileID>${100 + i}</fileID>
+  <fileID>${_fileId(m!, i)}</fileID>
   <name>${_escape(a.name)}</name>
   <mime>PDF-bestand</mime>
   <size>${a.size}</size>
@@ -517,6 +545,30 @@ ${[for (final (i, a) in attachments.indexed) '''
   <order>$i</order>
 </attachment>'''].join('\n')}
 </attachmentlist>''');
+  }
+
+  /// The `fileID` of attachment [index] of [message]: unique in the mailbox.
+  static int _fileId(FakeMessage message, int index) =>
+      message.id * 100 + index + 1;
+
+  /// The download of the attachment with [fileId]; a 404 for one without
+  /// content (what Smartschool answers then has not been seen).
+  ResponseBody _downloadAttachment(int fileId) {
+    for (final message in [...inbox, ...archive, ...sent]) {
+      for (final (index, attachment) in message.attachments.indexed) {
+        if (_fileId(message, index) != fileId) continue;
+        attachmentDownloads.add('${message.id}/${index + 1}');
+        final content = attachment.content;
+        if (content == null) break;
+        return fakeDownload(
+          content,
+          name: attachmentDownloadName ?? attachment.name,
+          announce: announceAttachmentDownloads,
+          stopped: () => stoppedAttachmentDownloads++,
+        );
+      }
+    }
+    return ResponseBody.fromString('Not found', 404);
   }
 
   /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
