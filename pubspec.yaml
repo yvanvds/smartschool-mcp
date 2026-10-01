@@ -18,14 +18,8 @@ dependencies:
   # HTTP client used by flutter_smartschool. Imported directly for its
   # exception types and to add an interceptor to the library's client.
   dio: ^5.11.1
-  # Smartschool client library (pure Dart despite the name). pub.dev only has
-  # 0.2.6, which lacks the 2FA-detection fix (yvanvds/dartschool#1) and the
-  # login-302 fix (yvanvds/dartschool#6). Switch to pub.dev once 0.2.10 or
-  # later is published there.
-  flutter_smartschool:
-    git:
-      url: https://github.com/yvanvds/dartschool.git
-      ref: bfd6258ea8679cd8b7bf1d442fa0a54ae2fe132b
+  # Smartschool client library (pure Dart despite the name).
+  flutter_smartschool: ^0.3.0
   # HTML parser for turning message bodies into plain text. flutter_smartschool
   # already depends on it.
   html: ^0.15.7

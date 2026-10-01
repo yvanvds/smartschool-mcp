@@ -55,8 +55,32 @@ void main() {
 
     test('an unreachable host', () async {
       final error = await _loginError(FakeSmartschool()..unreachable = true);
+      expect(error, isA<SmartschoolConnectionError>());
       expect(classifyFailure(error), ProblemKind.unreachable);
     });
+
+    test('a session Smartschool still refuses after the login', () async {
+      final error = await _loginError(FakeSmartschool()..rejectsAfterLogin = 1);
+      expect(error, isA<SmartschoolSessionExpiredError>());
+      expect(classifyFailure(error), ProblemKind.sessionRejected);
+    });
+  });
+
+  test('classifyFailure of an unreachable host during a service call, as the '
+      'library throws it', () async {
+    final server = FakeSmartschool();
+    final client = await fakeClientFactory(server, await tempCache())(
+      FakeCredentials(),
+    );
+    await client.platformId;
+    server.unreachable = true;
+
+    final error = await MessagesService(
+      client,
+    ).getHeaders().then<Object?>((_) => null, onError: (Object e) => e);
+
+    expect(error, isA<SmartschoolConnectionError>());
+    expect(classifyFailure(error!), ProblemKind.unreachable);
   });
 
   group('classifyFailure of other errors', () {
@@ -74,6 +98,10 @@ void main() {
           requestOptions: request,
           error: const SocketException('Connection refused'),
         ),
+        const SmartschoolConnectionError(
+          'Unable to reach Smartschool at school.smartschool.be: the '
+          'connection failed',
+        ),
       ]) {
         expect(
           classifyFailure(error),
@@ -83,7 +111,8 @@ void main() {
       }
     });
 
-    test('a rejected session: a 401, or HTML where data was expected', () {
+    test('a rejected session: a 401, the library refusing it, or HTML where '
+        'data was expected', () {
       expect(
         classifyFailure(
           DioException(
@@ -91,6 +120,14 @@ void main() {
             error: const SessionExpiredError.unauthorized(),
           ),
         ),
+        ProblemKind.sessionRejected,
+      );
+      expect(
+        classifyFailure(const SessionExpiredError.sentToLogin()),
+        ProblemKind.sessionRejected,
+      );
+      expect(
+        classifyFailure(const SmartschoolSessionExpiredError()),
         ProblemKind.sessionRejected,
       );
       expect(
@@ -117,7 +154,7 @@ void main() {
       expect(
         classifyFailure(
           const SmartschoolAuthenticationError(
-            'Maximum login attempts reached',
+            'Authentication flow did not complete. Still on /oauth',
           ),
         ),
         ProblemKind.unexpected,

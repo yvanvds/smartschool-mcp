@@ -67,6 +67,13 @@ void _fill(FakeMailbox mailbox) {
         date: '2024-03-11 11:00',
         to: [_me],
       ),
+      FakeMessage(
+        id: 303,
+        sender: _me,
+        subject: 'Rapport',
+        date: '2024-03-10 11:00',
+        bcc: ['Els Wouters', 'An Claes'],
+      ),
     ]);
 }
 
@@ -195,7 +202,7 @@ void main() {
       });
       expect(
         sent,
-        'Sent: 1 of 3 messages matches the filters, newest first.\n'
+        'Sent: 1 of 4 messages matches the filters, newest first.\n'
         '- id 9001 | 2024-04-01 10:01 | to An Claes | Re: Toets wiskunde',
       );
       final (_, read) = await callTool(connection, 'read_message', {
@@ -256,6 +263,17 @@ void main() {
         'send to=Els Wouters,An Claes cc= subject=Re: Uitstap',
         'send to=Els Wouters,An Claes cc=Piet Janssens subject=Re: Uitstap',
       ]);
+    });
+
+    test('a reply to the sent-box copy of a message the user sent to '
+        'themself goes to the user too', () async {
+      expect(
+        await ok({'message_id': 302, 'box': 'sent', 'body': 'Gedaan'}),
+        'Sent the reply to message 302.\n'
+        'To: $_me\n'
+        'Subject: Re: Herinnering',
+      );
+      expect(sends(), ['send to=$_me cc= subject=Re: Herinnering']);
     });
 
     test('a reply to a message the user sent to themself arrives in their '
@@ -333,11 +351,20 @@ void main() {
 
     test('Smartschool gives no one to reply to', () async {
       expect(
-        await error({'message_id': 302, 'box': 'sent', 'body': 'Hallo'}),
-        'Smartschool gives no one to send a reply to message 302 to (it does '
-        'not for some sent messages, for example when the user was the only '
-        'recipient). Nothing was sent. The user can reply in Smartschool '
-        'itself.',
+        await error({'message_id': 303, 'box': 'sent', 'body': 'Hallo'}),
+        'Smartschool gives no one to send a reply to message 303 to (a reply '
+        'to a sent message goes to its To recipients, and it has none, for '
+        'example when it only went to BCC recipients). Nothing was sent. The '
+        'user can reply in Smartschool itself.',
+      );
+      expect(
+        await error({
+          'message_id': 303,
+          'box': 'sent',
+          'body': 'Hallo',
+          'reply_all': true,
+        }),
+        startsWith('Smartschool gives no one to send a reply to message 303'),
       );
       mailbox.replyFormNames[101] = [];
       expect(
@@ -346,6 +373,20 @@ void main() {
         'was sent. The user can reply in Smartschool itself.',
       );
       expect(mailbox.submits, 0);
+    });
+
+    test('Smartschool does not register a recipient on the form', () async {
+      mailbox.unregistered.add('An Claes');
+
+      expect(
+        await error({'message_id': 101, 'body': 'Hallo', 'reply_all': true}),
+        'Smartschool did not open its form for a new message, or did not '
+        'accept a recipient on it, so nothing was sent. The account may not '
+        'be allowed to send messages, or to send to one of the recipients; '
+        'the details are in the server log.',
+      );
+      expect(mailbox.submits, 0);
+      expect(sends(), isEmpty);
     });
 
     test("Smartschool's reply form names more than the sender", () async {
@@ -455,8 +496,7 @@ void main() {
       expect(mailbox.submits, 1);
     });
 
-    test('Smartschool answers with a page that does not confirm it, which '
-        'the library takes as sent', () async {
+    test('Smartschool answers with a page that does not confirm it', () async {
       mailbox.submitAnswer = SubmitAnswer.otherPage;
 
       expect(await error({'message_id': 101, 'body': 'Hallo'}), _notConfirmed);

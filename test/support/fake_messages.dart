@@ -87,7 +87,9 @@ enum SubmitAnswer {
 /// [owner]); the reply-all form (`composeType=2`) of a received message
 /// names the To recipients except the [owner] and then the sender in To, and
 /// the CC recipients except the [owner] in CC; that of a sent message names
-/// its To recipients and then the [owner] in To, and its CC recipients in CC.
+/// its To recipients and then the [owner] in To, its CC recipients in CC and
+/// its BCC recipients in BCC. In the sent box, `show message` starts each
+/// recipient name with the recipient's read state (`+`).
 /// A message sent to the [owner] also lands in the inbox, with the same id.
 class FakeMailbox {
   FakeMailbox({this.owner = 'Jan Peeters'});
@@ -130,6 +132,11 @@ class FakeMailbox {
   /// The names the reply form of a received message shows in To instead
   /// of its sender, by message id.
   final Map<int, List<String>> replyFormNames = {};
+
+  /// Recipients Smartschool does not register on a compose form: it answers
+  /// adding them with an empty body, as seen live for an unknown user
+  /// (yvanvds/dartschool#39).
+  final Set<String> unregistered = {};
 
   /// How the next submits of the compose form are answered.
   SubmitAnswer submitAnswer = SubmitAnswer.sent;
@@ -296,32 +303,37 @@ ${page.map(_header).join('\n')}
   String _show(int id, String boxType, {required bool limitList}) {
     final m = vanished.contains(id) ? null : _find(id, boxType);
     if (m == null) {
-      // What Smartschool answers for an unknown id (seen live), with a
-      // date the library reads as 1970-01-01.
+      // What Smartschool answers for an id the box does not hold (seen
+      // live, yvanvds/dartschool#16): a placeholder with an empty status and
+      // no date, which the library returns as null.
       return _envelope('show message', '''
 <message>
   <id>$id</id>
   <from>Niet beschikbaar</from>
   <to/>
   <subject>* Bericht zonder onderwerp *</subject>
-  <date>1970-01-01 00:00</date>
+  <date>wrong input format</date>
   <body></body>
-  <status>0</status>
+  <status/>
   <attachment>0</attachment>
-  <unread>0</unread>
-  <label>0</label>
+  <unread/>
+  <label/>
   <receivers/>
   <ccreceivers/>
   <bccreceivers/>
+  <canReply/>
 </message>''');
     }
     // Without limitList=false, Smartschool lists two names per field and
-    // counts the rest.
+    // counts the rest. In the sent box, each name starts with the
+    // recipient's read state, `+` (read) or `-` (unread), seen live
+    // (yvanvds/dartschool#34); here every recipient has read it.
+    final marker = boxType == 'outbox' ? '+' : '';
     String receivers(String tag, List<String> names) {
       final listed = limitList ? names.take(2) : names;
       return listed.isEmpty
           ? '<$tag/>'
-          : '<$tag>${listed.map((n) => '<to>${_escape(n)}</to>').join()}</$tag>';
+          : '<$tag>${listed.map((n) => '<to>$marker${_escape(n)}</to>').join()}</$tag>';
     }
 
     int others(List<String> names) =>
@@ -382,6 +394,7 @@ ${[for (final (i, a) in attachments.indexed) '''
     final message = id == null ? null : _find(id, query['boxType']!);
     var to = const <String>[];
     var cc = const <String>[];
+    var bcc = const <String>[];
     if (message != null) {
       switch ((query['composeType'], sentBox)) {
         case ('1', true):
@@ -391,6 +404,7 @@ ${[for (final (i, a) in attachments.indexed) '''
         case ('2', true):
           to = [...message.to, owner];
           cc = message.cc;
+          bcc = message.bcc;
         case ('2', false):
           to = {
             ...message.to.where((name) => name != owner),
@@ -430,6 +444,9 @@ ${spans(to, '0')}
 <div id="insertSearchFieldContainer_2_0">
 ${spans(cc, '2')}
 </div>
+<div id="insertSearchFieldContainer_3_0">
+${spans(bcc, '3')}
+</div>
 </form>
 </body></html>''';
   }
@@ -443,6 +460,7 @@ ${spans(cc, '2')}
         fields['ssid'] != '$platformId') {
       throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
     }
+    if (unregistered.contains(_userName(id))) return '';
     (fields['type'] == '2' ? form.cc : form.to).add(id);
     return '''
 <users>

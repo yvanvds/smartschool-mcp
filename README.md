@@ -135,13 +135,13 @@ the login works and who is logged in, or what to fix.
   candidates when asked for advice and archives when asked to.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
-  before the subject. A reply to a sent message goes to its recipients. The
-  tool is marked destructive, so Claude Desktop asks for approval every
-  time, and Claude is told to show the text and recipients and wait for the
-  user's confirmation first. It never sends a reply twice by itself: when
-  Smartschool does not confirm a send, it says the reply may have been sent
-  and to check the sent box. Replies are new messages, not linked to the
-  original (yvanvds/dartschool#26).
+  before the subject. A reply to a sent message goes to its recipients,
+  except those in BCC. The tool is marked destructive, so Claude Desktop
+  asks for approval every time, and Claude is told to show the text and
+  recipients and wait for the user's confirmation first. It never sends a
+  reply twice by itself: when Smartschool does not confirm a send, it says
+  the reply may have been sent and to check the sent box. Replies are new
+  messages, not linked to the original (yvanvds/dartschool#26).
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so

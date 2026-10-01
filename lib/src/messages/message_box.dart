@@ -66,11 +66,12 @@ enum MessageBox {
   ///
   /// For an unknown id Smartschool does not answer with nothing but with a
   /// placeholder message ("Niet beschikbaar", "* Bericht zonder onderwerp *",
-  /// no text) whose date the library reads as 1970-01-01, so `getMessage`
-  /// returns that instead of null (yvanvds/dartschool#16). A message dated
-  /// before 1971 without text is taken to be that placeholder: no real
-  /// message is that old, and the placeholder's texts presumably depend on
-  /// the platform's language.
+  /// no text) whose date the library reads as 1970-01-01. Up to
+  /// flutter_smartschool 0.2.x, `getMessage` returned that instead of null
+  /// (yvanvds/dartschool#16, fixed in 0.3.0; dropping this check is #15). A
+  /// message dated before 1971 without text is taken to be that placeholder:
+  /// no real message is that old, and the placeholder's texts presumably
+  /// depend on the platform's language.
   Future<FullMessage?> message(
     MessagesService messages,
     int id, {

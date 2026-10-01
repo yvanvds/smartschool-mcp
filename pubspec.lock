@@ -172,12 +172,11 @@ packages:
   flutter_smartschool:
     dependency: "direct main"
     description:
-      path: "."
-      ref: bfd6258ea8679cd8b7bf1d442fa0a54ae2fe132b
-      resolved-ref: bfd6258ea8679cd8b7bf1d442fa0a54ae2fe132b
-      url: "https://github.com/yvanvds/dartschool.git"
-    source: git
-    version: "0.2.10"
+      name: flutter_smartschool
+      sha256: "62638413dbc29410ce7b13ad03bf6ff40220a719369178a379721426a1c274dc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   frontend_server_client:
     dependency: transitive
     description:

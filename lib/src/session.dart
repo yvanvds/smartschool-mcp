@@ -187,9 +187,9 @@ final class SmartschoolSession {
       final trace = SessionInterceptor(client, allowLogin: allowLogin);
       client.dio.interceptors.insert(0, trace);
       try {
-        // What ensureAuthenticated() does, minus its wrapping: it folds
-        // network errors into a SmartschoolAuthenticationError, which would
-        // hide "Smartschool unreachable" behind a login failure.
+        // What ensureAuthenticated() does. Before flutter_smartschool 0.3.0
+        // it folded network errors into a SmartschoolAuthenticationError;
+        // now both throw a SmartschoolConnectionError (#13).
         await client.platformId;
       } catch (_) {
         loggedIn = trace.loginPagesSeen > 0;
@@ -265,8 +265,8 @@ String _describe(Object error) => switch (error) {
 ///   so the log shows whether a session was reused or a new login and 2FA
 ///   round trip happened;
 /// - turns a `401` on a regular request into a [SessionExpiredError], so the
-///   session logs in again (see [SessionExpiredError] for why the library
-///   does not);
+///   session logs in again, before the library's auth interceptor can (see
+///   [SessionExpiredError]);
 /// - unless [allowLogin], turns being sent to the login chain into a
 ///   [SessionExpiredError] as well, before the library's auth interceptor
 ///   can start a login.
@@ -278,10 +278,11 @@ final class SessionInterceptor extends Interceptor {
   /// Whether the library may log in when Smartschool asks for it.
   ///
   /// Only while [SmartschoolSession] checks a new client's session: once
-  /// that works, the session turns it off. The library logs in for every
-  /// request that lands on the login chain, so requests in progress when
-  /// the session expires would each log in, all with the same 2FA code
-  /// (yvanvds/dartschool#36). Instead they fail with a
+  /// that works, the session turns it off. Up to flutter_smartschool 0.2.x
+  /// the library logged in for every request that landed on the login
+  /// chain, so requests in progress when the session expired each logged
+  /// in, all with the same 2FA code (yvanvds/dartschool#36, fixed in 0.3.0;
+  /// relying on that instead is #13). Instead they fail with a
   /// [SessionExpiredError], and [SmartschoolSession.run] logs in once for
   /// all of them with a new client and retries each call.
   bool allowLogin;

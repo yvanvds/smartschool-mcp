@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_access.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_format.dart';
@@ -140,16 +141,28 @@ void main() {
       expect(_folder('f', 'map.pdf').mimeType, isNull);
     });
 
-    test('a weblink takes its name, address, id and date from the raw JSON '
-        'and is left out without a name', () {
+    test('a weblink takes its name, address, id and date from the library\'s '
+        'weblink and is left out without a name', () {
+      // The keys of a weblink in a live folder listing.
+      IntradeskWeblink weblink(Map<String, Object> json) =>
+          IntradeskWeblink.fromJson({
+            'id': 'w1',
+            'platform': {'id': 4069, 'name': 'School'},
+            'name': 'Schoolsite',
+            'url': 'https://example.com',
+            'icon': 'folder_orange',
+            'state': 'active',
+            'parentFolderId': 'f1',
+            'dateCreated': '2024-08-29T17:01:56+02:00',
+            'dateStateChanged': '2024-08-29T17:01:56+02:00',
+            'dateChanged': '2024-08-29T17:01:56+02:00',
+            'isFavourite': false,
+            'confidential': false,
+            'ownerId': '12_345_0',
+            ...json,
+          });
       final link = IntradeskItem.weblink(
-        {
-          'id': 'w1',
-          'name': ' Schoolsite ',
-          'url': 'https://example.com',
-          'dateChanged': '2024-08-29T17:01:56+02:00',
-          'confidential': true,
-        },
+        weblink({'name': ' Schoolsite ', 'confidential': true}),
         parentId: 'f1',
         parentPath: 'Leerkrachten',
       )!;
@@ -161,10 +174,10 @@ void main() {
       expect(link.confidential, isTrue);
       expect(link.parentId, 'f1');
       expect(link.path, 'Leerkrachten / Schoolsite');
-      IntradeskItem? at(Map<String, dynamic> raw) =>
-          IntradeskItem.weblink(raw, parentId: '', parentPath: '');
-      expect(at({'name': 'Rooster'})?.url, isNull);
-      expect(at({'url': 'https://x'}), isNull);
+      IntradeskItem? at(Map<String, Object> json) =>
+          IntradeskItem.weblink(weblink(json), parentId: '', parentPath: '');
+      expect(at({'name': 'Rooster', 'url': ''})?.url, isNull);
+      expect(at({'name': '', 'url': 'https://x'}), isNull);
       expect(at({'name': ' '}), isNull);
     });
 

@@ -146,10 +146,11 @@ final class SmartschoolProblem implements Exception {
 /// missing or expired.
 ///
 /// Smartschool answers an XML or form POST without a valid session with a
-/// bare 401 instead of redirecting to `/login`, so the library's auth
-/// interceptor, which only reacts to landing on a login page, never logs in
-/// again. The session's interceptor turns that 401 into this error
-/// ([SessionExpiredError.unauthorized]). Belongs in the library: #13.
+/// bare 401 instead of redirecting to `/login`. The session's interceptor
+/// turns that 401 into this error ([SessionExpiredError.unauthorized])
+/// before the library sees it: since 0.3.0 the library logs in again on a
+/// 401 itself (yvanvds/dartschool#8), but here the session logs in once for
+/// all requests instead (see below). Belongs in the library: #13.
 ///
 /// The session's interceptor also turns a request sent to the login chain
 /// into this error ([SessionExpiredError.sentToLogin]) instead of letting
@@ -175,10 +176,16 @@ final class SessionExpiredError extends SmartschoolAuthenticationError {
 /// failure), which the caller handles itself.
 ///
 /// The library signals login failures with [SmartschoolAuthenticationError]s
-/// that differ only in their message, so those are told apart by message.
+/// whose message tells them apart, so those are told apart by message.
 /// `test/problems_test.dart` drives the library's real login chain against a
 /// fake Smartschool, so a changed message in a library update fails a test
 /// instead of silently becoming [ProblemKind.unexpected].
+///
+/// The library throws an unreachable Smartschool as a
+/// [SmartschoolConnectionError], and a session it still did not get accepted
+/// after logging in again (or no longer logs in for) as a
+/// [SmartschoolSessionExpiredError]. A request made on `client.dio` directly
+/// still fails with the plain [DioException].
 ProblemKind? classifyFailure(Object error) {
   switch (error) {
     case SmartschoolProblem(:final kind):
@@ -192,9 +199,10 @@ ProblemKind? classifyFailure(Object error) {
     case SocketException() ||
         TlsException() ||
         HttpException() ||
-        TimeoutException():
+        TimeoutException() ||
+        SmartschoolConnectionError():
       return ProblemKind.unreachable;
-    case SessionExpiredError():
+    case SessionExpiredError() || SmartschoolSessionExpiredError():
       return ProblemKind.sessionRejected;
     case SmartschoolAuthenticationError(:final message):
       return _classifyAuthMessage(message);
