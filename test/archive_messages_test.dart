@@ -275,8 +275,7 @@ void main() {
   });
 
   group('the session expires', () {
-    test('at the archive request: logs in again, lists the inbox again and '
-        'archives once', () async {
+    test('at the archive request: logs in again and archives once', () async {
       await callTool(connection, 'list_messages');
       server.mailbox.actions.clear();
       server.expireSessionBefore(
@@ -288,22 +287,24 @@ void main() {
       expect(
         server.requests.where((r) => r.endsWith(FakeMailbox.archivePath)),
         hasLength(2),
-        reason: 'the first archive request is rejected, the second accepted',
+        reason:
+            'the first archive request is refused; the library retries it '
+            'after logging in again',
       );
-      expect(server.mailbox.actions, [
-        _inboxListing,
-        _inboxListing,
-        'archive msgIDs=101',
-      ]);
+      expect(server.mailbox.actions, [_inboxListing, 'archive msgIDs=101']);
     });
 
-    test('at the archive listing, before anything was archived: the repeat '
-        'reports the message as archived, not as already there', () async {
+    test('at the archive listing, and Smartschool refuses it also after '
+        'logging in again: the call is repeated before anything was '
+        'archived, and reports the message as archived, not as already '
+        'there', () async {
       await callTool(connection, 'list_messages');
       server.mailbox.actions.clear();
-      server.expireSessionBefore(
-        (request) => '${request.data}'.contains('<![CDATA[305]]>'),
-      );
+      server
+        ..expireSessionBefore(
+          (request) => '${request.data}'.contains('<![CDATA[305]]>'),
+        )
+        ..rejectsAfterLogin = 1;
 
       final text = await ok([101, 999]);
 

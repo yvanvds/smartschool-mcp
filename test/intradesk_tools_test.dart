@@ -485,7 +485,7 @@ void main() {
     });
 
     test('when the session expires during the walk, the listings in progress '
-        'share one new login and the walk starts again', () async {
+        'share one new login and are retried, without walking again', () async {
       for (var i = 1; i <= 6; i++) {
         server.intradesk.addFolder('Map $i');
       }
@@ -509,7 +509,8 @@ void main() {
         reason: 'several listings were in progress when the session expired',
       );
       // One new login, not one per listing that found the session expired:
-      // each would send the same 2FA code (yvanvds/dartschool#36, #20).
+      // each would send the same 2FA code (yvanvds/dartschool#36, #20). The
+      // library shares it and retries each refused listing.
       expect(server.logins, 2);
       expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
       expect(
@@ -520,8 +521,13 @@ void main() {
       );
       expect(
         server.intradesk.listed.where((id) => id == ''),
-        hasLength(2),
-        reason: 'the walk starts again from the root',
+        hasLength(1),
+        reason: 'the walk does not start again from the root',
+      );
+      expect(
+        server.intradesk.listed.where((id) => id == _documenten),
+        hasLength(1),
+        reason: 'the refused listing is retried once, not listed twice',
       );
     });
 

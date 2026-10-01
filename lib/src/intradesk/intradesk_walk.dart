@@ -59,8 +59,10 @@ final class IntradeskWalkProgress {
 /// connection problem (Smartschool answers some with a 500) is counted in
 /// [IntradeskIndex.unlisted] and the walk goes on without its contents. A
 /// login or connection problem stops the walk and is rethrown once the
-/// listings in progress are done, so that `SmartschoolSession.run` can log
-/// in again and walk once more.
+/// listings in progress are done. A listing that finds the session expired
+/// does not stop it: the library logs in again and retries the listing. Only
+/// a session that Smartschool still refuses does, and then
+/// `SmartschoolSession.run` walks once more.
 ///
 /// Keeps [progress] up to date and logs it every [progressInterval]: counts
 /// only, never names.

@@ -280,9 +280,11 @@ again when the saved session has expired. The log shows which happened.
 Tools use the shared `SmartschoolSession` (`lib/src/session.dart`): call
 `session.run((client) => ...)` and let its `SmartschoolProblem` propagate;
 the server turns it into an error result with a message that tells the
-teacher which setting to fix. When Smartschool rejects an expired session,
-`run` logs in again and runs the action once more, so an action must be safe
-to repeat. Sending is not: `reply_to_message` turns every failure after the
+teacher which setting to fix. When a request finds the session expired,
+`flutter_smartschool` logs in again and retries that request; concurrent
+requests share that one login. When Smartschool still refuses the session,
+`run` runs the action once more, so an action must be safe to repeat.
+Sending is not: `reply_to_message` turns every failure after the
 submit into a result that is not retried (see `_send` in
 `lib/src/tools/reply_to_message_tool.dart`).
 

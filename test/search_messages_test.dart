@@ -465,8 +465,8 @@ void main() {
     expect(downloadConcurrency, 4);
   });
 
-  test('when the session expires halfway: logs in again and only downloads '
-      'what was not saved yet', () async {
+  test('when the session expires halfway: logs in again once, and '
+      'downloads each text once', () async {
     var shows = 0;
     server.expireSessionBefore(
       (request) => '${request.data}'.contains('show message') && ++shows == 3,
@@ -477,13 +477,12 @@ void main() {
     expect(server.logins, 2);
     final counts = downloadCounts();
     expect(counts.keys, unorderedEquals([101, 102, 103, 201, 202]));
-    expect(counts.values, everyElement(lessThanOrEqualTo(2)));
     expect(
-      counts.values.where((n) => n == 1).length,
-      greaterThanOrEqualTo(2),
+      counts.values,
+      everyElement(1),
       reason:
-          'texts saved before the session expired are not downloaded '
-          'again',
+          'the library retries each refused download after the one new '
+          'login; the search does not run again',
     );
     server.mailbox.actions.clear();
     await ok({'query': 'facultatieve verlofdag'});

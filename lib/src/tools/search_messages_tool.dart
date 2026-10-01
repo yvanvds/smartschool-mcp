@@ -130,7 +130,7 @@ Future<CallToolResult> _search(
   final limit = intArgument(arguments, 'limit') ?? defaultSearchLimit;
 
   final stopwatch = Stopwatch()..start();
-  // Counted over both runs when the session expires halfway.
+  // Counted over both runs when Smartschool refuses the session halfway.
   var downloads = 0;
   // Like every session action, this may run twice. The second run lists the
   // boxes again and finds the texts the first one saved in the cache.

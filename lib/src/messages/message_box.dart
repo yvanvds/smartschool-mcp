@@ -93,10 +93,10 @@ enum MessageBox {
 
 /// Runs [action] with a [MessagesService] on the session's logged-in client.
 ///
-/// The service is created inside [SmartschoolSession.run]'s callback, because
-/// the session replaces its client after logging in again, and disposed
-/// afterwards. Like every [SmartschoolSession.run] action, [action] may run
-/// twice (after an expired session), so it must be safe to repeat.
+/// The service is created inside [SmartschoolSession.run]'s callback and
+/// disposed afterwards. Like every [SmartschoolSession.run] action, [action]
+/// may run twice (when Smartschool refuses the session), so it must be safe
+/// to repeat.
 Future<T> withMessages<T>(
   SmartschoolSession session,
   Future<T> Function(MessagesService messages) action,

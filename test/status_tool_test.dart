@@ -137,6 +137,11 @@ void main() {
         FakeSmartschool(twoFactorAccepted: false),
         'rejected the two-factor authentication (2FA) code',
       ),
+      'no authenticator app': (
+        FakeSmartschool(secondStep: SecondStep.twoFactorWithoutApp),
+        'asks for a kind of two-factor authentication (2FA) this extension '
+            'cannot handle',
+      ),
       'account verification': (
         FakeSmartschool(secondStep: SecondStep.accountVerification),
         'asks for account verification (a date of birth)',
@@ -177,5 +182,29 @@ void main() {
 
     expect(text, startsWith('Smartschool connection: working\n'));
     expect(server.logins, 2);
+  });
+
+  test('after a restart whose saved session expired: logs in once and '
+      'works', () async {
+    final cookies = await tempCache();
+    Future<String> statusAfterStart() async {
+      final session = SmartschoolSession(
+        fakeExtensionSettings(),
+        createClient: fakeClientFactory(server, cookies),
+      );
+      addTearDown(session.close);
+      final (connection, _) = await connect(tools: [statusTool(session)]);
+      final (_, text) = await callTool(connection, 'smartschool_status');
+      return text;
+    }
+
+    await statusAfterStart();
+    server.expireSession();
+    server.requests.clear();
+    final text = await statusAfterStart();
+
+    expect(text, startsWith('Smartschool connection: working\n'));
+    expect(server.logins, 2);
+    expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
   });
 }

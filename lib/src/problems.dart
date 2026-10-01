@@ -142,50 +142,22 @@ final class SmartschoolProblem implements Exception {
   }
 }
 
-/// Smartschool did not accept the session of a regular request: it is
-/// missing or expired.
-///
-/// Smartschool answers an XML or form POST without a valid session with a
-/// bare 401 instead of redirecting to `/login`. The session's interceptor
-/// turns that 401 into this error ([SessionExpiredError.unauthorized])
-/// before the library sees it: since 0.3.0 the library logs in again on a
-/// 401 itself (yvanvds/dartschool#8), but here the session logs in once for
-/// all requests instead (see below). Belongs in the library: #13.
-///
-/// The session's interceptor also turns a request sent to the login chain
-/// into this error ([SessionExpiredError.sentToLogin]) instead of letting
-/// the library log in, so that concurrent requests share one new login
-/// (yvanvds/dartschool#36, #20).
-final class SessionExpiredError extends SmartschoolAuthenticationError {
-  const SessionExpiredError.unauthorized()
-    : super(
-        'Smartschool answered 401 Unauthorized: the session is missing or '
-        'expired',
-      );
-
-  const SessionExpiredError.sentToLogin()
-    : super(
-        'Smartschool sent the request to its login page: the session is '
-        'missing or expired',
-      );
-}
-
 /// Classifies [error] as a login or connection problem.
 ///
 /// Returns null when [error] is something else (for example a tool-specific
 /// failure), which the caller handles itself.
 ///
-/// The library signals login failures with [SmartschoolAuthenticationError]s
-/// whose message tells them apart, so those are told apart by message.
+/// The library throws each login failure as its own subclass of
+/// [SmartschoolAuthenticationError] (yvanvds/dartschool#11), an unreachable
+/// Smartschool as a [SmartschoolConnectionError], and a session Smartschool
+/// refused, also after the library logged in again where it could, as a
+/// [SmartschoolSessionExpiredError]. Any other
+/// [SmartschoolAuthenticationError] (an unknown step in the login chain, an
+/// HTML page where data was expected) is [ProblemKind.unexpected].
 /// `test/problems_test.dart` drives the library's real login chain against a
-/// fake Smartschool, so a changed message in a library update fails a test
-/// instead of silently becoming [ProblemKind.unexpected].
-///
-/// The library throws an unreachable Smartschool as a
-/// [SmartschoolConnectionError], and a session it still did not get accepted
-/// after logging in again (or no longer logs in for) as a
-/// [SmartschoolSessionExpiredError]. A request made on `client.dio` directly
-/// still fails with the plain [DioException].
+/// fake Smartschool, so a library update that throws another type fails a
+/// test. A request made on `client.dio` directly still fails with the plain
+/// [DioException], which carries the library's error.
 ProblemKind? classifyFailure(Object error) {
   switch (error) {
     case SmartschoolProblem(:final kind):
@@ -202,10 +174,22 @@ ProblemKind? classifyFailure(Object error) {
         TimeoutException() ||
         SmartschoolConnectionError():
       return ProblemKind.unreachable;
-    case SessionExpiredError() || SmartschoolSessionExpiredError():
+    case SmartschoolSessionExpiredError():
       return ProblemKind.sessionRejected;
-    case SmartschoolAuthenticationError(:final message):
-      return _classifyAuthMessage(message);
+    case SmartschoolInvalidCredentialsError():
+      return ProblemKind.wrongPassword;
+    // A missing TOTP secret cannot happen: an empty key is caught as a
+    // missing setting first.
+    case SmartschoolTwoFactorRejectedError() ||
+        SmartschoolTwoFactorRequiredError():
+      return ProblemKind.twoFactorRejected;
+    case SmartschoolUnsupportedTwoFactorMethodError():
+      return ProblemKind.twoFactorUnsupported;
+    case SmartschoolAccountVerificationRequiredError() ||
+        SmartschoolAccountVerificationRejectedError():
+      return ProblemKind.accountVerification;
+    case SmartschoolAuthenticationError():
+      return ProblemKind.unexpected;
   }
   return null;
 }
@@ -218,23 +202,3 @@ ProblemKind? _classifyDio(DioException error) => switch (error.type) {
   DioExceptionType.badCertificate => ProblemKind.unreachable,
   _ => null,
 };
-
-ProblemKind _classifyAuthMessage(String message) {
-  final lower = message.toLowerCase();
-  if (lower.startsWith('login failed')) return ProblemKind.wrongPassword;
-  if (lower.contains('only googleauthenticator')) {
-    return ProblemKind.twoFactorUnsupported;
-  }
-  // "2FA verification failed", and "2FA requires a TOTP secret" (cannot
-  // happen: an empty key is caught as a missing setting first).
-  if (lower.startsWith('2fa')) return ProblemKind.twoFactorRejected;
-  if (lower.contains('account verification') ||
-      lower.contains('account-verification')) {
-    return ProblemKind.accountVerification;
-  }
-  // A page of HTML where data was expected: the session was not accepted.
-  if (lower.contains('html instead of') || lower.contains('received html')) {
-    return ProblemKind.sessionRejected;
-  }
-  return ProblemKind.unexpected;
-}
