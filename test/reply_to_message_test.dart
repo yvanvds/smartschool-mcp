@@ -3,6 +3,7 @@
 library;
 
 import 'package:dart_mcp/client.dart';
+import 'package:dio/dio.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
@@ -74,6 +75,16 @@ void _fill(FakeMailbox mailbox) {
         date: '2024-03-10 11:00',
         bcc: ['Els Wouters', 'An Claes'],
       ),
+      FakeMessage(
+        id: 304,
+        sender: _me,
+        listedAs: 'Els Wouters, An Claes',
+        subject: 'Oudercontact',
+        date: '2024-03-09 11:00',
+        to: ['Els Wouters'],
+        cc: ['An Claes'],
+        bcc: ['Piet Janssens'],
+      ),
     ]);
 }
 
@@ -130,6 +141,9 @@ void main() {
       if (action.startsWith('send ')) action,
   ];
 
+  bool isRequestTo(RequestOptions request, String function) =>
+      request.uri.queryParameters['function'] == function;
+
   test('is listed as destructive and not idempotent, and tells Claude to get '
       'explicit confirmation first and never to resend an unconfirmed '
       'reply', () async {
@@ -154,6 +168,7 @@ void main() {
     );
     expect(description, contains('goes to its sender'));
     expect(description, contains('except the user'));
+    expect(description, contains('Smartschool links the reply to the message'));
     expect(description, contains('one "Re:"'));
     expect(description, contains('HTML in body is not interpreted'));
     expect(
@@ -183,7 +198,8 @@ void main() {
     });
   });
 
-  group('sends the reply once, with a single "Re:"', () {
+  group('sends the reply once, as a reply to the message, with a single '
+      '"Re:"', () {
     test('a plain reply to an inbox message goes to its sender only', () async {
       expect(
         await ok({'message_id': 101, 'body': 'Donderdag kan ik.'}),
@@ -191,7 +207,9 @@ void main() {
         'To: An Claes\n'
         'Subject: Re: Toets wiskunde',
       );
-      expect(sends(), ['send to=An Claes cc= subject=Re: Toets wiskunde']);
+      expect(sends(), [
+        'send reply-to=101 to=An Claes cc= bcc= subject=Re: Toets wiskunde',
+      ]);
       expect(mailbox.submits, 1);
       expect(mailbox.sentBodies, ['<p>Donderdag kan ik.</p>']);
 
@@ -202,7 +220,7 @@ void main() {
       });
       expect(
         sent,
-        'Sent: 1 of 4 messages matches the filters, newest first.\n'
+        'Sent: 1 of 5 messages matches the filters, newest first.\n'
         '- id 9001 | 2024-04-01 10:01 | to An Claes | Re: Toets wiskunde',
       );
       final (_, read) = await callTool(connection, 'read_message', {
@@ -224,7 +242,7 @@ void main() {
         'Subject: Re: Toets wiskunde',
       );
       expect(sends(), [
-        'send to=Els Wouters,An Claes cc=Piet Janssens '
+        'send reply-to=101 to=Els Wouters,An Claes cc=Piet Janssens bcc= '
             'subject=Re: Toets wiskunde',
       ]);
     });
@@ -236,7 +254,9 @@ void main() {
         'To: Secretariaat\n'
         'Subject: Re: Verlofaanvraag',
       );
-      expect(sends(), ['send to=Secretariaat cc= subject=Re: Verlofaanvraag']);
+      expect(sends(), [
+        'send reply-to=201 to=Secretariaat cc= bcc= subject=Re: Verlofaanvraag',
+      ]);
     });
 
     test('a message in the sent box: a reply goes to its To recipients, a '
@@ -260,8 +280,37 @@ void main() {
         'Subject: Re: Uitstap',
       );
       expect(sends(), [
-        'send to=Els Wouters,An Claes cc= subject=Re: Uitstap',
-        'send to=Els Wouters,An Claes cc=Piet Janssens subject=Re: Uitstap',
+        'send reply-to=301 to=Els Wouters,An Claes cc= bcc= '
+            'subject=Re: Uitstap',
+        'send reply-to=301 to=Els Wouters,An Claes cc=Piet Janssens bcc= '
+            'subject=Re: Uitstap',
+      ]);
+    });
+
+    test('a reply (to all) to a sent message never goes to its BCC '
+        'recipients', () async {
+      expect(
+        await ok({'message_id': 304, 'box': 'sent', 'body': 'Graag'}),
+        'Sent the reply to message 304.\n'
+        'To: Els Wouters\n'
+        'Subject: Re: Oudercontact',
+      );
+      expect(
+        await ok({
+          'message_id': 304,
+          'box': 'sent',
+          'body': 'Graag',
+          'reply_all': true,
+        }),
+        'Sent the reply to message 304.\n'
+        'To: Els Wouters\n'
+        'CC: An Claes\n'
+        'Subject: Re: Oudercontact',
+      );
+      expect(sends(), [
+        'send reply-to=304 to=Els Wouters cc= bcc= subject=Re: Oudercontact',
+        'send reply-to=304 to=Els Wouters cc=An Claes bcc= '
+            'subject=Re: Oudercontact',
       ]);
     });
 
@@ -273,7 +322,9 @@ void main() {
         'To: $_me\n'
         'Subject: Re: Herinnering',
       );
-      expect(sends(), ['send to=$_me cc= subject=Re: Herinnering']);
+      expect(sends(), [
+        'send reply-to=302 to=$_me cc= bcc= subject=Re: Herinnering',
+      ]);
     });
 
     test('a reply to a message the user sent to themself arrives in their '
@@ -311,8 +362,9 @@ void main() {
       ]);
     });
 
-    test('two replies at the same time are sent one after the other, each '
+    test('two replies at the same time are each sent once and '
         'confirmed', () async {
+      server.latency = const Duration(milliseconds: 5);
       final results = await Future.wait([
         reply({'message_id': 101, 'body': 'Een'}),
         reply({'message_id': 201, 'box': 'archive', 'body': 'Twee'}),
@@ -321,7 +373,14 @@ void main() {
       for (final (result, text) in results) {
         expect(result.isError, isNot(true), reason: text);
       }
-      expect(sends(), hasLength(2));
+      expect(
+        sends(),
+        unorderedEquals([
+          'send reply-to=101 to=An Claes cc= bcc= subject=Re: Toets wiskunde',
+          'send reply-to=201 to=Secretariaat cc= bcc= '
+              'subject=Re: Verlofaanvraag',
+        ]),
+      );
       expect(mailbox.submits, 2);
     });
   });
@@ -375,15 +434,35 @@ void main() {
       expect(mailbox.submits, 0);
     });
 
-    test('Smartschool does not register a recipient on the form', () async {
+    test('Smartschool does not register a recipient on the reply '
+        'form', () async {
+      // A reply to a sent message goes to its To recipients, which its reply
+      // form does not name, so they are registered on it.
       mailbox.unregistered.add('An Claes');
 
       expect(
-        await error({'message_id': 101, 'body': 'Hallo', 'reply_all': true}),
-        'Smartschool did not open its form for a new message, or did not '
-        'accept a recipient on it, so nothing was sent. The account may not '
-        'be allowed to send messages, or to send to one of the recipients; '
-        'the details are in the server log.',
+        await error({'message_id': 301, 'box': 'sent', 'body': 'Hallo'}),
+        'Smartschool did not open its reply form for message 301, or did not '
+        'take the recipients of the reply on it, so nothing was sent. The '
+        'account may not be allowed to send messages, or to send to one of '
+        'the recipients; the details are in the server log.',
+      );
+      expect(mailbox.submits, 0);
+      expect(sends(), isEmpty);
+    });
+
+    test('Smartschool does not take a recipient the reply leaves out off the '
+        'reply form', () async {
+      // The reply form of a sent message names the user, who did not
+      // receive it.
+      mailbox.notRemovable.add(_me);
+
+      expect(
+        await error({'message_id': 301, 'box': 'sent', 'body': 'Hallo'}),
+        startsWith(
+          'Smartschool did not open its reply form for message 301, or did '
+          'not take the recipients of the reply on it, so nothing was sent.',
+        ),
       );
       expect(mailbox.submits, 0);
       expect(sends(), isEmpty);
@@ -436,46 +515,79 @@ void main() {
   });
 
   group('the session expires', () {
-    test('while recipients are added to the form: logs in again and sends '
-        'once', () async {
+    // A reply to a sent message takes the user off its reply form and
+    // registers its To recipients on it.
+    const sentReply =
+        'send reply-to=301 to=Els Wouters,An Claes cc= bcc= '
+        'subject=Re: Uitstap';
+
+    test('while a recipient is taken off the reply form: logs in again and '
+        'sends once', () async {
       server.expireSessionBefore(
-        (request) =>
-            request.uri.queryParameters['function'] == 'addUserToSelected',
+        (request) => isRequestTo(request, 'deleteUsersFromSelected'),
       );
 
       expect(
-        await ok({'message_id': 101, 'body': 'Hallo'}),
-        startsWith('Sent the reply to message 101.\n'),
+        await ok({'message_id': 301, 'box': 'sent', 'body': 'Hallo'}),
+        startsWith('Sent the reply to message 301.\n'),
       );
       expect(server.logins, 2);
-      expect(sends(), ['send to=An Claes cc= subject=Re: Toets wiskunde']);
+      expect(sends(), [sentReply]);
       expect(mailbox.submits, 1);
     });
 
-    test('before the compose form is loaded: logs in again and sends '
-        'once', () async {
+    test('while recipients are registered on the reply form: logs in again '
+        'and sends once', () async {
+      server.expireSessionBefore(
+        (request) => isRequestTo(request, 'addUserToSelected'),
+      );
+
+      expect(
+        await ok({'message_id': 301, 'box': 'sent', 'body': 'Hallo'}),
+        startsWith('Sent the reply to message 301.\n'),
+      );
+      expect(server.logins, 2);
+      expect(sends(), [sentReply]);
+      expect(mailbox.submits, 1);
+    });
+
+    test('before the reply form is loaded to send it: logs in again and '
+        'sends once', () async {
+      // The first load of the reply form reads the recipient, the second
+      // one sends the reply.
+      var replyForms = 0;
       server.expireSessionBefore(
         (request) =>
             request.method == 'GET' &&
-            request.uri.queryParameters['composeType'] == '0',
+            request.uri.queryParameters['composeType'] == '1' &&
+            ++replyForms == 2,
       );
 
       expect(
         await ok({'message_id': 101, 'body': 'Hallo'}),
         startsWith('Sent the reply to message 101.\n'),
       );
+      expect(replyForms, 2);
       expect(server.logins, 2);
+      expect(sends(), [
+        'send reply-to=101 to=An Claes cc= bcc= subject=Re: Toets wiskunde',
+      ]);
       expect(mailbox.submits, 1);
     });
 
-    test('at the submit: not sent again, and the user is told to check the '
-        'sent box', () async {
+    test('at the submit: Smartschool refused the submit without sending it, '
+        'so logs in again and sends the reply once', () async {
       server.expireSessionBefore(FakeMailbox.isSubmit);
 
-      expect(await error({'message_id': 101, 'body': 'Hallo'}), _notConfirmed);
-      expect(mailbox.submits, 1, reason: 'the submit must not be repeated');
-      expect(server.logins, 1);
-      expect(sends(), isEmpty);
+      expect(
+        await ok({'message_id': 101, 'body': 'Hallo'}),
+        startsWith('Sent the reply to message 101.\n'),
+      );
+      expect(mailbox.submits, 2, reason: 'the refused one and the sent one');
+      expect(server.logins, 2);
+      expect(sends(), [
+        'send reply-to=101 to=An Claes cc= bcc= subject=Re: Toets wiskunde',
+      ], reason: 'sent exactly once');
     });
   });
 
@@ -487,6 +599,7 @@ void main() {
       expect(await error({'message_id': 101, 'body': 'Hallo'}), _notConfirmed);
       expect(mailbox.submits, 1);
       expect(sends(), hasLength(1), reason: 'sent exactly once');
+      expect(server.logins, 1);
     });
 
     test('Smartschool answers with an error page', () async {
@@ -494,6 +607,7 @@ void main() {
 
       expect(await error({'message_id': 101, 'body': 'Hallo'}), _notConfirmed);
       expect(mailbox.submits, 1);
+      expect(sends(), isEmpty);
     });
 
     test('Smartschool answers with a page that does not confirm it', () async {

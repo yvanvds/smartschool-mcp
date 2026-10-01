@@ -101,7 +101,8 @@ enum SubmitAnswer {
 /// The Messages module of a fake Smartschool: the XML dispatcher
 /// (`message list`, `show message`, `attachment list`), the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
-/// compose forms, adding recipients to a form and submitting it.
+/// compose forms, adding recipients to a form and taking them off, and
+/// submitting it.
 ///
 /// Responses have the shape of the dartschool fixtures under
 /// `test/fixtures/smartschool/requests/post/postboxes/`,
@@ -120,8 +121,11 @@ enum SubmitAnswer {
 /// names the To recipients except the [owner] and then the sender in To, and
 /// the CC recipients except the [owner] in CC; that of a sent message names
 /// its To recipients and then the [owner] in To, its CC recipients in CC and
-/// its BCC recipients in BCC. In the sent box, `show message` starts each
-/// recipient name with the recipient's read state (`+`).
+/// its BCC recipients in BCC. As live, the recipients a reply form names are
+/// registered with it already (yvanvds/dartschool#26), and its submit links
+/// the message to the one it answers (`origMsgID`, `composeAction` `2`). In
+/// the sent box, `show message` starts each recipient name with the
+/// recipient's read state (`+`).
 /// A message sent to the [owner] also lands in the inbox, with the same id.
 class FakeMailbox {
   FakeMailbox({this.owner = 'Jan Peeters'});
@@ -158,7 +162,8 @@ class FakeMailbox {
 
   /// Every dispatcher call, as `action param=value ...` (params sorted),
   /// every archive request, as `archive msgIDs=1,2`, and every message sent,
-  /// as `send to=A,B cc=C subject=S`.
+  /// as `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with
+  /// the reply form of message 101, `send reply-to=101 to=...`.
   final List<String> actions = [];
 
   /// The names the reply form of a received message shows in To instead
@@ -169,6 +174,11 @@ class FakeMailbox {
   /// adding them with an empty body, as seen live for an unknown user
   /// (yvanvds/dartschool#39).
   final Set<String> unregistered = {};
+
+  /// Recipients Smartschool does not take off a compose form: it answers
+  /// taking them off with an empty list, as seen live for an entry the form
+  /// does not have (yvanvds/dartschool#42).
+  final Set<String> notRemovable = {};
 
   /// How the next submits of the compose form are answered.
   SubmitAnswer submitAnswer = SubmitAnswer.sent;
@@ -184,8 +194,9 @@ class FakeMailbox {
   /// box was last listed, by `boxType/boxID`: the box's paging position.
   final Map<String, int> _paging = {};
 
-  /// The recipients added to each open compose form, by its `uniqueUsc`.
-  final Map<String, ({List<int> to, List<int> cc})> _forms = {};
+  /// The recipients registered on each open compose form, by its
+  /// `uniqueUsc`: user ids by field (`typeatt`: `0` To, `2` CC, `3` BCC).
+  final Map<String, Map<String, List<int>>> _forms = {};
   int _formsOpened = 0;
   int _messagesSent = 0;
 
@@ -237,6 +248,14 @@ class FakeMailbox {
       return _response(
         _addUser((options.data as Map).cast<String, String>()),
         'text/xml',
+      );
+    }
+    if (options.method == 'POST' &&
+        query['file'] == 'searchUsers' &&
+        query['function'] == 'deleteUsersFromSelected') {
+      return _response(
+        _removeUsers((options.data as Map).cast<String, String>()),
+        'application/xml; charset=UTF-8',
       );
     }
     if (options.method == 'POST' && query['file'] == 'dispatcher') {
@@ -501,10 +520,10 @@ ${[for (final (i, a) in attachments.indexed) '''
   }
 
   /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
-  /// all), with a new `uniqueUsc` and the recipients of a reply filled in.
+  /// all), with a new `uniqueUsc` and the recipients of a reply filled in
+  /// and registered with it.
   String _composePage(Map<String, String> query) {
     final usc = 'usc${++_formsOpened}';
-    _forms[usc] = (to: [], cc: []);
     final id = int.tryParse(query['msgID'] ?? '');
     final sentBox = query['boxType'] == 'outbox';
     final message = id == null ? null : _find(id, query['boxType']!);
@@ -529,10 +548,16 @@ ${[for (final (i, a) in attachments.indexed) '''
           cc = [...message.cc.where((name) => name != owner)];
       }
     }
+    _forms[usc] = {
+      '0': [for (final name in to) userId(name)],
+      '2': [for (final name in cc) userId(name)],
+      '3': [for (final name in bcc) userId(name)],
+    };
     String spans(List<String> names, String type) => [
       for (final name in names)
-        '<div class="receiverSpan" realuserid="${userId(name)}" '
-            'ssidatt="$platformId" userltatt="0" typeatt="$type">'
+        '<div class="receiverSpan" idatt="U${userId(name)}" '
+            'realuserid="${userId(name)}" ssidatt="$platformId" '
+            'userltatt="0" typeatt="$type">'
             '<div class="receiverSpanName userm">${_escape(name)}</div>'
             '<div class="receiverSpanDelete" title="Verwijder"></div></div>',
     ].join('\n');
@@ -576,8 +601,11 @@ ${spans(bcc, '3')}
         fields['ssid'] != '$platformId') {
       throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
     }
-    if (unregistered.contains(_userName(id))) return '';
-    (fields['type'] == '2' ? form.cc : form.to).add(id);
+    final field = form[fields['type']]!;
+    // Smartschool answers a second registration in the same field with an
+    // empty body too (yvanvds/dartschool#39).
+    if (unregistered.contains(_userName(id)) || field.contains(id)) return '';
+    field.add(id);
     return '''
 <users>
 <user>
@@ -592,6 +620,36 @@ ${spans(bcc, '3')}
 <realUserId>$id</realUserId>
 </user>
 </users>''';
+  }
+
+  /// Takes the entries named in the field `xml` off the compose form named by
+  /// `uniqueUsc`, answering like the live platform: a list of the entries it
+  /// took off, empty for one the form does not have (or one in
+  /// [notRemovable]).
+  String _removeUsers(Map<String, String> fields) {
+    final form = _forms[fields['uniqueUsc']];
+    if (form == null) {
+      throw UnsupportedError('fake mailbox: cannot take users off $fields');
+    }
+    final removed = <String>[];
+    for (final user in RegExp(
+      r'<user><type>(\d+)</type><userid>U(\d+)</userid>'
+      r'<ssid>(\d+)</ssid><userlt>(\d+)</userlt></user>',
+    ).allMatches(fields['xml']!)) {
+      final type = user[1]!;
+      final id = int.parse(user[2]!);
+      if (user[3] != '$platformId' ||
+          notRemovable.contains(_userName(id)) ||
+          !(form[type]?.remove(id) ?? false)) {
+        continue;
+      }
+      removed.add(
+        '<user><type>$type</type><ssID>${user[3]}</ssID>'
+        '<userID>U$id</userID><userLT>${user[4]}</userLT></user>',
+      );
+    }
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '${removed.isEmpty ? '<users />' : '<users>${removed.join()}</users>'}';
   }
 
   /// Sends the message of the submitted compose form (or not, see
@@ -617,14 +675,26 @@ ${spans(bcc, '3')}
       case SubmitAnswer.sent || SubmitAnswer.responseLost:
         break;
     }
-    final to = [for (final id in form.to) _userName(id)];
-    final cc = [for (final id in form.cc) _userName(id)];
+    List<String> names(String field) => [
+      for (final id in form[field]!) _userName(id),
+    ];
+    final to = names('0');
+    final cc = names('2');
+    final bcc = names('3');
     final subject = fields['subject']!;
     final body = fields['message']!;
     final id = 9000 + ++_messagesSent;
     final date = '2024-04-01 10:${_messagesSent.toString().padLeft(2, '0')}';
+    // A reply form carries the id of the message it answers.
+    final answers = fields['origMsgID'] ?? '0';
+    final reply = fields['composeAction'] == '2' && answers != '0'
+        ? 'reply-to=$answers '
+        : '';
     sentBodies.add(body);
-    actions.add('send to=${to.join(',')} cc=${cc.join(',')} subject=$subject');
+    actions.add(
+      'send ${reply}to=${to.join(',')} cc=${cc.join(',')} '
+      'bcc=${bcc.join(',')} subject=$subject',
+    );
     FakeMessage copy({required bool unread}) => FakeMessage(
       id: id,
       sender: owner,
@@ -635,9 +705,10 @@ ${spans(bcc, '3')}
       unread: unread,
       to: to,
       cc: cc,
+      bcc: bcc,
     );
     sent.add(copy(unread: false));
-    if (to.contains(owner) || cc.contains(owner)) inbox.add(copy(unread: true));
+    if ([...to, ...cc, ...bcc].contains(owner)) inbox.add(copy(unread: true));
     if (submitAnswer == SubmitAnswer.responseLost) {
       throw DioException.connectionError(
         requestOptions: options,

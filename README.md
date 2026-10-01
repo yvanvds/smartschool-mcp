@@ -143,8 +143,9 @@ the login works and who is logged in, or what to fix.
   asks for approval every time, and Claude is told to show the text and
   recipients and wait for the user's confirmation first. It never sends a
   reply twice by itself: when Smartschool does not confirm a send, it says
-  the reply may have been sent and to check the sent box. Replies are new
-  messages, not linked to the original (yvanvds/dartschool#26).
+  the reply may have been sent and to check the sent box. The reply is sent
+  with the message's own reply form, so Smartschool links it to the
+  original.
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so
@@ -287,8 +288,11 @@ teacher which setting to fix. When a request finds the session expired,
 `flutter_smartschool` logs in again and retries that request; concurrent
 requests share that one login. When Smartschool still refuses the session,
 `run` runs the action once more, so an action must be safe to repeat.
-Sending is not: `reply_to_message` turns every failure after the
-submit into a result that is not retried (see `_send` in
+Sending is not, once Smartschool has handled the submit: `reply_to_message`
+turns a submit that Smartschool does not confirm
+(`SmartschoolSendUnconfirmedError`) into a result that is not retried. A
+step of the send that Smartschool refused the session for, the submit
+included, sent nothing, so `run` may repeat it (see `_send` in
 `lib/src/tools/reply_to_message_tool.dart`).
 
 ### Update check
