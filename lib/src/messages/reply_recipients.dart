@@ -25,14 +25,11 @@ final class ReplyRecipients {
 /// reply forms fill them in.
 ///
 /// - A message in the inbox or the archive: a plain reply goes to its
-///   sender, from Smartschool's reply form (`composeType=1`), which names
-///   only the sender. The reply-all form does contain the sender too, but
-///   without marking which entry it is (it was the last one when checked
-///   live), so it cannot be picked from there reliably. The library has no
-///   call for the reply form yet (yvanvds/dartschool#24), so its page is
-///   loaded here and parsed with the library's parser. A reply to all goes
-///   to the recipients of Smartschool's reply-all form: the sender and the
-///   To recipients in To, the CC recipients in CC, without the user (unless
+///   sender, the one recipient of Smartschool's reply form
+///   ([MessagesService.getReplyRecipients]). A reply to all goes to the
+///   recipients of Smartschool's reply-all form
+///   ([MessagesService.getReplyAllRecipients]): the sender and the To
+///   recipients in To, the CC recipients in CC, without the user (unless
 ///   the user sent the message).
 /// - A message in the sent box: Smartschool's reply form for it names the
 ///   user, the sender. So, as in most mail programs, a plain reply goes to
@@ -43,9 +40,11 @@ final class ReplyRecipients {
 ///   left out, so a reply never reveals them; a message sent to BCC
 ///   recipients only has no one to reply to.
 ///
+/// These are the recipients to pass to [MessagesService.sendReply], with
+/// `all: replyAll`: it takes whoever else its reply form names off the form.
+///
 /// Only loads compose pages and the message: nothing is sent.
 Future<ReplyRecipients> loadReplyRecipients(
-  SmartschoolClient client,
   MessagesService messages,
   MessageBox box,
   int id, {
@@ -63,15 +62,10 @@ Future<ReplyRecipients> loadReplyRecipients(
       );
       return ReplyRecipients(to: to, cc: cc);
     case (_, false):
-      final (to, cc, _) = MessagesService.parseReplyAllRecipients(
-        await client.getRaw(replyFormPath(box, id)),
+      final (to, cc, _) = await messages.getReplyRecipients(
+        id,
+        boxType: box.boxType,
       );
       return ReplyRecipients(to: to, cc: cc);
   }
 }
-
-/// The path of Smartschool's form for a plain reply to message [id] in
-/// [box], which it fills in with the sender.
-String replyFormPath(MessageBox box, int id) =>
-    '/?module=Messages&file=composeMessage&boxType=${box.boxType.value}'
-    '&composeType=1&msgID=$id';

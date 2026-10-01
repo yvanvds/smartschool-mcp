@@ -238,20 +238,38 @@ void main() {
       expect(afternoon, isNot(contains('id 103 ')));
     });
 
-    test('limit keeps the newest and says how many matched', () async {
+    test('limit keeps the newest and says that more are older', () async {
       expect(
         await ok('list_messages', {'limit': 1}),
-        'Inbox: 3 messages; showing the newest 1 (raise limit or narrow the '
-        'filters to see the rest), newest first.\n'
+        'Inbox: more than 1 message; showing the newest 1 (raise limit, or '
+        'pass until to see older ones), newest first.\n'
         '- id 102 | 2024-03-15 08:00 | from An Claes | Re: Toets wiskunde',
+      );
+    });
+
+    test('limit with filters: says how many matched when all are '
+        'known', () async {
+      expect(
+        await ok('list_messages', {'query': 'oudercontact', 'limit': 1}),
+        'Inbox: 1 of 3 messages matches the filters, newest first.\n'
+        '- id 101 | 2024-03-14 16:05 | from Jan Peeters | Oudercontact '
+        'donderdag | unread, attachments, flag red',
+      );
+      expect(
+        await ok('list_messages', {'unread_only': true, 'limit': 1}),
+        startsWith(
+          'Inbox: more than 1 message matches the filters; showing the newest '
+          '1 (raise limit, or pass until to see older ones), newest first.\n'
+          '- id 101 ',
+        ),
       );
     });
 
     test('a limit written with a decimal part (2.0) works like 2', () async {
       expect(
         await ok('list_messages', {'limit': 2.0}),
-        'Inbox: 3 messages; showing the newest 2 (raise limit or narrow the '
-        'filters to see the rest), newest first.\n'
+        'Inbox: more than 2 messages; showing the newest 2 (raise limit, or '
+        'pass until to see older ones), newest first.\n'
         '- id 102 | 2024-03-15 08:00 | from An Claes | Re: Toets wiskunde\n'
         '- id 101 | 2024-03-14 16:05 | from Jan Peeters | Oudercontact '
         'donderdag | unread, attachments, flag red',
@@ -270,39 +288,118 @@ void main() {
       expect(await ok('list_messages', {'box': 'sent'}), 'Sent: no messages.');
     });
 
-    test('a full box: says that Smartschool only returns the newest '
-        '50', () async {
-      for (var i = 0; i < 60; i++) {
-        server.mailbox.inbox.add(
-          FakeMessage(
-            id: 1000 + i,
-            sender: 'Leerling $i',
-            subject: 'Taak $i',
-            date: '2024-04-${(i % 28 + 1).toString().padLeft(2, '0')} 09:00',
-          ),
+    group('a box of more than 50 messages, which Smartschool lists 50 at a '
+        'time', () {
+      const firstPage =
+          'message list boxID=0 boxType=inbox layout=new poll=false poll_ids= '
+          'sortField=date sortKey=desc';
+      const nextPage = 'continue_messages boxID=0 boxType=inbox layout=new';
+
+      // 120 newer messages: the fixture's 102, 101 and 103 are the oldest
+      // three of 123, on the third page.
+      setUp(
+        () => server.mailbox.inbox.addAll(
+          hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),
+        ),
+      );
+
+      test('lists the whole box when the limit allows', () async {
+        final text = await ok('list_messages', {'limit': 200});
+
+        final lines = text.split('\n');
+        expect(lines.first, 'Inbox: 123 messages, newest first.');
+        expect(lines, hasLength(124));
+        expect(
+          lines[1],
+          '- id 1000 | 2024-04-30 18:00 | from Collega 0 | Bericht 0',
         );
-      }
+        expect(lines.skip(121).map((l) => l.substring(0, 9)), [
+          '- id 102 ',
+          '- id 101 ',
+          '- id 103 ',
+        ]);
+        expect(server.mailbox.actions, [firstPage, nextPage, nextPage]);
+      });
 
-      final text = await ok('list_messages', {'limit': 10});
+      test('lists only the pages it needs: stops once more messages match '
+          'than the limit, and says that more are older', () async {
+        final text = await ok('list_messages');
 
-      final lines = text.split('\n');
-      expect(
-        lines.first,
-        'Inbox: 50 messages; showing the newest 10 (raise limit or narrow '
-        'the filters to see the rest), newest first.',
-      );
-      expect(lines.where((l) => l.startsWith('- id ')), hasLength(10));
-      expect(
-        lines.last,
-        'Note: Smartschool only returns the newest 50 messages of a box, so '
-        'older messages are missing from this list and cannot be found with '
-        'the filters.',
-      );
-      // Without the cap, no note.
-      expect(
-        await ok('list_messages', {'box': 'archive'}),
-        isNot(contains('Note:')),
-      );
+        final lines = text.split('\n');
+        expect(
+          lines.first,
+          'Inbox: more than 50 messages; showing the newest 50 (raise limit, '
+          'or pass until to see older ones), newest first.',
+        );
+        expect(lines, hasLength(51));
+        expect(lines.last, startsWith('- id 1049 | 2024-04-28 17:00 |'));
+        // 50 fit the limit; the second page shows that more are older.
+        expect(server.mailbox.actions, [firstPage, nextPage]);
+
+        server.mailbox.actions.clear();
+        expect(
+          await ok('list_messages', {'limit': 10}),
+          startsWith('Inbox: more than 10 messages; showing the newest 10 '),
+        );
+        expect(server.mailbox.actions, [firstPage]);
+      });
+
+      test('until reaches the older messages', () async {
+        final text = await ok('list_messages', {
+          'until': '2024-04-26 14:00',
+          'limit': 3,
+        });
+
+        expect(
+          text,
+          'Inbox: more than 3 messages match the filters; showing the newest '
+          '3 (raise limit, or pass until to see older ones), newest first.\n'
+          '- id 1100 | 2024-04-26 14:00 | from Collega 100 | Bericht 100\n'
+          '- id 1101 | 2024-04-26 13:00 | from Collega 101 | Bericht 101\n'
+          '- id 1102 | 2024-04-26 12:00 | from Collega 102 | Bericht 102',
+        );
+        expect(server.mailbox.actions, [firstPage, nextPage, nextPage]);
+      });
+
+      test('filters search the whole box: an old message is found', () async {
+        expect(
+          await ok('list_messages', {'query': 'verlofaanvraag'}),
+          'Inbox: 1 of 123 messages matches the filters, newest first.\n'
+          '- id 103 | 2024-03-13 10:30 | from Secretariaat | Verlofaanvraag | '
+          'unread',
+        );
+        expect(server.mailbox.actions, [firstPage, nextPage, nextPage]);
+      });
+
+      test('since: stops at the first page that reaches past it', () async {
+        final text = await ok('list_messages', {'since': '2024-04-30'});
+
+        final lines = text.split('\n');
+        expect(
+          lines.first,
+          'Inbox: 19 of the newest 50 messages match the filters, newest '
+          'first.',
+        );
+        expect(lines.last, startsWith('- id 1018 | 2024-04-30 00:00 |'));
+        expect(server.mailbox.actions, [firstPage]);
+      });
+
+      test('two listings at the same time each list the whole box', () async {
+        // Smartschool keeps one paging position per box in the session and
+        // restarts it on every listing of the box: interleaved, each
+        // listing would end early, at a page the other one already got.
+        server.latency = const Duration(milliseconds: 5);
+
+        final texts = await Future.wait([
+          ok('list_messages', {'limit': 200}),
+          ok('list_messages', {'limit': 200}),
+        ]);
+
+        for (final text in texts) {
+          expect(text, startsWith('Inbox: 123 messages, newest first.\n'));
+          expect(text.split('\n'), hasLength(124));
+        }
+      });
     });
 
     group('invalid arguments are errors that say what to fix', () {
@@ -352,8 +449,8 @@ void main() {
         'Status: unread\n'
         'Flag: red\n'
         'Attachments (2):\n'
-        '- Planning oudercontact.pdf (123.48 KiB)\n'
-        '- Lokalen.xlsx (8.2 KiB)\n'
+        '1. Planning oudercontact.pdf (123.48 KiB)\n'
+        '2. Lokalen.xlsx (8.2 KiB)\n'
         '\n'
         "Beste collega's,\n"
         '\n'
@@ -441,6 +538,33 @@ void main() {
         'list_messages and pass the box it was listed in.',
       );
       expect(text, isNot(contains('Niet beschikbaar')));
+    });
+
+    test('a real message is shown whatever its date and text: only the '
+        'library tells Smartschool\'s placeholder apart', () async {
+      // Until #15, the server took a message dated before 1971 without text
+      // for the placeholder, which flutter_smartschool 0.2.x returned
+      // (yvanvds/dartschool#16).
+      server.mailbox.inbox.add(
+        FakeMessage(
+          id: 104,
+          sender: 'Directie',
+          subject: 'Leeg',
+          date: '1970-01-01 00:00',
+        ),
+      );
+
+      expect(
+        await ok('read_message', {'message_id': 104}),
+        'Message 104 (Inbox)\n'
+        'From: Directie\n'
+        'Date: 1970-01-01 00:00\n'
+        'To: (none)\n'
+        'Subject: Leeg\n'
+        'Attachments: none\n'
+        '\n'
+        '(The message has no text.)',
+      );
     });
 
     test('a message looked up in the wrong box is not found', () async {

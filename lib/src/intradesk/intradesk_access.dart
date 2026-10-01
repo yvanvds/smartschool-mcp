@@ -7,10 +7,9 @@ import 'intradesk_index.dart';
 /// Runs [action] with an [IntradeskService] on the session's logged-in
 /// client.
 ///
-/// The service is created inside [SmartschoolSession.run]'s callback, because
-/// the session replaces its client after logging in again. Like every
-/// [SmartschoolSession.run] action, [action] may run twice (after an expired
-/// session), so it must be safe to repeat; reading Intradesk is.
+/// Like every [SmartschoolSession.run] action, [action] may run twice (when
+/// Smartschool refuses the session), so it must be safe to repeat; reading
+/// Intradesk is.
 Future<T> withIntradesk<T>(
   SmartschoolSession session,
   Future<T> Function(IntradeskService intradesk) action,

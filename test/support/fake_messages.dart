@@ -1,13 +1,21 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+
+import 'fake_download.dart';
 
 /// An attachment of a [FakeMessage].
 class FakeAttachment {
-  const FakeAttachment(this.name, this.size);
+  const FakeAttachment(this.name, this.size, {this.content});
 
   final String name;
 
   /// As Smartschool formats it, like `123.48 KiB`.
   final String size;
+
+  /// What a download of it gets; without it, the download is answered with
+  /// a 404.
+  final Uint8List? content;
 }
 
 /// A message in a [FakeMailbox].
@@ -52,6 +60,36 @@ class FakeMessage {
   final bool canReply;
 }
 
+/// [count] messages an hour apart, newest first: ids [firstId] and up, the
+/// first dated [newest] (Smartschool time, like `2024-04-30 18:00`), each
+/// with the subject `$subject <n>` (n counting from 0) and the body
+/// `<p>Bericht <n></p>`.
+List<FakeMessage> hourlyMessages(
+  int count, {
+  required int firstId,
+  required String newest,
+  String subject = 'Bericht',
+}) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final start = DateTime.parse('${newest}Z');
+  final messages = <FakeMessage>[];
+  for (var i = 0; i < count; i++) {
+    final date = start.subtract(Duration(hours: i));
+    messages.add(
+      FakeMessage(
+        id: firstId + i,
+        sender: 'Collega $i',
+        subject: '$subject $i',
+        date:
+            '${date.year}-${two(date.month)}-${two(date.day)} '
+            '${two(date.hour)}:${two(date.minute)}',
+        body: '<p>Bericht $i</p>',
+      ),
+    );
+  }
+  return messages;
+}
+
 /// How the fake answers a submit of the compose form (sending a message).
 enum SubmitAnswer {
   /// Sends the message and answers with the page that closes the compose
@@ -69,18 +107,22 @@ enum SubmitAnswer {
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`), the archive endpoint,
+/// (`message list`, `show message`, `attachment list`), attachment
+/// downloads, the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
-/// compose forms, adding recipients to a form and submitting it.
+/// compose forms, adding recipients to a form and taking them off, and
+/// submitting it.
 ///
 /// Responses have the shape of the dartschool fixtures under
 /// `test/fixtures/smartschool/requests/post/postboxes/`,
 /// `.../post/messages/xhr/archivemessages.json` and
-/// `.../{get,post}/composemessage/`, and the behaviour seen live: a box
-/// returns its newest [pageSize] messages only, an unknown message id gets a
-/// placeholder message instead of nothing, and the archive endpoint lists
-/// only the ids it moved from the inbox as successful (for a message already
-/// in the archive it answers `{"success":[]}`).
+/// `.../{get,post}/composemessage/`, and the behaviour seen live: a box is
+/// listed [pageSize] headers at a time, newest first (a `message list`
+/// answers with the first page, each `continue_messages` with the next, see
+/// [newSession]), an unknown message id gets a placeholder message instead
+/// of nothing, and the archive endpoint lists only the ids it moved from the
+/// inbox as successful (for a message already in the archive it answers
+/// `{"success":[]}`).
 ///
 /// The reply forms are filled in as seen live: the reply form
 /// (`composeType=1`) names the sender (for a sent message, that is the
@@ -88,8 +130,11 @@ enum SubmitAnswer {
 /// names the To recipients except the [owner] and then the sender in To, and
 /// the CC recipients except the [owner] in CC; that of a sent message names
 /// its To recipients and then the [owner] in To, its CC recipients in CC and
-/// its BCC recipients in BCC. In the sent box, `show message` starts each
-/// recipient name with the recipient's read state (`+`).
+/// its BCC recipients in BCC. As live, the recipients a reply form names are
+/// registered with it already (yvanvds/dartschool#26), and its submit links
+/// the message to the one it answers (`origMsgID`, `composeAction` `2`). In
+/// the sent box, `show message` starts each recipient name with the
+/// recipient's read state (`+`).
 /// A message sent to the [owner] also lands in the inbox, with the same id.
 class FakeMailbox {
   FakeMailbox({this.owner = 'Jan Peeters'});
@@ -126,7 +171,8 @@ class FakeMailbox {
 
   /// Every dispatcher call, as `action param=value ...` (params sorted),
   /// every archive request, as `archive msgIDs=1,2`, and every message sent,
-  /// as `send to=A,B cc=C subject=S`.
+  /// as `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with
+  /// the reply form of message 101, `send reply-to=101 to=...`.
   final List<String> actions = [];
 
   /// The names the reply form of a received message shows in To instead
@@ -138,6 +184,11 @@ class FakeMailbox {
   /// (yvanvds/dartschool#39).
   final Set<String> unregistered = {};
 
+  /// Recipients Smartschool does not take off a compose form: it answers
+  /// taking them off with an empty list, as seen live for an entry the form
+  /// does not have (yvanvds/dartschool#42).
+  final Set<String> notRemovable = {};
+
   /// How the next submits of the compose form are answered.
   SubmitAnswer submitAnswer = SubmitAnswer.sent;
 
@@ -148,8 +199,29 @@ class FakeMailbox {
   /// The HTML bodies of the messages sent, in order.
   final List<String> sentBodies = [];
 
-  /// The recipients added to each open compose form, by its `uniqueUsc`.
-  final Map<String, ({List<int> to, List<int> cc})> _forms = {};
+  /// The attachments downloaded, in order, as `<message id>/<number>`
+  /// (counting from 1).
+  final List<String> attachmentDownloads = [];
+
+  /// Whether attachment downloads announce their size (`Content-Length`)
+  /// and name (`Content-Disposition`).
+  bool announceAttachmentDownloads = true;
+
+  /// The name attachment downloads give in `Content-Disposition`, instead
+  /// of the attachment's own.
+  String? attachmentDownloadName;
+
+  /// How many attachment downloads were cancelled before all of the file
+  /// was sent.
+  int stoppedAttachmentDownloads = 0;
+
+  /// How many headers of each box the current session was sent since the
+  /// box was last listed, by `boxType/boxID`: the box's paging position.
+  final Map<String, int> _paging = {};
+
+  /// The recipients registered on each open compose form, by its
+  /// `uniqueUsc`: user ids by field (`typeatt`: `0` To, `2` CC, `3` BCC).
+  final Map<String, Map<String, List<int>>> _forms = {};
   int _formsOpened = 0;
   int _messagesSent = 0;
 
@@ -162,6 +234,16 @@ class FakeMailbox {
 
   String _userName(int id) =>
       _userIds.entries.firstWhere((entry) => entry.value == id).key;
+
+  /// Starts a new session, which has no paging positions.
+  ///
+  /// As seen live (yvanvds/dartschool#15), Smartschool keeps one paging
+  /// position per box in the session: a `message list` of a box restarts it
+  /// at the second page, and each `continue_messages` of the box answers
+  /// with the page after the position. A `continue_messages` of a box the
+  /// session has not listed is answered like one after the last page (only
+  /// `rebuildfinish`); what Smartschool answers then has not been seen.
+  void newSession() => _paging.clear();
 
   /// Whether [options] submits a compose form, which sends a message.
   static bool isSubmit(RequestOptions options) =>
@@ -184,6 +266,9 @@ class FakeMailbox {
     if (options.method == 'GET' && _isCompose(options)) {
       return _response(_composePage(query), 'text/html');
     }
+    if (options.method == 'GET' && query['file'] == 'download') {
+      return _downloadAttachment(int.parse(query['fileID']!));
+    }
     if (isSubmit(options)) return _submit(options);
     if (options.method == 'POST' &&
         query['file'] == 'searchUsers' &&
@@ -191,6 +276,14 @@ class FakeMailbox {
       return _response(
         _addUser((options.data as Map).cast<String, String>()),
         'text/xml',
+      );
+    }
+    if (options.method == 'POST' &&
+        query['file'] == 'searchUsers' &&
+        query['function'] == 'deleteUsersFromSelected') {
+      return _response(
+        _removeUsers((options.data as Map).cast<String, String>()),
+        'application/xml; charset=UTF-8',
       );
     }
     if (options.method == 'POST' && query['file'] == 'dispatcher') {
@@ -218,6 +311,7 @@ class FakeMailbox {
     final id = int.tryParse(params['msgID'] ?? '');
     return switch (action) {
       'message list' => _list(params['boxType']!, params['boxID'] ?? '0'),
+      'continue_messages' => _continue(params['boxType']!, params['boxID']!),
       'show message' => _show(
         id!,
         params['boxType']!,
@@ -269,14 +363,83 @@ class FakeMailbox {
     return null;
   }
 
+  /// The messages of a box, newest first (the highest id first among
+  /// messages of the same minute, so that pages do not overlap).
+  List<FakeMessage> _sorted(String boxType, String boxId) =>
+      [..._box(boxType, boxId)]..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        return byDate != 0 ? byDate : b.id.compareTo(a.id);
+      });
+
   String _list(String boxType, String boxId) {
-    final messages = [..._box(boxType, boxId)]
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final page = messages.take(pageSize);
-    return _envelope('message list', '''
+    final messages = _sorted(boxType, boxId);
+    final page = messages.take(pageSize).toList();
+    _paging['$boxType/$boxId'] = page.length;
+    return _listing(
+      'rebuild',
+      page,
+      more: messages.length > page.length,
+      boxType: boxType,
+      boxId: boxId,
+    );
+  }
+
+  String _continue(String boxType, String boxId) {
+    final messages = _sorted(boxType, boxId);
+    final from = _paging['$boxType/$boxId'] ?? messages.length;
+    final page = messages.skip(from).take(pageSize).toList();
+    _paging['$boxType/$boxId'] = from + page.length;
+    return _listing(
+      page.isEmpty ? null : 'rebuildcontinue',
+      page,
+      more: from + page.length < messages.length,
+      boxType: boxType,
+      boxId: boxId,
+    );
+  }
+
+  /// A page of a box listing, shaped like the live answers: the headers of
+  /// [page] in a [command] action (`rebuild` for a `message list`,
+  /// `rebuildcontinue` for a `continue_messages`, none after the last page),
+  /// then a `continue_messages` action when the box holds [more] headers, or
+  /// a `rebuildfinish` action when not.
+  String _listing(
+    String? command,
+    List<FakeMessage> page, {
+    required bool more,
+    required String boxType,
+    required String boxId,
+  }) {
+    final headers = command == null
+        ? ''
+        : '''
+      <action>
+        <subsystem>message list</subsystem>
+        <command>$command</command>
+        <data>
 <messages>
 ${page.map(_header).join('\n')}
-</messages>''');
+</messages>
+        </data>
+      </action>''';
+    final end = more
+        ? '<action><subsystem>message list</subsystem>'
+              '<command>continue_messages</command><data><details>'
+              '<boxID>$boxId</boxID><boxType>$boxType</boxType></details>'
+              '</data></action>'
+        : '<action><subsystem>message list</subsystem>'
+              '<command>rebuildfinish</command><data><message/></data>'
+              '</action>';
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+$headers
+      $end
+    </actions>
+  </response>
+</server>''';
   }
 
   String _header(FakeMessage m) =>
@@ -373,7 +536,7 @@ ${page.map(_header).join('\n')}
 <attachmentlist>
 ${[for (final (i, a) in attachments.indexed) '''
 <attachment>
-  <fileID>${100 + i}</fileID>
+  <fileID>${_fileId(m!, i)}</fileID>
   <name>${_escape(a.name)}</name>
   <mime>PDF-bestand</mime>
   <size>${a.size}</size>
@@ -384,11 +547,35 @@ ${[for (final (i, a) in attachments.indexed) '''
 </attachmentlist>''');
   }
 
+  /// The `fileID` of attachment [index] of [message]: unique in the mailbox.
+  static int _fileId(FakeMessage message, int index) =>
+      message.id * 100 + index + 1;
+
+  /// The download of the attachment with [fileId]; a 404 for one without
+  /// content (what Smartschool answers then has not been seen).
+  ResponseBody _downloadAttachment(int fileId) {
+    for (final message in [...inbox, ...archive, ...sent]) {
+      for (final (index, attachment) in message.attachments.indexed) {
+        if (_fileId(message, index) != fileId) continue;
+        attachmentDownloads.add('${message.id}/${index + 1}');
+        final content = attachment.content;
+        if (content == null) break;
+        return fakeDownload(
+          content,
+          name: attachmentDownloadName ?? attachment.name,
+          announce: announceAttachmentDownloads,
+          stopped: () => stoppedAttachmentDownloads++,
+        );
+      }
+    }
+    return ResponseBody.fromString('Not found', 404);
+  }
+
   /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
-  /// all), with a new `uniqueUsc` and the recipients of a reply filled in.
+  /// all), with a new `uniqueUsc` and the recipients of a reply filled in
+  /// and registered with it.
   String _composePage(Map<String, String> query) {
     final usc = 'usc${++_formsOpened}';
-    _forms[usc] = (to: [], cc: []);
     final id = int.tryParse(query['msgID'] ?? '');
     final sentBox = query['boxType'] == 'outbox';
     final message = id == null ? null : _find(id, query['boxType']!);
@@ -413,10 +600,16 @@ ${[for (final (i, a) in attachments.indexed) '''
           cc = [...message.cc.where((name) => name != owner)];
       }
     }
+    _forms[usc] = {
+      '0': [for (final name in to) userId(name)],
+      '2': [for (final name in cc) userId(name)],
+      '3': [for (final name in bcc) userId(name)],
+    };
     String spans(List<String> names, String type) => [
       for (final name in names)
-        '<div class="receiverSpan" realuserid="${userId(name)}" '
-            'ssidatt="$platformId" userltatt="0" typeatt="$type">'
+        '<div class="receiverSpan" idatt="U${userId(name)}" '
+            'realuserid="${userId(name)}" ssidatt="$platformId" '
+            'userltatt="0" typeatt="$type">'
             '<div class="receiverSpanName userm">${_escape(name)}</div>'
             '<div class="receiverSpanDelete" title="Verwijder"></div></div>',
     ].join('\n');
@@ -460,8 +653,11 @@ ${spans(bcc, '3')}
         fields['ssid'] != '$platformId') {
       throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
     }
-    if (unregistered.contains(_userName(id))) return '';
-    (fields['type'] == '2' ? form.cc : form.to).add(id);
+    final field = form[fields['type']]!;
+    // Smartschool answers a second registration in the same field with an
+    // empty body too (yvanvds/dartschool#39).
+    if (unregistered.contains(_userName(id)) || field.contains(id)) return '';
+    field.add(id);
     return '''
 <users>
 <user>
@@ -476,6 +672,36 @@ ${spans(bcc, '3')}
 <realUserId>$id</realUserId>
 </user>
 </users>''';
+  }
+
+  /// Takes the entries named in the field `xml` off the compose form named by
+  /// `uniqueUsc`, answering like the live platform: a list of the entries it
+  /// took off, empty for one the form does not have (or one in
+  /// [notRemovable]).
+  String _removeUsers(Map<String, String> fields) {
+    final form = _forms[fields['uniqueUsc']];
+    if (form == null) {
+      throw UnsupportedError('fake mailbox: cannot take users off $fields');
+    }
+    final removed = <String>[];
+    for (final user in RegExp(
+      r'<user><type>(\d+)</type><userid>U(\d+)</userid>'
+      r'<ssid>(\d+)</ssid><userlt>(\d+)</userlt></user>',
+    ).allMatches(fields['xml']!)) {
+      final type = user[1]!;
+      final id = int.parse(user[2]!);
+      if (user[3] != '$platformId' ||
+          notRemovable.contains(_userName(id)) ||
+          !(form[type]?.remove(id) ?? false)) {
+        continue;
+      }
+      removed.add(
+        '<user><type>$type</type><ssID>${user[3]}</ssID>'
+        '<userID>U$id</userID><userLT>${user[4]}</userLT></user>',
+      );
+    }
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '${removed.isEmpty ? '<users />' : '<users>${removed.join()}</users>'}';
   }
 
   /// Sends the message of the submitted compose form (or not, see
@@ -501,14 +727,26 @@ ${spans(bcc, '3')}
       case SubmitAnswer.sent || SubmitAnswer.responseLost:
         break;
     }
-    final to = [for (final id in form.to) _userName(id)];
-    final cc = [for (final id in form.cc) _userName(id)];
+    List<String> names(String field) => [
+      for (final id in form[field]!) _userName(id),
+    ];
+    final to = names('0');
+    final cc = names('2');
+    final bcc = names('3');
     final subject = fields['subject']!;
     final body = fields['message']!;
     final id = 9000 + ++_messagesSent;
     final date = '2024-04-01 10:${_messagesSent.toString().padLeft(2, '0')}';
+    // A reply form carries the id of the message it answers.
+    final answers = fields['origMsgID'] ?? '0';
+    final reply = fields['composeAction'] == '2' && answers != '0'
+        ? 'reply-to=$answers '
+        : '';
     sentBodies.add(body);
-    actions.add('send to=${to.join(',')} cc=${cc.join(',')} subject=$subject');
+    actions.add(
+      'send ${reply}to=${to.join(',')} cc=${cc.join(',')} '
+      'bcc=${bcc.join(',')} subject=$subject',
+    );
     FakeMessage copy({required bool unread}) => FakeMessage(
       id: id,
       sender: owner,
@@ -519,9 +757,10 @@ ${spans(bcc, '3')}
       unread: unread,
       to: to,
       cc: cc,
+      bcc: bcc,
     );
     sent.add(copy(unread: false));
-    if (to.contains(owner) || cc.contains(owner)) inbox.add(copy(unread: true));
+    if ([...to, ...cc, ...bcc].contains(owner)) inbox.add(copy(unread: true));
     if (submitAnswer == SubmitAnswer.responseLost) {
       throw DioException.connectionError(
         requestOptions: options,

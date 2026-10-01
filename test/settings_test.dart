@@ -25,45 +25,6 @@ void main() {
     });
   });
 
-  group('SmartschoolSettings.userCacheDirectory', () {
-    final sep = Platform.pathSeparator;
-
-    test('is the library\'s folder: HOME, else USERPROFILE, else the '
-        'current folder, then .cache/smartschool/<username>', () {
-      expect(
-        SmartschoolSettings.userCacheDirectory('jan.peeters', {
-          'HOME': '/home/jan',
-          'USERPROFILE': r'C:\Users\jan',
-        }),
-        ['/home/jan', '.cache', 'smartschool', 'jan.peeters'].join(sep),
-      );
-      expect(
-        SmartschoolSettings.userCacheDirectory('jan.peeters', {
-          'USERPROFILE': r'C:\Users\jan',
-        }),
-        [r'C:\Users\jan', '.cache', 'smartschool', 'jan.peeters'].join(sep),
-      );
-      expect(
-        SmartschoolSettings.userCacheDirectory('jan.peeters', {}),
-        ['.', '.cache', 'smartschool', 'jan.peeters'].join(sep),
-      );
-    });
-
-    test('of the settings uses the trimmed username and this process\'s '
-        'environment', () {
-      final settings = SmartschoolSettings.read(
-        fakeExtensionSettings(FakeCredentials(username: ' jan.peeters ')),
-      );
-      final home =
-          Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-
-      expect(
-        settings.cacheDirectory,
-        [home, '.cache', 'smartschool', 'jan.peeters'].join(sep),
-      );
-    });
-  });
-
   group('extension settings', () {
     test('are read, trimmed and checked for completeness', () {
       final settings = SmartschoolSettings.read(

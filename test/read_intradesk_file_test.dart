@@ -290,6 +290,27 @@ void main() {
     );
   });
 
+  test('a connection that fails halfway: Smartschool could not be reached, '
+      'and the next call downloads the file again', () async {
+    // 84 KB: two chunks, and less text than is cut off.
+    final text = 'Beste ouders,\n' * 6000;
+    final id = server.intradesk.addFile(
+      'brief.txt',
+      content: utf8.encode(text),
+    );
+    server.intradesk.failDownloadsAfter = 64 * 1024;
+
+    expect(await error(id), startsWith('Could not reach Smartschool at '));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(server.intradesk.stoppedDownloads, 1);
+    expect(server.intradesk.bytesSent, 64 * 1024);
+
+    server.intradesk.failDownloadsAfter = null;
+    expect(await read(id), endsWith('\n\n$text'));
+    expect(server.intradesk.downloaded, [id, id]);
+    expect(server.logins, 1);
+  });
+
   test('a type that cannot be read is refused by the index without '
       'downloading, else after', () async {
     final known = server.intradesk.addFile(

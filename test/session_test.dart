@@ -15,6 +15,28 @@ Future<String> _post(SmartschoolClient client) =>
 TypeMatcher<SmartschoolProblem> _problem(ProblemKind kind) =>
     isA<SmartschoolProblem>().having((p) => p.kind, 'kind', kind);
 
+/// Runs [body] and returns the lines it logged to stderr, without their
+/// `[smartschool_mcp] ` prefix.
+Future<List<String>> _logOf(Future<void> Function() body) async {
+  final stderr = _CapturedStderr();
+  await IOOverrides.runZoned(body, stderr: () => stderr);
+  return [
+    for (final line in stderr.lines)
+      line.replaceFirst('[smartschool_mcp] ', ''),
+  ];
+}
+
+/// A stderr that keeps the lines written to it.
+final class _CapturedStderr implements Stdout {
+  final List<String> lines = [];
+
+  @override
+  void writeln([Object? object = '']) => lines.add('$object');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   late FakeSmartschool server;
   late Directory cache;
@@ -34,7 +56,6 @@ void main() {
         clientsCreated++;
         return create(credentials);
       },
-      recheckDelay: Duration.zero,
     );
     addTearDown(session.close);
     return session;
@@ -94,7 +115,74 @@ void main() {
     expect(server.requests, isNot(contains(startsWith('POST /2fa'))));
   });
 
+  test('the cache folder is the one the library\'s client uses: unknown '
+      'before the login, still known after closing', () async {
+    final session = newSession();
+    expect(() => session.cacheDirectory, throwsStateError);
+
+    await session.run(_post);
+    expect(session.cacheDirectory, cache.path);
+
+    await session.close();
+    expect(session.cacheDirectory, cache.path);
+  });
+
+  test('the log tells a new login from a reused session, and shows a '
+      'session that expired', () async {
+    final first = await _logOf(() => newSession().run(_post));
+    final reused = await _logOf(() => newSession().run(_post));
+    server.expireSession();
+    final expired = await _logOf(() => newSession().run(_post));
+
+    expect(
+      first,
+      containsAllInOrder([
+        'Smartschool: no valid session (sent to /login)',
+        'Smartschool: sending username and password',
+        'Smartschool: sending a 2FA code',
+        'Smartschool: logged in',
+      ]),
+    );
+    expect(
+      reused,
+      contains(endsWith('reused the saved session, no login needed')),
+    );
+    expect(reused, isNot(contains(startsWith('Smartschool: sending'))));
+    expect(
+      expired,
+      containsAllInOrder([
+        'Smartschool: no valid session (sent to /login)',
+        'Smartschool: sending username and password',
+        'Smartschool: logged in',
+      ]),
+    );
+    for (final line in [...first, ...reused, ...expired]) {
+      expect(line, isNot(contains(fakePassword)));
+      expect(line, isNot(contains(fakeTotpSecret)));
+    }
+  });
+
+  test('the log shows a POST that Smartschool answers with 401', () async {
+    final session = newSession();
+    await session.run(_post);
+    server.expireSession();
+
+    final log = await _logOf(() => session.run(_post));
+
+    expect(
+      log,
+      containsAllInOrder([
+        'Smartschool: no valid session (answered 401)',
+        'Smartschool: sending username and password',
+        'Smartschool: sending a 2FA code',
+      ]),
+    );
+  });
+
   group('when the session expires mid-process', () {
+    // The library logs in again on the same client and retries the refused
+    // request itself (yvanvds/dartschool#8, #36), so the action runs once.
+
     test(
       'a POST answered with 401 logs in again and is retried once',
       () async {
@@ -108,13 +196,20 @@ void main() {
         expect(server.logins, 2);
         expect(server.requests.first, 'POST /some/form');
         expect(server.requests.last, 'POST /some/form');
+        expect(
+          server.requests.where((r) => r == 'POST /some/form'),
+          hasLength(2),
+        );
         expect(server.requests, contains('POST /login'));
-        expect(clientsCreated, 2, reason: 'a new client for the new login');
+        expect(
+          clientsCreated,
+          1,
+          reason: 'the new login is on the same client',
+        );
       },
     );
 
-    test('a GET sent to /login logs in again with a new client and is '
-        'retried once', () async {
+    test('a GET sent to /login logs in again and is retried once', () async {
       final session = newSession();
       await session.run(_post);
       server.expireSession();
@@ -127,10 +222,11 @@ void main() {
       });
 
       expect(server.logins, 2);
-      expect(attempts, 2);
-      expect(clientsCreated, 2, reason: 'a new client for the new login');
+      expect(attempts, 1, reason: 'the library retries the request');
+      expect(clientsCreated, 1);
       expect(server.requests.first, 'GET /some/page');
       expect(server.requests.last, 'GET /some/page');
+      expect(server.requests.where((r) => r == 'GET /some/page'), hasLength(2));
       expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
     });
 
@@ -141,6 +237,7 @@ void main() {
       server
         ..expireSession()
         ..latency = const Duration(milliseconds: 20);
+      server.requests.clear();
       final attempts = <String, int>{};
       Future<String> call(
         String name,
@@ -158,13 +255,20 @@ void main() {
       ]);
 
       expect(server.logins, 2);
-      expect(server.requests.where((r) => r == 'POST /login'), hasLength(2));
-      expect(clientsCreated, 2);
-      expect(attempts, {'GET a': 2, 'GET b': 2, 'GET c': 2, 'POST': 2});
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+      expect(clientsCreated, 1);
+      expect(attempts, {'GET a': 1, 'GET b': 1, 'GET c': 1, 'POST': 1});
+      for (final request in ['GET /a', 'GET /b', 'GET /c', 'POST /some/form']) {
+        expect(
+          server.requests.where((r) => r == request),
+          hasLength(2),
+          reason: '$request: refused, then retried once',
+        );
+      }
     });
 
     test('requests of one call that find it expired at the same time share '
-        'one new login, and the call is retried once', () async {
+        'one new login, and each is retried once', () async {
       final session = newSession();
       await session.run(_post);
       server
@@ -182,11 +286,11 @@ void main() {
 
       expect(server.maxInFlight, 4);
       expect(server.logins, 2);
-      expect(attempts, 2);
-      expect(clientsCreated, 2);
+      expect(attempts, 1);
+      expect(clientsCreated, 1);
     });
 
-    test('a call that starts after the new login uses the new client without '
+    test('a call that starts after the new login uses the client without '
         'logging in again', () async {
       final session = newSession();
       await session.run(_post);
@@ -197,13 +301,36 @@ void main() {
       await session.run((client) => client.getRaw('/b'));
 
       expect(server.logins, 2);
-      expect(clientsCreated, 2);
+      expect(clientsCreated, 1);
       expect(server.requests, ['GET /b']);
+    });
+
+    test('when Smartschool refuses the retry after logging in again, the call '
+        'runs once more, without another login', () async {
+      final session = newSession();
+      await session.run(_post);
+      server
+        ..expireSession()
+        ..rejectsAfterLogin = 1;
+      var attempts = 0;
+
+      expect(
+        await session.run((client) {
+          attempts++;
+          return client.getRaw('/a');
+        }),
+        contains('home'),
+      );
+
+      expect(attempts, 2);
+      expect(server.logins, 2);
     });
 
     test('a request that is still refused after logging in again is not '
         'retried a second time', () async {
       final session = newSession();
+      await session.run(_post);
+      server.requests.clear();
       var attempts = 0;
 
       await expectLater(
@@ -213,29 +340,39 @@ void main() {
         }),
         throwsA(_problem(ProblemKind.sessionRejected)),
       );
+      // Each attempt: the library logs in again and retries the request
+      // once; then the session runs the call once more, and stops.
       expect(attempts, 2);
+      expect(
+        server.requests.where((r) => r == 'POST /always-401'),
+        hasLength(4),
+      );
+      expect(server.logins, 3);
     });
   });
 
-  group('when Smartschool still sends the first request after a successful '
-      'login to /login', () {
-    test(
-      'checks once more with a new client, without logging in again',
-      () async {
-        server.rejectsAfterLogin = 1;
-        final session = newSession();
+  group('with a saved session that expired (an old cookie cache)', () {
+    test('a new process logs in once, and its first call succeeds on that '
+        'client', () async {
+      await newSession().run(_post);
+      server.expireSession();
+      server.requests.clear();
+      clientsCreated = 0;
 
-        expect(await session.run(_post), '<ok/>');
+      // A second session on the same cookie cache, like a restarted server.
+      // The library's retry after the login must not send the refused
+      // session id along (yvanvds/dartschool#9).
+      expect(await newSession().run(_post), '<ok/>');
 
-        expect(server.logins, 1);
-        expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
-        expect(clientsCreated, 2);
-      },
-    );
+      expect(server.logins, 2);
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+      expect(server.requests.last, 'POST /some/form');
+      expect(clientsCreated, 1);
+    });
 
-    test('gives up when the new client is refused too, still without a '
-        'second login', () async {
-      server.rejectsAfterLogin = 2;
+    test('a session Smartschool still refuses after the login is reported, '
+        'without a second login', () async {
+      server.rejectsAfterLogin = 1;
       final session = newSession();
 
       await expectLater(
@@ -246,18 +383,6 @@ void main() {
       expect(server.logins, 1);
       expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
       expect(server.requests, isNot(contains('POST /some/form')));
-    });
-
-    test('also when logging in again after the session expired', () async {
-      final session = newSession();
-      await session.run(_post);
-      server
-        ..expireSession()
-        ..rejectsAfterLogin = 1;
-
-      expect(await session.run(_post), '<ok/>');
-
-      expect(server.logins, 2);
     });
   });
 

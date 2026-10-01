@@ -47,8 +47,13 @@ from the SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, SMARTSCHOOL_PASSWORD and
 SMARTSCHOOL_MFA environment variables (the Claude Desktop extension settings).
 
   --credentials <path>  Read the settings from this credentials.yml instead
-                        (keys: main_url, username, password, mfa). For
-                        development.
+                        (keys: main_url, username, password, mfa, and
+                        optionally download_dir). For development.
+
+save_intradesk_file and save_message_attachment save files into the folder in
+SMARTSCHOOL_DOWNLOAD_DIR (then download_dir in the credentials file), by
+default %USERPROFILE%\\Downloads\\Smartschool. The server deletes the files it
+saved there after 7 days and never touches other files.
 
 Once a day the server asks GitHub whether a newer release exists.
 SMARTSCHOOL_MCP_UPDATE_CHECK=off turns that off; SMARTSCHOOL_MCP_UPDATE_URL

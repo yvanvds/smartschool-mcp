@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
@@ -43,60 +45,72 @@ enum MessageBox {
         defaultValue: inbox.name,
       );
 
-  /// How many headers Smartschool returns for a box at most: the newest 50.
+  /// The message headers in this box, newest first.
   ///
-  /// Seen live for the inbox, the sent box and the archive. The library has
-  /// no way to ask for older ones (yvanvds/dartschool#15), so a box that
-  /// returns this many may hold older messages that cannot be listed.
-  static const pageSize = 50;
-
-  /// The message headers in this box as Smartschool returns them: the newest
-  /// [pageSize] at most, in no guaranteed order.
-  Future<List<ShortMessage>> headers(MessagesService messages) =>
-      switch (this) {
-        archive => messages.getArchiveHeaders(),
-        _ => messages.getHeaders(boxType: boxType),
-      };
+  /// Smartschool lists a box 50 headers at a time. The pages are requested
+  /// one after the other, and [stopAfter], when given, is called with each:
+  /// when it returns true, no further page is requested. Without it, or
+  /// when it never returns true, the whole box is listed, and a box can hold
+  /// thousands of messages: stop as soon as the headers so far are enough.
+  ///
+  /// Smartschool keeps one paging position per box in the session and
+  /// restarts it whenever the box is listed (yvanvds/dartschool#15). The
+  /// library then ends a listing that is still paging as if the box ended
+  /// there (yvanvds/dartschool#76). So the box listings of this process (one
+  /// session) run one at a time, also for different boxes: the inbox and the
+  /// archive share a box type, and whether they share a position is
+  /// unknown. A new login between two pages loses the position as well,
+  /// which nothing here detects (#28).
+  Future<List<ShortMessage>> headers(
+    MessagesService messages, {
+    bool Function(List<ShortMessage> page)? stopAfter,
+  }) => _oneListingAtATime(() async {
+    final pages = switch (this) {
+      archive => messages.getArchiveHeaderPages(),
+      _ => messages.getHeaderPages(boxType: boxType),
+    };
+    final headers = <ShortMessage>[];
+    await for (final page in pages) {
+      headers.addAll(page);
+      if (stopAfter?.call(page) ?? false) break;
+    }
+    return headers;
+  });
 
   /// Message [id] in this box, or null when the box has no such message.
   ///
   /// With [allRecipients] (the default) the message lists all its
   /// recipients; without, Smartschool names a few and counts the rest (a
   /// lighter request, for when the recipients do not matter).
-  ///
-  /// For an unknown id Smartschool does not answer with nothing but with a
-  /// placeholder message ("Niet beschikbaar", "* Bericht zonder onderwerp *",
-  /// no text) whose date the library reads as 1970-01-01. Up to
-  /// flutter_smartschool 0.2.x, `getMessage` returned that instead of null
-  /// (yvanvds/dartschool#16, fixed in 0.3.0; dropping this check is #15). A
-  /// message dated before 1971 without text is taken to be that placeholder:
-  /// no real message is that old, and the placeholder's texts presumably
-  /// depend on the platform's language.
   Future<FullMessage?> message(
     MessagesService messages,
     int id, {
     bool allRecipients = true,
-  }) async {
-    final message = await messages.getMessage(
-      id,
-      boxType: boxType,
-      includeAllRecipients: allRecipients,
-    );
-    if (message == null) return null;
-    if (message.date.isBefore(DateTime.utc(1971)) &&
-        message.body.trim().isEmpty) {
-      return null;
-    }
-    return message;
-  }
+  }) => messages.getMessage(
+    id,
+    boxType: boxType,
+    includeAllRecipients: allRecipients,
+  );
+}
+
+/// When the box listing that started last is done; the next one waits for
+/// it.
+Future<void> _lastListing = Future<void>.value();
+
+/// Runs [listing] once the box listings started before it are done.
+Future<T> _oneListingAtATime<T>(Future<T> Function() listing) {
+  final previous = _lastListing;
+  final done = Completer<void>();
+  _lastListing = done.future;
+  return previous.then((_) => listing()).whenComplete(done.complete);
 }
 
 /// Runs [action] with a [MessagesService] on the session's logged-in client.
 ///
-/// The service is created inside [SmartschoolSession.run]'s callback, because
-/// the session replaces its client after logging in again, and disposed
-/// afterwards. Like every [SmartschoolSession.run] action, [action] may run
-/// twice (after an expired session), so it must be safe to repeat.
+/// The service is created inside [SmartschoolSession.run]'s callback and
+/// disposed afterwards. Like every [SmartschoolSession.run] action, [action]
+/// may run twice (when Smartschool refuses the session), so it must be safe
+/// to repeat.
 Future<T> withMessages<T>(
   SmartschoolSession session,
   Future<T> Function(MessagesService messages) action,

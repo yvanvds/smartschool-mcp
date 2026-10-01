@@ -27,9 +27,7 @@ ServerTool archiveMessagesTool(SmartschoolSession session) => ServerTool(
         'list_messages and read_message to propose a list and let the user '
         'choose. When the user asks you to archive messages, archive them '
         'with this tool. The result says per id whether it was archived, '
-        'was already in the archive, or could not be archived and why. '
-        'Smartschool only returns the newest ${MessageBox.pageSize} messages '
-        'of the inbox, so only those can be archived here.',
+        'was already in the archive, or could not be archived and why.',
     inputSchema: Schema.object(
       properties: {
         'message_ids': Schema.list(
@@ -61,14 +59,14 @@ Future<CallToolResult> _archive(
   // The input schema guarantees a list of 1 to maxArchiveIds whole numbers.
   // Duplicates (also 101 and 101.0) are dropped, keeping the order.
   final ids = {...intListArgument(arguments, 'message_ids')}.toList();
-  final report = await withMessages(
+  final results = await withMessages(
     session,
     (messages) => _archiveIds(messages, ids),
   );
   return CallToolResult(
     // Only when nothing ended up in the archive.
-    isError: report.results.every((r) => r.outcome.failed),
-    content: [TextContent(text: _format(report))],
+    isError: results.every((r) => r.outcome.failed),
+    content: [TextContent(text: _format(results))],
   );
 }
 
@@ -90,36 +88,29 @@ enum _Outcome {
 /// archive listed it.
 typedef _Result = ({int id, _Outcome outcome, ShortMessage? header});
 
-/// The outcome per id, and whether the inbox listing was cut off at
-/// [MessageBox.pageSize] messages.
-typedef _Report = ({List<_Result> results, bool inboxFull});
-
 /// Archives the inbox messages among [ids] and says what happened to each,
 /// in the order of [ids].
 ///
-/// Only ids in the inbox listing are sent to Smartschool. That listing holds
-/// the newest [MessageBox.pageSize] messages (yvanvds/dartschool#15), the
-/// same ones list_messages shows, so every id Claude can have is in it,
-/// unless new messages pushed it out since. What Smartschool does with the
-/// id of a message elsewhere (sent, in the trash) is unknown, so those are
-/// never sent. An id that is not in the inbox is looked up in the archive:
-/// archiving is idempotent, so one that is already there is not a failure
-/// (Claude repeating a call whose answer got lost, for example).
+/// Only ids found in the inbox are sent to Smartschool: what it does with
+/// the id of a message elsewhere (sent, in the trash) is unknown. An id that
+/// is not in the inbox is looked up in the archive: archiving is idempotent,
+/// so one that is already there is not a failure (Claude repeating a call
+/// whose answer got lost, for example).
 ///
 /// Runs inside [withMessages], so it may run twice. The archive request
 /// comes last: when Smartschool rejects the session, nothing has been
 /// archived yet, and the repeat starts again from the inbox listing.
-Future<_Report> _archiveIds(MessagesService messages, List<int> ids) async {
-  final inbox = {
-    for (final header in await MessageBox.inbox.headers(messages))
-      header.id: header,
-  };
+Future<List<_Result>> _archiveIds(
+  MessagesService messages,
+  List<int> ids,
+) async {
+  final inbox = await _find(MessageBox.inbox, messages, ids);
   final archive = ids.every(inbox.containsKey)
       ? const <int, ShortMessage>{}
-      : {
-          for (final header in await MessageBox.archive.headers(messages))
-            header.id: header,
-        };
+      : await _find(MessageBox.archive, messages, [
+          for (final id in ids)
+            if (!inbox.containsKey(id)) id,
+        ]);
   final toArchive = [
     for (final id in ids)
       if (inbox.containsKey(id)) id,
@@ -145,16 +136,30 @@ Future<_Report> _archiveIds(MessagesService messages, List<int> ids) async {
     ),
     (null, null) => (id: id, outcome: _Outcome.notInInbox, header: null),
   };
-  return (
-    results: [for (final id in ids) result(id)],
-    inboxFull: inbox.length >= MessageBox.pageSize,
-  );
+  return [for (final id in ids) result(id)];
 }
 
-/// [report] as text: a summary, a list per outcome, and notes on what to do
-/// about failures.
-String _format(_Report report) {
-  final results = report.results;
+/// The headers in [box] by id, listed newest first until all of [ids] are
+/// among them (or to the end of the box).
+Future<Map<int, ShortMessage>> _find(
+  MessageBox box,
+  MessagesService messages,
+  List<int> ids,
+) async {
+  final missing = ids.toSet();
+  final headers = await box.headers(
+    messages,
+    stopAfter: (page) {
+      missing.removeAll([for (final header in page) header.id]);
+      return missing.isEmpty;
+    },
+  );
+  return {for (final header in headers) header.id: header};
+}
+
+/// [results] as text: a summary, a list per outcome, and notes on what to
+/// do about failures.
+String _format(List<_Result> results) {
   int count(_Outcome outcome) =>
       results.where((r) => r.outcome == outcome).length;
   final total = results.length;
@@ -191,8 +196,7 @@ String _format(_Report report) {
   if (count(_Outcome.notInInbox) > 0) {
     lines.add(
       'Note: only messages in the inbox can be archived. Take the ids from '
-      'list_messages on the inbox.'
-      '${report.inboxFull ? _olderNote : ''}',
+      'list_messages on the inbox.',
     );
   }
   if (count(_Outcome.notConfirmed) > 0) {
@@ -205,11 +209,5 @@ String _format(_Report report) {
   }
   return lines.join('\n');
 }
-
-/// Why an older inbox message cannot be archived (yvanvds/dartschool#15).
-const _olderNote =
-    ' Smartschool only returns the newest ${MessageBox.pageSize} messages of '
-    'the inbox, so an older message cannot be archived here; the user can '
-    'archive it in Smartschool itself.';
 
 String _count(int count, String noun) => '$count $noun${count == 1 ? '' : 's'}';

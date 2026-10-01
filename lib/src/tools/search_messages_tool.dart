@@ -12,9 +12,9 @@ import '../session.dart';
 import 'arguments.dart';
 import 'server_tool.dart';
 
-/// At most this many message texts are downloaded per search: enough for
-/// the newest [MessageBox.pageSize] messages of the inbox and of the
-/// archive, the boxes searched by default.
+/// At most this many message texts are downloaded per search, to keep a
+/// search short. The texts are kept, so each next search of a large box goes
+/// further back.
 const maxDownloadsPerSearch = 100;
 
 /// How many message texts are downloaded at the same time, to be gentle on
@@ -54,9 +54,7 @@ ServerTool searchMessagesTool(
         'The first search downloads the message texts and keeps them on this '
         'PC, so later searches are quick; at most $maxDownloadsPerSearch are '
         'downloaded per search, and the result says when messages were left '
-        'unsearched because of that (search again to continue). Smartschool '
-        'only returns the newest ${MessageBox.pageSize} messages of each box; '
-        'older ones cannot be searched.',
+        'unsearched because of that (search again to continue).',
     inputSchema: Schema.object(
       properties: {
         'query': Schema.string(
@@ -130,18 +128,21 @@ Future<CallToolResult> _search(
   final limit = intArgument(arguments, 'limit') ?? defaultSearchLimit;
 
   final stopwatch = Stopwatch()..start();
-  // Counted over both runs when the session expires halfway.
+  // Counted over both runs when Smartschool refuses the session halfway.
   var downloads = 0;
   // Like every session action, this may run twice. The second run lists the
   // boxes again and finds the texts the first one saved in the cache.
   final (:listed, :candidates, :fromCache, :notSearched) = await withMessages(
     session,
     (messages) async {
-      final listed = <MessageBox, int>{};
+      var listed = 0;
       final candidates = <_Candidate>[];
       for (final box in boxes) {
-        final headers = await box.headers(messages);
-        listed[box] = headers.length;
+        final headers = await box.headers(
+          messages,
+          stopAfter: inRange.reachesPastSince,
+        );
+        listed += headers.length;
         candidates.addAll([
           for (final header in headers)
             if (inRange.matches(header)) _Candidate(box, header),
@@ -200,24 +201,23 @@ Future<CallToolResult> _search(
   final vanished = candidates.where((c) => c.vanished).length;
   // Counts only: the query and the texts are personal.
   log(
-    'search_messages: ${candidates.length} messages to search, '
-    '$fromCache texts from the cache, $downloads downloaded, $notSearched '
-    'left for a next search, ${hits.length} matching, '
+    'search_messages: $listed messages listed, ${candidates.length} to '
+    'search, $fromCache texts from the cache, $downloads downloaded, '
+    '$notSearched left for a next search, ${hits.length} matching, '
     '${stopwatch.elapsedMilliseconds} ms',
   );
 
   final where = _joinAnd([for (final box in boxes) box.label]);
-  final listedTotal = listed.values.fold(0, (sum, count) => sum + count);
   final words = query.terms.join(', ');
   final shown = hits.take(limit).toList();
   final cut = shown.length < hits.length
       ? '; showing the newest ${shown.length} (raise limit to see the rest)'
       : '';
   final lines = [
-    if (listedTotal == 0)
+    if (listed == 0)
       '$where: no messages.'
     else if (candidates.isEmpty)
-      '$where: no messages in the date range ($listedTotal checked).'
+      '$where: no messages in the date range ($listed checked).'
     else if (hits.isEmpty)
       '$where: none of the ${_count(searched, 'message')} searched '
           'contains all of: $words.'
@@ -238,15 +238,6 @@ Future<CallToolResult> _search(
     if (vanished > 0)
       'Skipped: ${_count(vanished, 'listed message')} that Smartschool no '
           'longer returned (deleted in the meantime?).',
-    // Smartschool only returns the newest messages of a box
-    // (yvanvds/dartschool#15).
-    if (_joinAnd([
-          for (final box in boxes)
-            if (listed[box]! >= MessageBox.pageSize) box.label,
-        ])
-        case final full when full.isNotEmpty)
-      'Note: Smartschool only returns the newest ${MessageBox.pageSize} '
-          'messages of a box, so older messages in $full were not searched.',
   ];
   return CallToolResult(content: [TextContent(text: lines.join('\n'))]);
 }

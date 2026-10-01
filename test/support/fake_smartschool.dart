@@ -51,9 +51,13 @@ class FakeSmartschool implements HttpClientAdapter {
   /// When set, every request fails the way an unreachable host does.
   bool unreachable = false;
 
-  /// How many requests right after a successful login are still sent to
-  /// `/login` although the new session is valid, as seen live on a first
-  /// login with an old cookie cache.
+  /// How many requests right after a successful login Smartschool still
+  /// refuses (a GET sent to `/login`, a POST answered with 401) although the
+  /// login went through.
+  ///
+  /// Not seen live: the refusal seen live after a login with an old cookie
+  /// cache was the library sending the refused session id along with the
+  /// new one (yvanvds/dartschool#9), which [_hasSession] models.
   int rejectsAfterLogin = 0;
   int _rejectsLeft = 0;
 
@@ -94,11 +98,18 @@ class FakeSmartschool implements HttpClientAdapter {
   void expireSessionBefore(bool Function(RequestOptions request) matches) =>
       _expireBefore = matches;
 
+  /// Whether [options] carries the valid session.
+  ///
+  /// Like the live platform, only the first `PHPSESSID` in the `Cookie`
+  /// header counts: a request that sends a refused session id before the
+  /// new one is refused (yvanvds/dartschool#9).
   bool _hasSession(RequestOptions options) {
     final cookie = options.headers[HttpHeaders.cookieHeader];
-    return _validSession != null &&
-        cookie is String &&
-        cookie.contains('PHPSESSID=$_validSession');
+    if (_validSession == null || cookie is! String) return false;
+    final session = RegExp(
+      r'(?:^|;)\s*PHPSESSID=([^;]*)',
+    ).firstMatch(cookie)?.group(1);
+    return session == _validSession;
   }
 
   @override
@@ -158,6 +169,7 @@ class FakeSmartschool implements HttpClientAdapter {
       logins++;
       _validSession = 'session$logins';
       _passwordDone = false;
+      mailbox.newSession();
       _rejectsLeft = rejectsAfterLogin;
       return _json(
         '{"success":true,"redirectTo":"/"}',
@@ -169,6 +181,10 @@ class FakeSmartschool implements HttpClientAdapter {
       // An XML or form POST without a session gets a bare 401 (observed on
       // the live platform), not a redirect to /login.
       if (!loggedIn || path == '/always-401') {
+        return ResponseBody.fromString('', 401);
+      }
+      if (_rejectsLeft > 0) {
+        _rejectsLeft--;
         return ResponseBody.fromString('', 401);
       }
       return mailbox.respond(options) ?? _html('<ok/>');

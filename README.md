@@ -35,7 +35,12 @@ main_url: yourschool.smartschool.be
 username: your.username
 password: your-password
 mfa: YOUR-TOTP-BASE32-SECRET
+# Optional: where save_intradesk_file and save_message_attachment save.
+download_dir: C:\Users\you\Downloads\Smartschool
 ```
+
+`SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
+*Saving files* below).
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -54,9 +59,10 @@ Every run logs in with a fresh cookie cache, so do not run it in a loop. Its
 message test only reads (it lists the inbox and archive and reads a few
 messages that are already read) and uses your own cookie cache; run just that
 one with `--name list_messages`. The search test only reads as well: it
-searches for a word of a read message twice (the second time from your
-message text cache) and for a word that occurs nowhere, and prints counts and
-timings only; run it with `--name search_messages`. The Intradesk test only
+searches for a word of a read message, from that message's date on, twice
+(the second time from your message text cache) and for a word that occurs
+nowhere, and prints counts and timings only; run it with
+`--name search_messages`. The Intradesk test only
 reads too (no file is downloaded): it lists the top of Intradesk and a folder,
 searches with `refresh: true` (a full walk of Intradesk, a few minutes on a
 large one) and then from the index, and prints counts and timings only; run
@@ -65,6 +71,11 @@ changes) the two smallest Word, Excel, PowerPoint, PDF, PNG and JPEG files it
 finds, reads them with `read_intradesk_file`, checks that a file above the
 size limit is refused without downloading it, and prints formats, sizes,
 character counts and timings only; run it with `--name read_intradesk_file`.
+The save test saves (never changes) the smallest PDF and Word file above 5 KB
+on Intradesk and the first attachment of a read message (twice, to see the
+second copy get a name of its own) into a temporary download folder that is
+deleted afterwards, checks their sizes and first bytes, and prints
+extensions, sizes and timings only; run it with `--name save_intradesk_file`.
 
 ### Build
 
@@ -94,7 +105,8 @@ Open Claude Desktop's config file via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_MAIN_URL": "yourschool.smartschool.be",
         "SMARTSCHOOL_USERNAME": "your.username",
         "SMARTSCHOOL_PASSWORD": "your-password",
-        "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET"
+        "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
+        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder"
       }
     }
   }
@@ -102,7 +114,8 @@ Open Claude Desktop's config file via *Settings → Developer → Edit Config*
 ```
 
 `SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP); MFA
-is mandatory for teachers. Restart Claude Desktop after editing the file. The
+is mandatory for teachers. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
+*Saving files* below). Restart Claude Desktop after editing the file. The
 server's stderr ends up in Claude Desktop's MCP log
 (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -112,27 +125,34 @@ the login works and who is logged in, or what to fix.
 
 ### Tools
 
-- `smartschool_status`: whether the connection works, or what to fix, and
-  whether a newer version is available (see *Update check* below).
+- `smartschool_status`: whether the connection works, or what to fix, the
+  download folder and whether it is writable, and whether a newer version
+  is available (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
-  Smartschool only returns the newest 50 messages of a box
-  (yvanvds/dartschool#15).
-- `read_message`: one message with its recipients, attachment names and the
-  body as plain text. It does not mark the message as read.
+  Smartschool lists a box 50 messages at a time; the tool asks for the next
+  50 only while they can change the result (more messages to show, or not
+  yet past `since`), and Claude reaches older messages with `until`.
+- `read_message`: one message with its recipients, its attachments
+  (numbered, with name and size) and the body as plain text. It does not
+  mark the message as read.
+- `save_message_attachment`: saves one attachment of a message (by its
+  number in `read_message`, or its file name) into the download folder and
+  returns its full path, name and size (see *Saving files* below).
 - `search_messages`: searches the text, subject and sender of the messages
   in the inbox and archive (or the boxes named) for words, ignoring case and
   accents, optionally within a date range, and returns the matching messages
   newest first with a snippet around the words. It downloads each message
   text once (at most 100 per search, 4 at a time, newest first) and keeps it
   in the message text cache (see below), so later searches are quick; the
-  result says when messages were left unsearched. Like `list_messages` it
-  only sees the newest 50 messages of a box.
+  result says when messages were left unsearched. It lists the whole of each
+  box searched (with `since`, only back to that date), so a search of a
+  large box takes a few searches the first time.
 - `archive_messages`: moves up to 100 inbox messages (ids from
   `list_messages`) to the archive and reports per id whether it was
-  archived, was already in the archive, or why not. Only the newest 50 inbox
-  messages can be archived, the ones `list_messages` shows. Claude proposes
-  candidates when asked for advice and archives when asked to.
+  archived, was already in the archive, or why not. It lists the inbox (and
+  the archive, for ids not in the inbox) until it has found every id. Claude
+  proposes candidates when asked for advice and archives when asked to.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -140,8 +160,9 @@ the login works and who is logged in, or what to fix.
   asks for approval every time, and Claude is told to show the text and
   recipients and wait for the user's confirmation first. It never sends a
   reply twice by itself: when Smartschool does not confirm a send, it says
-  the reply may have been sent and to check the sent box. Replies are new
-  messages, not linked to the original (yvanvds/dartschool#26).
+  the reply may have been sent and to check the sent box. The reply is sent
+  with the message's own reply form, so Smartschool links it to the
+  original.
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so
@@ -156,6 +177,10 @@ the login works and who is logged in, or what to fix.
   `search_intradesk` or `list_intradesk_folder`) and returns its text, or an
   image, so Claude can check what is in it, quote from it or summarise it
   (see *Reading Intradesk files* below).
+- `save_intradesk_file`: saves one Intradesk file into the download folder
+  and returns its full path, name and size, for a file `read_intradesk_file`
+  cannot read (a scan, an old Office file, any other format) or when the
+  user wants the file itself (see *Saving files* below).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -175,18 +200,19 @@ name with extension, path, size, date changed, `extension`, `mimeType`) and
 `IntradeskIndex` (lookup by id, the items inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
-`intradesk_cache.dart`; name matching in `intradesk_search.dart`, output
-lines in `intradesk_format.dart`, and the size-limited download
-(`downloadIntradeskFile`) in `intradesk_download.dart`.
+`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
+lines in `intradesk_format.dart`.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
 `document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
 `UnreadableDocument` with the reason (in `document_content.dart`); the
 readers per format are `docx_text.dart`, `xlsx_text.dart`, `pptx_text.dart`,
-`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. The
-size-limited download itself (`downloadCapped`, for any Smartschool path) is
-in `lib/src/capped_download.dart`.
+`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. Downloads go
+through `flutter_smartschool`'s streamed download with a size limit
+(`IntradeskService.downloadFileStream`, `MessageAttachment.downloadStream`,
+both with `maxBytes`), which also gives the file name from the
+`Content-Disposition` header.
 
 ### Message text cache
 
@@ -264,11 +290,72 @@ it and forgets it. What a file is follows from its content, not its name:
 
 Files larger than 25 MB are not opened: refused before downloading when the
 index knows the size, else as soon as Smartschool announces it or the
-download goes past it (the library cannot limit a download,
-yvanvds/dartschool#41). Text longer than 100,000 characters (Claude Desktop
-accepts about 150,000 per tool result) is cut off with a note, and a PDF
-stops after 30 seconds of reading. The log shows formats, sizes and counts,
-never a name or any text.
+download goes past it, and `flutter_smartschool` then stops the transfer.
+Text longer than 100,000 characters (Claude Desktop accepts about 150,000
+per tool result) is cut off with a note, and a PDF stops after 30 seconds of
+reading. The log shows formats, sizes and counts, never a name or any text.
+
+### Saving files
+
+`save_intradesk_file` and `save_message_attachment` save a file into the
+download folder on this PC instead of returning what is in it. They are meant
+for a Claude Cowork project: Claude there reads the files in the project's
+folders (PDFs, scans, Word, Excel, images) far better than a tool result can
+carry them, so point the download folder at a (temporary) folder inside the
+project, and Claude opens the saved file from the path the tool returns. In a
+plain chat Claude tells the user where the file is, to open it or drag it into
+the chat. `read_intradesk_file` stays the quick option that works in every
+chat.
+
+The download folder is:
+
+1. `SMARTSCHOOL_DOWNLOAD_DIR`, when set and not empty: the extension setting
+   "Downloadmap" (in the extension manifest a `directory` field, so the
+   install form shows a folder picker);
+2. otherwise, with `--credentials`, the file's `download_dir`;
+3. otherwise `%USERPROFILE%\Downloads\Smartschool` (`$HOME/Downloads/Smartschool`
+   elsewhere).
+
+`smartschool_status` shows the folder, where it was set, and whether it is
+writable (it creates and deletes a test file; a folder that does not exist
+yet is created on the first save).
+
+- **Never overwrites:** a name that is taken (also by a folder, or in another
+  case) gets ` (2)`, ` (3)`, ... before the extension, and the result says so.
+- **Safe names:** the name Smartschool gives is made into one Windows
+  accepts: `<>:"/\|?*` and control characters become `_` (so a name never
+  holds a folder), dots and spaces at the end go, device names such as `CON`
+  or `nul.txt` and names like the server's own files get a `_` in front, and
+  a name longer than 120 characters is cut short, keeping its extension. The
+  result says what changed. No name at all: `intradesk-<id>` or
+  `attachment-<message id>-<number>`.
+- **Size limit:** 200 MB (higher than `read_intradesk_file`'s 25 MB: nothing
+  goes through the tool result). Refused before downloading when the
+  Intradesk index knows the size, else as soon as Smartschool announces it
+  or the download goes past it; `flutter_smartschool`'s streamed download
+  (`downloadFileStream`, `MessageAttachment.downloadStream`, both with
+  `maxBytes`) then stops the transfer.
+- **Written under a temporary name** (`.smartschool-mcp-<random>.part`) and
+  renamed once complete; a failed download leaves nothing behind.
+- **Temporary by design:** the folder holds `.smartschool-mcp-downloads.json`,
+  the list of the files the server saved there (name, time saved, size, time
+  changed). At startup, and at most once a day (also on a save), the server
+  deletes the listed files saved more than 7 days ago. It never touches any
+  other file in the folder, nor a listed file that was changed since it was
+  saved (that is the teacher's now: it is taken off the list). Its own
+  temporary files left behind by a server that was stopped while saving are
+  deleted after a day. Two servers sharing the folder each keep the list up
+  to date; a save one of them misses is only never cleaned up.
+
+The log shows sizes, timings and whether a name was changed, never a name.
+The code is in `lib/src/downloads/` (`DownloadFolder` in
+`download_folder.dart`, `safeFileName` in `file_names.dart`) and the tools
+in `lib/src/tools/save_intradesk_file_tool.dart` and
+`save_message_attachment_tool.dart`.
+
+Privacy: saved files are personal or school data, unencrypted, in a folder
+of the teacher's choice; the colleague guide (#11) must say so, and that
+they disappear after 7 days.
 
 ### Login
 
@@ -277,13 +364,25 @@ step (TOTP from `SMARTSCHOOL_MFA`). The session cookies are kept in
 `%USERPROFILE%\.cache\smartschool\<username>`, so a restart only logs in
 again when the saved session has expired. The log shows which happened.
 
+That folder is the one `flutter_smartschool` chooses
+(`SmartschoolClient.cacheDir`); the server does not work it out itself. Its
+own data for the user (the message texts, the Intradesk index) goes in
+subfolders of it (`SmartschoolSession.cacheDirectory`), and data that
+belongs to no user (the update check) in the folder above it
+(`sharedCacheDirectory` in `lib/src/cache_folder.dart`).
+
 Tools use the shared `SmartschoolSession` (`lib/src/session.dart`): call
 `session.run((client) => ...)` and let its `SmartschoolProblem` propagate;
 the server turns it into an error result with a message that tells the
-teacher which setting to fix. When Smartschool rejects an expired session,
-`run` logs in again and runs the action once more, so an action must be safe
-to repeat. Sending is not: `reply_to_message` turns every failure after the
-submit into a result that is not retried (see `_send` in
+teacher which setting to fix. When a request finds the session expired,
+`flutter_smartschool` logs in again and retries that request; concurrent
+requests share that one login. When Smartschool still refuses the session,
+`run` runs the action once more, so an action must be safe to repeat.
+Sending is not, once Smartschool has handled the submit: `reply_to_message`
+turns a submit that Smartschool does not confirm
+(`SmartschoolSendUnconfirmedError`) into a result that is not retried. A
+step of the send that Smartschool refused the session for, the submit
+included, sent nothing, so `run` may repeat it (see `_send` in
 `lib/src/tools/reply_to_message_tool.dart`).
 
 ### Update check

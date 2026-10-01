@@ -1,9 +1,10 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+
+import 'fake_download.dart';
 
 /// The Intradesk module of a fake Smartschool: the directory listings of
 /// the root and of each folder, and file downloads.
@@ -13,7 +14,8 @@ import 'package:dio/dio.dart';
 /// `test/fixtures/intradesk/` ([loadFixtures]). A folder is made with
 /// [addFolder], a file with [addFile] and a weblink with [addWeblink]; each
 /// shows up in its parent's listing. A file added with content can be
-/// downloaded.
+/// downloaded. The parents of a folder are served as Smartschool does, which
+/// the library asks for when a listing fails with a 500.
 class FakeIntradesk {
   FakeIntradesk() {
     _listings[''] = _emptyListing();
@@ -25,6 +27,9 @@ class FakeIntradesk {
   );
   static final _downloadPath = RegExp(
     r'^/intradesk/api/v1/(\d+)/files/([^/]+)/download$',
+  );
+  static final _parentsPath = RegExp(
+    r'^/intradesk/api/v1/(\d+)/folders/([^/]+)/parents$',
   );
 
   /// Listings by folder id; the root is ''.
@@ -55,6 +60,11 @@ class FakeIntradesk {
 
   /// How many downloads were cancelled before all of the file was sent.
   int stoppedDownloads = 0;
+
+  /// When set, the connection of a download fails once this many bytes of
+  /// it were sent, with the [HttpException] `dart:io` throws for a
+  /// connection that closes early.
+  int? failDownloadsAfter;
 
   int _folders = 0;
   int _files = 0;
@@ -206,6 +216,9 @@ class FakeIntradesk {
     if (_downloadPath.firstMatch(options.uri.path) case final download?) {
       return _download(download[2]!);
     }
+    if (_parentsPath.firstMatch(options.uri.path) case final parents?) {
+      return _parents(parents[2]!);
+    }
     final match = _path.firstMatch(options.uri.path);
     if (match == null) return null;
     final id = match[2] ?? '';
@@ -219,40 +232,50 @@ class FakeIntradesk {
     return _json(jsonEncode(listing));
   }
 
+  /// The parents of folder [id] as Smartschool answers them (seen live,
+  /// yvanvds/dartschool#37): a 404 for an id that is not a folder (unknown,
+  /// a file or a weblink), and the folders above a folder, `[]` at the top.
+  /// Here the folders above are their ids, from the top; the library reads
+  /// only the status.
+  ResponseBody _parents(String id) {
+    if (id.isEmpty || !_listings.containsKey(id)) {
+      return _json(
+        '{"status":404,"title":"Not Found","detail":"","type":""}',
+        status: 404,
+      );
+    }
+    final parents = <String>[];
+    var parent = _parentOf(id);
+    while (parent != null && parent.isNotEmpty) {
+      parents.insert(0, parent);
+      parent = _parentOf(parent);
+    }
+    return _json(jsonEncode(parents));
+  }
+
+  /// The id of the folder whose listing holds the folder [id] ('' for the
+  /// top), or null when no listing holds it.
+  String? _parentOf(String id) {
+    for (final MapEntry(:key, :value) in _listings.entries) {
+      if (value['folders']!.any((folder) => (folder as Map)['id'] == id)) {
+        return key;
+      }
+    }
+    return null;
+  }
+
   ResponseBody _download(String id) {
     downloaded.add(id);
     final content = contents[id];
     // Seen live: an unknown file id gets a 404.
     if (content == null) return _json('{"error":"not found"}', status: 404);
-    // Chunk by chunk, each in its own turn of the event loop, like data
-    // arriving from a socket.
-    Stream<Uint8List> chunks() async* {
-      var complete = false;
-      try {
-        for (var start = 0; start < content.length; start += 64 * 1024) {
-          await Future<void>.delayed(Duration.zero);
-          final end = start + 64 * 1024 < content.length
-              ? start + 64 * 1024
-              : content.length;
-          bytesSent += end - start;
-          yield Uint8List.sublistView(content, start, end);
-        }
-        complete = true;
-      } finally {
-        if (!complete) stoppedDownloads++;
-      }
-    }
-
-    return ResponseBody(
-      chunks(),
-      200,
-      headers: {
-        Headers.contentTypeHeader: ['application/octet-stream'],
-        if (announceDownloads) ...{
-          Headers.contentLengthHeader: ['${content.length}'],
-          'content-disposition': ['attachment; filename="${_names[id]}"'],
-        },
-      },
+    return fakeDownload(
+      content,
+      name: _names[id],
+      announce: announceDownloads,
+      failAfter: failDownloadsAfter,
+      sent: (bytes) => bytesSent += bytes,
+      stopped: () => stoppedDownloads++,
     );
   }
 

@@ -18,10 +18,12 @@ ServerTool readMessageTool(SmartschoolSession session) => ServerTool(
     title: 'Read a Smartschool message',
     description:
         'Reads one Smartschool message: sender, date, recipients (To and '
-        'CC), subject, attachment names and sizes, and the message text as '
-        'plain text. Get the id from list_messages first and pass the same '
-        'box. Use it to summarise a message or answer questions about it. '
-        'Reading a message here does not mark it as read in Smartschool.',
+        'CC), subject, the attachments (numbered, with name and size) and '
+        'the message text as plain text. Get the id from list_messages '
+        'first and pass the same box. Use it to summarise a message or '
+        'answer questions about it. To open an attachment, save it with '
+        'save_message_attachment. Reading a message here does not mark it '
+        'as read in Smartschool.',
     inputSchema: Schema.object(
       properties: {
         'message_id': Schema.int(
@@ -99,8 +101,9 @@ String formatMessage(
       'Attachments: none'
     else ...[
       'Attachments (${attachments.length}):',
-      for (final attachment in attachments)
-        '- ${attachment.name.trim()}'
+      // Numbered: save_message_attachment takes the number.
+      for (final (index, attachment) in attachments.indexed)
+        '${index + 1}. ${attachment.name.trim()}'
             '${attachment.size.trim().isEmpty ? '' : ' (${attachment.size.trim()})'}',
     ],
     '',

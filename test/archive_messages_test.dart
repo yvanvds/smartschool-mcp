@@ -17,6 +17,8 @@ const _inboxListing =
 const _archiveListing =
     'message list boxID=305 boxType=inbox layout=new poll=false poll_ids= '
     'sortField=date sortKey=desc';
+const _nextInboxPage = 'continue_messages boxID=0 boxType=inbox layout=new';
+const _nextArchivePage = 'continue_messages boxID=305 boxType=inbox layout=new';
 
 const _line101 =
     '- id 101 | 2024-03-14 16:05 | from Jan Peeters | Oudercontact donderdag '
@@ -116,7 +118,7 @@ void main() {
     expect(tool.description, contains('do not archive anything'));
     expect(tool.description, contains('propose a list'));
     expect(tool.description, contains('from list_messages'));
-    expect(tool.description, contains('newest 50 messages of the inbox'));
+    expect(tool.description, isNot(contains('newest 50')));
 
     final schema = tool.inputSchema;
     expect(schema.required, ['message_ids']);
@@ -209,36 +211,65 @@ void main() {
     expect(server.mailbox.actions, [_inboxListing, _archiveListing]);
   });
 
-  test('an id that is not among the newest 50 of a full inbox: says that '
-      'only those can be archived here', () async {
-    for (var i = 0; i < 60; i++) {
-      server.mailbox.inbox.add(
-        FakeMessage(
-          id: 1000 + i,
-          sender: 'Leerling $i',
-          subject: 'Taak $i',
-          date: '2024-04-${(i % 28 + 1).toString().padLeft(2, '0')} 09:00',
-        ),
-      );
-    }
-    // Message 103 is still in the inbox, but older than the newest 50.
+  test('an id older than the newest 50 inbox messages: lists the inbox page '
+      'by page until it finds every id, and archives it', () async {
+    server.mailbox.inbox.addAll(
+      hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),
+    );
+    // Message 103 is the oldest of 123, on the third page of 50.
 
-    final (result, text) = await archive([103]);
+    expect(await ok([103]), 'Archived 1 message.\nArchived:\n$_line103');
+    expect(server.mailbox.actions, [
+      _inboxListing,
+      _nextInboxPage,
+      _nextInboxPage,
+      'archive msgIDs=103',
+    ]);
+    expect(_ids(server.mailbox.archive), contains(103));
+
+    server.mailbox.actions.clear();
+    expect(await ok([1001]), startsWith('Archived 1 message.\n'));
+    expect(server.mailbox.actions, [_inboxListing, 'archive msgIDs=1001']);
+  });
+
+  test('an id in neither box: both are listed to the end', () async {
+    server.mailbox
+      ..inbox.addAll(
+        hourlyMessages(60, firstId: 1000, newest: '2024-04-30 18:00'),
+      )
+      ..archive.addAll(
+        hourlyMessages(60, firstId: 2000, newest: '2024-01-31 18:00'),
+      );
+
+    final (result, text) = await archive([999]);
 
     expect(result.isError, isTrue);
-    expect(
-      text,
-      endsWith(
-        'Not archived, not in the inbox:\n'
-        '- id 103\n'
-        'Note: only messages in the inbox can be archived. Take the ids from '
-        'list_messages on the inbox. Smartschool only returns the newest 50 '
-        'messages of the inbox, so an older message cannot be archived here; '
-        'the user can archive it in Smartschool itself.',
-      ),
+    expect(text, contains('Not archived, not in the inbox:\n- id 999\n'));
+    expect(server.mailbox.actions, [
+      _inboxListing,
+      _nextInboxPage,
+      _archiveListing,
+      _nextArchivePage,
+    ]);
+  });
+
+  test('an id already in the archive, older than its newest 50: found '
+      'there', () async {
+    server.mailbox.archive.addAll(
+      hourlyMessages(60, firstId: 2000, newest: '2024-03-31 18:00'),
     );
-    expect(server.mailbox.actions, isNot(contains(startsWith('archive '))));
-    expect(_ids(server.mailbox.inbox), contains(103));
+
+    expect(
+      await ok([201]),
+      'Archived 0 of 1 message; 1 was already in the archive.\n'
+      'Already in the archive:\n'
+      '$_line201',
+    );
+    expect(server.mailbox.actions, [
+      _inboxListing,
+      _archiveListing,
+      _nextArchivePage,
+    ]);
   });
 
   test('an id Smartschool does not confirm is reported per id', () async {
@@ -275,8 +306,7 @@ void main() {
   });
 
   group('the session expires', () {
-    test('at the archive request: logs in again, lists the inbox again and '
-        'archives once', () async {
+    test('at the archive request: logs in again and archives once', () async {
       await callTool(connection, 'list_messages');
       server.mailbox.actions.clear();
       server.expireSessionBefore(
@@ -288,22 +318,24 @@ void main() {
       expect(
         server.requests.where((r) => r.endsWith(FakeMailbox.archivePath)),
         hasLength(2),
-        reason: 'the first archive request is rejected, the second accepted',
+        reason:
+            'the first archive request is refused; the library retries it '
+            'after logging in again',
       );
-      expect(server.mailbox.actions, [
-        _inboxListing,
-        _inboxListing,
-        'archive msgIDs=101',
-      ]);
+      expect(server.mailbox.actions, [_inboxListing, 'archive msgIDs=101']);
     });
 
-    test('at the archive listing, before anything was archived: the repeat '
-        'reports the message as archived, not as already there', () async {
+    test('at the archive listing, and Smartschool refuses it also after '
+        'logging in again: the call is repeated before anything was '
+        'archived, and reports the message as archived, not as already '
+        'there', () async {
       await callTool(connection, 'list_messages');
       server.mailbox.actions.clear();
-      server.expireSessionBefore(
-        (request) => '${request.data}'.contains('<![CDATA[305]]>'),
-      );
+      server
+        ..expireSessionBefore(
+          (request) => '${request.data}'.contains('<![CDATA[305]]>'),
+        )
+        ..rejectsAfterLogin = 1;
 
       final text = await ok([101, 999]);
 

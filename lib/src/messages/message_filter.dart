@@ -2,8 +2,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../tools/server_tool.dart';
 
-/// Which message headers to show, applied to a whole box (Smartschool always
-/// returns all of it).
+/// Which message headers to show.
 final class MessageFilter {
   const MessageFilter({
     this.query,
@@ -39,6 +38,14 @@ final class MessageFilter {
       .toList();
 
   bool matches(ShortMessage message) => _matches(message, _terms);
+
+  /// Whether [page], a page of a box listed newest first, reaches back past
+  /// [since]: the pages after it only hold older messages, which cannot
+  /// match.
+  bool reachesPastSince(List<ShortMessage> page) => switch (since) {
+    final since? => page.any((message) => message.date.isBefore(since)),
+    null => false,
+  };
 
   bool _matches(ShortMessage message, List<String> terms) {
     if (unreadOnly && !message.unread) return false;

@@ -39,6 +39,10 @@ dependencies:
   # XML parser for the parts of Office files. flutter_smartschool already
   # depends on it.
   xml: ^6.6.1
+  # Reads the optional download_dir from a credentials.yml, which the
+  # library's PathCredentials does not expose. flutter_smartschool already
+  # depends on it.
+  yaml: ^3.1.2
 
 dev_dependencies:
   async: ^2.13.0

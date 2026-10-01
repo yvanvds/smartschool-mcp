@@ -16,9 +16,10 @@ typedef ClientFactory =
 /// Nothing happens at startup, so the server starts even with incomplete
 /// settings. The first [run] reads the settings, creates the client and logs
 /// in; later calls reuse that client for the lifetime of the process. The
-/// library keeps the session cookies in `~/.cache/smartschool/<username>`,
-/// so a new process only goes through the password and 2FA steps when the
-/// saved session has expired.
+/// library keeps the session cookies in the user's cache folder
+/// ([cacheDirectory], `~/.cache/smartschool/<username>`), so a new process
+/// only goes through the password and 2FA steps when the saved session has
+/// expired.
 ///
 /// Every failure surfaces as a [SmartschoolProblem] whose message tells the
 /// teacher what to fix. A failure that retrying cannot fix
@@ -27,12 +28,8 @@ typedef ClientFactory =
 /// again, so a wrong password cannot lock the account through repeated
 /// attempts.
 final class SmartschoolSession {
-  SmartschoolSession(
-    this.source, {
-    ClientFactory? createClient,
-    Duration recheckDelay = const Duration(seconds: 2),
-  }) : _createClient = createClient ?? SmartschoolClient.create,
-       _recheckDelay = recheckDelay;
+  SmartschoolSession(this.source, {ClientFactory? createClient})
+    : _createClient = createClient ?? SmartschoolClient.create;
 
   /// A GET that needs a valid session. Without one, Smartschool redirects it
   /// to `/login` and the library's auth interceptor logs in. The library's
@@ -42,18 +39,30 @@ final class SmartschoolSession {
   final CredentialSource source;
   final ClientFactory _createClient;
 
-  /// How long to wait before checking a just-created session again (see
-  /// [_open]).
-  final Duration _recheckDelay;
-
   SmartschoolSettings? _settings;
   SmartschoolProblem? _permanentProblem;
   SmartschoolClient? _client;
   Future<SmartschoolClient>? _connecting;
-  Future<SmartschoolClient>? _reconnecting;
+  String? _cacheDirectory;
 
-  /// Clients replaced by [_reconnect], closed by [close].
-  final List<SmartschoolClient> _retired = [];
+  /// The folder the library keeps the logged-in user's data in, such as the
+  /// saved session cookies: the client's [SmartschoolClient.cacheDir],
+  /// `~/.cache/smartschool/<username>` unless the [ClientFactory] chose
+  /// another one.
+  ///
+  /// The server keeps its own data for the user in subfolders of it (the
+  /// message texts, the Intradesk index), so that it is found and removed
+  /// together with the library's. Taken from the library rather than worked
+  /// out here, so it cannot drift from the folder the library uses.
+  ///
+  /// Known once [run] has logged in, and still after [close]; before that,
+  /// a [StateError]: use it only inside [run].
+  String get cacheDirectory =>
+      _cacheDirectory ??
+      (throw StateError(
+        'The Smartschool cache folder is only known once the session has '
+        'logged in',
+      ));
 
   /// The settings, read from [source] on first use.
   ///
@@ -77,17 +86,19 @@ final class SmartschoolSession {
 
   /// Runs [action] with a logged-in client.
   ///
-  /// Logs in first if needed. When Smartschool rejects the session during
-  /// [action] (it expired), logs in again and runs [action] once more. A
-  /// rejected request did not take effect on the server, but [action] runs
-  /// again from the start, so it must be safe to repeat.
+  /// Logs in first if needed. When the session expires later, the library
+  /// logs in again for the first request that Smartschool refuses and
+  /// retries that request; requests refused while that login runs wait for
+  /// it instead of logging in themselves, so they share one login
+  /// (yvanvds/dartschool#8, #36).
   ///
-  /// Calls that find the session expired at the same time, and concurrent
-  /// requests within one [action], share one new login: several logins at
-  /// once would send the same one-time 2FA code, and repeated logins count
-  /// towards locking the account (#20). That is why the library itself
-  /// never logs in on a client whose session worked (see
-  /// [SessionInterceptor.allowLogin]).
+  /// When Smartschool still refuses the session for a request of [action]
+  /// ([ProblemKind.sessionRejected]: also after the library logged in again,
+  /// or the library did not send the request because a new login replaced
+  /// the session it belongs to, like a step of a send), [action] runs once
+  /// more, from the start; the library logs in again first if needed. A
+  /// refused request did not take effect on the server, but [action] must be
+  /// safe to repeat.
   ///
   /// Login and connection failures are thrown as [SmartschoolProblem]s; other
   /// errors from [action] are rethrown unchanged.
@@ -103,12 +114,13 @@ final class SmartschoolSession {
       }
       log(
         'Smartschool did not accept the session (${_describe(error)}); '
-        'logging in again',
+        'trying once more',
       );
     }
-    final fresh = await _reconnect(client);
     try {
-      return await action(fresh);
+      // Through [_connectedClient], so that a login that another call found
+      // rejected meanwhile is not tried again.
+      return await action(await _connectedClient());
     } catch (error, stackTrace) {
       final kind = classifyFailure(error);
       if (kind == null) rethrow;
@@ -116,14 +128,11 @@ final class SmartschoolSession {
     }
   }
 
-  /// Releases the clients this session created.
+  /// Releases the client this session created.
   Future<void> close() async {
-    final clients = [?_client, ..._retired];
+    final client = _client;
     _client = null;
-    _retired.clear();
-    for (final client in clients) {
-      await client.dispose();
-    }
+    await client?.dispose();
   }
 
   Future<SmartschoolClient> _connectedClient() async {
@@ -146,90 +155,33 @@ final class SmartschoolSession {
         settings,
       );
     }
-    return _client = await _open(settings);
-  }
-
-  /// Replaces [rejected], whose session Smartschool no longer accepts, with a
-  /// new client, logging in again if needed.
-  ///
-  /// A new client rather than a new login on [rejected]: its cookie jar may
-  /// hold cookies that break the new session (see [_open]). Concurrent calls
-  /// share one replacement, and [rejected] stays open until [close] because
-  /// they may still be using it.
-  Future<SmartschoolClient> _reconnect(SmartschoolClient rejected) {
-    if (_permanentProblem case final problem?) return Future.error(problem);
-    if (_client case final current? when !identical(current, rejected)) {
-      return Future.value(current);
-    }
-    return _reconnecting ??= () async {
-      final fresh = await _open(settings);
-      _retired.add(rejected);
-      return _client = fresh;
-    }().whenComplete(() => _reconnecting = null);
+    final client = _client = await _open(settings);
+    _cacheDirectory = client.cacheDir;
+    return client;
   }
 
   /// Creates a client and checks its session, logging in if needed.
-  ///
-  /// Right after a successful login (password and 2FA accepted), Smartschool
-  /// can still send the library's retry of the session check to `/login`.
-  /// Seen live when logging in with an old cookie cache, while a new client
-  /// got in with the cookies that login had saved. What differs is the
-  /// cookie jar: the library's jar keeps expired cookies in memory
-  /// (`ignoreExpires`) but drops them when it saves, and a new client
-  /// reloads the saved cookies. So the check is repeated once with a new
-  /// client, which never logs in: a second 2FA code within seconds could be
-  /// refused as a replay. Belongs in the library: #13.
   Future<SmartschoolClient> _open(SmartschoolSettings settings) async {
-    var loggedIn = false;
-
-    Future<SmartschoolClient> attempt({required bool allowLogin}) async {
-      final client = await _createClient(settings.toCredentials());
-      final trace = SessionInterceptor(client, allowLogin: allowLogin);
-      client.dio.interceptors.insert(0, trace);
-      try {
-        // What ensureAuthenticated() does. Before flutter_smartschool 0.3.0
-        // it folded network errors into a SmartschoolAuthenticationError;
-        // now both throw a SmartschoolConnectionError (#13).
-        await client.platformId;
-      } catch (_) {
-        loggedIn = trace.loginPagesSeen > 0;
-        await client.dispose();
-        rethrow;
-      }
-      log(
-        trace.loginPagesSeen == 0
-            ? 'Smartschool: reused the saved session, no login needed'
-            : 'Smartschool: logged in',
-      );
-      // From now on a request sent to the login chain fails, so that [run]
-      // logs in again once for all requests that find the session expired.
-      trace.allowLogin = false;
-      return client;
-    }
-
     log('Smartschool: checking the session with ${settings.host}');
+    final client = await _createClient(settings.toCredentials());
+    final trace = SessionInterceptor(client);
+    client.dio.interceptors.insert(0, trace);
     try {
-      return await attempt(allowLogin: true);
+      await client.ensureAuthenticated();
     } catch (error, stackTrace) {
-      final kind = classifyFailure(error) ?? ProblemKind.unexpected;
-      if (kind != ProblemKind.sessionRejected || !loggedIn) {
-        throw _problem(kind, error, stackTrace);
-      }
-      log(
-        'Smartschool: logged in, but the session was not accepted yet '
-        '(${_describe(error)}); checking again with the saved cookies',
-      );
-    }
-    await Future<void>.delayed(_recheckDelay);
-    try {
-      return await attempt(allowLogin: false);
-    } catch (error, stackTrace) {
+      await client.dispose();
       throw _problem(
         classifyFailure(error) ?? ProblemKind.unexpected,
         error,
         stackTrace,
       );
     }
+    log(
+      trace.refusals == 0
+          ? 'Smartschool: reused the saved session, no login needed'
+          : 'Smartschool: logged in',
+    );
+    return client;
   }
 
   /// Builds the problem for [kind], logs [error] (with its stack trace when
@@ -258,38 +210,21 @@ String _describe(Object error) => switch (error) {
   _ => '$error',
 };
 
-/// A Dio interceptor, installed first on each of the session's clients,
-/// that
+/// A Dio interceptor, installed first on the session's client, that logs
+/// each step of the login chain to stderr (paths only, never bodies), so the
+/// log shows whether a session was reused or a new login and 2FA round trip
+/// happened.
 ///
-/// - logs each step of the login chain to stderr (paths only, never bodies),
-///   so the log shows whether a session was reused or a new login and 2FA
-///   round trip happened;
-/// - turns a `401` on a regular request into a [SessionExpiredError], so the
-///   session logs in again, before the library's auth interceptor can (see
-///   [SessionExpiredError]);
-/// - unless [allowLogin], turns being sent to the login chain into a
-///   [SessionExpiredError] as well, before the library's auth interceptor
-///   can start a login.
+/// It only watches: logging in again when Smartschool refuses the session
+/// is up to the library's own auth interceptor, which comes after it.
 final class SessionInterceptor extends Interceptor {
-  SessionInterceptor(this._client, {this.allowLogin = true});
+  SessionInterceptor(this._client);
 
   final SmartschoolClient _client;
 
-  /// Whether the library may log in when Smartschool asks for it.
-  ///
-  /// Only while [SmartschoolSession] checks a new client's session: once
-  /// that works, the session turns it off. Up to flutter_smartschool 0.2.x
-  /// the library logged in for every request that landed on the login
-  /// chain, so requests in progress when the session expired each logged
-  /// in, all with the same 2FA code (yvanvds/dartschool#36, fixed in 0.3.0;
-  /// relying on that instead is #13). Instead they fail with a
-  /// [SessionExpiredError], and [SmartschoolSession.run] logs in once for
-  /// all of them with a new client and retries each call.
-  bool allowLogin;
-
-  /// How many responses landed on a page of the login chain; 0 means the
-  /// saved session was valid.
-  int loginPagesSeen = 0;
+  /// How many answers to a regular request refused its session (a `401`, or
+  /// a page of the login chain); 0 means the saved session was valid.
+  int refusals = 0;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -311,46 +246,18 @@ final class SessionInterceptor extends Interceptor {
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
   ) {
-    final requested = response.requestOptions.uri;
-    if (!_client.isAuthUri(requested)) {
-      final page = response.realUri.path;
-      if (_client.isAuthUri(response.realUri)) {
-        loginPagesSeen++;
-        if (!allowLogin) {
-          log('Smartschool: the session is not valid (sent to $page)');
-          return _reject(
-            response,
-            handler,
-            const SessionExpiredError.sentToLogin(),
-          );
-        }
-        log(
-          page.endsWith('/login')
-              ? 'Smartschool: no valid session, logging in'
-              : 'Smartschool: login continues at $page',
-        );
-      } else if (response.statusCode == 401) {
-        return _reject(
-          response,
-          handler,
-          const SessionExpiredError.unauthorized(),
-        );
+    if (!_client.isAuthUri(response.requestOptions.uri)) {
+      final page = response.realUri;
+      final refused = _client.isAuthUri(page)
+          ? 'sent to ${page.path}'
+          : response.statusCode == 401
+          ? 'answered 401'
+          : null;
+      if (refused != null) {
+        refusals++;
+        log('Smartschool: no valid session ($refused)');
       }
     }
     handler.next(response);
-  }
-
-  void _reject(
-    Response<dynamic> response,
-    ResponseInterceptorHandler handler,
-    SessionExpiredError error,
-  ) {
-    handler.reject(
-      DioException(
-        requestOptions: response.requestOptions,
-        response: response,
-        error: error,
-      ),
-    );
   }
 }

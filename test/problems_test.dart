@@ -29,6 +29,7 @@ void main() {
     // when a library update changes how it reports a failure.
     test('a rejected password', () async {
       final error = await _loginError(FakeSmartschool(passwordAccepted: false));
+      expect(error, isA<SmartschoolInvalidCredentialsError>());
       expect(classifyFailure(error), ProblemKind.wrongPassword);
     });
 
@@ -36,6 +37,7 @@ void main() {
       final error = await _loginError(
         FakeSmartschool(twoFactorAccepted: false),
       );
+      expect(error, isA<SmartschoolTwoFactorRejectedError>());
       expect(classifyFailure(error), ProblemKind.twoFactorRejected);
     });
 
@@ -43,6 +45,7 @@ void main() {
       final error = await _loginError(
         FakeSmartschool(secondStep: SecondStep.twoFactorWithoutApp),
       );
+      expect(error, isA<SmartschoolUnsupportedTwoFactorMethodError>());
       expect(classifyFailure(error), ProblemKind.twoFactorUnsupported);
     });
 
@@ -50,6 +53,7 @@ void main() {
       final error = await _loginError(
         FakeSmartschool(secondStep: SecondStep.accountVerification),
       );
+      expect(error, isA<SmartschoolAccountVerificationRequiredError>());
       expect(classifyFailure(error), ProblemKind.accountVerification);
     });
 
@@ -111,54 +115,64 @@ void main() {
       }
     });
 
-    test('a rejected session: a 401, the library refusing it, or HTML where '
-        'data was expected', () {
+    test('a rejected session: as the library throws it, also wrapped as a '
+        'request on client.dio gets it', () {
+      const refused = SmartschoolSessionExpiredError();
+      expect(classifyFailure(refused), ProblemKind.sessionRejected);
       expect(
         classifyFailure(
           DioException(
             requestOptions: RequestOptions(path: '/'),
-            error: const SessionExpiredError.unauthorized(),
-          ),
-        ),
-        ProblemKind.sessionRejected,
-      );
-      expect(
-        classifyFailure(const SessionExpiredError.sentToLogin()),
-        ProblemKind.sessionRejected,
-      );
-      expect(
-        classifyFailure(const SmartschoolSessionExpiredError()),
-        ProblemKind.sessionRejected,
-      );
-      expect(
-        classifyFailure(
-          const SmartschoolAuthenticationError(
-            'Smartschool returned HTML instead of XML for "message list". '
-            'Login may have failed or expired.',
-          ),
-        ),
-        ProblemKind.sessionRejected,
-      );
-      expect(
-        classifyFailure(
-          const SmartschoolAuthenticationError(
-            'Expected JSON but received HTML from https://x/y. Session may be '
-            'unauthenticated or login flow did not complete.',
+            error: refused,
           ),
         ),
         ProblemKind.sessionRejected,
       );
     });
 
-    test('other authentication errors are "unexpected"', () {
+    test('each login failure by its type, whatever its message', () {
+      const message = 'reworded';
+      expect(
+        classifyFailure(const SmartschoolInvalidCredentialsError(message)),
+        ProblemKind.wrongPassword,
+      );
+      for (final error in [
+        const SmartschoolTwoFactorRejectedError(message),
+        const SmartschoolTwoFactorRequiredError(message),
+      ]) {
+        expect(classifyFailure(error), ProblemKind.twoFactorRejected);
+      }
       expect(
         classifyFailure(
-          const SmartschoolAuthenticationError(
-            'Authentication flow did not complete. Still on /oauth',
-          ),
+          const SmartschoolUnsupportedTwoFactorMethodError(['sms'], message),
         ),
-        ProblemKind.unexpected,
+        ProblemKind.twoFactorUnsupported,
       );
+      for (final error in [
+        const SmartschoolAccountVerificationRequiredError(message),
+        const SmartschoolAccountVerificationRejectedError(message),
+      ]) {
+        expect(classifyFailure(error), ProblemKind.accountVerification);
+      }
+    });
+
+    test('other authentication errors are "unexpected", also an HTML page '
+        'where data was expected', () {
+      for (final message in [
+        'Authentication flow did not complete. Still on /oauth',
+        'Smartschool returned HTML instead of XML for "message list". Login '
+            'may have failed or expired.',
+        'Expected JSON but received HTML from https://x/y. Session may be '
+            'unauthenticated or login flow did not complete.',
+        // The message of a rejected password, but not its type.
+        'Login failed. Check username/password or SSO-only account setup.',
+      ]) {
+        expect(
+          classifyFailure(SmartschoolAuthenticationError(message)),
+          ProblemKind.unexpected,
+          reason: message,
+        );
+      }
     });
 
     test('a SmartschoolProblem keeps its kind', () {

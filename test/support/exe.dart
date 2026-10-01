@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
+import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:test/test.dart';
 
@@ -36,7 +37,7 @@ Map<String, String> environmentWithoutSmartschool() => {
 
 /// The compiled server, driven over stdio like Claude Desktop does.
 class ServerProcess {
-  ServerProcess._(this._process)
+  ServerProcess._(this._process, {this.downloads})
     : stderr = _process.stderr.transform(utf8.decoder).join(),
       _stdout = StreamQueue(
         _process.stdout.transform(utf8.decoder).transform(const LineSplitter()),
@@ -48,24 +49,49 @@ class ServerProcess {
   /// The update check is turned off unless [checkForUpdates], so a test
   /// never asks the real GitHub: a test that checks passes an [environment]
   /// with `SMARTSCHOOL_MCP_UPDATE_URL` (a `FakeGitHub`) and its own `HOME`.
+  ///
+  /// Files are saved in a new temporary folder ([downloads], deleted after
+  /// the test), so a test never touches the real Downloads folder, unless
+  /// [environment] sets `SMARTSCHOOL_DOWNLOAD_DIR` itself (empty for the
+  /// default).
   static Future<ServerProcess> start(
     String exePath, {
     List<String> args = const [],
     Map<String, String>? environment,
     bool checkForUpdates = false,
   }) async {
+    final downloadVariable = Setting.downloadDir.envVar;
+    Directory? downloads;
+    if (environment?[downloadVariable] == null) {
+      downloads = await Directory.systemTemp.createTemp(
+        'smartschool_mcp_downloads_',
+      );
+      final folder = downloads;
+      addTearDown(() async {
+        try {
+          await folder.delete(recursive: true);
+        } on FileSystemException {
+          // The server still had a file open; it is in the temp folder.
+        }
+      });
+    }
     final process = await Process.start(
       exePath,
       args,
       environment: {
         ...?environment,
+        if (downloads != null) downloadVariable: downloads.path,
         if (!checkForUpdates) UpdateChecker.disableVariable: 'off',
       },
       includeParentEnvironment: environment == null,
     );
     addTearDown(process.kill);
-    return ServerProcess._(process);
+    return ServerProcess._(process, downloads: downloads?.path);
   }
+
+  /// The temporary download folder [start] gave the server, or null when
+  /// the test chose one.
+  final String? downloads;
 
   final Process _process;
   final StreamQueue<String> _stdout;

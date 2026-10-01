@@ -103,19 +103,14 @@ void main() {
     final result = await session.run((client) async {
       final messages = MessagesService(client);
       try {
-        return await loadReplyRecipients(
-          client,
-          messages,
-          box,
-          id,
-          replyAll: replyAll,
-        );
+        return await loadReplyRecipients(messages, box, id, replyAll: replyAll);
       } finally {
         await messages.dispose();
       }
     });
     for (final user in [...result.to, ...result.cc]) {
-      // What sendMessage registers each recipient with.
+      // What sendReply compares with its form's entries and registers a
+      // recipient with.
       expect(user.userId, server.mailbox.userId(user.displayName));
       expect(user.ssId, FakeMailbox.platformId);
       expect(user.userLt, 0);

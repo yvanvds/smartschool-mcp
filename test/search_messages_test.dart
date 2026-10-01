@@ -164,7 +164,7 @@ void main() {
     expect(tool.description, contains('call read_message with its id and box'));
     expect(tool.description, contains('at most 100 are downloaded per search'));
     expect(tool.description, contains('keeps them on this PC'));
-    expect(tool.description, contains('newest 50 messages of each box'));
+    expect(tool.description, isNot(contains('newest 50')));
     final schema = tool.inputSchema;
     expect(schema.required, ['query']);
     expect(schema.properties!.keys, [
@@ -223,6 +223,45 @@ void main() {
         reason: 'text of $id saved',
       );
     }
+  });
+
+  test('wired like the server (MessageTextCache.of): the texts are saved in '
+      'messages/<host> in the cache folder of the library\'s client, next '
+      'to the session cookies, where a restart finds them', () async {
+    Future<ServerConnection> startOfSession() async {
+      final session = SmartschoolSession(
+        fakeExtensionSettings(),
+        createClient: fakeClientFactory(server, cookies),
+      );
+      addTearDown(session.close);
+      final (connection, _) = await connect(
+        tools: [searchMessagesTool(session, MessageTextCache.of(session))],
+      );
+      return connection;
+    }
+
+    final first = await ok({
+      'query': 'facultatieve verlofdag',
+    }, await startOfSession());
+
+    final folder = Directory(
+      [cookies.path, 'messages', fakeHost].join(Platform.pathSeparator),
+    );
+    for (final id in [101, 102, 103, 201, 202]) {
+      expect(
+        await MessageTextCache(folder).read(BoxType.inbox, id),
+        isNotNull,
+        reason: 'text of $id saved',
+      );
+    }
+    expect(cacheFolder.listSync(), isEmpty);
+
+    server.mailbox.actions.clear();
+    expect(
+      await ok({'query': 'facultatieve verlofdag'}, await startOfSession()),
+      first,
+    );
+    expect(downloads(), isEmpty);
   });
 
   test('matches the subject and the sender too; an empty message shows '
@@ -403,9 +442,6 @@ void main() {
       'query': 'zwembad',
       'boxes': ['inbox', 'sent', 'archive'],
     };
-    const pageNote =
-        'Note: Smartschool only returns the newest 50 messages of a box, so '
-        'older messages in Inbox, Sent and Archive were not searched.';
     const hit1049 =
         '- inbox | id 1049 | 2024-03-10 10:49 | from Collega 49 | Inbox 49\n'
         '  Bericht 49: het zwembad is dicht';
@@ -418,8 +454,7 @@ void main() {
       'Not searched: the 50 oldest messages, because at most 100 message '
       'texts are downloaded per search. Search again to search them too: '
       'downloaded texts are kept, so the next search only downloads the '
-      'rest.\n'
-      '$pageNote',
+      'rest.',
     );
     expect(downloadCounts().keys.toSet(), {
       for (var i = 0; i < 50; i++) ...{1000 + i, 2000 + i},
@@ -432,8 +467,7 @@ void main() {
       'of: zwembad, newest first.\n'
       '$hit1049\n'
       '- sent | id 3000 | 2024-01-10 10:00 | to Collega 0 | Verstuurd 0\n'
-      '  Bericht 0: zwembad\n'
-      '$pageNote',
+      '  Bericht 0: zwembad',
     );
     expect(downloadCounts().keys.toSet(), {
       for (var i = 0; i < 50; i++) 3000 + i,
@@ -465,8 +499,8 @@ void main() {
     expect(downloadConcurrency, 4);
   });
 
-  test('when the session expires halfway: logs in again and only downloads '
-      'what was not saved yet', () async {
+  test('when the session expires halfway: logs in again once, and '
+      'downloads each text once', () async {
     var shows = 0;
     server.expireSessionBefore(
       (request) => '${request.data}'.contains('show message') && ++shows == 3,
@@ -477,13 +511,12 @@ void main() {
     expect(server.logins, 2);
     final counts = downloadCounts();
     expect(counts.keys, unorderedEquals([101, 102, 103, 201, 202]));
-    expect(counts.values, everyElement(lessThanOrEqualTo(2)));
     expect(
-      counts.values.where((n) => n == 1).length,
-      greaterThanOrEqualTo(2),
+      counts.values,
+      everyElement(1),
       reason:
-          'texts saved before the session expired are not downloaded '
-          'again',
+          'the library retries each refused download after the one new '
+          'login; the search does not run again',
     );
     server.mailbox.actions.clear();
     await ok({'query': 'facultatieve verlofdag'});
@@ -517,7 +550,8 @@ void main() {
     );
   });
 
-  test('a page-size note when a box returns 50 messages', () async {
+  test('searches past the first 50 messages of a box, which Smartschool '
+      'lists 50 at a time', () async {
     for (var i = 0; i < 48; i++) {
       server.mailbox.archive.add(
         FakeMessage(
@@ -528,13 +562,14 @@ void main() {
         ),
       );
     }
+    // The 51st message of the archive, on its second page.
     server.mailbox.archive.add(
       FakeMessage(
         id: 800,
         sender: 'Directie',
         subject: 'Nog ouder',
         date: '2023-11-01 10:00',
-        body: '<p>zwembad</p>',
+        body: '<p>Het zwembad is dicht.</p>',
       ),
     );
 
@@ -542,10 +577,51 @@ void main() {
 
     expect(
       text,
-      'Inbox and Archive: none of the 53 messages searched contains all of: '
-      'zwembad.\n'
-      'Note: Smartschool only returns the newest 50 messages of a box, so '
-      'older messages in Archive were not searched.',
+      'Inbox and Archive: 1 of the 54 messages searched contains all of: '
+      'zwembad, newest first.\n'
+      '- archive | id 800 | 2023-11-01 10:00 | from Directie | Nog ouder\n'
+      '  Het zwembad is dicht.',
     );
+    expect(
+      server.mailbox.actions.where((a) => !a.startsWith('show message ')),
+      [
+        startsWith('message list boxID=0 boxType=inbox '),
+        startsWith('message list boxID=305 boxType=inbox '),
+        'continue_messages boxID=305 boxType=inbox layout=new',
+      ],
+    );
+  });
+
+  test('since: lists each box only until it reaches past since', () async {
+    server.mailbox.inbox.addAll(
+      hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),
+    );
+    server.mailbox.inbox.add(
+      FakeMessage(
+        id: 1500,
+        sender: 'Directie',
+        subject: 'Zwembad',
+        date: '2024-04-30 08:30',
+        body: '<p>Het zwembad is dicht.</p>',
+      ),
+    );
+
+    final text = await ok({'query': 'zwembad', 'since': '2024-04-30'});
+
+    expect(
+      text,
+      'Inbox and Archive: 1 of the 20 messages searched contains all of: '
+      'zwembad, newest first.\n'
+      '- inbox | id 1500 | 2024-04-30 08:30 | from Directie | Zwembad\n'
+      '  Het zwembad is dicht.',
+    );
+    expect(
+      server.mailbox.actions.where((a) => !a.startsWith('show message ')),
+      [
+        startsWith('message list boxID=0 boxType=inbox '),
+        startsWith('message list boxID=305 boxType=inbox '),
+      ],
+    );
+    expect(downloads(), hasLength(20));
   });
 }

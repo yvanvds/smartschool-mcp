@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:pub_semver/pub_semver.dart';
-import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/cache_folder.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
@@ -435,11 +435,9 @@ void main() {
   });
 
   group('fromEnvironment', () {
-    test('asks GitHub by default and keeps its state in the cache root, '
-        'which needs no Smartschool settings', () {
-      final home = Directory.systemTemp.path;
-
-      final updates = UpdateChecker.fromEnvironment({'HOME': home})!;
+    test('asks GitHub by default and keeps its state in the shared cache '
+        'folder, which needs no Smartschool settings', () {
+      final updates = UpdateChecker.fromEnvironment(const {})!;
       addTearDown(updates.close);
 
       expect(updates.endpoint, UpdateChecker.defaultEndpoint);
@@ -450,7 +448,7 @@ void main() {
       expect(
         updates.stateFile.path,
         [
-          SmartschoolSettings.cacheRoot({'HOME': home}),
+          sharedCacheDirectory(),
           'smartschool-mcp-update-check.json',
         ].join(Platform.pathSeparator),
       );
@@ -461,7 +459,6 @@ void main() {
       for (final value in ['off', 'OFF', ' false ', 'no', '0']) {
         expect(
           UpdateChecker.fromEnvironment({
-            'HOME': '.',
             'SMARTSCHOOL_MCP_UPDATE_CHECK': value,
           }),
           isNull,
@@ -469,7 +466,6 @@ void main() {
         );
       }
       final on = UpdateChecker.fromEnvironment({
-        'HOME': '.',
         'SMARTSCHOOL_MCP_UPDATE_CHECK': 'on',
       });
       expect(on, isNotNull);
@@ -478,17 +474,13 @@ void main() {
     test('SMARTSCHOOL_MCP_UPDATE_URL asks another address; one that is not '
         'http(s) turns the check off', () {
       final updates = UpdateChecker.fromEnvironment({
-        'HOME': '.',
         'SMARTSCHOOL_MCP_UPDATE_URL': ' http://127.0.0.1:8080/latest ',
       })!;
       expect(updates.endpoint, Uri.parse('http://127.0.0.1:8080/latest'));
 
       for (final value in ['ftp://example.com/latest', 'not an address']) {
         expect(
-          UpdateChecker.fromEnvironment({
-            'HOME': '.',
-            'SMARTSCHOOL_MCP_UPDATE_URL': value,
-          }),
+          UpdateChecker.fromEnvironment({'SMARTSCHOOL_MCP_UPDATE_URL': value}),
           isNull,
           reason: value,
         );
