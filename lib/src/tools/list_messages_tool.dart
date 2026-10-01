@@ -24,9 +24,8 @@ ServerTool listMessagesTool(SmartschoolSession session) => ServerTool(
         'oudercontact?" (query, since and until). query matches the subject '
         'and the sender name only, not the message text. The result says how '
         'many messages matched, so you can tell when the limit cut the list '
-        'short. Smartschool only returns the newest '
-        '${MessageBox.pageSize} messages of each box; older ones cannot be '
-        'listed.',
+        'short; to see older messages, pass until (for example the date of '
+        'the oldest message shown).',
     inputSchema: Schema.object(
       properties: {
         'box': MessageBox.schema(
@@ -92,7 +91,25 @@ Future<CallToolResult> _list(
       filter.since != null ||
       filter.until != null;
 
-  final headers = await withMessages(session, box.headers);
+  // The box is listed newest first, page by page, until the pages listed
+  // decide what to show. Like every session action, this may run twice.
+  final (:headers, :stop) = await withMessages(session, (messages) async {
+    var matching = 0;
+    _Stop? stop;
+    final headers = await box.headers(
+      messages,
+      stopAfter: (page) {
+        matching += page.where(filter.matches).length;
+        if (filter.reachesPastSince(page)) {
+          stop = _Stop.pastSince;
+        } else if (matching > filter.limit) {
+          stop = _Stop.pastLimit;
+        }
+        return stop != null;
+      },
+    );
+    return (headers: headers, stop: stop);
+  });
   final (:shown, :matching) = filter.apply(headers);
 
   final total = _count(headers.length, 'message');
@@ -101,9 +118,20 @@ Future<CallToolResult> _list(
     summary = '${box.label}: no messages.';
   } else if (matching == 0) {
     summary = '${box.label}: no messages match the filters ($total checked).';
-  } else if (filtered) {
+  } else if (stop == _Stop.pastLimit) {
+    // How many older messages match is unknown: they were not listed.
+    final count = _count(shown.length, 'message');
+    final verb = shown.length == 1 ? 'matches' : 'match';
     summary =
-        '${box.label}: $matching of $total '
+        '${box.label}: more than $count${filtered ? ' $verb the filters' : ''}'
+        '; showing the newest ${shown.length} (raise limit, or pass until to '
+        'see older ones), newest first.';
+  } else if (filtered) {
+    // A listing that stopped past since left out older messages, which
+    // cannot match.
+    final checked = stop == _Stop.pastSince ? 'the newest $total' : total;
+    summary =
+        '${box.label}: $matching of $checked '
         'match${matching == 1 ? 'es' : ''} the filters'
         '${_cut(shown.length, matching)}, newest first.';
   } else {
@@ -113,14 +141,18 @@ Future<CallToolResult> _list(
   final lines = [
     summary,
     for (final message in shown) '- ${formatHeaderLine(message, box)}',
-    // Smartschool only returns the newest messages of a box
-    // (yvanvds/dartschool#15).
-    if (headers.length >= MessageBox.pageSize)
-      'Note: Smartschool only returns the newest ${MessageBox.pageSize} '
-          'messages of a box, so older messages are missing from this list '
-          'and cannot be found with the filters.',
   ];
   return CallToolResult(content: [TextContent(text: lines.join('\n'))]);
+}
+
+/// Why a box was not listed to the end.
+enum _Stop {
+  /// More messages matched than the limit: older ones would not be shown.
+  pastLimit,
+
+  /// The listing reached messages from before since: older ones cannot
+  /// match.
+  pastSince,
 }
 
 /// Notes that only [shown] of the [matching] messages are listed.

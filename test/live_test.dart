@@ -18,9 +18,10 @@
 /// own with `--name list_messages`. Its failures show message text masked.
 ///
 /// The search test only reads as well: it searches the inbox and the archive
-/// for a word of a read message, twice (the second time from the message
-/// text cache, `~/.cache/smartschool/<username>/messages/<host>`), and for a
-/// word that occurs nowhere. Run it on its own with
+/// for a word of a read message, from that message's date on, twice (the
+/// second time from the message text cache,
+/// `~/.cache/smartschool/<username>/messages/<host>`), and for a word that
+/// occurs nowhere. Run it on its own with
 /// `--name search_messages`. It prints counts and timings, never the word or
 /// any message text.
 ///
@@ -244,19 +245,27 @@ void main() {
       // A long word from the text of a read inbox message.
       final inbox = _expectListShape(await call('list_messages', {}), 'Inbox');
       String? word;
-      int? wordId;
+      _Header? wordMessage;
       for (final header in inbox.where((h) => !h.unread).take(5)) {
         final text = await call('read_message', {'message_id': header.id});
         final body = text.substring(text.indexOf('\n\n') + 2);
         if (body.startsWith('(The message has no text.)')) continue;
         word = RegExp(r'\p{L}{7,}', unicode: true).firstMatch(body)?[0];
         if (word != null) {
-          wordId = header.id;
+          wordMessage = header;
           break;
         }
       }
       expect(word, isNotNull, reason: 'no read inbox message with a word');
-      final query = {'query': word!.toUpperCase(), 'limit': 100};
+      // From the date of that message on: the whole inbox and archive can be
+      // more than the 100 texts a search downloads, and then the second
+      // search would download the next 100 instead of reading the cache.
+      final since = wordMessage!.date;
+      final query = {
+        'query': word!.toUpperCase(),
+        'since': since,
+        'limit': 100,
+      };
 
       final watch = Stopwatch()..start();
       final first = await call('search_messages', query);
@@ -266,6 +275,7 @@ void main() {
       final secondTime = watch.elapsedMilliseconds;
       final nothing = await call('search_messages', {
         'query': 'qzxj${DateTime.now().microsecondsSinceEpoch}',
+        'since': since,
       });
 
       final hits = [
@@ -284,7 +294,7 @@ void main() {
         isTrue,
         reason: _mask(first),
       );
-      expect(hits, contains(wordId), reason: _mask(first));
+      expect(hits, contains(wordMessage.id), reason: _mask(first));
       expect(second == first, isTrue, reason: 'second: ${_mask(second)}');
       expect(
         RegExp(
@@ -623,10 +633,16 @@ String _mask(String text) => text
     .replaceAll(RegExp(r'\p{L}', unicode: true), 'x')
     .replaceAll(RegExp(r'\d'), '9');
 
-typedef _Header = ({int id, String who, String subject, bool unread});
+typedef _Header = ({
+  int id,
+  String date,
+  String who,
+  String subject,
+  bool unread,
+});
 
 final _headerLine = RegExp(
-  r'^- id (\d+) \| \d{4}-\d\d-\d\d \d\d:\d\d \| (?:from|to) (.*?) \| '
+  r'^- id (\d+) \| (\d{4}-\d\d-\d\d \d\d:\d\d) \| (?:from|to) (.*?) \| '
   r'(.+?)(?: \| ((?:unread|attachments|flag \w+)(?:, (?:attachments|flag \w+))*))?$',
 );
 
@@ -641,14 +657,14 @@ List<_Header> _expectListShape(String text, String label) {
   );
   final headers = <_Header>[];
   for (final line in lines.skip(1)) {
-    if (line.startsWith('Note: ')) continue;
     final match = _headerLine.firstMatch(line);
     expect(match, isNotNull, reason: 'line: ${_mask(line)}');
     headers.add((
       id: int.parse(match![1]!),
-      who: match[2]!,
-      subject: match[3]!,
-      unread: match[4]?.contains('unread') ?? false,
+      date: match[2]!,
+      who: match[3]!,
+      subject: match[4]!,
+      unread: match[5]?.contains('unread') ?? false,
     ));
   }
   return headers;

@@ -54,9 +54,10 @@ Every run logs in with a fresh cookie cache, so do not run it in a loop. Its
 message test only reads (it lists the inbox and archive and reads a few
 messages that are already read) and uses your own cookie cache; run just that
 one with `--name list_messages`. The search test only reads as well: it
-searches for a word of a read message twice (the second time from your
-message text cache) and for a word that occurs nowhere, and prints counts and
-timings only; run it with `--name search_messages`. The Intradesk test only
+searches for a word of a read message, from that message's date on, twice
+(the second time from your message text cache) and for a word that occurs
+nowhere, and prints counts and timings only; run it with
+`--name search_messages`. The Intradesk test only
 reads too (no file is downloaded): it lists the top of Intradesk and a folder,
 searches with `refresh: true` (a full walk of Intradesk, a few minutes on a
 large one) and then from the index, and prints counts and timings only; run
@@ -116,8 +117,9 @@ the login works and who is logged in, or what to fix.
   whether a newer version is available (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
-  Smartschool only returns the newest 50 messages of a box
-  (yvanvds/dartschool#15).
+  Smartschool lists a box 50 messages at a time; the tool asks for the next
+  50 only while they can change the result (more messages to show, or not
+  yet past `since`), and Claude reaches older messages with `until`.
 - `read_message`: one message with its recipients, attachment names and the
   body as plain text. It does not mark the message as read.
 - `search_messages`: searches the text, subject and sender of the messages
@@ -126,13 +128,14 @@ the login works and who is logged in, or what to fix.
   newest first with a snippet around the words. It downloads each message
   text once (at most 100 per search, 4 at a time, newest first) and keeps it
   in the message text cache (see below), so later searches are quick; the
-  result says when messages were left unsearched. Like `list_messages` it
-  only sees the newest 50 messages of a box.
+  result says when messages were left unsearched. It lists the whole of each
+  box searched (with `since`, only back to that date), so a search of a
+  large box takes a few searches the first time.
 - `archive_messages`: moves up to 100 inbox messages (ids from
   `list_messages`) to the archive and reports per id whether it was
-  archived, was already in the archive, or why not. Only the newest 50 inbox
-  messages can be archived, the ones `list_messages` shows. Claude proposes
-  candidates when asked for advice and archives when asked to.
+  archived, was already in the archive, or why not. It lists the inbox (and
+  the archive, for ids not in the inbox) until it has found every id. Claude
+  proposes candidates when asked for advice and archives when asked to.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,

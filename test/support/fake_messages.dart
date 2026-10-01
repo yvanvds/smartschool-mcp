@@ -52,6 +52,36 @@ class FakeMessage {
   final bool canReply;
 }
 
+/// [count] messages an hour apart, newest first: ids [firstId] and up, the
+/// first dated [newest] (Smartschool time, like `2024-04-30 18:00`), each
+/// with the subject `$subject <n>` (n counting from 0) and the body
+/// `<p>Bericht <n></p>`.
+List<FakeMessage> hourlyMessages(
+  int count, {
+  required int firstId,
+  required String newest,
+  String subject = 'Bericht',
+}) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final start = DateTime.parse('${newest}Z');
+  final messages = <FakeMessage>[];
+  for (var i = 0; i < count; i++) {
+    final date = start.subtract(Duration(hours: i));
+    messages.add(
+      FakeMessage(
+        id: firstId + i,
+        sender: 'Collega $i',
+        subject: '$subject $i',
+        date:
+            '${date.year}-${two(date.month)}-${two(date.day)} '
+            '${two(date.hour)}:${two(date.minute)}',
+        body: '<p>Bericht $i</p>',
+      ),
+    );
+  }
+  return messages;
+}
+
 /// How the fake answers a submit of the compose form (sending a message).
 enum SubmitAnswer {
   /// Sends the message and answers with the page that closes the compose
@@ -76,11 +106,13 @@ enum SubmitAnswer {
 /// Responses have the shape of the dartschool fixtures under
 /// `test/fixtures/smartschool/requests/post/postboxes/`,
 /// `.../post/messages/xhr/archivemessages.json` and
-/// `.../{get,post}/composemessage/`, and the behaviour seen live: a box
-/// returns its newest [pageSize] messages only, an unknown message id gets a
-/// placeholder message instead of nothing, and the archive endpoint lists
-/// only the ids it moved from the inbox as successful (for a message already
-/// in the archive it answers `{"success":[]}`).
+/// `.../{get,post}/composemessage/`, and the behaviour seen live: a box is
+/// listed [pageSize] headers at a time, newest first (a `message list`
+/// answers with the first page, each `continue_messages` with the next, see
+/// [newSession]), an unknown message id gets a placeholder message instead
+/// of nothing, and the archive endpoint lists only the ids it moved from the
+/// inbox as successful (for a message already in the archive it answers
+/// `{"success":[]}`).
 ///
 /// The reply forms are filled in as seen live: the reply form
 /// (`composeType=1`) names the sender (for a sent message, that is the
@@ -148,6 +180,10 @@ class FakeMailbox {
   /// The HTML bodies of the messages sent, in order.
   final List<String> sentBodies = [];
 
+  /// How many headers of each box the current session was sent since the
+  /// box was last listed, by `boxType/boxID`: the box's paging position.
+  final Map<String, int> _paging = {};
+
   /// The recipients added to each open compose form, by its `uniqueUsc`.
   final Map<String, ({List<int> to, List<int> cc})> _forms = {};
   int _formsOpened = 0;
@@ -162,6 +198,16 @@ class FakeMailbox {
 
   String _userName(int id) =>
       _userIds.entries.firstWhere((entry) => entry.value == id).key;
+
+  /// Starts a new session, which has no paging positions.
+  ///
+  /// As seen live (yvanvds/dartschool#15), Smartschool keeps one paging
+  /// position per box in the session: a `message list` of a box restarts it
+  /// at the second page, and each `continue_messages` of the box answers
+  /// with the page after the position. A `continue_messages` of a box the
+  /// session has not listed is answered like one after the last page (only
+  /// `rebuildfinish`); what Smartschool answers then has not been seen.
+  void newSession() => _paging.clear();
 
   /// Whether [options] submits a compose form, which sends a message.
   static bool isSubmit(RequestOptions options) =>
@@ -218,6 +264,7 @@ class FakeMailbox {
     final id = int.tryParse(params['msgID'] ?? '');
     return switch (action) {
       'message list' => _list(params['boxType']!, params['boxID'] ?? '0'),
+      'continue_messages' => _continue(params['boxType']!, params['boxID']!),
       'show message' => _show(
         id!,
         params['boxType']!,
@@ -269,14 +316,83 @@ class FakeMailbox {
     return null;
   }
 
+  /// The messages of a box, newest first (the highest id first among
+  /// messages of the same minute, so that pages do not overlap).
+  List<FakeMessage> _sorted(String boxType, String boxId) =>
+      [..._box(boxType, boxId)]..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        return byDate != 0 ? byDate : b.id.compareTo(a.id);
+      });
+
   String _list(String boxType, String boxId) {
-    final messages = [..._box(boxType, boxId)]
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final page = messages.take(pageSize);
-    return _envelope('message list', '''
+    final messages = _sorted(boxType, boxId);
+    final page = messages.take(pageSize).toList();
+    _paging['$boxType/$boxId'] = page.length;
+    return _listing(
+      'rebuild',
+      page,
+      more: messages.length > page.length,
+      boxType: boxType,
+      boxId: boxId,
+    );
+  }
+
+  String _continue(String boxType, String boxId) {
+    final messages = _sorted(boxType, boxId);
+    final from = _paging['$boxType/$boxId'] ?? messages.length;
+    final page = messages.skip(from).take(pageSize).toList();
+    _paging['$boxType/$boxId'] = from + page.length;
+    return _listing(
+      page.isEmpty ? null : 'rebuildcontinue',
+      page,
+      more: from + page.length < messages.length,
+      boxType: boxType,
+      boxId: boxId,
+    );
+  }
+
+  /// A page of a box listing, shaped like the live answers: the headers of
+  /// [page] in a [command] action (`rebuild` for a `message list`,
+  /// `rebuildcontinue` for a `continue_messages`, none after the last page),
+  /// then a `continue_messages` action when the box holds [more] headers, or
+  /// a `rebuildfinish` action when not.
+  String _listing(
+    String? command,
+    List<FakeMessage> page, {
+    required bool more,
+    required String boxType,
+    required String boxId,
+  }) {
+    final headers = command == null
+        ? ''
+        : '''
+      <action>
+        <subsystem>message list</subsystem>
+        <command>$command</command>
+        <data>
 <messages>
 ${page.map(_header).join('\n')}
-</messages>''');
+</messages>
+        </data>
+      </action>''';
+    final end = more
+        ? '<action><subsystem>message list</subsystem>'
+              '<command>continue_messages</command><data><details>'
+              '<boxID>$boxId</boxID><boxType>$boxType</boxType></details>'
+              '</data></action>'
+        : '<action><subsystem>message list</subsystem>'
+              '<command>rebuildfinish</command><data><message/></data>'
+              '</action>';
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+$headers
+      $end
+    </actions>
+  </response>
+</server>''';
   }
 
   String _header(FakeMessage m) =>
