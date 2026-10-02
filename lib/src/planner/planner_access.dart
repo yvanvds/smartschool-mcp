@@ -14,7 +14,8 @@ import '../tools/server_tool.dart';
 ///
 /// Like every [SmartschoolSession.run] action, [action] may run twice (when
 /// Smartschool refuses the session), so it must be safe to repeat; reading
-/// the planner is.
+/// the planner is, and so are the library's writes (see
+/// `planner_writes.dart`).
 ///
 /// The planner's own errors, which [SmartschoolSession.run] passes on as
 /// they are, become [ToolError]s ([plannerToolError]); login and connection
@@ -38,6 +39,11 @@ Future<T> withPlanner<T>(
 /// - [SmartschoolPlannedElementNotFoundError]: the element is gone, or its
 ///   id changed (a lesson hour that was filled or cleared gets a new id,
 ///   dartschool#84).
+/// - [SmartschoolPlannerWriteRefusedError]: a check of the library refused
+///   a write before sending it (the element is not the user's own, the
+///   planner does not allow the change, the lesson hour is no longer
+///   empty). Its message, which the library writes from what it checked,
+///   is the reason passed on.
 /// - Any other [SmartschoolPlannerError]: an answer the server cannot use.
 ///   The library's message can quote the planner's answer, so it goes to
 ///   the log only.
@@ -45,8 +51,10 @@ Future<T> withPlanner<T>(
 ///   (a malformed id, a reversed period). Not a [RangeError], which is a
 ///   bug rather than a refused request.
 ///
-/// The planner writes (#53, #55) add their own cases in front of the
-/// [SmartschoolPlannerError] one: a refused write is one too.
+/// A write that went out without the planner confirming it
+/// ([SmartschoolPlannerSaveUnconfirmedError]) is not a [ToolError]: the
+/// write tools report it themselves (`plannerWriteNotConfirmed` in
+/// `planner_writes.dart`).
 ToolError? plannerToolError(Object error) {
   switch (error) {
     case SmartschoolPlannedElementNotFoundError(
@@ -60,6 +68,13 @@ ToolError? plannerToolError(Object error) {
         'id changed: a lesson hour that is filled or cleared gets a new id. '
         'List the planner again with list_planner and take the id from '
         'there.',
+      );
+    case SmartschoolPlannerWriteRefusedError(:final message):
+      log('planner: $error');
+      return ToolError(
+        'The planner refused the change before it was sent: '
+        '${_refusal(message)} List the planner again with list_planner '
+        '(planner me) to see how it is now.',
       );
     case SmartschoolPlannerError(:final statusCode):
       log('planner: $error');
@@ -76,6 +91,18 @@ ToolError? plannerToolError(Object error) {
       );
   }
   return null;
+}
+
+/// The reason in [message], the message of a
+/// [SmartschoolPlannerWriteRefusedError]: without the name of the library's
+/// method in front (`planLesson: `) and its closing `Nothing was sent.`,
+/// which the tools say in their own words.
+String _refusal(String message) {
+  final reason = message
+      .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
+      .replaceFirst(RegExp(r'\s*Nothing was sent\.\s*$'), '')
+      .trim();
+  return reason.endsWith('.') ? reason : '$reason.';
 }
 
 /// A planner as the planner tools name it: `me`, the user's own planner, or

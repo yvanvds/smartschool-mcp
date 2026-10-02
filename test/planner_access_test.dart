@@ -402,6 +402,35 @@ void main() {
       );
     });
 
+    test('passes on why the library refused a write before sending it, '
+        'without its method name and its own "Nothing was sent"', () {
+      expect(
+        plannerToolError(
+          const SmartschoolPlannerWriteRefusedError(
+            'planLesson: the planner does not let you change '
+            'planned-placeholders $_uuid (canUserReplace not set). Nothing '
+            'was sent.',
+          ),
+        ),
+        _toolError(
+          'The planner refused the change before it was sent: the planner '
+          'does not let you change planned-placeholders $_uuid '
+          '(canUserReplace not set). List the planner again with '
+          'list_planner (planner me) to see how it is now.',
+        ),
+      );
+      expect(
+        plannerToolError(
+          const SmartschoolPlannerWriteRefusedError('Some other reason'),
+        ),
+        _toolError(
+          'The planner refused the change before it was sent: Some other '
+          'reason. List the planner again with list_planner (planner me) to '
+          'see how it is now.',
+        ),
+      );
+    });
+
     test('passes on what the library refused before sending', () {
       expect(
         plannerToolError(ArgumentError.value('x', 'id', 'is empty')),
@@ -586,6 +615,44 @@ void main() {
       formatElementLine(element),
       '10:20–11:10 | lesson | by Jan Peeters, Wim Willems | id '
       'planned-lessons/4069/$_uuid',
+    );
+  });
+
+  test('formatElementSummary names the kind, the name, when, the classes '
+      'and the course of an element, leaving out what it does not have', () {
+    final lesson = PlannedElement(
+      id: _uuid,
+      platformId: 4069,
+      type: PlannedElementType.lesson,
+      typeName: 'planned-lessons',
+      name: 'Lussen',
+      period: PlannerPeriod(
+        from: DateTime(2026, 11, 20, 11, 10),
+        to: DateTime(2026, 11, 20, 12),
+      ),
+      participantGroups: const [
+        PlannerGroup(id: '4069_2001', platformId: 4069, name: '6A1'),
+        PlannerGroup(id: '4069_2002', platformId: 4069, name: '6A2'),
+      ],
+      courses: const [
+        PlannerCourse(id: 'c1', platformId: 4069, name: 'informatica'),
+      ],
+    );
+    expect(
+      formatElementSummary(lesson),
+      'lesson "Lussen" on Friday 2026-11-20 11:10–12:00 (6A1, 6A2, '
+      'informatica)',
+    );
+    expect(
+      formatElementSummary(
+        _element(
+          type: 'planned-placeholders',
+          name: null,
+          from: DateTime(2026, 11, 20, 11, 10),
+          to: DateTime(2026, 11, 20, 12),
+        ),
+      ),
+      'empty lesson hour on Friday 2026-11-20 11:10–12:00',
     );
   });
 

@@ -13,7 +13,8 @@ Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen. Claude leest de planner alleen: het verandert er niets in.
+  kiezen. Je eigen lesuren invullen met lessen, die lessen aanpassen en een
+  lesuur weer leegmaken, pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
@@ -256,6 +257,20 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   een paar momenten voor, en jij kiest. Heeft je school in de planner een
   grens gezet voor de werkbelasting van de klas, dan noemt Claude die ook.
 - "Welke toetsen heeft 5WW1 volgende week?"
+- "Vul mijn lessen informatica van volgende week in volgens dit plan: ..."
+  Claude zoekt eerst je lege lesuren van volgende week. Het toont per lesuur
+  de dag, het uur, de klas, het vak, en de titel en info die het wil
+  invullen, en wacht op jouw akkoord. Daarna vraagt Claude Desktop per lesuur
+  nog eens toestemming. Je leerlingen zien de titel en de info voor
+  leerlingen meteen. Claude verandert alleen je eigen planner: de lessen van
+  collega's raakt het niet aan.
+- "Zet bij mijn les van dinsdag in 5WW1 dat ze hun rekenmachine moeten
+  meebrengen."
+  Claude past de titel, de info voor leerlingen of de privé-info van een les
+  aan, na jouw akkoord. De nieuwe info vervangt de oude.
+- "Maak mijn les van vrijdag het 3e uur weer leeg."
+  De les verdwijnt met haar titel en info, en het lesuur is weer leeg. Dat
+  kun je niet ongedaan maken: Claude vraagt eerst je akkoord.
 
 ### Bestanden bewaren
 
@@ -292,11 +307,13 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
 - De extensie werkt alleen met berichten, Intradesk en de planner. Andere
-  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner leest
-  ze alleen.
-- Net na een wijziging in de planner (in Smartschool zelf) kan het overzicht
-  nog enkele seconden de oude toestand tonen. Een les of toets apart openen
-  toont meteen de nieuwe.
+  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner vult
+  ze alleen je eigen lesuren in, past ze je eigen lessen, toetsen en taken
+  aan en maakt ze lesuren weer leeg. Een nieuwe toets of taak plannen kan ze
+  niet.
+- Net na een wijziging in de planner (in Smartschool zelf of door Claude)
+  kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
+  toets apart openen toont meteen de nieuwe.
 
 ## 6. Bijwerken naar een nieuwe versie
 

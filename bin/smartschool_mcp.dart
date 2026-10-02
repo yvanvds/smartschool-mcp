@@ -13,12 +13,15 @@ import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
+import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
@@ -104,6 +107,9 @@ Future<void> _serve(ServerOptions options) async {
           listPlannerTool(session),
           readPlannedElementTool(session),
           listClassAssignmentsTool(session),
+          planLessonTool(session),
+          editPlannedElementTool(session),
+          clearLessonTool(session),
         ],
         updates: updates,
       );

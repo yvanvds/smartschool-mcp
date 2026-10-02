@@ -373,6 +373,48 @@ client name. It also installs again while that copy runs.
   limiet`, and every weight was 0). It also lists the school's assignment
   types (`getAssignmentTypes`, read once per session). The tool only reads:
   choosing the moment is left to the user, with Claude.
+- `plan_lesson`: fills an empty lesson hour of the user's own planner
+  (`hour`, an id `planned-placeholders/…` from `list_planner` with `me`)
+  with a lesson: a `name`, and optionally `public_info` (what pupils see)
+  and `private_info`, written as plain text (the library's `planLesson`,
+  dartschool#87). The server turns the text into the HTML the planner's own
+  editor makes, escaping every character (`plainTextToHtml`: a `<p>` per
+  paragraph, `<br />` per line break). Pupils of the hour's classes see the
+  name and public info at once. The tool is marked destructive, so Claude
+  Desktop asks for approval every time, and Claude is told to show the user
+  every hour (date and time, class, course, name and info) and wait for
+  the user's confirmation first; one confirmation for a week's list is
+  enough, with one call per hour. The library reads the hour again and
+  refuses, before sending anything, an hour that is not the user's own, or
+  that the planner does not let the user fill; an hour that was filled
+  since it was listed is gone under its id. It sends the fill once, never
+  again after logging in again. The result gives the lesson as saved and
+  its new id (the hour's id is gone), and says that `list_planner` can
+  show the old state for a few seconds while `read_planned_element` is up
+  to date at once.
+- `edit_planned_element`: changes the `name`, `public_info` and/or
+  `private_info` (plain text, as `plan_lesson`; an empty text empties an
+  info) of a lesson or an assignment of the user's own planner, by its id
+  (`renameElement`, `changePublicInfo`, `changePrivateInfo`, in that
+  order). Marked destructive and idempotent: each change sets a value, and
+  the library sends nothing for a value the element already has. The
+  library refuses a colleague's element, or a change the planner does not
+  allow, before sending it. When one change fails after another was saved,
+  the answer says which were saved.
+- `clear_lesson`: empties a lesson hour of the user's own planner again
+  (`clearLesson`): the lesson, its name and info are gone, and the hour is
+  an empty lesson hour with a **new** id, which the result gives. Marked
+  destructive. The library refuses a colleague's lesson, and a lesson the
+  planner lets the user trash or delete (one outside the timetable, which
+  it does not clear), and sends the clear once.
+
+For the three planner writes, a write that went out without the planner
+confirming it (`SmartschoolPlannerSaveUnconfirmedError`) is reported as
+maybe saved, with what to read to check it, and Claude is told not to call
+the tool again for it, as for a message whose send Smartschool did not
+confirm. A session that Smartschool refused for a fill or a clear means the
+write was not carried out: the session repeats the call, which reads the
+element again (a lesson hour filled meanwhile is gone, so nothing is sent).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -423,10 +465,21 @@ school's assignment types, read once per session (`AssignmentTypes.of`). In
 `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment
 type (`formatAssignmentType`), one line per element (`formatElementLine`),
+an element in a few words for a write's result (`formatElementSummary`),
 elements per day (`elementsByDay`) and an element's detail
-(`formatElementDetail`). The tests run against a fake planner
-(`test/support/fake_planner.dart`), built from dartschool's anonymised
-captures of the live planner and its workload view.
+(`formatElementDetail`). In `planner_writes.dart`, for the tools that
+change the planner: the info text Claude writes as HTML
+(`plainTextToHtml`), the `hour` argument (`emptyHourArgument`), the fill of
+an empty lesson hour with its result (`fillLessonHour`, which takes the
+library call that fills, so a lesfiche can be planned the same way),
+`withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
+error), and the result of a write the planner did not confirm
+(`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
+refused a write (`SmartschoolPlannerWriteRefusedError`). The tests run
+against a fake planner (`test/support/fake_planner.dart`), built from
+dartschool's anonymised captures of the live planner and its workload view,
+which carries out the writes of dartschool#87 (fill, rename, change of the
+info, clear) as the live planner did.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

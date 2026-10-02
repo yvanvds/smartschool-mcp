@@ -183,6 +183,23 @@ String formatElementLine(PlannedElement element, {String? ownUserId}) {
   ].join(' | ');
 }
 
+/// [element] in a few words, for the result of a write: its kind and name,
+/// its day and time, and its classes and course, like `lesson "Lussen" on
+/// Friday 2026-11-20 11:10–12:00 (6A1, 6A2, informatica)` or `empty lesson
+/// hour on Friday 2026-11-20 11:10–12:00 (6A1, 6A2, informatica)`.
+String formatElementSummary(PlannedElement element) {
+  final about = [
+    elementClasses(element),
+    elementCourses(element),
+  ].where((part) => part.isNotEmpty).join(', ');
+  return [
+    formatElementKind(element),
+    if (elementName(element) case final name?) '"$name"',
+    'on ${formatPlannerDay(element.period.from)} ${formatElementTime(element)}',
+    if (about.isNotEmpty) '($about)',
+  ].join(' ');
+}
+
 /// The name of [calendar] as the elements of it tell it: the class, the
 /// person or the room the elements name with that calendar's id; null when
 /// none does.

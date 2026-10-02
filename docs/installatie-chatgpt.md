@@ -13,7 +13,8 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen. ChatGPT leest de planner alleen: het verandert er niets in.
+  kiezen. Je eigen lesuren invullen met lessen, die lessen aanpassen en een
+  lesuur weer leegmaken, pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 
@@ -218,8 +219,9 @@ Hetzelfde als in Claude Desktop: zie
 Claude Desktop. Wat daar over Claude staat, geldt hier voor ChatGPT. Een paar
 verschillen:
 
-- **Berichten versturen en weggooien.** ChatGPT toont eerst de tekst en de
-  ontvangers, of de berichten die naar de prullenbak gaan, en wacht op jouw
+- **Berichten versturen en weggooien, de planner invullen.** ChatGPT toont
+  eerst de tekst en de ontvangers, de berichten die naar de prullenbak gaan,
+  of de lessen die in je planner komen of verdwijnen, en wacht op jouw
   akkoord. Daarna vraagt de app nog eens toestemming. Kies daar niet om het
   altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
   (*Full access*): dan vraagt de app nergens meer toestemming voor.

@@ -59,6 +59,9 @@ void main() {
       'list_planner',
       'read_planned_element',
       'list_class_assignments',
+      'plan_lesson',
+      'edit_planned_element',
+      'clear_lesson',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -319,6 +322,46 @@ void main() {
       'description': isA<String>(),
       'items': {'type': 'string'},
     });
+    // The planner writes (#53): pupils see a change at once, so Claude
+    // Desktop asks for approval. A fill and a clear are not idempotent; an
+    // edit sets values, so it is.
+    for (final (name, idempotent) in [
+      ('plan_lesson', false),
+      ('edit_planned_element', true),
+      ('clear_lesson', false),
+    ]) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': false,
+        'destructiveHint': true,
+        'idempotentHint': idempotent,
+        'openWorldHint': true,
+      }, reason: name);
+      expect(
+        tools[name]!['description'],
+        contains('after the user has explicitly confirmed it'),
+        reason: name,
+      );
+    }
+    final planSchema = tools['plan_lesson']!['inputSchema'] as Map;
+    expect(planSchema['required'], ['hour', 'name']);
+    expect((planSchema['properties'] as Map).keys, [
+      'hour',
+      'name',
+      'public_info',
+      'private_info',
+    ]);
+    final editSchema = tools['edit_planned_element']!['inputSchema'] as Map;
+    expect(editSchema['required'], ['id']);
+    expect((editSchema['properties'] as Map).keys, [
+      'id',
+      'name',
+      'public_info',
+      'private_info',
+    ]);
+    final clearSchema = tools['clear_lesson']!['inputSchema'] as Map;
+    expect(clearSchema['required'], ['id']);
+    expect((clearSchema['properties'] as Map).keys, ['id']);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -333,7 +376,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(20));
+    expect(tools, hasLength(23));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -698,8 +741,9 @@ void main() {
   });
 
   test('the planner tools without settings: an error result that names the '
-      'missing settings; an invalid planner, element id, class, date or type: '
-      'an error that says what to fix, before any login (#51, #52)', () async {
+      'missing settings; an invalid planner, element id, hour, class, date, '
+      'type or name: an error that says what to fix, before any login (#51, '
+      '#52, #53)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -736,6 +780,27 @@ void main() {
           'until': '2026-10-30',
         },
       ),
+      (
+        'plan_lesson',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': 'Lussen: for en while',
+          'public_info': 'Breng je laptop mee.',
+          'private_info': 'Oefening 3 overslaan.',
+        },
+      ),
+      (
+        'edit_planned_element',
+        {
+          'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'public_info': '',
+        },
+      ),
+      (
+        'clear_lesson',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
       expect(isError, isTrue, reason: tool);
@@ -747,54 +812,81 @@ void main() {
       expect(text, isNot(contains('#0')), reason: 'no stack trace');
     }
 
-    for (final (tool, arguments, message)
-        in <(String, Map<String, Object?>, String)>[
-          ('search_planners', {'query': '  '}, 'query is empty'),
-          ('list_planner', {'planner': '6WEWI1'}, 'planner must be me'),
-          ('list_planner', {'from': 'maandag'}, '"maandag" is not'),
-          (
-            'list_planner',
-            {'from': '2026-10-09', 'until': '2026-10-05'},
-            'until must not be before from',
-          ),
-          (
-            'list_planner',
-            {
-              'types': ['tests'],
-            },
-            '"tests" is not one of the allowed values',
-          ),
-          (
-            'read_planned_element',
-            {'id': '225c0b54-0000-4000-8000-000000000000'},
-            'id must be the id of a planner element',
-          ),
-          (
-            'list_class_assignments',
-            {
-              'classes': [
-                for (var i = 0; i < 11; i++) 'group/4069_${4256 + i}',
-              ],
-            },
-            'classes holds 11 classes, and at most 10 fit in one call',
-          ),
-          (
-            'list_class_assignments',
-            {
-              'classes': ['6WEWI1'],
-            },
-            'each item of classes must be the planner id of a class',
-          ),
-          (
-            'list_class_assignments',
-            {
-              'classes': ['group/4069_4256'],
-              'until': '30 oktober',
-            },
-            '"30 oktober" is not',
-          ),
-          ('list_class_assignments', {'classes': 'group/4069_4256'}, 'classes'),
-        ]) {
+    for (final (tool, arguments, message) in <(String, Map<String, Object?>, String)>[
+      ('search_planners', {'query': '  '}, 'query is empty'),
+      ('list_planner', {'planner': '6WEWI1'}, 'planner must be me'),
+      ('list_planner', {'from': 'maandag'}, '"maandag" is not'),
+      (
+        'list_planner',
+        {'from': '2026-10-09', 'until': '2026-10-05'},
+        'until must not be before from',
+      ),
+      (
+        'list_planner',
+        {
+          'types': ['tests'],
+        },
+        '"tests" is not one of the allowed values',
+      ),
+      (
+        'read_planned_element',
+        {'id': '225c0b54-0000-4000-8000-000000000000'},
+        'id must be the id of a planner element',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': [for (var i = 0; i < 11; i++) 'group/4069_${4256 + i}'],
+        },
+        'classes holds 11 classes, and at most 10 fit in one call',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['6WEWI1'],
+        },
+        'each item of classes must be the planner id of a class',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256'],
+          'until': '30 oktober',
+        },
+        '"30 oktober" is not',
+      ),
+      ('list_class_assignments', {'classes': 'group/4069_4256'}, 'classes'),
+      (
+        'plan_lesson',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'name': 'Lussen',
+        },
+        'is a lesson, not an empty lesson hour',
+      ),
+      (
+        'plan_lesson',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': ' ',
+        },
+        'name is empty',
+      ),
+      (
+        'edit_planned_element',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+        'pass at least one of name, public_info and private_info',
+      ),
+      (
+        'clear_lesson',
+        {
+          'id':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+        },
+        'is an empty lesson hour already',
+      ),
+    ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
       expect(isError, isTrue, reason: '$tool $arguments');
       expect(text, contains(message), reason: '$tool $arguments');

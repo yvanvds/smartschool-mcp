@@ -100,8 +100,8 @@ String _inline(String text) => text.splitMapJoin(
     final match = found as RegExpMatch;
     if (match.namedGroup('linkText') case final linkText?) {
       final url = match.namedGroup('url')!;
-      if (!_allowedUrl.hasMatch(url)) return _escape(match[0]!);
-      return '<a href="${_escape(url)}">${_inline(linkText)}</a>';
+      if (!_allowedUrl.hasMatch(url)) return escapeHtml(match[0]!);
+      return '<a href="${escapeHtml(url)}">${_inline(linkText)}</a>';
     }
     if (match.namedGroup('boldItalic') case final both?) {
       return '<strong><em>${_inline(both)}</em></strong>';
@@ -113,7 +113,7 @@ String _inline(String text) => text.splitMapJoin(
     final italic = match.namedGroup('italic') ?? match.namedGroup('italic2');
     return '<em>${_inline(italic!)}</em>';
   },
-  onNonMatch: _escape,
+  onNonMatch: escapeHtml,
 );
 
 /// Links, bold and italic, leftmost first. Bold and italic together
@@ -131,7 +131,10 @@ final _inlineMarkup = RegExp(
 
 final _allowedUrl = RegExp(r'^(https?://|mailto:)\S+$', caseSensitive: false);
 
-String _escape(String text) => text
+/// [text] with every character that is markup in HTML escaped (`&`, `<`,
+/// `>` and both quotes), so that it shows as the text it is, also inside an
+/// attribute.
+String escapeHtml(String text) => text
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')

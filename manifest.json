@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.2.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten, Intradesk en planner.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je eigen lesuren invullen met lessen, ze aanpassen en weer leegmaken (pas na jouw bevestiging).\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -112,6 +112,18 @@
     {
       "name": "list_class_assignments",
       "description": "Toont per dag welke toetsen en taken één of meer klassen al hebben, om een moment voor een nieuwe toets te kiezen."
+    },
+    {
+      "name": "plan_lesson",
+      "description": "Vult een leeg lesuur in je eigen planner met een les: een titel, info voor leerlingen en privé-info. Pas na jouw bevestiging."
+    },
+    {
+      "name": "edit_planned_element",
+      "description": "Past de titel, de info voor leerlingen of de privé-info van een eigen les of toets in de planner aan. Pas na jouw bevestiging."
+    },
+    {
+      "name": "clear_lesson",
+      "description": "Maakt een lesuur in je eigen planner weer leeg: de les met haar titel en info verdwijnt. Pas na jouw bevestiging."
     }
   ],
   "keywords": [

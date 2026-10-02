@@ -258,6 +258,7 @@ class FakePlannedElement {
     this.weblinks = const [],
     this.visibleFrom,
     this.isAnnounced,
+    this.capabilities = const {},
   });
 
   final String id;
@@ -292,10 +293,112 @@ class FakePlannedElement {
   final String? visibleFrom;
   final bool? isAnnounced;
 
+  /// Capabilities that differ from what the planner gives an element of
+  /// this type ([capabilityJson]), such as `{'canUserReplace': false}`.
+  final Map<String, bool> capabilities;
+
   /// The element id as the planner tools print it.
   String get ref => '$type/$platformId/$id';
 
   bool get _isAssignment => type == 'planned-assignments';
+
+  /// Whether the fake's own account organises it.
+  bool get isOwn => organisers.any((user) => user.id == fakePlannerMe);
+
+  /// What the planner lets the fake's own account do with the element, as
+  /// dartschool's captures of #87 and #89 show it: everything the type
+  /// allows for an element of its own (an empty lesson hour can be filled,
+  /// not renamed; a lesson in a lesson hour can be edited and cleared, not
+  /// trashed or deleted; an assignment can be trashed), nothing for a
+  /// colleague's; then [capabilities].
+  Map<String, Object?> capabilityJson() => {
+    ...switch (type) {
+      'planned-placeholders' => {
+        'canUserTrash': false,
+        'canUserDelete': false,
+        'canUserEdit': isOwn,
+        'canUserReplace': isOwn,
+        'canUserRename': false,
+      },
+      'planned-lessons' => {
+        'canUserTrash': false,
+        'canUserDelete': false,
+        'canUserEdit': isOwn,
+        'canUserChangePrivateInfo': isOwn,
+        'canUserChangePublicInfo': isOwn,
+        'canUserReplace': isOwn,
+        'canUserRename': isOwn,
+      },
+      'planned-assignments' => {
+        'canUserTrash': isOwn,
+        'canUserDelete': isOwn,
+        'canUserEdit': isOwn,
+        'canUserChangePrivateInfo': isOwn,
+        'canUserChangePublicInfo': isOwn,
+        'canUserRename': isOwn,
+      },
+      _ => {'canUserEdit': isOwn},
+    },
+    ...capabilities,
+    'canUserSeeProperties': {'id': true, 'name': true},
+  };
+
+  /// This element with the [name], [publicInfo] and [privateInfo] given
+  /// changed, as an edit of the planner leaves it.
+  FakePlannedElement withChanges({
+    String? name,
+    String? publicInfo,
+    String? privateInfo,
+  }) => FakePlannedElement(
+    id: id,
+    type: type,
+    from: from,
+    to: to,
+    name: name ?? this.name,
+    platformId: platformId,
+    wholeDay: wholeDay,
+    deadline: deadline,
+    organisers: organisers,
+    groups: groups,
+    users: users,
+    courses: courses,
+    rooms: rooms,
+    assignmentType: assignmentType,
+    publicInfo: publicInfo ?? this.publicInfo,
+    privateInfo: privateInfo ?? this.privateInfo,
+    labels: labels,
+    attachments: attachments,
+    weblinks: weblinks,
+    visibleFrom: visibleFrom,
+    isAnnounced: isAnnounced,
+    capabilities: capabilities,
+  );
+
+  /// A new element of [type] with the id [id] in this element's lesson
+  /// hour: its period, organisers, classes, course and rooms, as the planner
+  /// makes a lesson of an empty lesson hour and the other way round.
+  FakePlannedElement inSameHour({
+    required String id,
+    required String type,
+    String? name,
+    String publicInfo = '',
+    String privateInfo = '',
+  }) => FakePlannedElement(
+    id: id,
+    type: type,
+    from: from,
+    to: to,
+    name: name,
+    platformId: platformId,
+    wholeDay: wholeDay,
+    organisers: organisers,
+    groups: groups,
+    users: users,
+    courses: courses,
+    rooms: rooms,
+    publicInfo: publicInfo,
+    privateInfo: privateInfo,
+  );
 
   bool overlaps(DateTime start, DateTime end) =>
       !DateTime.parse(from).isAfter(end) && !DateTime.parse(to).isBefore(start);
@@ -323,10 +426,7 @@ class FakePlannedElement {
     },
     'plannedElementType': type,
     'isParticipant': false,
-    'capabilities': {
-      'canUserEdit': organisers.any((user) => user.id == fakePlannerMe),
-      'canUserSeeProperties': {'id': true, 'name': true},
-    },
+    'capabilities': capabilityJson(),
     'onlineSession': null,
     if (_isAssignment) 'resolvedStatus': 'unresolved',
     if (name != null)
@@ -487,8 +587,28 @@ class FakePlannerHit {
 /// The workload calls answer `400` for a class the fake does not know (one
 /// of no element or calendar), as the calendars do.
 ///
+/// And the writes of dartschool#87, which change what it serves as the live
+/// planner did (the request bodies are recorded as sent, for the tests to
+/// compare with dartschool's):
+/// - `POST /planner/api/v1/planned-placeholders/{platformId}/{id}/replace/planned-lessons/blanco`:
+///   fills the empty lesson hour as [fillSlot] does, and answers with the
+///   lesson;
+/// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/rename`
+///   (`newName`), `.../change-public-info` and `.../change-private-info`
+///   (`newInfo`): changes the element, and answers with it;
+/// - `POST /planner/api/v1/planned-elements/clear` (`type`, `elementId`,
+///   `elementPlatformId`): clears the lesson as [clearLesson] does, and
+///   answers with the empty lesson hour.
+///
+/// A write of an element the fake does not have is answered with `404`.
+/// The fake does not check whose element it changes: the library does that
+/// before it sends a write, and the tests check that none is sent for a
+/// colleague's.
+///
 /// Every planner request is recorded in [requests]. [failing] answers a
-/// path with another status instead.
+/// path with another status instead (a write is then not carried out);
+/// [lostAnswers] carries the write to a path out, but drops the connection
+/// before the answer.
 class FakePlanner {
   /// The elements of each calendar, by `user/{id}`, `group/{id}` or
   /// `location/{id}`.
@@ -524,6 +644,78 @@ class FakePlanner {
   /// Paths answered with this status (and an answer the planner might give)
   /// instead.
   final Map<String, int> failing = {};
+
+  /// Paths of writes that are carried out, after which the connection drops
+  /// before the answer arrives.
+  final Set<String> lostAnswers = {};
+
+  /// How many elements the writes made, for their ids.
+  int _made = 0;
+
+  /// The planner requests that change something, as `POST path`, in order.
+  List<String> get writes => [
+    for (final request in requests)
+      if (request.method == 'POST' && _isWrite(request.path))
+        'POST ${request.path}',
+  ];
+
+  static bool _isWrite(String path) =>
+      !path.startsWith('$_api/quick-search/') &&
+      !path.startsWith('$_api/workload/');
+
+  /// Fills the empty lesson hour [ref] (`planned-placeholders/4069/<id>`)
+  /// with a lesson named [name], as the planner does: the hour is gone under
+  /// its id, and a lesson with a new id takes its place, in its period, with
+  /// its organisers, classes, course and rooms, in every calendar it was
+  /// in. Returns the lesson, or null when the fake has no such hour.
+  FakePlannedElement? fillSlot(
+    String ref, {
+    required String name,
+    String publicInfo = '',
+    String privateInfo = '',
+  }) {
+    final slot = elements[ref];
+    if (slot == null || slot.type != 'planned-placeholders') return null;
+    final lesson = slot.inSameHour(
+      id: _newId('4000'),
+      type: 'planned-lessons',
+      name: name,
+      publicInfo: publicInfo,
+      privateInfo: privateInfo,
+    );
+    _replace(slot, lesson);
+    return lesson;
+  }
+
+  /// Clears the lesson [ref] (`planned-lessons/4069/<id>`), as the planner
+  /// does: the lesson is gone, and an empty lesson hour with a new id takes
+  /// its place. Returns the hour, or null when the fake has no such lesson.
+  FakePlannedElement? clearLesson(String ref) {
+    final lesson = elements[ref];
+    if (lesson == null || lesson.type != 'planned-lessons') return null;
+    final slot = lesson.inSameHour(
+      id: _newId('5000'),
+      type: 'planned-placeholders',
+    );
+    _replace(lesson, slot);
+    return slot;
+  }
+
+  /// A new element id, with [version] as its third part (`4000` for a
+  /// lesson, `5000` for an empty lesson hour, as in the captures).
+  String _newId(String version) =>
+      'e0000000-0000-$version-9000-${(++_made).toString().padLeft(12, '0')}';
+
+  /// Puts [replacement] in the place of [element]: in [elements] and in
+  /// every calendar.
+  void _replace(FakePlannedElement element, FakePlannedElement replacement) {
+    elements.remove(element.ref);
+    elements[replacement.ref] = replacement;
+    for (final listed in calendars.values) {
+      final index = listed.indexOf(element);
+      if (index >= 0) listed[index] = replacement;
+    }
+  }
 
   /// Adds [element] to each of [calendars] (such as `group/4069_2001`), and
   /// makes its detail readable.
@@ -578,18 +770,50 @@ class FakePlanner {
     }
     final route = path.substring(_api.length + 1).split('/');
     if (options.method == 'POST') {
-      return switch (route.join('/')) {
-        'quick-search/planner/search' => _search(options.data),
-        'workload/planned-elements' => _workloadAssignments(
+      final answer = switch (route) {
+        ['quick-search', 'planner', 'search'] => _search(options.data),
+        ['workload', 'planned-elements'] => _workloadAssignments(
           options.uri.queryParameters,
           options.data,
         ),
-        'workload/schedule' => _workloadSchedule(
+        ['workload', 'schedule'] => _workloadSchedule(
           options.uri.queryParameters,
           options.data,
         ),
+        [
+          'planned-placeholders',
+          final platform,
+          final id,
+          'replace',
+          'planned-lessons',
+          'blanco',
+        ] =>
+          _fill(
+            'planned-placeholders/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
+        ['planned-elements', 'clear'] => _clear(options.data),
+        [
+          final type,
+          final platform,
+          final id,
+          final action &&
+              ('rename' || 'change-public-info' || 'change-private-info'),
+        ] =>
+          _edit(
+            '$type/$platform/${Uri.decodeComponent(id)}',
+            action,
+            options.data,
+          ),
         _ => null,
       };
+      if (answer != null && lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
     }
     if (options.method != 'GET') return null;
     if (route case ['planned-elements', final kind, final id]) {
@@ -609,6 +833,47 @@ class FakePlanner {
       return _json(jsonEncode(element.detailJson()));
     }
     return null;
+  }
+
+  ResponseBody _notFound() => _json(
+    '{"status":404,"title":"Not Found","detail":"","type":""}',
+    status: 404,
+  );
+
+  ResponseBody _fill(String ref, Object? data) {
+    final body = data as Map;
+    final lesson = fillSlot(
+      ref,
+      name: body['name'] as String,
+      publicInfo: body['publicInfo'] as String,
+      privateInfo: body['privateInfo'] as String,
+    );
+    if (lesson == null) return _notFound();
+    return _json(jsonEncode(lesson.detailJson()));
+  }
+
+  ResponseBody _clear(Object? data) {
+    final body = data as Map;
+    final slot = clearLesson(
+      '${body['type']}/${body['elementPlatformId']}/${body['elementId']}',
+    );
+    if (slot == null) return _notFound();
+    return _json(jsonEncode(slot.detailJson()));
+  }
+
+  ResponseBody _edit(String ref, String action, Object? data) {
+    final element = elements[ref];
+    if (element == null) return _notFound();
+    final body = data as Map;
+    final changed = switch (action) {
+      'rename' => element.withChanges(name: body['newName'] as String),
+      'change-public-info' => element.withChanges(
+        publicInfo: body['newInfo'] as String,
+      ),
+      _ => element.withChanges(privateInfo: body['newInfo'] as String),
+    };
+    _replace(element, changed);
+    return _json(jsonEncode(changed.detailJson()));
   }
 
   /// The classes of a workload request, or null when the fake does not know
