@@ -155,7 +155,7 @@ void main() {
     final init = await server.initialize();
     expect((init['serverInfo'] as Map)['version'], manifest['version']);
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(_skoreTools, hasLength(5));
+    expect(_skoreTools, hasLength(8));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       [
@@ -195,7 +195,7 @@ void main() {
 
   test('installed with "Skore-beheer" ticked: Claude Desktop passes it as '
       'true, and the server offers every tool of the manifest, the Skore '
-      'tools last, and says the switch is on (#42, #43)', () async {
+      'tools last, and says the switch is on (#42, #43, #44)', () async {
     final home = await tempHome();
     final required = {
       for (final MapEntry(:key, :value) in fields().entries)

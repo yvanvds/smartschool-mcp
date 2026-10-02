@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.2.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten, Intradesk en planner.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven (pas na jouw bevestiging).\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging).\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -155,12 +155,24 @@
       "description": "Alleen met Skore-beheer aan: toont de leerkrachten die je in Skore aan een vak kunt koppelen."
     },
     {
+      "name": "list_skore_gradebook_shares",
+      "description": "Alleen met Skore-beheer aan: toont de puntenboeken van een leerkracht in Skore, met de leerkrachten met wie elk gedeeld is."
+    },
+    {
       "name": "add_skore_teacher",
       "description": "Alleen met Skore-beheer aan: koppelt een leerkracht aan een vak van een klas in Skore, als nieuwe lesopdracht. Pas na jouw bevestiging."
     },
     {
       "name": "replace_skore_teacher",
       "description": "Alleen met Skore-beheer aan: geeft een lesopdracht in Skore een andere leerkracht; de lesopdracht en haar puntenboek blijven. Pas na jouw bevestiging."
+    },
+    {
+      "name": "share_skore_gradebook",
+      "description": "Alleen met Skore-beheer aan: deelt een puntenboek in Skore met een of meer leerkrachten, om te lezen of ook te wijzigen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "unshare_skore_gradebook",
+      "description": "Alleen met Skore-beheer aan: stopt het delen van een puntenboek in Skore met een of meer leerkrachten. Pas na jouw bevestiging."
     }
   ],
   "keywords": [
@@ -220,7 +232,7 @@
     "skore": {
       "type": "boolean",
       "title": "Skore-beheer",
-      "description": "Alleen als je in Skore de rechten hebt voor puntenbeheer: Rapporten > Modellen en Puntenboeken, zoals een Skore-beheerder. Dan kan Claude in Skore de klassen, de vakken met hun leerkrachten (de lesopdrachten) en de leerkrachten bekijken, en na jouw bevestiging leerkrachten aan vakken koppelen. De meeste leerkrachten en alle leerlingen hebben die rechten niet: laat het dan uit.",
+      "description": "Alleen als je in Skore de rechten hebt voor puntenbeheer: Rapporten > Modellen en Puntenboeken, zoals een Skore-beheerder. Dan kan Claude in Skore de klassen, de vakken met hun leerkrachten (de lesopdrachten) en de leerkrachten bekijken, en na jouw bevestiging leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen hebben die rechten niet: laat het dan uit.",
       "required": false,
       "default": false
     }

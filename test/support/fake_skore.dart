@@ -7,7 +7,11 @@ import 'package:dio/dio.dart';
 // captures of the live Skore (`test/skore_service_test.dart` there, read-only,
 // 2026-10-01), with fake names; and the assignment of a teacher to a course
 // (`saveOwner`, with `getMyGroups` before a replace), carried out as the live
-// Skore did in dartschool#71 (`test/skore_service_assign_test.dart` there).
+// Skore did in dartschool#71 (`test/skore_service_assign_test.dart` there);
+// and the gradebooks of a teacher with whom they are shared (`getCourses` of
+// the gradebooks service) and the save of their shares (`saveShared`), as the
+// live Skore answered and carried them out in dartschool#74
+// (`test/skore_service_share_test.dart` there).
 
 /// The tree of report models (`select_models`), answered as JSON.
 const fakeSkoreModelsPath = '/modules/Skore/modules/rapportbeheer/data.php';
@@ -32,6 +36,13 @@ const fakeSkoreFirstNewAssignment = 35001;
 const fakeSkoreGradebooksRpcPath =
     '/modules/Skore/modules/rapportbeheer/rpc/data.php';
 
+/// The RPC methods of [fakeSkoreGradebooksRpcPath] the fake serves: the
+/// gradebooks of a teacher (`getCourses`) and the save of their shares
+/// (`saveShared`). It answers any other (the service also holds
+/// `deleteTeacher`, `cleanUpSkore`, `hideWorkyear`, `unlockReport`, ...)
+/// with HTTP 501.
+const fakeSkoreGradebooksRpcMethods = {'getCourses', 'saveShared'};
+
 /// How the fake refuses an account without the rights for score management.
 ///
 /// What the live Skore answers such an account has not been captured
@@ -49,11 +60,12 @@ enum SkoreRefusal {
   page,
 }
 
-/// How the fake answers a save (`saveOwner`), for the tests of a save that
-/// Skore does not confirm.
+/// How the fake answers a save (`saveOwner`, `saveShared`), for the tests of
+/// a save that Skore does not confirm.
 enum SkoreSave {
-  /// Carried out, and answered with the assignment and its teacher, as the
-  /// live Skore did (`{"ownerID": 34826, "userID": 146}`).
+  /// Carried out, and answered as the live Skore did: `saveOwner` with the
+  /// assignment and its teacher (`{"ownerID": 34826, "userID": 146}`),
+  /// `saveShared` with `{"state": 1}`.
   confirmed,
 
   /// Carried out, but the connection drops before the answer arrives.
@@ -61,6 +73,11 @@ enum SkoreSave {
 
   /// Not carried out: answered with HTTP 500 and Smartschool's error page.
   serverError,
+
+  /// Only for `saveShared`: answered as confirmed (`{"state": 1}`), but not
+  /// carried out, so the gradebooks read afterwards do not show it. (A
+  /// `saveOwner` is answered with HTTP 400, which no test expects.)
+  unapplied,
 }
 
 /// A teacher as Skore names one (`"Last, First"`), by Smartschool user id.
@@ -231,8 +248,11 @@ const fakeSkore1B2 = FakeSkoreClass(2378, '1B2');
 /// service `owners.php` it serves [fakeSkoreOwnersRpcMethods]: the read of
 /// the teachers, whether a teacher works with "Mijn lesgroepen" for a course
 /// ([myGroups]), and the save of an assignment, which it carries out on the
-/// classes as the live Skore did, or not, as [save] says. The gradebooks
-/// service (#44) is not served yet.
+/// classes as the live Skore did, or not, as [save] says. Of the gradebooks
+/// service (#44) it serves [fakeSkoreGradebooksRpcMethods]: a teacher's
+/// gradebooks, one per assignment of theirs on the classes, with the
+/// teachers each is shared with ([shares]), and the save of those shares,
+/// carried out, or not, likewise.
 class FakeSkore {
   /// The report models, with their groups and classes.
   final List<FakeSkoreModel> models = [];
@@ -243,8 +263,18 @@ class FakeSkore {
   /// When set, how every request is refused.
   SkoreRefusal? refusal;
 
-  /// How the fake answers a save (`saveOwner`).
+  /// How the fake answers a save (`saveOwner`, `saveShared`), after
+  /// [nextSaves].
   SkoreSave save = SkoreSave.confirmed;
+
+  /// How the fake answers the next saves, in order, before [save]: for a
+  /// save that fails after others went well.
+  final List<SkoreSave> nextSaves = [];
+
+  /// The teachers each gradebook is shared with, by gradebook id (the id of
+  /// its assignment): its readers and its writers, by teacher id, in
+  /// Skore's order. A gradebook not here is shared with nobody.
+  final Map<int, ({List<int> readers, List<int> writers})> shares = {};
 
   /// The teachers who work with "Mijn lesgroepen" (their own groups of
   /// pupils) for a course of a class, as (teacher id, class id, course id).
@@ -280,6 +310,11 @@ class FakeSkore {
   /// The saves (`saveOwner`) that reached Skore, as their parameters:
   /// class id, course id, assignment id (empty to add one) and teacher id.
   List<List<Object?>> get saves => paramsOf('saveOwner');
+
+  /// The saves of a gradebook's shares (`saveShared`) that reached Skore, as
+  /// their parameters: the owner's id, and the readers and the writers by
+  /// gradebook id, as the "share gradebooks" manager sends them.
+  List<List<Object?>> get shareSaves => paramsOf('saveShared');
 
   /// The assignments that a save or [addAssignment] changed, by class id
   /// and course id; the other courses have those they were loaded with.
@@ -337,9 +372,33 @@ class FakeSkore {
     classId,
   )?.courses?.where((course) => course.id == courseId).firstOrNull;
 
+  /// The gradebooks of teacher [ownerId] as the gradebooks service's
+  /// `getCourses` gives them: one per assignment of theirs, in the order of
+  /// the classes and their courses, each with its course and class name and
+  /// its [shares]. Empty for a teacher without assignments, and for a user id
+  /// Skore does not know, as in the capture.
+  List<Map<String, Object?>> gradebooksOf(int ownerId) => [
+    for (final model in models)
+      for (final group in model.groups)
+        for (final skoreClass in group.classes)
+          for (final course in skoreClass.courses ?? const <FakeSkoreCourse>[])
+            for (final assignment in assignmentsOf(skoreClass.id, course))
+              if (assignment.teacher.id == ownerId)
+                {
+                  'id': '${assignment.id}',
+                  'icon': 'IconLib:laptop',
+                  'name': course.name,
+                  'class': skoreClass.name,
+                  'readers': shares[assignment.id]?.readers ?? const <int>[],
+                  'writers': shares[assignment.id]?.writers ?? const <int>[],
+                },
+  ];
+
   /// The school of dartschool's capture, trimmed: three report models; the
   /// classes 1B1, 1B2 (no course structure) and 2B1, 3B1, and 5WW1, and
-  /// OKAN, listed without a group; and six teachers.
+  /// OKAN, listed without a group; six teachers; and gradebook 34826
+  /// (Digitale vaardigheden of 5WW1, of Willems) shared with Maes as a
+  /// writer, as in the capture of dartschool#74.
   void loadSchool() {
     models.addAll(const [
       FakeSkoreModel(178, '1gr B-str.', [
@@ -358,6 +417,7 @@ class FakeSkore {
       ]),
     ]);
     teachers.addAll(FakeSkoreTeacher.school);
+    shares[34826] = (readers: [], writers: [FakeSkoreTeacher.maes.id]);
   }
 
   /// The class with [id], or null.
@@ -447,12 +507,98 @@ class FakeSkore {
           '{"error":"the fake does not serve $method"}',
           status: 501,
         );
+      case ('POST', fakeSkoreGradebooksRpcPath):
+        final method = form['rpc_method'];
+        final params = jsonDecode(form['rpc_params'] ?? '[]') as List;
+        switch (method) {
+          // getCourses(userID), the user id as a number.
+          case 'getCourses':
+            final [ownerId] = params;
+            return _rpc(
+              'getCourses',
+              ownerId is int ? gradebooksOf(ownerId) : const [],
+            );
+          // saveShared(userID, readers, writers).
+          case 'saveShared':
+            return _saveShared(options, params);
+        }
+        return _json(
+          '{"error":"the fake does not serve $method"}',
+          status: 501,
+        );
     }
     return null;
   }
 
-  /// Carries out a save (`saveOwner`) as [save] says, and answers it as
-  /// the live Skore did: `{"ownerID": 34826, "userID": 146}`, the
+  /// How the next save is answered: the first of [nextSaves], else [save].
+  SkoreSave _nextSave() => nextSaves.isEmpty ? save : nextSaves.removeAt(0);
+
+  /// Carries out a save of shares (`saveShared`) as the next save says
+  /// ([_nextSave]), and answers it as the live Skore did: `{"state": 1}`.
+  ///
+  /// [params] are the owner's user id, then the readers and the writers as
+  /// maps from gradebook id to teacher ids, as the "share gradebooks"
+  /// manager sends them: the ids as numbers. Each gradebook sent gets those
+  /// readers and writers; the owner's other gradebooks are not touched, as
+  /// in the live saves of dartschool#74. A save the fake cannot carry out
+  /// (not in that shape, the readers and writers of different gradebooks, a
+  /// gradebook that is not the owner's) is answered with HTTP 400, which no
+  /// test expects.
+  ResponseBody _saveShared(RequestOptions options, List<Object?> params) {
+    final outcome = _nextSave();
+    if (outcome == SkoreSave.serverError) {
+      return _html(_errorPage, status: 500);
+    }
+    final changes = _sharesToSave(params);
+    if (changes == null) {
+      return _json('{"error":"the fake cannot save $params"}', status: 400);
+    }
+    if (outcome != SkoreSave.unapplied) shares.addAll(changes);
+    if (outcome == SkoreSave.answerLost) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'Connection reset by peer',
+      );
+    }
+    return _rpc('saveShared', {'state': 1});
+  }
+
+  /// The readers and writers by gradebook id that a `saveShared` with
+  /// [params] saves, or null when the fake cannot carry it out (see
+  /// [_saveShared]).
+  Map<int, ({List<int> readers, List<int> writers})>? _sharesToSave(
+    List<Object?> params,
+  ) {
+    if (params case [
+      final int ownerId,
+      final Map<String, Object?> readers,
+      final Map<String, Object?> writers,
+    ] when readers.isNotEmpty && readers.length == writers.length) {
+      final owned = {for (final g in gradebooksOf(ownerId)) g['id']};
+      final changes = <int, ({List<int> readers, List<int> writers})>{};
+      for (final MapEntry(:key, value: readerIds) in readers.entries) {
+        final writerIds = writers[key];
+        if (!owned.contains(key) ||
+            !_isIdList(readerIds) ||
+            !_isIdList(writerIds)) {
+          return null;
+        }
+        changes[int.parse(key)] = (
+          readers: (readerIds as List).cast<int>(),
+          writers: (writerIds as List).cast<int>(),
+        );
+      }
+      return changes;
+    }
+    return null;
+  }
+
+  /// Whether [value] is a list of teacher ids as numbers.
+  static bool _isIdList(Object? value) =>
+      value is List && value.every((id) => id is int);
+
+  /// Carries out a save (`saveOwner`) as the next save says ([_nextSave]),
+  /// and answers it as the live Skore did: `{"ownerID": 34826, "userID": 146}`, the
   /// assignment (new, or the same for a replace) and its teacher.
   ///
   /// The library checks a save before it sends it, so a save the fake
@@ -463,13 +609,17 @@ class FakeSkore {
     List<Object?> params,
     List<int?> ids,
   ) {
-    if (save == SkoreSave.serverError) {
+    final outcome = _nextSave();
+    if (outcome == SkoreSave.serverError) {
       return _html(_errorPage, status: 500);
     }
     final [classId, courseId, assignmentId, teacherId] = ids;
     final teacher = teachers.where((t) => t.id == teacherId).firstOrNull;
     final FakeSkoreAssignment? saved;
-    if (classId == null || courseId == null || teacher == null) {
+    if (outcome == SkoreSave.unapplied ||
+        classId == null ||
+        courseId == null ||
+        teacher == null) {
       saved = null;
     } else if ('${params[2]}'.isEmpty) {
       saved = addAssignment(classId, courseId, teacher);
@@ -481,7 +631,7 @@ class FakeSkore {
     if (saved == null) {
       return _json('{"error":"the fake cannot save $params"}', status: 400);
     }
-    if (save == SkoreSave.answerLost) {
+    if (outcome == SkoreSave.answerLost) {
       throw DioException.connectionError(
         requestOptions: options,
         reason: 'Connection reset by peer',

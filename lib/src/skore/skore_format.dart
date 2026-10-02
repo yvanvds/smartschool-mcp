@@ -79,6 +79,43 @@ String formatSkoreTeacherOf(SkoreAssignment assignment) =>
 String formatSkoreTeacher(SkoreTeacher teacher) =>
     '${skoreName(teacher.name)} | teacher id ${teacher.id}';
 
+/// The names of [teachers] by teacher id, to name the teachers of a
+/// gradebook with ([formatSkoreTeacherId]): its owner, readers and writers
+/// are only ids (#44).
+Map<int, String> skoreTeacherNames(List<SkoreTeacher> teachers) => {
+  for (final teacher in teachers) teacher.id: teacher.name,
+};
+
+/// Teacher [id], named from [names] ([skoreTeacherNames]): for example
+/// `Maes, Mira (teacher id 1006)`; only `teacher id 1999` for a teacher
+/// Skore does not list (such as one who left the school).
+String formatSkoreTeacherId(int id, Map<int, String> names) =>
+    switch (names[id]) {
+      final name? => '${skoreName(name)} (teacher id $id)',
+      null => 'teacher id $id',
+    };
+
+/// A gradebook with the teachers it is shared with: its course, class and
+/// gradebook id, its readers (who may read it) and writers (who may read and
+/// change it), named from [names]. For example `Digitale vaardigheden |
+/// class 5WW1 | gradebook id 34826 | readers: none | writers: Maes, Mira
+/// (teacher id 1006)`.
+String formatSkoreGradebook(
+  SkoreGradebookShares gradebook,
+  Map<int, String> names,
+) {
+  String teachers(List<int> ids) => ids.isEmpty
+      ? 'none'
+      : [for (final id in ids) formatSkoreTeacherId(id, names)].join('; ');
+  return [
+    skoreName(gradebook.courseName),
+    'class ${skoreName(gradebook.className)}',
+    'gradebook id ${gradebook.gradebookId}',
+    'readers: ${teachers(gradebook.readerIds)}',
+    'writers: ${teachers(gradebook.writerIds)}',
+  ].join(' | ');
+}
+
 /// The items of [items] in whose texts ([textsOf]) every word of [query]
 /// occurs, ignoring case and accents, also as part of a longer word; all of
 /// them when [query] has no words.

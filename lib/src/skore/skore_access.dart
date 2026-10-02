@@ -16,6 +16,12 @@ const skoreRights =
     'the rights for score management in Skore (Rapporten > Modellen and '
     'Puntenboeken), as a Skore administrator has';
 
+/// What a change Skore refused tells Claude to read again, to correct the
+/// call: for the writes on the courses of a class (#43).
+const rereadSkoreClass =
+    'Read the class again with list_skore_courses (and the teachers with '
+    'list_skore_teachers)';
+
 /// Runs [action] with a [SkoreService] on the session's logged-in client.
 ///
 /// Like every [SmartschoolSession.run] action, [action] may run twice (when
@@ -23,23 +29,27 @@ const skoreRights =
 /// reads are, and so are the library's writes (see `skore_writes.dart`).
 ///
 /// Skore's own errors, which [SmartschoolSession.run] passes on as they
-/// are, become [ToolError]s ([skoreToolError]); login and connection
-/// failures stay `SmartschoolProblem`s.
+/// are, become [ToolError]s ([skoreToolError], with [reread] for a change
+/// Skore refused); login and connection failures stay
+/// `SmartschoolProblem`s.
 Future<T> withSkore<T>(
   SmartschoolSession session,
-  Future<T> Function(SkoreService skore) action,
-) async {
+  Future<T> Function(SkoreService skore) action, {
+  String reread = rereadSkoreClass,
+}) async {
   try {
     return await session.run((client) => action(SkoreService(client)));
   } catch (error) {
-    final toolError = skoreToolError(error, session.source);
+    final toolError = skoreToolError(error, session.source, reread: reread);
     if (toolError == null) rethrow;
     throw toolError;
   }
 }
 
 /// The [ToolError] for [error], an error of [SkoreService], or null for
-/// anything else. [source] is where the user turns "Skore-beheer" off.
+/// anything else. [source] is where the user turns "Skore-beheer" off, and
+/// [reread] what to read again after a change Skore refused (like
+/// [rereadSkoreClass]).
 ///
 /// - [SmartschoolSkoreAccessDeniedError]: Skore refused the request to the
 ///   account (HTTP 403), which lacks the rights for that part of Skore.
@@ -50,7 +60,8 @@ Future<T> withSkore<T>(
 /// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
 ///   save refused the change, so nothing was saved. Its message, which the
 ///   library writes from what it read and quotes nothing else of Skore's
-///   answers, is the reason passed on, so that Claude can correct the call.
+///   answers, is the reason passed on, with [reread], so that Claude can
+///   correct the call.
 /// - Any other [SmartschoolSkoreError]: an answer the server cannot use.
 ///   What Skore answers an account without the rights has not been
 ///   captured yet (yvanvds/dartschool#91): it most likely ends up here (an
@@ -64,7 +75,11 @@ Future<T> withSkore<T>(
 /// [SmartschoolSkoreError]) is not a [ToolError]: the write tools report it
 /// themselves, with what to read to check it (`skoreWriteNotConfirmed` in
 /// `skore_writes.dart`).
-ToolError? skoreToolError(Object error, CredentialSource source) {
+ToolError? skoreToolError(
+  Object error,
+  CredentialSource source, {
+  String reread = rereadSkoreClass,
+}) {
   switch (error) {
     case SmartschoolSkoreAccessDeniedError(:final area):
       log('skore: $error');
@@ -88,8 +103,7 @@ ToolError? skoreToolError(Object error, CredentialSource source) {
       log('skore: $error');
       return ToolError(
         'Skore refused the change before saving it: ${_refusal(message)} '
-        'Read the class again with list_skore_courses (and the teachers '
-        'with list_skore_teachers) to correct the call.',
+        '$reread to correct the call.',
       );
     case SmartschoolSkoreError():
       log('skore: $error');

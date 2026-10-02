@@ -23,8 +23,9 @@ Je vraagt het gewoon in een gesprek:
   Skore-beheerder: de klassen bekijken, de vakken van een klas met de
   leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Een leerkracht
   aan een vak van een klas koppelen, of een lesopdracht een andere
-  leerkracht geven, telkens pas nadat jij het goedgekeurd hebt. Dat zet je
-  aan met **Skore-beheer**.
+  leerkracht geven. Een puntenboek delen met andere leerkrachten, of dat
+  delen stoppen. Telkens pas nadat jij het goedgekeurd hebt. Dat zet je aan
+  met **Skore-beheer**.
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
 [installatiegids voor ChatGPT](installatie-chatgpt.md).
@@ -322,11 +323,23 @@ school, of zet **Skore-beheer** weer uit.
   lesopdracht en haar puntenboek blijven: alleen de leerkracht verandert.
   Werkt de huidige leerkracht voor dat vak met **Mijn lesgroepen**, dan
   verandert Claude niets: regel die groepen eerst zelf in Skore.
+- "Met wie is het puntenboek Digitale vaardigheden van 5WW1 gedeeld?"
+- "Deel het puntenboek Digitale vaardigheden van 5WW1 met de andere
+  leerkrachten van de klas, om te lezen."
+  Claude zoekt de klas, het vak en de lesopdracht van de titularis op (dat
+  is het puntenboek), en de andere leerkrachten van de klas. Het toont welk
+  puntenboek het met wie gaat delen, en deelt pas na jouw akkoord, met alle
+  leerkrachten in één keer. Daarna vraagt Claude Desktop nog eens
+  toestemming. Wie het puntenboek kan lezen of wijzigen, ziet de punten van
+  de leerlingen erin. Een leerkracht die het al mocht wijzigen en het nu
+  alleen mag lezen (of omgekeerd), krijgt de nieuwe toegang.
+- "Stop het delen van dat puntenboek met meneer Peeters."
 
-Claude verandert in Skore alleen iets na jouw akkoord, telkens voor één vak
-van één klas. Een lesopdracht verwijderen, de leerlingen van een
-lesopdracht kiezen of lesopdrachten importeren kan Claude niet: dat doe je
-zelf in Skore.
+Claude verandert in Skore alleen iets na jouw akkoord: telkens voor één vak
+van één klas, of voor één puntenboek. Loopt het delen bij een leerkracht
+mis, dan stopt Claude daar en zegt het voor elke leerkracht wat er gebeurd
+is. Een lesopdracht verwijderen, de leerlingen van een lesopdracht kiezen of
+lesopdrachten importeren kan Claude niet: dat doe je zelf in Skore.
 
 ### Bestanden bewaren
 
@@ -364,8 +377,9 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   zelf.
 - De extensie werkt alleen met berichten, Intradesk, de planner en, met
   **Skore-beheer** aan, Skore. Andere onderdelen van Smartschool kent ze
-  niet. In Skore leest ze de klassen, vakken en leerkrachten, en koppelt ze
-  leerkrachten aan vakken: een lesopdracht verwijderen kan ze niet. In de
+  niet. In Skore leest ze de klassen, vakken, leerkrachten en gedeelde
+  puntenboeken, koppelt ze leerkrachten aan vakken en deelt ze puntenboeken:
+  een lesopdracht verwijderen kan ze niet. In de
   planner
   verandert ze alleen je eigen planner: ze vult je lesuren in, plant toetsen
   en taken in je lesuren, past je eigen lessen, toetsen en taken aan, maakt

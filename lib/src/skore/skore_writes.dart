@@ -7,8 +7,10 @@ import '../tools/server_tool.dart';
 import 'skore_access.dart';
 
 // Changing Skore, shared by the Skore tools that write (`add_skore_teacher`,
-// `replace_skore_teacher`): running a write, how a change Skore refused or
-// did not confirm is reported, and reading the course a write is about.
+// `replace_skore_teacher`; `share_skore_gradebook` and
+// `unshare_skore_gradebook` in `skore_shares.dart`): running a write, how a
+// change Skore refused or did not confirm is reported, and reading the
+// course a write is about.
 //
 // The library does the checks before each write (it reads the class and the
 // teachers again, and refuses a course that is not in the class or is a group
@@ -60,22 +62,36 @@ CallToolResult skoreWriteNotConfirmed({
   required String what,
   required String check,
   required SmartschoolSkoreSaveUnconfirmedError error,
+}) => CallToolResult(
+  isError: true,
+  content: [
+    TextContent(
+      text: skoreNotConfirmed(
+        tool: tool,
+        what: what,
+        check: check,
+        error: error,
+      ),
+    ),
+  ],
+);
+
+/// What [skoreWriteNotConfirmed] says, for a tool that reports it with more
+/// (`share_skore_gradebook`: what it did for the teachers before); logs the
+/// library's message.
+String skoreNotConfirmed({
+  required String tool,
+  required String what,
+  required String check,
+  required SmartschoolSkoreSaveUnconfirmedError error,
 }) {
   log(
     '$tool: Skore did not confirm a save, not retrying: '
     '${'$error'.replaceAll(RegExp(r'\s+'), ' ')}',
   );
-  return CallToolResult(
-    isError: true,
-    content: [
-      TextContent(
-        text:
-            '$what may or may not have been saved: the change was sent, but '
-            'Skore did not confirm it. Do not call $tool again for it: first '
-            '$check. Then tell the user what you found.',
-      ),
-    ],
-  );
+  return '$what may or may not have been saved: the change was sent, but '
+      'Skore did not confirm it. Do not call $tool again for it: first '
+      '$check. Then tell the user what you found.';
 }
 
 /// Course [courseId] of class [classId] as Skore lists it now

@@ -133,7 +133,8 @@ void main() {
 
     test('after the reads, as writes Claude Desktop asks approval for every '
         'time, not idempotent', () {
-      expect(tools.keys.skip(3), [
+      // After the four reads (#44 added list_skore_gradebook_shares).
+      expect(tools.keys.skip(4).take(2), [
         'add_skore_teacher',
         'replace_skore_teacher',
       ]);

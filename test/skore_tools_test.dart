@@ -71,15 +71,18 @@ void main() {
     });
 
     test('the reads in order, read-only and idempotent, before the writes '
-        '(#43)', () {
+        '(#43, #44)', () {
       expect(tools.keys, [
         'list_skore_classes',
         'list_skore_courses',
         'list_skore_teachers',
+        'list_skore_gradebook_shares',
         'add_skore_teacher',
         'replace_skore_teacher',
+        'share_skore_gradebook',
+        'unshare_skore_gradebook',
       ]);
-      for (final tool in tools.values.take(3)) {
+      for (final tool in tools.values.take(4)) {
         final annotations = tool.toolAnnotations!;
         expect(annotations.readOnlyHint, isTrue, reason: tool.name);
         expect(annotations.idempotentHint, isTrue, reason: tool.name);
@@ -403,14 +406,17 @@ void main() {
         'list_skore_classes',
         'list_skore_courses',
         'list_skore_teachers',
+        'list_skore_gradebook_shares',
         'add_skore_teacher',
         'replace_skore_teacher',
+        'share_skore_gradebook',
+        'unshare_skore_gradebook',
       ],
     );
     for (final state in [SwitchState.off, SwitchState.unclear]) {
       final optIn = skoreOptIn(session, state);
       expect(optIn.offered, isEmpty, reason: state.name);
-      expect(optIn.tools, hasLength(5), reason: state.name);
+      expect(optIn.tools, hasLength(8), reason: state.name);
     }
   });
 }

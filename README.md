@@ -495,9 +495,10 @@ meanwhile is gone, so nothing is sent).
 The Skore tools are offered only when the switch "Skore-beheer" is on (see
 *Opt-in tools* below): they need the rights for score management in Skore
 (Rapporten > Modellen and Puntenboeken), as a Skore administrator has, and
-most teachers and all pupils lack them. The first three read Skore with the
-library's `SkoreService` (dartschool#70) and change nothing; the last two
-assign teachers to courses (dartschool#71):
+most teachers and all pupils lack them. The first four read Skore with the
+library's `SkoreService` (dartschool#70, dartschool#74) and change nothing;
+the last four assign teachers to courses (dartschool#71) and share
+gradebooks (dartschool#74):
 
 - `list_skore_classes`: the classes of Skore's report models
   (`getClasses`), one line per class with its name, Skore class id, group
@@ -519,6 +520,15 @@ assign teachers to courses (dartschool#71):
 - `list_skore_teachers`: the teachers Skore lets assign to a course
   (`getTeachers`), by name with their teacher id (the Smartschool user id),
   in Skore's order; `query` as for `list_skore_classes`.
+- `list_skore_gradebook_shares`: the gradebooks of one teacher
+  (`teacher_id`, the owner; `getGradebookShares`), as Skore's "share
+  gradebooks" manager shows them (Puntenboeken), one line per gradebook in
+  Skore's order: its course, class and gradebook id, and its readers and
+  writers by name, joined with `getTeachers` (a teacher Skore no longer
+  lists shows by teacher id only). The gradebook id is the assignment id of
+  `list_skore_courses`, and the owner the teacher of that assignment. An
+  empty list means a teacher without gradebooks or an unknown id; the
+  result says so.
 - `add_skore_teacher`: assigns a teacher (`teacher_id`, from
   `list_skore_teachers`) to a course (`course_id`) of a class (`class_id`),
   with the library's `addTeacher`: a new assignment, which holds all pupils
@@ -540,8 +550,49 @@ assign teachers to courses (dartschool#71):
   told to leave those groups to the user in Skore: the library never deletes
   them (`explodeMyGroups`), and the tool tries no other way. The result also
   names the teacher replaced.
+- `share_skore_gradebook`: shares a gradebook (`owner_id`, `gradebook_id`)
+  with one or more teachers (`teacher_ids`, 1 to 50) with `read` or `write`
+  access (`access`), with `shareGradebook`, once per teacher, one after the
+  other: sharing with all teachers of a class takes one confirmation, not
+  one per teacher. The teachers it is already shared with keep their
+  access; a teacher with the other access moves to the access given.
+  Marked destructive (sharing gives colleagues access to pupils' scores),
+  and idempotent: sharing again the same way saves nothing. Claude is told
+  the typical flow (the class, its courses, the assignment of the
+  titularis, then the other teachers of the class, all from
+  `list_skore_courses`), to read the gradebook with
+  `list_skore_gradebook_shares` first, and to show the user the gradebook
+  (course and class), the teachers and the access and wait for the user's
+  confirmation.
+- `unshare_skore_gradebook`: stops sharing a gradebook with one or more
+  teachers, with `unshareGradebook`, likewise; the other teachers keep
+  theirs, and a teacher Skore no longer lists can still be taken off.
+  Marked destructive and idempotent, with the same confirmation.
 
-For both writes, the library reads the class (`getCourses`) and the teachers
+For both writes on gradebooks, the tool first reads the owner's gradebooks
+and the teachers itself, to name them and to know what each teacher has
+before the change: the library returns only the gradebook after it (a
+workaround for yvanvds/dartschool#103; its removal is tracked in #74). It
+then stops at the first teacher that fails, and the result says per teacher
+whether the gradebook was shared (or unshared), was already shared that way
+(nothing saved), or was not, or not tried, followed by why it stopped and
+the gradebook's readers and writers afterwards; it is an error when it
+stopped. Before each change the library reads the gradebooks (and, to share,
+the teachers) again and refuses the owner among the teachers, a gradebook
+that is not the owner's, and, to share, a teacher Skore does not list
+(`SmartschoolSkoreChangeRefusedError`); the tool passes the reason on, and
+tells Claude to read the gradebook again. The save (`saveShared`) holds the
+complete readers and writers of that one gradebook, the ids as numbers, so
+sending it again does not change the outcome: the library sends it again
+after logging in again. It reads the gradebooks again after the save, so a
+teacher reported as done is certain; a save that Skore or that read does
+not confirm (`SmartschoolSkoreSaveUnconfirmedError`) is reported as maybe
+saved, with what to look for in `list_skore_gradebook_shares`, and Claude is
+told not to call the tool again for it. Sharing from a teacher's own
+account, without the rights (Skore's `/SkoreGradebook`), is not offered: the
+library does not support it.
+
+For both writes on assignments, the library reads the class (`getCourses`) and the teachers
 (`getTeachers`) again and refuses, before saving, a course that is not in the
 class or is a group header, an assignment that is not the course's, a
 teacher already on the course (for a replace, its current one too) and one
@@ -658,21 +709,29 @@ Skore helpers for later tools live in `lib/src/skore/`. In
 (`skoreToolError`: no rights, or an answer the server cannot use, whose
 details go to the log only), and `checkSkoreAccess`, the access check of
 `smartschool_status`; `skoreToolError` also passes on why a check refused a
-change, and says what to do about "Mijn lesgroepen". In `skore_writes.dart`,
-for the tools that change Skore: `withSkoreWrite`, which runs a write and
-adds to its `ToolError` that nothing was changed, `skoreWriteNotConfirmed`,
-the result of a save Skore did not confirm, and `readSkoreCourse`. In
-`skore_format.dart`: one line per class, course row, assignment and teacher,
-a course or a teacher in a sentence, and the `query` filter
+change (with what to read again: the class, or for a gradebook
+`rereadSkoreGradebook`), and says what to do about "Mijn lesgroepen". In
+`skore_writes.dart`, for the tools that change Skore: `withSkoreWrite`,
+which runs a write and adds to its `ToolError` that nothing was changed,
+`skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result of a
+save Skore did not confirm, and `readSkoreCourse`. In `skore_shares.dart`:
+`changeSkoreShares`, which shares a gradebook with teachers or unshares it,
+one teacher after the other, and the arguments' schemas. In
+`skore_format.dart`: one line per class, course row, assignment, teacher and
+gradebook, a course or a teacher in a sentence, and the `query` filter
 (`skoreMatches`). In `skore_opt_in.dart`: the Skore tools behind their
 switch (`skoreOptIn`). The tests run against a fake Skore
 (`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
 reads, in the shape of dartschool's anonymised captures, with fake names;
 it can refuse an account without the rights with HTTP 403 or with a page
 instead of data. It carries out the save of an assignment (`saveOwner`) and
-answers `getMyGroups` as the live Skore did in dartschool#71, can lose the
-answer to a save or answer it with an error page, and answers any other RPC
-method with HTTP 501.
+answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
+teacher's gradebooks, one per assignment, with their shares (`getCourses`
+of the gradebooks service), and carries out the save of their shares
+(`saveShared`) as the live Skore did in dartschool#74. It can lose the
+answer to a save, answer it with an error page, or (`saveShared`) answer it
+as done without carrying it out, also for one save of several
+(`nextSaves`); it answers any other RPC method with HTTP 501.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

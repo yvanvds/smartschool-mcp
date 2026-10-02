@@ -24,9 +24,10 @@ import 'support/fake_github.dart';
 ///
 /// Teachers as what a tool is about are fine: the Skore tools list the
 /// teachers of a course and the teachers that can be assigned, by their
-/// teacher id (#42), and assign them (#43). Write "a teacher", "its
-/// teachers", "the teacher to assign", "the teacher of the assignment";
-/// never "the teacher" as the one who uses the tool.
+/// teacher id (#42), assign them (#43), and share gradebooks with them
+/// (#44). Write "a teacher", "its teachers", "the teacher to assign", "the
+/// teacher of the assignment", "the owner among the teachers"; never "the
+/// teacher" as the one who uses the tool.
 final _userAsTeacher = RegExp(
   r"\bthe (?:signed-in |logged-in |current )?teacher(?:'s)? "
   r'(?:is|was|can|could|has|had|wants|asks|asked|sees|looks|uses|types|'
@@ -489,6 +490,13 @@ void main() {
       'the current teacher of the assignment (teacher id 1005) works with',
       'only its teacher changes: the teacher it had is no longer on the '
           'course',
+      'and the owner is the teacher of that assignment',
+      'a teacher with the other access gets the access given instead',
+      'the owner among the teachers to share with',
+      'A teacher Skore no longer lists (such as one who left the school) can '
+          'still be taken off',
+      'no gradebook belongs to that teacher id, or that no teacher has that '
+          'id',
       'what the user is looking for',
     ]) {
       expect(text, isNot(matches(_userAsTeacher)), reason: text);
@@ -497,15 +505,18 @@ void main() {
       'list_skore_classes',
       'list_skore_courses',
       'list_skore_teachers',
+      'list_skore_gradebook_shares',
       'add_skore_teacher',
       'replace_skore_teacher',
+      'share_skore_gradebook',
+      'unshare_skore_gradebook',
     });
   });
 
   test('no tool assumes the user is a teacher: students sign in too, so '
       'titles and descriptions speak of the user (#62). Only the Skore '
       'tools, with "Skore-beheer" on, speak of teachers, as their subject '
-      '(#42, #43)', () async {
+      '(#42, #43, #44)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: {
@@ -516,7 +527,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(32));
+    expect(tools, hasLength(35));
     expect([
       for (final tool in tools.cast<Map<String, Object?>>())
         if (_teachersAsSubject.contains(tool['name'])) tool['name'],
@@ -551,8 +562,11 @@ void main() {
       'list_skore_classes',
       'list_skore_courses',
       'list_skore_teachers',
+      'list_skore_gradebook_shares',
     ];
-    const skoreWrites = ['add_skore_teacher', 'replace_skore_teacher'];
+    const assignWrites = ['add_skore_teacher', 'replace_skore_teacher'];
+    const shareWrites = ['share_skore_gradebook', 'unshare_skore_gradebook'];
+    const skoreWrites = [...assignWrites, ...shareWrites];
     const skoreTools = [...skoreReads, ...skoreWrites];
 
     Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
@@ -599,8 +613,8 @@ void main() {
     });
 
     test('on: the Skore tools come last, the reads read-only and the writes '
-        '(#43) destructive, with their arguments; smartschool_status says it '
-        'is on; without settings they name the missing settings, before any '
+        '(#43, #44) destructive, with their arguments; smartschool_status says '
+        'it is on; without settings they name the missing settings, before any '
         'login', () async {
       final server = await ServerProcess.start(
         exePath,
@@ -612,7 +626,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(32));
+      expect(tools, hasLength(35));
       expect([for (final tool in tools.skip(27)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
@@ -623,16 +637,55 @@ void main() {
           'openWorldHint': true,
         }, reason: name);
       }
-      // Claude Desktop asks approval before every call of a write.
+      // Claude Desktop asks approval before every call of a write. Sharing
+      // again the same way saves nothing (#44).
       for (final name in skoreWrites) {
         expect(byName[name]!['annotations'], {
           'title': isA<String>(),
           'readOnlyHint': false,
           'destructiveHint': true,
-          'idempotentHint': false,
+          'idempotentHint': shareWrites.contains(name),
           'openWorldHint': true,
         }, reason: name);
       }
+      for (final (name, required) in [
+        (
+          'share_skore_gradebook',
+          ['owner_id', 'gradebook_id', 'teacher_ids', 'access'],
+        ),
+        (
+          'unshare_skore_gradebook',
+          ['owner_id', 'gradebook_id', 'teacher_ids'],
+        ),
+      ]) {
+        final schema = byName[name]!['inputSchema'] as Map;
+        expect(schema['required'], required, reason: name);
+        final properties = schema['properties'] as Map;
+        expect(properties.keys, required, reason: name);
+        for (final id in ['owner_id', 'gradebook_id']) {
+          expect(properties[id], {
+            'type': 'integer',
+            'description': isA<String>(),
+            'minimum': 1,
+          }, reason: '$name $id');
+        }
+        expect(properties['teacher_ids'], {
+          'type': 'array',
+          'description': isA<String>(),
+          'items': {'type': 'integer', 'minimum': 1},
+          'minItems': 1,
+          'maxItems': 50,
+        }, reason: name);
+      }
+      expect(
+        (byName['share_skore_gradebook']!['inputSchema'] as Map)['properties']
+            as Map,
+        containsPair('access', {
+          'type': 'string',
+          'description': isA<String>(),
+          'enum': ['read', 'write'],
+        }),
+      );
       for (final (name, required) in [
         ('add_skore_teacher', ['class_id', 'course_id', 'teacher_id']),
         (
@@ -667,6 +720,16 @@ void main() {
         'description': isA<String>(),
         'minimum': 1,
       });
+      final sharesSchema =
+          byName['list_skore_gradebook_shares']!['inputSchema'] as Map;
+      expect(sharesSchema['required'], ['teacher_id']);
+      expect(sharesSchema['properties'], {
+        'teacher_id': {
+          'type': 'integer',
+          'description': isA<String>(),
+          'minimum': 1,
+        },
+      });
 
       final (statusError, status) = await server.callTool('smartschool_status');
       expect(statusError, isNot(true));
@@ -694,6 +757,24 @@ void main() {
             'teacher_id': 1006,
           },
         ),
+        ('list_skore_gradebook_shares', {'teacher_id': 1005}),
+        (
+          'share_skore_gradebook',
+          {
+            'owner_id': 1005,
+            'gradebook_id': 34826,
+            'teacher_ids': [1001, 1002],
+            'access': 'read',
+          },
+        ),
+        (
+          'unshare_skore_gradebook',
+          {
+            'owner_id': 1005,
+            'gradebook_id': 34826,
+            'teacher_ids': [1006],
+          },
+        ),
       ]) {
         final (isError, text) = await server.callTool(
           tool,
@@ -711,7 +792,7 @@ void main() {
       await server.stop();
       expect(
         await server.stderr,
-        contains('Skore-beheer: on, 5 tools offered'),
+        contains('Skore-beheer: on, 8 tools offered'),
       );
     });
   });
