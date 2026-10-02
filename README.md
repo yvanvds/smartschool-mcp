@@ -126,8 +126,9 @@ via *Settings → Developer → Edit Config*
 ```
 
 `SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP); MFA
-is mandatory for teachers. Spaces in it are ignored; a value that is not
-Base32 (such as the app's 6-digit code) is reported before any login. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
+is mandatory for teachers. Spaces and hyphens in it are ignored; a value that
+is not Base32 (such as the app's 6-digit code) is reported without sending the
+password. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
 *Saving files* below). Restart Claude Desktop after editing the file. The
 server's stderr ends up in Claude Desktop's MCP log
 (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).

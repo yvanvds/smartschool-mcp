@@ -14,6 +14,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/install.dart';
@@ -80,17 +81,21 @@ void main() {
   });
 
   test('says that spaces in the 2FA key do not matter and which characters '
-      'it has, as the server checks it', () {
+      'it has, as the library checks it', () {
     expect(text, isNot(contains('zonder spaties')));
     expect(text, contains('Spaties in de sleutel zijn geen probleem.'));
     expect(text, contains('letters en de cijfers 2 tot 7; spaties mogen.'));
-    String key(String typed) => SmartschoolSettings.normalizeTotpSecret(typed);
+    // The check the library runs on the key when it logs in.
     expect(
-      SmartschoolSettings.isTotpSecret(key('JBSW Y3DP EHPK 3PXP')),
-      isTrue,
+      Credentials.normalizeTotpSecret('JBSW Y3DP EHPK 3PXP'),
+      'JBSWY3DPEHPK3PXP',
     );
     for (final typed in ['123456', '234567', 'JBSWY3DPEHPK3PX8']) {
-      expect(SmartschoolSettings.isTotpSecret(key(typed)), isFalse);
+      expect(
+        () => Credentials.normalizeTotpSecret(typed),
+        throwsA(isA<SmartschoolInvalidTotpSecretError>()),
+        reason: typed,
+      );
     }
   });
 

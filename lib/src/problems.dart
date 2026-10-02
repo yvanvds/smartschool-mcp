@@ -18,9 +18,11 @@ enum ProblemKind {
   credentialsFileInvalid(permanent: true),
 
   /// The 2FA key in the settings cannot be a TOTP secret (not Base32, or a
-  /// code of the authenticator app): found before logging in, see
-  /// [SmartschoolSettings.mfaProblem], or by the library before it posts the
-  /// password ([SmartschoolInvalidTotpSecretError]).
+  /// code of the authenticator app): the library refuses it when it logs in
+  /// ([SmartschoolInvalidTotpSecretError]), before it posts the password.
+  /// Only a date, which the library keeps for an account verification, is
+  /// refused after the password, when Smartschool asks for a 2FA code
+  /// instead.
   twoFactorKeyInvalid(permanent: true),
 
   /// Smartschool rejected the username or password.
@@ -84,12 +86,12 @@ final class SmartschoolProblem implements Exception {
         'use SmartschoolProblem.credentialsFile',
       ),
       ProblemKind.twoFactorKeyInvalid =>
-        'The two-factor authentication (2FA) key is not valid, so Smartschool '
-            'was not contacted. Check ${name(Setting.mfa)} ${source.where}: '
-            'it must be the key Smartschool shows when you add an '
-            'authenticator app, made of letters and the digits 2 to 7 (spaces '
-            'do not matter), not the 6-digit code the app shows. Then '
-            '$restart.',
+        'The two-factor authentication (2FA) key is not valid, so the login '
+            'to Smartschool was stopped. Check ${name(Setting.mfa)} '
+            '${source.where}: it must be the key Smartschool shows when you '
+            'add an authenticator app, made of letters and the digits 2 to 7 '
+            '(spaces and hyphens do not matter), not the 6-digit code the app '
+            'shows. Then $restart.',
       ProblemKind.wrongPassword =>
         'Smartschool did not accept the username or password. Check '
             '${name(Setting.username)} and ${name(Setting.password)} '
@@ -218,9 +220,7 @@ ProblemKind? classifyFailure(Object error) {
         SmartschoolTwoFactorRequiredError():
       return ProblemKind.twoFactorRejected;
     // A key that is not a TOTP secret, which the library refuses before it
-    // posts the password (yvanvds/dartschool#79). For now
-    // SmartschoolSettings.mfaProblem refuses such a key before logging in
-    // (yvanvds/smartschool-mcp#34).
+    // posts the password (yvanvds/dartschool#79).
     case SmartschoolInvalidTotpSecretError():
       return ProblemKind.twoFactorKeyInvalid;
     case SmartschoolUnsupportedTwoFactorMethodError():

@@ -175,14 +175,19 @@ void main() {
     expect(home.listSync(), isEmpty);
   });
 
-  test('installed with the 6-digit code of the app in "2FA-sleutel": '
-      'smartschool_status and the other tools name that field and say it '
-      'is not the code, without logging in anywhere', () async {
+  test('installed with the 6-digit code of the app in "2FA-sleutel": the '
+      'server does not refuse it itself but leaves it to the login of the '
+      'library, and quotes neither the code nor the password', () async {
+    // The library refuses the code when it logs in, before it posts the
+    // password. The message that names "2FA-sleutel" is checked over MCP
+    // against a fake Smartschool (test/status_tool_test.dart): the exe only
+    // talks HTTPS to the address in the settings, with the certificates of
+    // the PC, so there is no fake Smartschool it can reach. Here the address
+    // is a host that cannot exist (RFC 2606), so that the server cannot
+    // reach a real school either: it reports that first.
     final home = await tempHome();
     const password = 'not-a-real-password';
     final server = await startInstalled({
-      // A host that cannot exist (RFC 2606), so that the server would not
-      // reach a real school if it did try to log in.
       'main_url': 'school.invalid',
       'username': 'jan.peeters',
       'password': password,
@@ -192,48 +197,37 @@ void main() {
 
     final (statusError, status) = await server.callTool('smartschool_status');
     final (listError, list) = await server.callTool('list_messages');
-    final (searchError, search) = await server.callTool(
-      'search_intradesk',
-      arguments: {'query': 'uitstap'},
-    );
 
-    final title = fields()['mfa']!['title'];
-    final problem =
-        'The two-factor authentication (2FA) key is not valid, so Smartschool '
-        'was not contacted. Check "$title" (SMARTSCHOOL_MFA) in the '
-        'Smartschool extension settings in Claude Desktop (Settings → '
-        'Extensions): it must be the key Smartschool shows when you add an '
-        'authenticator app, made of letters and the digits 2 to 7 (spaces do '
-        'not matter), not the 6-digit code the app shows. Then restart Claude '
-        'Desktop.';
+    const unreachable = 'Could not reach Smartschool at school.invalid.';
     expect(statusError, isNot(true));
     expect(
       status,
       startsWith(
         'Smartschool connection: NOT working\n'
-        'Problem: $problem\n'
-        'Smartschool address: school.invalid\n'
-        'Settings: extension settings (all filled in)\n',
+        'Problem: $unreachable',
       ),
     );
+    expect(status, contains('\nSettings: extension settings (all filled in)'));
     expect(listError, isTrue);
-    expect(list, problem);
-    expect(searchError, isTrue);
-    expect(search, problem);
+    expect(list, startsWith(unreachable));
 
     await server.stop();
     final log = await server.stderr;
     expect(
       log,
-      contains('Smartschool settings: the 2FA key is not valid (not Base32'),
+      contains('Smartschool: checking the session with school.invalid'),
     );
-    expect(log, isNot(contains('Smartschool: checking the session')));
+    expect(log, isNot(contains('2FA key is not valid')));
     expect(log, isNot(contains('sending username and password')));
-    for (final text in [status, list, search, log]) {
+    for (final text in [status, list, log]) {
       expect(text, isNot(contains(password)));
       expect(text, isNot(contains('123 456')));
     }
-    expect(home.listSync(), isEmpty, reason: 'no session saved');
+    expect(
+      home.listSync(recursive: true).whereType<File>(),
+      isEmpty,
+      reason: 'no session saved',
+    );
   });
 
   test('installed with a folder picked for "Downloadmap": '

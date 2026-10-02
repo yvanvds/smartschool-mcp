@@ -74,9 +74,7 @@ void main() {
 
     test('a 2FA key that is not a key: its own type, before the password is '
         'posted (yvanvds/dartschool#79)', () async {
-      // The 6-digit code of the app, and a key with a "1". For now
-      // SmartschoolSettings.mfaProblem refuses such a key before logging in
-      // (yvanvds/smartschool-mcp#34).
+      // The 6-digit code of the app, and a key with a "1".
       for (final key in ['123456', 'JBSW Y3DP EHPK 3PX1']) {
         final server = FakeSmartschool();
         final error = await _loginError(server, FakeCredentials(mfa: key));
@@ -337,15 +335,15 @@ void main() {
       expect(message(ProblemKind.twoFactorRejected), contains('clock'));
     });
 
-    test('a 2FA key that is not valid: not a 6-digit code, spaces do not '
-        'matter, nothing about the clock', () {
+    test('a 2FA key that is not valid: not a 6-digit code, spaces and '
+        'hyphens do not matter, nothing about the clock', () {
       final text = message(ProblemKind.twoFactorKeyInvalid);
       expect(
         text,
         allOf(
-          contains('key is not valid, so Smartschool was not contacted'),
+          contains('key is not valid, so the login to Smartschool was stopped'),
           contains('not the 6-digit code'),
-          contains('spaces do not matter'),
+          contains('spaces and hyphens do not matter'),
           contains('restart Claude Desktop'),
         ),
       );
