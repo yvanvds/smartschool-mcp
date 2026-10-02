@@ -56,9 +56,11 @@ final class IntradeskWalkProgress {
 /// holds folders, not files (seen live).
 ///
 /// A folder whose listing fails for another reason than a login or
-/// connection problem (Smartschool answers some with a 500) is counted in
-/// [IntradeskIndex.unlisted] and the walk goes on without its contents. A
-/// login or connection problem stops the walk and is rethrown once the
+/// connection problem or a disposed client (Smartschool answers some with a
+/// 500) is counted in [IntradeskIndex.unlisted] and the walk goes on without
+/// its contents. A login or connection problem, or the
+/// [SmartschoolClientDisposedError] of a client disposed during the walk
+/// (the server shuts down), stops the walk and is rethrown once the
 /// listings in progress are done. A listing that finds the session expired
 /// does not stop it: the library logs in again and retries the listing. Only
 /// a session that Smartschool still refuses does, and then
@@ -91,10 +93,9 @@ Future<IntradeskIndex> buildIntradeskIndex(
     } catch (error) {
       // The root must work; for another folder only a login or connection
       // problem stops the walk, or the client being disposed (the server
-      // shuts down), which the library reports with a plain StateError
-      // (yvanvds/dartschool#73, #26).
+      // shuts down; yvanvds/dartschool#73).
       if (folder == null ||
-          error is StateError ||
+          error is SmartschoolClientDisposedError ||
           classifyFailure(error) != null) {
         rethrow;
       }
