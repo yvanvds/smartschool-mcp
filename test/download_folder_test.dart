@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
@@ -24,7 +25,7 @@ void main() {
 
   DownloadFolder folderAt(String path) => DownloadFolder(
     path,
-    origin: const DownloadFolderOrigin('set in a test', fix: 'pick another'),
+    origin: DownloadFolderOrigin('set in a test', fix: 'pick another'),
     clock: () => now,
   );
 
@@ -82,6 +83,30 @@ void main() {
         'choose another folder in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR) '
         'in the Smartschool extension settings in Claude Desktop (Settings → '
         'Extensions), then restart Claude Desktop',
+      );
+    });
+
+    test('worded for the app the server runs in, which is known only after '
+        'the folder was resolved', () {
+      final client = ClientContext();
+      final folder = DownloadFolder.resolve(
+        ExtensionSettings(client: client),
+        environment: {'SMARTSCHOOL_DOWNLOAD_DIR': inRoot('Cowork')},
+      )!;
+
+      client.app = ClientApp.codex;
+
+      expect(
+        folder.origin.label,
+        'set in SMARTSCHOOL_DOWNLOAD_DIR ("Downloadmap")',
+      );
+      expect(
+        folder.origin.fix,
+        'choose another folder in SMARTSCHOOL_DOWNLOAD_DIR ("Downloadmap") '
+        "in the ChatGPT app, under Instellingen (Settings) → Plug-ins → MCP's "
+        '→ smartschool → Omgevingsvariabelen (Environment variables); in the '
+        'Codex CLI or IDE extension, under [mcp_servers.smartschool.env] in '
+        r'%USERPROFILE%\.codex\config.toml, then restart ChatGPT (or Codex)',
       );
     });
 

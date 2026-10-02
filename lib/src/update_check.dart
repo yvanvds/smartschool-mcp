@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:pub_semver/pub_semver.dart';
 
 import 'cache_folder.dart';
+import 'client_app.dart';
 import 'log.dart';
 import 'version.dart';
 
@@ -18,7 +19,8 @@ final class Release {
   /// The release's tag, e.g. `v0.2.0`.
   final String tag;
 
-  /// The release page (GitHub's `html_url`), where the `.mcpb` file is.
+  /// The release page (GitHub's `html_url`), where the `.mcpb` and `.exe`
+  /// files are.
   final Uri url;
 
   /// The version in a release [tag] such as `v1.2.3` (the `v` is optional),
@@ -148,6 +150,11 @@ final class UpdateChecker {
   /// The name of the extension file attached to every release.
   static const assetName = 'smartschool-mcp.mcpb';
 
+  /// The name of the server's executable attached to every release, which
+  /// installs itself for ChatGPT and Codex when double-clicked
+  /// (`lib/src/install.dart`).
+  static const exeAssetName = 'smartschool-mcp.exe';
+
   /// An answer larger than this is not a release (GitHub's is a few KB).
   static const maxAnswerBytes = 1024 * 1024;
 
@@ -155,9 +162,15 @@ final class UpdateChecker {
   /// ignored and overwritten.
   static const stateFormat = 1;
 
-  /// What the user does to update to [release].
-  static String howToUpdate(Release release) =>
-      'download $assetName from ${release.url} and double-click it';
+  /// What the user does to update to [release] in [app].
+  static String howToUpdate(Release release, ClientApp app) => switch (app) {
+    ClientApp.claudeDesktop =>
+      'download $assetName from ${release.url} and double-click it',
+    ClientApp.codex =>
+      'download $exeAssetName from ${release.url}, double-click it to '
+          'install it over the old version (the settings in ChatGPT stay), '
+          'then restart ChatGPT (or Codex)',
+  };
 
   final Uri endpoint;
   final File stateFile;
@@ -242,10 +255,11 @@ final class UpdateChecker {
   /// The notice to add to a tool result when a newer release is known and
   /// the user has not been told about it in this process (not by an earlier
   /// notice, nor by `smartschool_status`, see [announced]); null otherwise.
+  /// It says how to update in [app].
   ///
   /// Also starts a background check when the last one is a day old, so a
   /// server that keeps running learns about later releases. Never waits.
-  String? takeNotice() {
+  String? takeNotice({ClientApp app = ClientApp.claudeDesktop}) {
     checkInBackground();
     final latest = _latest;
     if (latest == null ||
@@ -254,9 +268,9 @@ final class UpdateChecker {
       return null;
     }
     _announced = latest.version;
-    return 'Update available: version ${latest.version} of the Smartschool '
-        'extension has been released (this is version $current). Please tell '
-        'the user: to update, ${howToUpdate(latest)}.';
+    return 'Update available: version ${latest.version} of ${app.product} '
+        'has been released (this is version $current). Please tell the user: '
+        'to update, ${howToUpdate(latest, app)}.';
   }
 
   /// Records that the user was told about [release] (by

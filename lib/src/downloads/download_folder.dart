@@ -13,16 +13,29 @@ import 'file_names.dart';
 /// Where the path of a [DownloadFolder] came from, and how the teacher
 /// chooses another folder; for `smartschool_status` and error messages.
 final class DownloadFolderOrigin {
-  const DownloadFolderOrigin(this.label, {required this.fix});
+  DownloadFolderOrigin(String label, {required String fix})
+    : this.worded(() => label, fix: () => fix);
+
+  /// An origin whose texts are worded when asked for: they name the app the
+  /// server runs in, which is only known after the client's `initialize`,
+  /// later than the folder is resolved.
+  DownloadFolderOrigin.worded(
+    String Function() label, {
+    required String Function() fix,
+  }) : _label = label,
+       _fix = fix;
+
+  final String Function() _label;
+  final String Function() _fix;
 
   /// Such as `set in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR)` or `the
   /// default`.
-  final String label;
+  String get label => _label();
 
   /// What the teacher does to use another folder, such as `choose another
   /// folder in "Downloadmap" (...) in the Smartschool extension settings
   /// ..., then restart Claude Desktop`.
-  final String fix;
+  String get fix => _fix();
 }
 
 /// The folder on this PC that `save_intradesk_file` and
@@ -66,7 +79,7 @@ final class DownloadFolder {
   }) {
     final variables = environment ?? Platform.environment;
     const setting = Setting.downloadDir;
-    final fix = switch (source) {
+    String fix() => switch (source) {
       ExtensionSettings() =>
         'choose another folder in ${source.name(setting)} ${source.where}, '
             'then ${source.restart}',
@@ -74,28 +87,32 @@ final class DownloadFolder {
         'set ${setting.envVar}, or ${setting.fileKey} in the credentials '
             'file $path, to another folder, then ${source.restart}',
     };
-    DownloadFolder folder(String path, String label) => DownloadFolder(
-      Directory(path).absolute.path,
-      origin: DownloadFolderOrigin(label, fix: fix),
-      clock: clock,
-    );
+    DownloadFolder folder(String path, String Function() label) =>
+        DownloadFolder(
+          Directory(path).absolute.path,
+          origin: DownloadFolderOrigin.worded(label, fix: fix),
+          clock: clock,
+        );
 
     if (_clean(variables[setting.envVar]) case final path?) {
-      return folder(path, switch (source) {
-        ExtensionSettings() => 'set in ${source.name(setting)}',
-        CredentialsFile() => 'set in ${setting.envVar}',
-      });
+      return folder(
+        path,
+        () => switch (source) {
+          ExtensionSettings() => 'set in ${source.name(setting)}',
+          CredentialsFile() => 'set in ${setting.envVar}',
+        },
+      );
     }
     if (source case CredentialsFile(:final path)) {
       if (_clean(source.downloadDirectory()) case final directory?) {
         return folder(
           directory,
-          'set in ${setting.fileKey} in the credentials file $path',
+          () => 'set in ${setting.fileKey} in the credentials file $path',
         );
       }
     }
     if (defaultPath(variables) case final path?) {
-      return folder(path, 'the default');
+      return folder(path, () => 'the default');
     }
     log(
       'downloads: no download folder (${setting.envVar} is not set and '

@@ -87,7 +87,7 @@ Future<CallToolResult> _save(
   final id = requiredIntArgument(arguments, 'message_id');
   final box = MessageBox.parse(arguments['box']);
   final which = _attachmentArgument(arguments);
-  final folder = downloads ?? (throw noDownloadFolder());
+  final folder = downloads ?? (throw noDownloadFolder(session.source));
 
   // As read_message: neither call changes the read state.
   final (message, attachments) = await withMessages(session, (messages) async {

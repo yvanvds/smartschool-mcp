@@ -1,5 +1,6 @@
 import 'package:dart_mcp/server.dart';
 
+import '../client_app.dart';
 import '../downloads/download_folder.dart';
 import '../log.dart';
 import '../problems.dart';
@@ -15,11 +16,13 @@ import 'server_tool.dart';
 /// turned off); and, with [downloads], which download folder the save tools
 /// use and whether it is writable ([downloads] gives that folder, null when
 /// there is none; without [downloads], the status says nothing about
-/// downloads).
+/// downloads). [client] is the app the server runs in, for how to update
+/// (Claude Desktop without it).
 ServerTool statusTool(
   SmartschoolSession session, {
   UpdateChecker? updates,
   DownloadFolder? Function()? downloads,
+  ClientContext? client,
 }) => ServerTool(
   definition: Tool(
     name: 'smartschool_status',
@@ -44,13 +47,14 @@ ServerTool statusTool(
       openWorldHint: true,
     ),
   ),
-  handler: (_) => _status(session, updates, downloads),
+  handler: (_) => _status(session, updates, downloads, client),
 );
 
 Future<CallToolResult> _status(
   SmartschoolSession session,
   UpdateChecker? updates,
   DownloadFolder? Function()? downloads,
+  ClientContext? client,
 ) async {
   // Asks GitHub and tries the download folder while the connection is
   // checked, so they add no time.
@@ -91,12 +95,14 @@ Future<CallToolResult> _status(
       'Smartschool address: '
           '${settings.host.isEmpty ? '(not filled in)' : settings.host}',
     'Settings: ${_describeSettings(source, settings)}',
+    if (MisnamedSetting.describe(source.misnamed) case final misnamed?)
+      'Wrong setting names: $misnamed',
     if (downloads != null)
       _describeDownloadFolder(folder, await folderCheck, session.source),
     'Server version: $packageVersion',
   ];
   final update = await updateCheck;
-  report.add(_describeUpdate(update));
+  report.add(_describeUpdate(update, client?.app ?? ClientApp.claudeDesktop));
   if (update case UpdateAvailable(:final release)) {
     // Shown here, so no tool result repeats it as a notice.
     updates?.announced(release);
@@ -104,17 +110,20 @@ Future<CallToolResult> _status(
   return CallToolResult(content: [TextContent(text: report.join('\n'))]);
 }
 
-/// The `Updates:` line: what the update check found, or that it is off.
-String _describeUpdate(UpdateCheckResult? result) => switch (result) {
-  null => 'Updates: not checked (the update check is turned off)',
-  UpdateAvailable(:final release) =>
-    'Updates: version ${release.version} is available. To update, '
-        '${UpdateChecker.howToUpdate(release)}.',
-  UpToDate(latest: null) => 'Updates: up to date (no release published yet)',
-  UpToDate(:final latest?) =>
-    'Updates: up to date (latest release: ${latest.version})',
-  UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
-};
+/// The `Updates:` line: what the update check found, or that it is off; how
+/// to update in [app].
+String _describeUpdate(UpdateCheckResult? result, ClientApp app) =>
+    switch (result) {
+      null => 'Updates: not checked (the update check is turned off)',
+      UpdateAvailable(:final release) =>
+        'Updates: version ${release.version} is available. To update, '
+            '${UpdateChecker.howToUpdate(release, app)}.',
+      UpToDate(latest: null) =>
+        'Updates: up to date (no release published yet)',
+      UpToDate(:final latest?) =>
+        'Updates: up to date (latest release: ${latest.version})',
+      UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
+    };
 
 /// The `Download folder:` line: the folder, where its path comes from, and
 /// whether files can be saved in it, or how to choose another.
@@ -159,7 +168,12 @@ String _describeSettings(
   return '$origin (${states.join(', ')})';
 }
 
+/// How [setting] is called where the teacher fills it in: its title in the
+/// install form, its variable in ChatGPT's form, its key in the credentials
+/// file.
 String _shortName(CredentialSource source, Setting setting) => switch (source) {
+  ExtensionSettings(client: ClientContext(app: ClientApp.codex)) =>
+    setting.envVar,
   ExtensionSettings() => setting.formTitle,
   CredentialsFile() => setting.fileKey,
 };

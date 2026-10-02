@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
@@ -283,9 +284,16 @@ class FakeCredentials extends Credentials {
   final String? mfa;
 }
 
-/// Extension settings holding [credentials].
-ExtensionSettings fakeExtensionSettings([Credentials? credentials]) =>
-    ExtensionSettings(read: () => credentials ?? FakeCredentials());
+/// Extension settings holding [credentials], in an environment with no
+/// other variables (so no misnamed setting); worded for [client]'s app.
+ExtensionSettings fakeExtensionSettings([
+  Credentials? credentials,
+  ClientContext? client,
+]) => ExtensionSettings(
+  client: client,
+  read: () => credentials ?? FakeCredentials(),
+  environment: () => const {},
+);
 
 /// A temporary cookie cache directory, deleted after the test.
 Future<Directory> tempCache() async {

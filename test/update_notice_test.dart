@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -66,9 +67,11 @@ void main() {
   Future<ServerConnection> serve(
     UpdateChecker? updates, {
     CredentialSource? source,
+    String clientName = 'test',
   }) async {
+    final client = ClientContext();
     final session = SmartschoolSession(
-      source ?? fakeExtensionSettings(),
+      source ?? fakeExtensionSettings(null, client),
       createClient: fakeClientFactory(smartschool, await tempCache()),
     );
     addTearDown(session.close);
@@ -76,11 +79,13 @@ void main() {
     addTearDown(() => index.walkDone);
     final (connection, _) = await connect(
       tools: [
-        statusTool(session, updates: updates),
+        statusTool(session, updates: updates, client: client),
         listMessagesTool(session),
         readIntradeskFileTool(session, index),
       ],
       updates: updates,
+      client: client,
+      clientName: clientName,
     );
     return connection;
   }
@@ -270,6 +275,38 @@ void main() {
     expect(
       offlineStatus,
       endsWith('\nUpdates: could not check (could not reach 127.0.0.1)'),
+    );
+  });
+
+  test('in ChatGPT or Codex: the notice and smartschool_status say to '
+      'download and double-click the exe, then restart ChatGPT', () async {
+    github.publish('v0.2.0');
+    final updates = checker();
+    final connection = await serve(
+      updates,
+      clientName: ClientApp.codexClientName,
+    );
+    updates.checkInBackground();
+    await updates.idle;
+
+    final messages = await call(connection, 'list_messages');
+    final status = text(await call(connection, 'smartschool_status'));
+
+    final howTo =
+        'download smartschool-mcp.exe from ${releasePage('v0.2.0')}, '
+        'double-click it to install it over the old version (the settings in '
+        'ChatGPT stay), then restart ChatGPT (or Codex)';
+    expect(messages.content, hasLength(2));
+    expect(
+      (messages.content.last as TextContent).text,
+      'Update available: version 0.2.0 of the Smartschool MCP server has '
+      'been released (this is version 0.1.0). Please tell the user: to '
+      'update, $howTo.',
+    );
+    expect(status, startsWith('Smartschool connection: working\n'));
+    expect(
+      status,
+      endsWith('\nUpdates: version 0.2.0 is available. To update, $howTo.'),
     );
   });
 

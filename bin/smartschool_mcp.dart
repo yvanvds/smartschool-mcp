@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_mcp/stdio.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
+import 'package:smartschool_mcp/src/install.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/log.dart';
 import 'package:smartschool_mcp/src/messages/message_cache.dart';
@@ -24,25 +26,41 @@ import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
-/// Serves MCP over stdin/stdout until the client closes stdin.
+/// Serves MCP over stdin/stdout until the client closes stdin, or, started
+/// with `--install` or by a double-click, installs the server for ChatGPT
+/// and Codex (`lib/src/install.dart`).
 ///
-/// stdout is the protocol channel. Diagnostics go to stderr, and any stray
-/// `print` (ours or a dependency's) is redirected there as well.
+/// When serving, stdout is the protocol channel. Diagnostics go to stderr,
+/// and any stray `print` (ours or a dependency's) is redirected there as
+/// well.
 Future<void> main(List<String> args) async {
+  final ServerOptions options;
+  try {
+    options = ServerOptions.parse(args);
+  } on FormatException catch (error) {
+    log('${error.message}\n\n${ServerOptions.usage}');
+    exitCode = 64; // EX_USAGE
+    return;
+  }
+  final interactive = stdin.hasTerminal;
+  if (options.installs(interactive: interactive)) {
+    exitCode = await runInstaller(
+      out: stdout,
+      interactive: interactive,
+      clipboard: options.clipboard,
+    );
+    return;
+  }
+  await _serve(options);
+}
+
+Future<void> _serve(ServerOptions options) async {
   await runZoned(
     () async {
-      final ServerOptions options;
-      try {
-        options = ServerOptions.parse(args);
-      } on FormatException catch (error) {
-        log('${error.message}\n\n${ServerOptions.usage}');
-        exitCode = 64; // EX_USAGE
-        return;
-      }
-
+      final client = ClientContext();
       final source = switch (options.credentialsPath) {
         final path? => CredentialsFile(path),
-        null => const ExtensionSettings(),
+        null => ExtensionSettings(client: client),
       };
       final session = SmartschoolSession(source);
       final intradeskIndex = IntradeskIndexCache.of(session);
@@ -50,8 +68,14 @@ Future<void> main(List<String> args) async {
       final updates = UpdateChecker.fromEnvironment();
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
+        client: client,
         tools: [
-          statusTool(session, updates: updates, downloads: () => downloads),
+          statusTool(
+            session,
+            updates: updates,
+            downloads: () => downloads,
+            client: client,
+          ),
           listMessagesTool(session),
           readMessageTool(session),
           saveMessageAttachmentTool(session, downloads),
@@ -74,9 +98,12 @@ Future<void> main(List<String> args) async {
                   '(${downloads.origin.label})',
       );
       // In the background: startup never waits for GitHub, nor for deleting
-      // old downloads.
+      // old downloads, nor for deleting a copy an update moved aside.
       updates?.checkInBackground();
       downloads?.cleanUpInBackground();
+      unawaited(
+        deleteReplacedCopies(File(Platform.resolvedExecutable).parent.path),
+      );
       await server.done;
       await updates?.close();
       await downloads?.idle;

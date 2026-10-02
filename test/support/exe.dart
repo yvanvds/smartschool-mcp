@@ -100,13 +100,15 @@ class ServerProcess {
   /// Everything the server wrote to stderr, once it has exited.
   final Future<String> stderr;
 
-  /// Sends `initialize` and `notifications/initialized`; returns the
-  /// initialize result.
-  Future<Map<String, Object?>> initialize() async {
+  /// Sends `initialize` and `notifications/initialized`, as a client that
+  /// calls itself [clientName]; returns the initialize result.
+  Future<Map<String, Object?>> initialize({
+    String clientName = 'e2e-test',
+  }) async {
     final result = await request('initialize', {
       'protocolVersion': '2025-06-18',
       'capabilities': <String, Object?>{},
-      'clientInfo': {'name': 'e2e-test', 'version': '0.0.0'},
+      'clientInfo': {'name': clientName, 'version': '0.0.0'},
     });
     _send({'jsonrpc': '2.0', 'method': 'notifications/initialized'});
     return result;

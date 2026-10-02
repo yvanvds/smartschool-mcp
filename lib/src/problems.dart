@@ -146,9 +146,13 @@ final class SmartschoolProblem implements Exception {
   @override
   String toString() => message;
 
+  /// The message for [missing] settings, with any [CredentialSource.misnamed]
+  /// variable: a setting under a mistyped name is a missing one.
   static String _missing(CredentialSource source, List<Setting> missing) {
     final names = missing.map(source.name).join(', ');
+    final misnamed = MisnamedSetting.describe(source.misnamed);
     return 'Not all Smartschool settings are filled in. Missing: $names. '
+        '${misnamed == null ? '' : '$misnamed '}'
         'Fill ${missing.length == 1 ? 'it' : 'them'} in ${source.where}, '
         'then ${source.restart}.';
   }

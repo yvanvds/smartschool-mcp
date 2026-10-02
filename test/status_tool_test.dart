@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -18,9 +19,14 @@ void main() {
 
   /// Calls `smartschool_status` over MCP on a server whose session reads
   /// [source] and talks to [server], with [downloads] when given.
+  ///
+  /// The client calls itself [clientName]; the server records the app in
+  /// [client], which [source] should share.
   Future<(CallToolResult, String)> status({
     CredentialSource? source,
     DownloadFolder? Function()? downloads,
+    ClientContext? client,
+    String clientName = 'test',
   }) async {
     final session = SmartschoolSession(
       source ?? fakeExtensionSettings(),
@@ -28,7 +34,9 @@ void main() {
     );
     addTearDown(session.close);
     final (connection, _) = await connect(
-      tools: [statusTool(session, downloads: downloads)],
+      tools: [statusTool(session, downloads: downloads, client: client)],
+      client: client,
+      clientName: clientName,
     );
     return callTool(connection, 'smartschool_status');
   }
@@ -79,7 +87,7 @@ void main() {
 
     DownloadFolder folderAt(String path) => DownloadFolder(
       path,
-      origin: const DownloadFolderOrigin(
+      origin: DownloadFolderOrigin(
         'set in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR)',
         fix:
             'choose another folder in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR) '
@@ -276,6 +284,109 @@ void main() {
     expect(text, contains('The credentials file $missing'));
     expect(text, contains('does not exist'));
     expect(text, contains('Settings: credentials file $missing'));
+  });
+
+  group('in ChatGPT or Codex', () {
+    /// Settings read from [credentials], in an environment that also holds
+    /// [variables], for a server Codex started.
+    ExtensionSettings codexSettings(
+      ClientContext client,
+      FakeCredentials credentials, [
+      Map<String, String> variables = const {},
+    ]) => ExtensionSettings(
+      client: client,
+      read: () => credentials,
+      environment: () => {'SYSTEMROOT': r'C:\Windows', ...variables},
+    );
+
+    test('a missing setting: names the variable, the form in ChatGPT and '
+        'a variable under a mistyped name, never its value, and does not '
+        'contact Smartschool', () async {
+      final client = ClientContext();
+      final (result, text) = await status(
+        source: codexSettings(client, FakeCredentials(mainUrl: ''), {
+          'SMARTSCHOOL_MAINURL': 'value-never-shown',
+          'SMARTSCHOOL_USERNAME': 'jan.peeters',
+        }),
+        client: client,
+        clientName: ClientApp.codexClientName,
+      );
+
+      expect(result.isError, isNot(true));
+      const misnamed =
+          '"SMARTSCHOOL_MAINURL" is set, but that is not the name of a '
+          'setting: probably SMARTSCHOOL_MAIN_URL.';
+      expect(
+        text,
+        startsWith(
+          'Smartschool connection: NOT working\n'
+          'Problem: Not all Smartschool settings are filled in. Missing: '
+          'SMARTSCHOOL_MAIN_URL ("Smartschool-adres"). $misnamed Fill it in '
+          "in the ChatGPT app, under Instellingen (Settings) → Plug-ins → MCP's "
+          '→ smartschool → Omgevingsvariabelen (Environment variables); in the '
+          'Codex CLI or IDE extension, under [mcp_servers.smartschool.env] in '
+          r'%USERPROFILE%\.codex\config.toml, then restart ChatGPT (or '
+          'Codex).\n',
+        ),
+      );
+      expect(
+        text,
+        contains(
+          '\nSettings: environment variables of the MCP server '
+          '(SMARTSCHOOL_MAIN_URL: missing, SMARTSCHOOL_USERNAME: filled in, '
+          'SMARTSCHOOL_PASSWORD: filled in, SMARTSCHOOL_MFA: filled in)\n'
+          'Wrong setting names: $misnamed\n',
+        ),
+      );
+      expect(text, isNot(contains('value-never-shown')));
+      expectNoSecretsOrTraces(text);
+      expect(server.requests, isEmpty);
+    });
+
+    test('valid settings: working', () async {
+      final client = ClientContext();
+      final (_, text) = await status(
+        source: codexSettings(client, FakeCredentials()),
+        client: client,
+        clientName: ClientApp.codexClientName,
+      );
+
+      expect(
+        text,
+        'Smartschool connection: working\n'
+        'Logged in as: $fakeDisplayName\n'
+        'Smartschool address: $fakeHost\n'
+        'Settings: environment variables of the MCP server (all filled in)\n'
+        'Server version: $packageVersion\n'
+        'Updates: not checked (the update check is turned off)',
+      );
+    });
+
+    test('in Claude Desktop, the same settings are worded as '
+        'before', () async {
+      final client = ClientContext();
+      final (_, text) = await status(
+        source: codexSettings(client, FakeCredentials(mainUrl: '')),
+        client: client,
+        clientName: 'claude-ai',
+      );
+
+      expect(
+        text,
+        contains(
+          'Missing: "Smartschool-adres" (SMARTSCHOOL_MAIN_URL). Fill it in in '
+          'the Smartschool extension settings in Claude Desktop (Settings → '
+          'Extensions), then restart Claude Desktop.\n',
+        ),
+      );
+      expect(
+        text,
+        contains(
+          '\nSettings: extension settings (Smartschool-adres: missing, ',
+        ),
+      );
+      expect(text, isNot(contains('Wrong setting names')));
+    });
   });
 
   group('each login failure has its own message', () {

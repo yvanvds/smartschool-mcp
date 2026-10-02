@@ -89,7 +89,7 @@ Future<CallToolResult> _save(
     );
   }
 
-  final folder = downloads ?? (throw noDownloadFolder());
+  final folder = downloads ?? (throw noDownloadFolder(session.source));
 
   // Inside the session, as the cache folder is the logged-in user's; also
   // reports missing settings before anything is written.
