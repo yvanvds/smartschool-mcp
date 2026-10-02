@@ -18,9 +18,11 @@ import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
@@ -110,6 +112,8 @@ Future<void> _serve(ServerOptions options) async {
           planLessonTool(session),
           editPlannedElementTool(session),
           clearLessonTool(session),
+          listLesfichesTool(session),
+          planLesficheTool(session),
         ],
         updates: updates,
       );

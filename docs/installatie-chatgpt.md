@@ -13,8 +13,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen. Je eigen lesuren invullen met lessen, die lessen aanpassen en een
-  lesuur weer leegmaken, pas nadat jij het goedgekeurd hebt.
+  kiezen. Je eigen lesuren invullen met lessen of met je lesfiches uit de
+  module Lesfiches, die lessen aanpassen en een lesuur weer leegmaken, pas
+  nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 

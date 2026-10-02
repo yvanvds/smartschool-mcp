@@ -13,8 +13,9 @@ Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen. Je eigen lesuren invullen met lessen, die lessen aanpassen en een
-  lesuur weer leegmaken, pas nadat jij het goedgekeurd hebt.
+  kiezen. Je eigen lesuren invullen met lessen of met je lesfiches uit de
+  module Lesfiches, die lessen aanpassen en een lesuur weer leegmaken, pas
+  nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
@@ -271,6 +272,12 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 - "Maak mijn les van vrijdag het 3e uur weer leeg."
   De les verdwijnt met haar titel en info, en het lesuur is weer leeg. Dat
   kun je niet ongedaan maken: Claude vraagt eerst je akkoord.
+- "Plan mijn lesfiches van JAAR 6, trimester 1 in mijn komende lessen
+  informatica van 6A1, in volgorde."
+  Claude zoekt je lesfiches met die labels en je lege lesuren, en stelt voor
+  welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
+  lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
+  kunnen zo: een lesfiche van een toets of taak niet.
 
 ### Bestanden bewaren
 
@@ -310,7 +317,8 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner vult
   ze alleen je eigen lesuren in, past ze je eigen lessen, toetsen en taken
   aan en maakt ze lesuren weer leeg. Een nieuwe toets of taak plannen kan ze
-  niet.
+  niet. In de module Lesfiches leest ze je lesfiches alleen: ze verandert
+  er niets in.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
   toets apart openen toont meteen de nieuwe.

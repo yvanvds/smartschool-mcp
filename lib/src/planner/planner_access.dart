@@ -23,9 +23,19 @@ import '../tools/server_tool.dart';
 Future<T> withPlanner<T>(
   SmartschoolSession session,
   Future<T> Function(PlannerService planner) action,
+) => withPlannerClient(session, (client) => action(PlannerService(client)));
+
+/// Runs [action] with the session's logged-in client, for the planner tools
+/// that need another service of the library next to the planner (the
+/// Lesfiches module's `LessonContentService`), as [withPlanner] does: the
+/// errors of the planner and of the Lesfiches module become [ToolError]s
+/// ([plannerToolError]).
+Future<T> withPlannerClient<T>(
+  SmartschoolSession session,
+  Future<T> Function(SmartschoolClient client) action,
 ) async {
   try {
-    return await session.run((client) => action(PlannerService(client)));
+    return await session.run(action);
   } catch (error) {
     final toolError = plannerToolError(error);
     if (toolError == null) rethrow;
@@ -47,6 +57,9 @@ Future<T> withPlanner<T>(
 /// - Any other [SmartschoolPlannerError]: an answer the server cannot use.
 ///   The library's message can quote the planner's answer, so it goes to
 ///   the log only.
+/// - [SmartschoolLessonContentError]: the Lesfiches module, whose lesfiches
+///   the planner plans (and reads before it plans one), gave an answer the
+///   server cannot use. Likewise to the log only.
 /// - [ArgumentError]: the library refused the request before sending it
 ///   (a malformed id, a reversed period). Not a [RangeError], which is a
 ///   bug rather than a refused request.
@@ -80,6 +93,13 @@ ToolError? plannerToolError(Object error) {
       log('planner: $error');
       return ToolError(
         'The planner gave an answer the server could not use'
+        '${statusCode == null ? '' : ' (HTTP $statusCode)'}. Try again in a '
+        'moment; the technical details are in the server log.',
+      );
+    case SmartschoolLessonContentError(:final statusCode):
+      log('lesfiches: $error');
+      return ToolError(
+        'The Lesfiches module gave an answer the server could not use'
         '${statusCode == null ? '' : ' (HTTP $statusCode)'}. Try again in a '
         'moment; the technical details are in the server log.',
       );

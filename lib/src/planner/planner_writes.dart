@@ -9,8 +9,8 @@ import 'planner_access.dart';
 import 'planner_format.dart';
 
 // Changing the user's own planner, shared by the planner tools that write
-// (`plan_lesson`, `edit_planned_element`, `clear_lesson`; the lesfiches of
-// #54 and the assignments of #55 build on it): the info texts Claude writes,
+// (`plan_lesson`, `plan_lesfiche`, `edit_planned_element`, `clear_lesson`;
+// the assignments of #55 build on it): the info texts Claude writes,
 // as HTML; the empty lesson hour a fill takes; the fill of a lesson hour
 // itself; and how a write the planner refused or did not confirm is
 // reported.
@@ -141,8 +141,8 @@ CallToolResult plannerWriteNotConfirmed({
 ///
 /// Reads the hour first (the library's fill takes the element as read, and
 /// the result names the hour), then calls [fill] with it, such as
-/// [PlannerService.planLesson]; [what] names what is planned (like
-/// `the lesson "Lussen"`). The library reads the hour again and refuses
+/// [PlannerService.planLesson] or [PlannerService.planLessonContent]; [what]
+/// names what is planned (like `the lesson "Lussen"`). The library reads the hour again and refuses
 /// one that is not the user's own or no longer empty, and sends the fill
 /// once. A fill that the planner does not confirm is reported as maybe
 /// saved ([plannerWriteNotConfirmed]), with how to check it.

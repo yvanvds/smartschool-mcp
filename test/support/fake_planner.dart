@@ -14,6 +14,10 @@ const _api = '/planner/api/v1';
 const fakeAssignmentTypesPath =
     '/lesson-content/api/v1/assignments/applicable-assignment-types';
 
+/// Where the user's lesfiches are read: the Lesfiches module's list, with
+/// the slash at the end, as the library asks for it.
+const fakeLesfichesPath = '/lesson-content/api/v1/lesson-content/';
+
 /// The moment [year]-[month]-[day] [hour]:[minute]:[second] in the time of
 /// this PC, written as the planner writes a date and time: ISO 8601 with the
 /// offset (`2026-10-05T10:20:00+02:00` in Belgium in October,
@@ -383,6 +387,7 @@ class FakePlannedElement {
     String? name,
     String publicInfo = '',
     String privateInfo = '',
+    List<String> labels = const [],
   }) => FakePlannedElement(
     id: id,
     type: type,
@@ -398,6 +403,7 @@ class FakePlannedElement {
     rooms: rooms,
     publicInfo: publicInfo,
     privateInfo: privateInfo,
+    labels: labels,
   );
 
   bool overlaps(DateTime start, DateTime end) =>
@@ -481,6 +487,115 @@ class FakePlannedElement {
       'linkedEvaluation': null,
       'dateCreated': visibleFrom ?? from,
     },
+  };
+}
+
+/// A lesfiche of the Lesfiches module (lesson content), which the fake
+/// lists at [fakeLesfichesPath] and the planner plans into an empty lesson
+/// hour.
+///
+/// The JSON has the shape of dartschool's anonymised capture of the live
+/// list (`test/lesson_content_service_test.dart` there, #88): dates without
+/// an offset, courses by id only, the school's labels (`platform`) and the
+/// user's own (`user`).
+class FakeLesfiche {
+  const FakeLesfiche({
+    required this.id,
+    required this.name,
+    this.type = 'lessons',
+    this.icon = 'document_observation',
+    this.publicInfo = '',
+    this.isVisible = true,
+    this.owner = fakePlannerMe,
+    this.lastChanged = '2025-09-12 12:24:59',
+    this.courses = const [],
+    this.labels = const [],
+    this.ownLabels = const [],
+    this.assignmentType,
+    this.attachments = const [],
+  });
+
+  final String id;
+  final String name;
+
+  /// The module's name of the kind: `lessons` or `assignments`.
+  final String type;
+  final String? icon;
+
+  /// HTML, as the module keeps it.
+  final String publicInfo;
+  final bool isVisible;
+
+  /// The whole user id of the owner.
+  final String owner;
+
+  /// When it was last changed, as the module writes it: `2025-09-12
+  /// 12:24:59`, without an offset.
+  final String lastChanged;
+  final List<FakePlannerCourse> courses;
+
+  /// The texts of the school's labels, such as `JAAR 6`.
+  final List<String> labels;
+
+  /// The texts of the user's own labels.
+  final List<String> ownLabels;
+  final FakeAssignmentType? assignmentType;
+
+  /// The names of the attachments.
+  final List<String> attachments;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'platformId': 4069,
+    if (assignmentType case final type?) 'assignmentType': type.schoolJson(),
+    'name': name,
+    'icon': ?icon,
+    'publicInfo': publicInfo,
+    'isVisible': isVisible,
+    'owner': owner,
+    'dateStateChanged': lastChanged,
+    'dateLastChanged': lastChanged,
+    'courses': [
+      for (final course in courses) {'platformId': 4069, 'id': course.id},
+    ],
+    'labels': [
+      for (final (index, text) in labels.indexed)
+        {
+          'identifier': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'type': 'platform',
+          'text': text,
+          'color': 'aqua',
+          'isVisible': true,
+          'id': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'platformId': 4069,
+          'ssId': 4069,
+          'locations': ['lesson_content', 'planner'],
+        },
+      for (final (index, text) in ownLabels.indexed)
+        {
+          'identifier': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'type': 'user',
+          'text': text,
+          'color': 'steel',
+          'isVisible': true,
+          'id': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'userId': owner,
+        },
+    ],
+    'weblinks': <Object?>[],
+    'partnerWeblinks': <Object?>[],
+    'attachments': [
+      for (final (index, name) in attachments.indexed)
+        {'id': 'f0000000-0000-4000-8000-00000000004$index', 'name': name},
+    ],
+    'deeplinks': <Object?>[],
+    'capabilities': {
+      'canUserSeeDetails': true,
+      'canUserEdit': true,
+      'canUserTrash': true,
+      'canUserTrashAsAdmin': false,
+    },
+    'type': type,
   };
 }
 
@@ -582,7 +697,8 @@ class FakePlannerHit {
 ///   `groups`: for every day of the period (in the time of this PC), the
 ///   workload of each class: its [workloadWeights] (0 by default) and its
 ///   [workloadSettings] ([FakeWorkloadSetting.noLimit] by default);
-/// - `GET` [fakeAssignmentTypesPath]: the [assignmentTypes].
+/// - `GET` [fakeAssignmentTypesPath]: the [assignmentTypes];
+/// - `GET` [fakeLesfichesPath]: the [lesfiches], in the order added.
 ///
 /// The workload calls answer `400` for a class the fake does not know (one
 /// of no element or calendar), as the calendars do.
@@ -593,6 +709,13 @@ class FakePlannerHit {
 /// - `POST /planner/api/v1/planned-placeholders/{platformId}/{id}/replace/planned-lessons/blanco`:
 ///   fills the empty lesson hour as [fillSlot] does, and answers with the
 ///   lesson;
+/// - `POST /planner/api/v1/planned-placeholders/{platformId}/{id}/replace/planned-lessons`
+///   (dartschool#88, its `sourceId` a lesfiche id): fills the empty lesson
+///   hour with a lesson named after the lesfiche, with its labels and its
+///   public info, as the live planner did (it took the name, the labels and
+///   the empty info of the lesfiche tried), and answers with the lesson; a
+///   lesfiche it does not have is answered with `400` (made up: the library
+///   refuses one before sending);
 /// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/rename`
 ///   (`newName`), `.../change-public-info` and `.../change-private-info`
 ///   (`newInfo`): changes the element, and answers with it;
@@ -626,6 +749,9 @@ class FakePlanner {
 
   /// The school's assignment types.
   final List<FakeAssignmentType> assignmentTypes = [];
+
+  /// The user's lesfiches in the Lesfiches module.
+  final List<FakeLesfiche> lesfiches = [];
 
   /// The workload setting of a class, by class id; the others have
   /// [FakeWorkloadSetting.noLimit].
@@ -673,6 +799,7 @@ class FakePlanner {
     required String name,
     String publicInfo = '',
     String privateInfo = '',
+    List<String> labels = const [],
   }) {
     final slot = elements[ref];
     if (slot == null || slot.type != 'planned-placeholders') return null;
@@ -682,6 +809,7 @@ class FakePlanner {
       name: name,
       publicInfo: publicInfo,
       privateInfo: privateInfo,
+      labels: labels,
     );
     _replace(slot, lesson);
     return lesson;
@@ -747,7 +875,9 @@ class FakePlanner {
 
   ResponseBody? respond(RequestOptions options) {
     final path = options.uri.path;
-    if (!path.startsWith('$_api/') && path != fakeAssignmentTypesPath) {
+    if (!path.startsWith('$_api/') &&
+        path != fakeAssignmentTypesPath &&
+        path != fakeLesfichesPath) {
       return null;
     }
     requests.add((
@@ -766,6 +896,12 @@ class FakePlanner {
       if (options.method != 'GET') return null;
       return _json(
         jsonEncode([for (final type in assignmentTypes) type.schoolJson()]),
+      );
+    }
+    if (path == fakeLesfichesPath) {
+      if (options.method != 'GET') return null;
+      return _json(
+        jsonEncode([for (final lesfiche in lesfiches) lesfiche.toJson()]),
       );
     }
     final route = path.substring(_api.length + 1).split('/');
@@ -789,6 +925,17 @@ class FakePlanner {
           'blanco',
         ] =>
           _fill(
+            'planned-placeholders/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
+        [
+          'planned-placeholders',
+          final platform,
+          final id,
+          'replace',
+          'planned-lessons',
+        ] =>
+          _fillWithLesfiche(
             'planned-placeholders/$platform/${Uri.decodeComponent(id)}',
             options.data,
           ),
@@ -847,6 +994,22 @@ class FakePlanner {
       name: body['name'] as String,
       publicInfo: body['publicInfo'] as String,
       privateInfo: body['privateInfo'] as String,
+    );
+    if (lesson == null) return _notFound();
+    return _json(jsonEncode(lesson.detailJson()));
+  }
+
+  ResponseBody _fillWithLesfiche(String ref, Object? data) {
+    final sourceId = ((data as Map)['sourceId'] as String).toLowerCase();
+    final lesfiche = lesfiches
+        .where((lesfiche) => lesfiche.id.toLowerCase() == sourceId)
+        .firstOrNull;
+    if (lesfiche == null) return _badRequest();
+    final lesson = fillSlot(
+      ref,
+      name: lesfiche.name,
+      publicInfo: lesfiche.publicInfo,
+      labels: [...lesfiche.labels, ...lesfiche.ownLabels],
     );
     if (lesson == null) return _notFound();
     return _json(jsonEncode(lesson.detailJson()));
@@ -1283,4 +1446,56 @@ extension FakePlannerWorkloadCaptures on FakePlanner {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Lesfiches module of dartschool's capture
+// ---------------------------------------------------------------------------
+
+/// The three lesfiches of dartschool's trimmed capture of the live
+/// Lesfiches list (#88), owned by the fake's own account: a hidden lesson
+/// lesfiche with the school's labels `JAAR 6` and `TRIMESTER 1` and no info.
+final fakeLesficheLussen = FakeLesfiche(
+  id: 'b0000000-0000-4000-8000-000000000001',
+  name: 'Herhaling: lussen',
+  isVisible: false,
+  lastChanged: '2026-09-07 19:51:25',
+  courses: [fakeInformatica],
+  labels: ['JAAR 6', 'TRIMESTER 1'],
+);
+
+/// A visible assignment lesfiche (`KT Kleine Taak`) with public info and an
+/// own label.
+final fakeLesficheGame = FakeLesfiche(
+  id: 'b0000000-0000-4000-8000-000000000002',
+  name: 'Taak: een eigen spel',
+  type: 'assignments',
+  icon: 'flags_red_yellow',
+  publicInfo: '<p>Dien je taak in via de digitale klas.</p>',
+  lastChanged: '2025-09-05 11:30:28',
+  courses: [fakeInformatica],
+  ownLabels: ['Lussen'],
+  assignmentType: FakeAssignmentType.kt,
+);
+
+/// A visible lesson lesfiche of two courses, without labels, with public
+/// info and a (made-up) attachment.
+final fakeLesficheFuncties = FakeLesfiche(
+  id: 'b0000000-0000-4000-8000-000000000003',
+  name: 'Functies',
+  publicInfo: '<p>Hoofdstuk 4</p>',
+  courses: [fakeInformatica, _chemie],
+  attachments: ['hoofdstuk4.pdf'],
+);
+
+/// The Lesfiches module of the capture, served by
+/// [FakePlannerLesficheCaptures.loadLesfiches].
+extension FakePlannerLesficheCaptures on FakePlanner {
+  /// Serves dartschool's capture of the Lesfiches list: [fakeLesficheLussen],
+  /// [fakeLesficheGame] and [fakeLesficheFuncties], in that order.
+  void loadLesfiches() => lesfiches.addAll([
+    fakeLesficheLussen,
+    fakeLesficheGame,
+    fakeLesficheFuncties,
+  ]);
 }

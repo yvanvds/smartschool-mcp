@@ -62,6 +62,8 @@ void main() {
       'plan_lesson',
       'edit_planned_element',
       'clear_lesson',
+      'list_lesfiches',
+      'plan_lesfiche',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -88,6 +90,7 @@ void main() {
       'list_planner',
       'read_planned_element',
       'list_class_assignments',
+      'list_lesfiches',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -322,13 +325,14 @@ void main() {
       'description': isA<String>(),
       'items': {'type': 'string'},
     });
-    // The planner writes (#53): pupils see a change at once, so Claude
+    // The planner writes (#53, #54): pupils see a change at once, so Claude
     // Desktop asks for approval. A fill and a clear are not idempotent; an
     // edit sets values, so it is.
     for (final (name, idempotent) in [
       ('plan_lesson', false),
       ('edit_planned_element', true),
       ('clear_lesson', false),
+      ('plan_lesfiche', false),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -362,6 +366,31 @@ void main() {
     final clearSchema = tools['clear_lesson']!['inputSchema'] as Map;
     expect(clearSchema['required'], ['id']);
     expect((clearSchema['properties'] as Map).keys, ['id']);
+    // The lesfiches (#54): listed by label, name and kind; one planned into
+    // an empty lesson hour by its id.
+    final lesfichesSchema = tools['list_lesfiches']!['inputSchema'] as Map;
+    expect(lesfichesSchema['required'], isNull);
+    expect((lesfichesSchema['properties'] as Map).keys, [
+      'query',
+      'label',
+      'type',
+    ]);
+    expect((lesfichesSchema['properties'] as Map)['label'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
+    expect((lesfichesSchema['properties'] as Map)['type'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'enum': ['lessons', 'assignments', 'all'],
+    });
+    final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
+    expect(planLesficheSchema['required'], ['hour', 'lesfiche']);
+    expect((planLesficheSchema['properties'] as Map).keys, [
+      'hour',
+      'lesfiche',
+    ]);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -376,7 +405,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(23));
+    expect(tools, hasLength(25));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -742,8 +771,8 @@ void main() {
 
   test('the planner tools without settings: an error result that names the '
       'missing settings; an invalid planner, element id, hour, class, date, '
-      'type or name: an error that says what to fix, before any login (#51, '
-      '#52, #53)', () async {
+      'type, name or lesfiche: an error that says what to fix, before any '
+      'login (#51, #52, #53, #54)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -800,6 +829,23 @@ void main() {
       (
         'clear_lesson',
         {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      ('list_lesfiches', {}),
+      (
+        'list_lesfiches',
+        {
+          'query': 'lussen',
+          'label': ['JAAR 6', 'TRIMESTER 1'],
+          'type': 'all',
+        },
+      ),
+      (
+        'plan_lesfiche',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'lesfiche': 'b0000000-0000-4000-8000-000000000001',
+        },
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
@@ -885,6 +931,29 @@ void main() {
               'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
         },
         'is an empty lesson hour already',
+      ),
+      (
+        'list_lesfiches',
+        {'type': 'tests'},
+        '"tests" is not one of the allowed values',
+      ),
+      ('list_lesfiches', {'label': 'JAAR 6'}, 'label'),
+      (
+        'plan_lesfiche',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'lesfiche': 'b0000000-0000-4000-8000-000000000001',
+        },
+        'is a lesson, not an empty lesson hour',
+      ),
+      (
+        'plan_lesfiche',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'lesfiche': 'Herhaling: lussen',
+        },
+        'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);

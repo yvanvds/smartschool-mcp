@@ -402,6 +402,25 @@ void main() {
       );
     });
 
+    test('does not quote an answer the Lesfiches module gave', () {
+      const answer = 'secret answer of the module';
+      expect(
+        plannerToolError(const SmartschoolLessonContentError('Got: $answer')),
+        _toolError(
+          'The Lesfiches module gave an answer the server could not use. Try '
+          'again in a moment; the technical details are in the server log.',
+        ),
+      );
+      expect(
+        plannerToolError(
+          const SmartschoolLessonContentError('Got: $answer', statusCode: 500),
+        ),
+        _toolError(
+          allOf(contains('could not use (HTTP 500).'), isNot(contains(answer))),
+        ),
+      );
+    });
+
     test('passes on why the library refused a write before sending it, '
         'without its method name and its own "Nothing was sent"', () {
       expect(

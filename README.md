@@ -407,8 +407,40 @@ client name. It also installs again while that copy runs.
   destructive. The library refuses a colleague's lesson, and a lesson the
   planner lets the user trash or delete (one outside the timetable, which
   it does not clear), and sends the clear once.
+- `list_lesfiches`: the user's lesfiches in the Lesfiches module (the
+  library's `LessonContentService.getItems`, dartschool#88), read in full
+  on every call: lesson lesfiches by default, or assignments or all
+  (`type`), with every `label` given (the whole label, case-insensitive,
+  such as `JAAR 6` and `TRIMESTER 1`) and every word of `query` in the
+  name. One line per lesfiche, by name with the numbers in order (`Les 2`
+  before `Les 10`): kind (an assignment with its type), name, labels,
+  courses, visible or hidden in the module, the day it was last changed
+  (the module's dates have no offset: Smartschool time) and its id. The
+  module names a lesfiche's courses by id only (dartschool#101), so the
+  tool names them after the user's own planner of the 4 weeks before and
+  after today (`ownCourseNames`, one planner read per call, only when a
+  lesfiche listed has a course); a course without a lesson hour there is
+  "not in your planner", and when that read fails only the number of
+  courses is shown. A label filter that matches nothing lists the labels
+  there are. At most 200 lines, with a note to narrow the list. An answer
+  of the module the server cannot use (`SmartschoolLessonContentError`) is
+  "the Lesfiches module gave an answer the server could not use", with the
+  details in the log only.
+- `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
+  `list_lesfiches`) into an empty lesson hour of the user's own planner
+  (`hour`, as `plan_lesson`) with the library's `planLessonContent`
+  (dartschool#88): the planner names the lesson after the lesfiche and
+  takes over its content (seen live: its labels and goals; the info of the
+  lesfiche tried was empty, and whether attachments and weblinks come along
+  was not checked). It works as `plan_lesson` does: marked destructive, Claude shows the
+  mapping of lesfiches onto hours (date and time, class, course, lesfiche)
+  and plans after the user's confirmation, one call per hour, in order;
+  the result gives the lesson as saved and its new id. The library reads
+  the lesfiches before it plans and refuses, before sending anything, an id
+  the user has no lesfiche with and an assignment lesfiche; the tool passes
+  that reason on. A hidden lesfiche is planned like any other.
 
-For the three planner writes, a write that went out without the planner
+For the four planner writes, a write that went out without the planner
 confirming it (`SmartschoolPlannerSaveUnconfirmedError`) is reported as
 maybe saved, with what to read to check it, and Claude is told not to call
 the tool again for it, as for a message whose send Smartschool did not
@@ -453,9 +485,11 @@ lines in `intradesk_format.dart`.
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
 and turns the planner's errors into `ToolError`s (`plannerToolError`: an
-element that is gone or got a new id, an answer the server cannot use,
-whose details go to the log only, and a request the library refused before
-sending it); the planner ids (`PlannerRef`, `me` or `user/…`, `group/…`,
+element that is gone or got a new id, an answer the server cannot use of
+the planner or of the Lesfiches module, whose details go to the log only,
+and a request the library refused before sending it), and
+`withPlannerClient`, the same with the client itself, for a tool that also
+needs the Lesfiches module; the planner ids (`PlannerRef`, `me` or `user/…`, `group/…`,
 `location/…`, and `formatPlannerId`); the compound element id
 `<plannedElementType>/<platformId>/<id>` (`PlannedElementRef`, which also
 reads an element's detail); the `classes` argument, 1 to a maximum of
@@ -475,11 +509,17 @@ library call that fills, so a lesfiche can be planned the same way),
 `withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
 error), and the result of a write the planner did not confirm
 (`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
-refused a write (`SmartschoolPlannerWriteRefusedError`). The tests run
-against a fake planner (`test/support/fake_planner.dart`), built from
-dartschool's anonymised captures of the live planner and its workload view,
-which carries out the writes of dartschool#87 (fill, rename, change of the
-info, clear) as the live planner did.
+refused a write (`SmartschoolPlannerWriteRefusedError`). In
+`lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
+`lesfiche` argument (`lesficheArgument`), the course names from the own
+planner (`ownCourseNames`, a workaround for dartschool#101), the filters
+(`lesficheMatches`), the order of the names (`compareLesficheNames`) and one
+line per lesfiche (`formatLesficheLine`). The tests run against a fake
+planner (`test/support/fake_planner.dart`), built from dartschool's
+anonymised captures of the live planner, its workload view and the
+Lesfiches list, which carries out the writes of dartschool#87 (fill,
+rename, change of the info, clear) and the plan of a lesfiche of
+dartschool#88 as the live planner did.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
