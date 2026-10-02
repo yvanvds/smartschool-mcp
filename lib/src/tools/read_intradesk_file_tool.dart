@@ -17,7 +17,7 @@ import 'server_tool.dart';
 const maxIntradeskFileBytes = 25 * 1024 * 1024;
 
 /// `read_intradesk_file`: what is in one file on Intradesk, as text (or as
-/// an image), so Claude can check whether it holds what the teacher is
+/// an image), so Claude can check whether it holds what the user is
 /// looking for.
 ///
 /// The file's path, size and type come from the index in [cache] when there
@@ -33,7 +33,7 @@ ServerTool readIntradeskFileTool(
     description:
         'Opens one file on Intradesk, the school\'s shared document store in '
         'Smartschool, and returns what is in it: to check whether it holds '
-        'what the teacher is looking for, to quote from it or to summarise '
+        'what the user is looking for, to quote from it or to summarise '
         'it. Get the file id from search_intradesk or list_intradesk_folder. '
         'Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files, PDFs, '
         'text files (.txt, .csv, .md) and web pages (.html) come back as '
@@ -113,7 +113,7 @@ Future<CallToolResult> _read(
       throw ToolError(
         '${intradeskFileTitle(id, known, size: size)} is too large to open here'
         '${size == null ? ' (more than ${formatFileSize(error.maxBytes)})' : ''}: '
-        '${_limit()} The teacher can open it in Smartschool.',
+        '${_limit()} The user can open it in Smartschool.',
       );
     }
   });
@@ -167,7 +167,7 @@ void _refuseBeforeDownload(String id, IntradeskItem? known) {
   if (known.size case final size? when size > maxIntradeskFileBytes) {
     throw ToolError(
       '${intradeskFileTitle(id, known, size: size)} is too large to open here: '
-      '${_limit()} The teacher can open it in Smartschool.',
+      '${_limit()} The user can open it in Smartschool.',
     );
   }
   if (unreadableExtensionReason(fileExtension(known.name)) case final reason?) {

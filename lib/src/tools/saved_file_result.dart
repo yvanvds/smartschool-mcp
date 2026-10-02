@@ -49,7 +49,7 @@ String tooLargeToSave(SmartschoolDownloadTooLargeError error) {
   final limit = formatFileSize(error.maxBytes);
   return 'is too large to save here'
       '${tooLargeSize(error) == null ? ' (more than $limit)' : ''}: files up '
-      'to $limit can be saved. The teacher can download it in Smartschool.';
+      'to $limit can be saved. The user can download it in Smartschool.';
 }
 
 /// The error when there is no download folder (no setting and no home

@@ -23,7 +23,8 @@ niet mee verbonden.
 ## Inhoud
 
 1. [Wat heb je nodig?](#1-wat-heb-je-nodig)
-2. [Je 2FA-sleutel opzoeken](#2-je-2fa-sleutel-opzoeken)
+2. [Je 2FA-sleutel opzoeken](#2-je-2fa-sleutel-opzoeken) (alleen met
+   tweestapsverificatie)
 3. [De extensie installeren](#3-de-extensie-installeren)
 4. [Testen](#4-testen)
 5. [Wat kun je vragen?](#5-wat-kun-je-vragen)
@@ -43,10 +44,17 @@ niet mee verbonden.
   wachtwoord.** Kun je alleen inloggen via Microsoft of Google, dan werkt de
   extensie niet.
 - **Tweestapsverificatie met een authenticator-app** op je telefoon, zoals
-  Microsoft Authenticator of Google Authenticator. Gebruik je nog geen
-  authenticator-app, dan stel je er een in bij stap 2.
+  Microsoft Authenticator of Google Authenticator, als je account
+  tweestapsverificatie gebruikt. Voor leerkrachten is dat zo. Gebruik je nog
+  geen authenticator-app, dan stel je er een in bij stap 2. Log je in met
+  alleen je wachtwoord, zonder code uit een app, zoals de meeste leerlingen?
+  Dan heb je geen authenticator-app nodig.
 
 ## 2. Je 2FA-sleutel opzoeken
+
+**Alleen als je tweestapsverificatie gebruikt.** Vraagt Smartschool na je
+wachtwoord geen code uit een app, zoals bij de meeste leerlingen? Sla deze
+stap dan over en laat de **2FA-sleutel** in stap 3 leeg.
 
 Bij het inloggen vraagt Smartschool een code van zes cijfers uit je
 authenticator-app. De extensie logt zelf voor je in en maakt die code zelf.
@@ -112,7 +120,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Smartschool-adres** | Het adres van je school op Smartschool, bijvoorbeeld `school.smartschool.be`. Je mag het ook uit de adresbalk van je browser kopiëren. |
    | **Gebruikersnaam** | De gebruikersnaam waarmee je inlogt op Smartschool. |
    | **Wachtwoord** | Je wachtwoord voor Smartschool. |
-   | **2FA-sleutel** | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. |
+   | **2FA-sleutel** (alleen met tweestapsverificatie) | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat dit veld dan leeg. |
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
@@ -297,6 +305,14 @@ of een tikfout. De sleutel bestaat alleen uit letters en de cijfers 2 tot 7;
 spaties mogen. Vul de juiste sleutel in en herstart Claude Desktop. Zolang de
 sleutel niet klopt, probeert de extensie niet in te loggen.
 
+### Smartschool vraagt een 2FA-code, maar de 2FA-sleutel is leeg
+
+Je account gebruikt tweestapsverificatie: na je wachtwoord vraagt Smartschool
+een code uit een authenticator-app. Zoek je 2FA-sleutel op zoals in
+[stap 2](#2-je-2fa-sleutel-opzoeken), vul hem in bij **2FA-sleutel** en
+herstart Claude Desktop. Tot dan probeert de extensie niet opnieuw in te
+loggen.
+
 ### Smartschool weigert de 2FA-code
 
 - Controleer de **2FA-sleutel**: het moet de sleutel uit
@@ -389,14 +405,16 @@ map te openen.
 
 Tweestapsverificatie beschermt je account doordat je naast je wachtwoord iets
 nodig hebt dat alleen jij hebt: je telefoon. De extensie bewaart je wachtwoord
-én je 2FA-sleutel op je pc. Wie op je pc kan, heeft dus allebei. Daarom:
+én je 2FA-sleutel op je pc. Wie op je pc kan, heeft dus allebei. Zonder
+tweestapsverificatie bewaart ze alleen je wachtwoord, en dan is dat genoeg om
+in jouw naam in te loggen. Daarom:
 
 - **Vergrendel je pc altijd als je wegloopt:** Windows-toets + L.
 - Bescherm je Windows-account met een wachtwoord of een pincode.
 - Installeer de extensie niet op een pc die je met anderen deelt, zoals de pc
   in een klaslokaal, en niet op een gedeeld Windows-account.
 - Is je pc gestolen of kwijt? Verander dan je Smartschool-wachtwoord en stel
-  je tweestapsverificatie opnieuw in.
+  je tweestapsverificatie opnieuw in, als je die gebruikt.
 
 ### Wat gaat er naar Claude?
 

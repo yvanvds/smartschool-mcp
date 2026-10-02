@@ -384,10 +384,92 @@ void main() {
         expect(server.mailbox.actions, [firstPage]);
       });
 
+      test('a new login between two pages goes on with the next page: the '
+          'whole box is shown', () async {
+        var pages = 0;
+        server.expireSessionBefore(
+          (request) =>
+              '${request.data}'.contains('continue_messages') && ++pages == 2,
+        );
+
+        final text = await ok('list_messages', {'limit': 200});
+
+        expect(text, startsWith('Inbox: 123 messages, newest first.\n'));
+        expect(text.split('\n'), hasLength(124));
+        expect(server.logins, 2);
+        // The refused request is not answered; the library sends it again
+        // after logging in, and Smartschool kept the paging position.
+        expect(server.mailbox.actions, [firstPage, nextPage, nextPage]);
+      });
+
+      group('the box listed elsewhere while it is paged, as the web client '
+          'does when the user opens it (yvanvds/dartschool#76)', () {
+        /// Lists the inbox elsewhere before the second `continue_messages`
+        /// of each of the next [times] listings of it: once it has paged
+        /// past its second page, where Smartschool's restart shows.
+        void listElsewhereWhilePaging({required int times}) {
+          var left = times;
+          var pages = 0;
+          server.mailbox.beforeAnswer = (action) {
+            if (action == firstPage) pages = 0;
+            if (action == nextPage && ++pages == 2 && left > 0) {
+              left--;
+              server.mailbox.listElsewhere();
+            }
+          };
+        }
+
+        test('the box is listed again, and all of it is shown', () async {
+          listElsewhereWhilePaging(times: 1);
+
+          final text = await ok('list_messages', {'limit': 200});
+
+          expect(text, startsWith('Inbox: 123 messages, newest first.\n'));
+          expect(text.split('\n'), hasLength(124));
+          expect(text, contains('\n- id 103 | 2024-03-13 10:30 |'));
+          expect(server.mailbox.actions, [
+            firstPage,
+            nextPage,
+            // Answered with the second page again: the paging was restarted.
+            nextPage,
+            firstPage,
+            nextPage,
+            nextPage,
+          ]);
+          expect(server.logins, 1);
+        });
+
+        test('restarted again: an error that says to try again, and the box '
+            'is not listed a third time', () async {
+          listElsewhereWhilePaging(times: 2);
+
+          final (result, text) = await call('list_messages', {'limit': 200});
+
+          expect(result.isError, isTrue);
+          expect(
+            text,
+            allOf(
+              startsWith('Smartschool restarted the listing of a message box'),
+              contains('in the browser'),
+              contains('Try again in a moment.'),
+            ),
+          );
+          expect(server.mailbox.actions, [
+            firstPage,
+            nextPage,
+            nextPage,
+            firstPage,
+            nextPage,
+            nextPage,
+          ]);
+        });
+      });
+
       test('two listings at the same time each list the whole box', () async {
-        // Smartschool keeps one paging position per box in the session and
-        // restarts it on every listing of the box: interleaved, each
-        // listing would end early, at a page the other one already got.
+        // Smartschool keeps one paging position per user and box, which
+        // every listing of the box restarts and every next page moves on:
+        // interleaved, the listings would restart or skip each other's
+        // pages.
         server.latency = const Duration(milliseconds: 5);
 
         final texts = await Future.wait([

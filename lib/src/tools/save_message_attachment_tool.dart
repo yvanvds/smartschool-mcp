@@ -13,7 +13,7 @@ import 'server_tool.dart';
 
 /// `save_message_attachment`: saves one attachment of a Smartschool message
 /// into the download folder ([downloads]), so that Claude can open it with
-/// its own file tools (in a Cowork project) or the teacher can.
+/// its own file tools (in a Cowork project) or the user can.
 ///
 /// The attachment is named by its number as `read_message` lists it (1 for
 /// the first) or by its file name. Attachments larger than [maxBytes] are
@@ -126,7 +126,7 @@ Future<CallToolResult> _save(
       } on SmartschoolDownloadError catch (error) {
         throw ToolError(
           'Smartschool could not download $title (status '
-          '${error.statusCode}). Try again later; the teacher can download '
+          '${error.statusCode}). Try again later; the user can download '
           'it in Smartschool.',
         );
       } on SmartschoolDownloadTooLargeError catch (error) {

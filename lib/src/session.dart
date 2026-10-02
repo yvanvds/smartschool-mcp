@@ -23,12 +23,12 @@ typedef ClientFactory =
 ///
 /// Every failure surfaces as a [SmartschoolProblem] whose message tells the
 /// teacher what to fix. A failure that retrying cannot fix
-/// ([ProblemKind.permanent]: wrong settings, such as an empty setting or a
-/// 2FA key that is not valid, both found before logging in; a rejected
-/// password or 2FA code) is
-/// remembered and returned to later calls without contacting Smartschool
-/// again, so a wrong password cannot lock the account through repeated
-/// attempts.
+/// ([ProblemKind.permanent]: wrong settings, such as an empty setting, found
+/// before contacting Smartschool, or a 2FA key that is not valid, which the
+/// library refuses before it posts the password; a rejected password or 2FA
+/// code) is remembered and returned to later calls without contacting
+/// Smartschool again, so a wrong password cannot lock the account through
+/// repeated attempts.
 final class SmartschoolSession {
   SmartschoolSession(this.source, {ClientFactory? createClient})
     : _createClient = createClient ?? SmartschoolClient.create;
@@ -99,36 +99,51 @@ final class SmartschoolSession {
   /// or the library did not send the request because a new login replaced
   /// the session it belongs to, like a step of a send), [action] runs once
   /// more, from the start; the library logs in again first if needed. A
-  /// refused request did not take effect on the server, but [action] must be
-  /// safe to repeat.
+  /// refused request did not take effect on the server.
   ///
-  /// Login and connection failures are thrown as [SmartschoolProblem]s; other
-  /// errors from [action] are rethrown unchanged.
+  /// Likewise when Smartschool restarts the paging of a message box that
+  /// [action] lists ([ProblemKind.listingRestarted]: the box was listed
+  /// elsewhere on the account meanwhile, see `MessageBox.headers`): [action]
+  /// runs once more and lists the box again.
+  ///
+  /// Each of the two is repeated once: when it happens again, it is thrown.
+  /// So [action] runs at most three times, and it must be safe to repeat.
+  ///
+  /// Login and connection failures, and a listing restarted again, are
+  /// thrown as [SmartschoolProblem]s; other errors from [action] are
+  /// rethrown unchanged.
   Future<T> run<T>(Future<T> Function(SmartschoolClient client) action) async {
-    final client = await _connectedClient();
-    try {
-      return await action(client);
-    } catch (error, stackTrace) {
-      final kind = classifyFailure(error);
-      if (kind == null) rethrow;
-      if (kind != ProblemKind.sessionRejected) {
-        throw _problem(kind, error, stackTrace);
+    var client = await _connectedClient();
+    final repeated = <ProblemKind>{};
+    while (true) {
+      try {
+        return await action(client);
+      } catch (error, stackTrace) {
+        final kind = classifyFailure(error);
+        if (kind == null) rethrow;
+        if (!_repeatable.contains(kind) || !repeated.add(kind)) {
+          throw _problem(kind, error, stackTrace);
+        }
+        log(switch (kind) {
+          ProblemKind.listingRestarted =>
+            'Smartschool restarted the listing of a message box '
+                '(${_describe(error)}); listing it again',
+          _ =>
+            'Smartschool did not accept the session (${_describe(error)}); '
+                'trying once more',
+        });
       }
-      log(
-        'Smartschool did not accept the session (${_describe(error)}); '
-        'trying once more',
-      );
-    }
-    try {
       // Through [_connectedClient], so that a login that another call found
       // rejected meanwhile is not tried again.
-      return await action(await _connectedClient());
-    } catch (error, stackTrace) {
-      final kind = classifyFailure(error);
-      if (kind == null) rethrow;
-      throw _problem(kind, error, stackTrace);
+      client = await _connectedClient();
     }
   }
+
+  /// The problems after which [run] runs its action once more.
+  static const _repeatable = {
+    ProblemKind.sessionRejected,
+    ProblemKind.listingRestarted,
+  };
 
   /// Releases the client this session created.
   Future<void> close() async {
@@ -154,13 +169,6 @@ final class SmartschoolSession {
       );
       throw _permanentProblem = SmartschoolProblem.of(
         ProblemKind.missingSettings,
-        settings,
-      );
-    }
-    if (settings.mfaProblem case final problem?) {
-      log('Smartschool settings: the 2FA key is not valid ($problem)');
-      throw _permanentProblem = SmartschoolProblem.of(
-        ProblemKind.twoFactorKeyInvalid,
         settings,
       );
     }

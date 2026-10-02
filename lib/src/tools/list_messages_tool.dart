@@ -92,7 +92,8 @@ Future<CallToolResult> _list(
       filter.until != null;
 
   // The box is listed newest first, page by page, until the pages listed
-  // decide what to show. Like every session action, this may run twice.
+  // decide what to show. Like every session action, this may run more than
+  // once.
   final (:headers, :stop) = await withMessages(session, (messages) async {
     var matching = 0;
     _Stop? stop;

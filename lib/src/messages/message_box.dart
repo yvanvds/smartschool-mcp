@@ -53,14 +53,23 @@ enum MessageBox {
   /// when it never returns true, the whole box is listed, and a box can hold
   /// thousands of messages: stop as soon as the headers so far are enough.
   ///
-  /// Smartschool keeps one paging position per box in the session and
-  /// restarts it whenever the box is listed (yvanvds/dartschool#15). The
-  /// library then ends a listing that is still paging as if the box ended
-  /// there (yvanvds/dartschool#76). So the box listings of this process (one
-  /// session) run one at a time, also for different boxes: the inbox and the
-  /// archive share a box type, and whether they share a position is
-  /// unknown. A new login between two pages loses the position as well,
-  /// which nothing here detects (#28).
+  /// Smartschool keeps the paging position per user and box, not in the
+  /// session (yvanvds/dartschool#76): a listing of the box anywhere on the
+  /// account restarts it, also in another session (the web client, the
+  /// Account Manager, another smartschool-mcp process). A listing that is
+  /// still paging then fails with a [SmartschoolPagingRestartedError] after
+  /// the pages it got, rather than return part of the box, and
+  /// [SmartschoolSession.run] runs its action once more, which lists the box
+  /// again (#28). So keep the state of [stopAfter] inside that action. A new
+  /// login between two pages does not restart the paging: Smartschool goes
+  /// on with the next page in the new session.
+  ///
+  /// Two pagings of the same box at the same time share the position and
+  /// can skip each other's pages, without an error. So the box listings of
+  /// this process run one at a time, also for different boxes: the inbox and
+  /// the archive share a box type, and whether they share a position is
+  /// unknown. That keeps this server's own tool calls apart, but not a
+  /// listing elsewhere on the account.
   Future<List<ShortMessage>> headers(
     MessagesService messages, {
     bool Function(List<ShortMessage> page)? stopAfter,
@@ -109,8 +118,9 @@ Future<T> _oneListingAtATime<T>(Future<T> Function() listing) {
 ///
 /// The service is created inside [SmartschoolSession.run]'s callback and
 /// disposed afterwards. Like every [SmartschoolSession.run] action, [action]
-/// may run twice (when Smartschool refuses the session), so it must be safe
-/// to repeat.
+/// may run more than once (when Smartschool refuses the session, or
+/// restarts a box listing of it, see [MessageBox.headers]), so it must be
+/// safe to repeat.
 Future<T> withMessages<T>(
   SmartschoolSession session,
   Future<T> Function(MessagesService messages) action,

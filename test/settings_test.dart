@@ -41,75 +41,54 @@ void main() {
 
       expect(settings.host, fakeHost);
       expect(settings.username, 'jan.peeters');
-      expect(settings.missing, [Setting.password, Setting.mfa]);
+      expect(settings.empty, [Setting.password, Setting.mfa]);
+      expect(settings.missing, [Setting.password]);
     });
 
     test('with all four values filled in, nothing is missing', () {
       final settings = SmartschoolSettings.read(fakeExtensionSettings());
 
+      expect(settings.empty, isEmpty);
       expect(settings.missing, isEmpty);
       final credentials = settings.toCredentials();
       expect(credentials.mainUrl, fakeHost);
       expect(credentials.mfa, fakeTotpSecret);
     });
 
-    test('a 2FA key copied in groups: the white space is removed', () {
-      // Also a non-breaking space and a tab, as a copy from a web page may
-      // hold.
-      for (final key in ['JBSW Y3DP EHPK 3PXP', ' JBSW Y3DP\tEHPK  3PXP ']) {
+    test('the 2FA key is optional: empty, only spaces or not set, it is not '
+        'missing, and the library gets an empty key, which it takes as none '
+        '(#41)', () {
+      expect(Setting.mfa.required, isFalse);
+      expect(Setting.login, contains(Setting.mfa));
+      for (final key in ['', ' \t ', null]) {
         final settings = SmartschoolSettings.read(
           fakeExtensionSettings(FakeCredentials(mfa: key)),
         );
 
-        expect(settings.mfa, fakeTotpSecret, reason: key);
-        expect(settings.toCredentials().mfa, fakeTotpSecret, reason: key);
-        expect(settings.mfaProblem, isNull, reason: key);
-        expect(settings.missing, isEmpty, reason: key);
+        expect(settings.mfa, '', reason: '"$key"');
+        expect(settings.empty, [Setting.mfa], reason: '"$key"');
+        expect(settings.missing, isEmpty, reason: '"$key"');
+        expect(settings.toCredentials().mfa, '', reason: '"$key"');
       }
     });
 
-    test('a 2FA key in lower case or with "=" padding is valid', () {
+    test('the 2FA key is passed on to the library as typed, only trimmed: '
+        'the library checks it', () {
+      // In groups, with a tab or with hyphens, as an authenticator setup
+      // screen or a web page may show it; and the 6-digit code of the app,
+      // which the library refuses (test/session_test.dart).
       for (final key in [
-        fakeTotpSecret,
-        fakeTotpSecret.toLowerCase(),
-        'jbsw y3dp EHPK 3pxp',
-        // 26 characters, padded to 32 the way RFC 4648 pads them.
-        'JBSWY3DPEHPK3PXPJBSWY3DPEH======',
+        'JBSW Y3DP EHPK 3PXP',
+        ' JBSW Y3DP\tEHPK  3PXP ',
+        'JBSW-Y3DP-EHPK-3PXP',
+        '123 456',
       ]) {
-        expect(
-          SmartschoolSettings.isTotpSecret(key.replaceAll(' ', '')),
-          isTrue,
-        );
-        expect(
-          SmartschoolSettings.read(
-            fakeExtensionSettings(FakeCredentials(mfa: key)),
-          ).mfaProblem,
-          isNull,
-          reason: key,
-        );
-      }
-    });
-
-    test('a 6-digit code or a key with other characters is not valid, and '
-        'is not missing either', () {
-      final problems = {
-        // A code of the authenticator app: with a 1, 8, 9 or 0 it is not
-        // Base32, with only 2 to 7 it is.
-        '123456': 'not Base32',
-        '234 567': 'digits only',
-        // Hyphens, a 0 for an O, a date of birth.
-        'JBSW-Y3DP-EHPK-3PXP': 'not Base32',
-        'JBSWY3DPEHPK3PX0': 'not Base32',
-        '2010-05-15': 'not Base32',
-        '=JBSWY3DPEHPK3PXP': 'not Base32',
-      };
-      for (final MapEntry(key: key, value: problem) in problems.entries) {
         final settings = SmartschoolSettings.read(
           fakeExtensionSettings(FakeCredentials(mfa: key)),
         );
 
-        expect(settings.mfaProblem, startsWith(problem), reason: key);
-        expect(settings.mfaProblem, isNot(contains(key)), reason: key);
+        expect(settings.mfa, key.trim(), reason: key);
+        expect(settings.toCredentials().mfa, key.trim(), reason: key);
         expect(settings.missing, isEmpty, reason: key);
       }
     });
@@ -184,8 +163,8 @@ void main() {
       expect(source.where, contains(file.absolute.path));
     });
 
-    test('a 2FA key in groups works there too; a 6-digit code (a number in '
-        'YAML) is not valid', () {
+    test('a 2FA key in groups, or a 6-digit code (a number in YAML), reaches '
+        'the library as typed there too', () {
       SmartschoolSettings readWithKey(String mfa) {
         final file = File('${dir.path}/dev.yml')
           ..writeAsStringSync(
@@ -198,12 +177,27 @@ void main() {
       }
 
       final grouped = readWithKey('JBSW Y3DP EHPK 3PXP');
-      expect(grouped.mfa, fakeTotpSecret);
-      expect(grouped.mfaProblem, isNull);
+      expect(grouped.toCredentials().mfa, 'JBSW Y3DP EHPK 3PXP');
 
       final code = readWithKey('123456');
       expect(code.missing, isEmpty);
-      expect(code.mfaProblem, startsWith('not Base32'));
+      expect(code.toCredentials().mfa, '123456');
+    });
+
+    test('without the key mfa, as for an account without 2FA: nothing is '
+        'missing (#41)', () {
+      final file = File('${dir.path}/student.yml')
+        ..writeAsStringSync(
+          'username: lena.peeters\n'
+          'password: $fakePassword\n'
+          'main_url: $fakeHost\n',
+        );
+
+      final settings = SmartschoolSettings.read(CredentialsFile(file.path));
+
+      expect(settings.mfa, '');
+      expect(settings.missing, isEmpty);
+      expect(settings.empty, [Setting.mfa]);
     });
 
     test('a relative path is resolved against the working directory', () {

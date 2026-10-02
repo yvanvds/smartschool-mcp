@@ -5,8 +5,12 @@ import 'package:yaml/yaml.dart';
 
 import 'client_app.dart';
 
-/// A setting of the server: the four values it needs to log in to
-/// Smartschool ([login]), and the optional download folder.
+/// A setting of the server: the four values it logs in to Smartschool with
+/// ([login]), and the optional download folder.
+///
+/// Of the four, the 2FA key is optional: only an account with two-factor
+/// authentication (2FA), such as a teacher's, needs it. Students sign in
+/// with only their password.
 ///
 /// [formTitle] is the field's title in the Claude Desktop extension's install
 /// form. The extension manifest (`manifest.json`, its `user_config` keyed by
@@ -17,7 +21,12 @@ enum Setting {
   mainUrl('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL', 'main_url'),
   username('Gebruikersnaam', 'SMARTSCHOOL_USERNAME', 'username'),
   password('Wachtwoord', 'SMARTSCHOOL_PASSWORD', 'password'),
-  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa'),
+
+  /// The TOTP secret of the authenticator app, for an account with 2FA; an
+  /// account without it leaves it empty. When Smartschool asks for a 2FA
+  /// code and it is empty, the login fails with
+  /// `ProblemKind.twoFactorKeyMissing`.
+  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa', required: false),
 
   /// The folder `save_intradesk_file` and `save_message_attachment` save
   /// into; optional (see `DownloadFolder.resolve`). In the extension
@@ -28,6 +37,7 @@ enum Setting {
     'SMARTSCHOOL_DOWNLOAD_DIR',
     'download_dir',
     required: false,
+    forLogin: false,
   );
 
   const Setting(
@@ -35,6 +45,7 @@ enum Setting {
     this.envVar,
     this.fileKey, {
     this.required = true,
+    this.forLogin = true,
   });
 
   /// The title of the field in the extension's install form.
@@ -48,13 +59,18 @@ enum Setting {
   /// for the login settings).
   final String fileKey;
 
-  /// Whether the server needs it to log in.
+  /// Whether it must be filled in: the server does not log in without it
+  /// ([SmartschoolSettings.missing]).
   final bool required;
 
-  /// The settings the server needs to log in, in form order.
+  /// Whether the server logs in with it ([login]).
+  final bool forLogin;
+
+  /// The settings the server logs in with, in form order: the required
+  /// ones and the optional 2FA key.
   static final List<Setting> login = [
     for (final setting in values)
-      if (setting.required) setting,
+      if (setting.forLogin) setting,
   ];
 }
 
@@ -336,8 +352,7 @@ final class CredentialsFileException implements Exception {
 }
 
 /// The settings as read from a [CredentialSource]: trimmed, with the
-/// Smartschool address reduced to a host name and the 2FA key without white
-/// space.
+/// Smartschool address reduced to a host name.
 final class SmartschoolSettings {
   SmartschoolSettings._(
     this.source, {
@@ -358,7 +373,7 @@ final class SmartschoolSettings {
       host: normalizeHost(credentials.mainUrl),
       username: credentials.username.trim(),
       password: credentials.password.trim(),
-      mfa: normalizeTotpSecret(credentials.mfa ?? ''),
+      mfa: (credentials.mfa ?? '').trim(),
     );
   }
 
@@ -369,34 +384,35 @@ final class SmartschoolSettings {
   final String username;
   final String password;
 
-  /// The TOTP secret (Base32), without white space: see
-  /// [normalizeTotpSecret].
+  /// The 2FA key: the TOTP secret (Base32) of the authenticator app, as
+  /// typed, only trimmed; empty for an account without two-factor
+  /// authentication (2FA), such as a student's.
+  ///
+  /// The library checks it: it ignores white space and hyphens in it (a key
+  /// copied in groups, `JBSW Y3DP EHPK 3PXP`), and refuses a value that
+  /// cannot be a TOTP secret, such as the 6-digit code of the app, with a
+  /// [SmartschoolInvalidTotpSecretError] when it logs in (see
+  /// `ProblemKind.twoFactorKeyInvalid`). It takes an empty key as no key:
+  /// it logs in with only the password, and fails with a
+  /// [SmartschoolTwoFactorRequiredError] when Smartschool asks for a 2FA
+  /// code (see `ProblemKind.twoFactorKeyMissing`).
   final String mfa;
 
-  /// Why [mfa] cannot be a TOTP secret, in a few words for the log (it never
-  /// quotes the key); null when it can be one, or when it is empty (see
-  /// [missing]).
-  ///
-  /// Checked before logging in: before 0.3.2 the library posted the password
-  /// first and then failed on the key with a bare `FormatException`, on
-  /// every attempt (yvanvds/dartschool#79). 0.3.2 checks the key itself,
-  /// before the password, with a [SmartschoolInvalidTotpSecretError] (see
-  /// `classifyFailure`); this check goes in yvanvds/smartschool-mcp#34. See
-  /// [isTotpSecret].
-  String? get mfaProblem => mfa.isEmpty || isTotpSecret(mfa)
-      ? null
-      : _base32.hasMatch(mfa)
-      ? 'digits only, like a code of the authenticator app'
-      : 'not Base32: a character other than the letters A to Z, the digits '
-            '2 to 7 and "=" padding at the end';
-
-  /// The login settings that are empty, in form order. All four are
-  /// required: MFA is mandatory for teachers.
-  List<Setting> get missing => [
+  /// The login settings ([Setting.login]) that are empty, in form order,
+  /// also the optional 2FA key.
+  List<Setting> get empty => [
     if (host.isEmpty) Setting.mainUrl,
     if (username.isEmpty) Setting.username,
     if (password.isEmpty) Setting.password,
     if (mfa.isEmpty) Setting.mfa,
+  ];
+
+  /// The required settings that are empty, in form order: the server does
+  /// not log in while there are any. The 2FA key is not one of them, as
+  /// only an account with 2FA needs it.
+  List<Setting> get missing => [
+    for (final setting in empty)
+      if (setting.required) setting,
   ];
 
   /// The credentials for the library. Only valid when [missing] is empty.
@@ -406,32 +422,6 @@ final class SmartschoolSettings {
     mainUrl: host,
     mfa: mfa,
   );
-
-  /// Removes all white space from a 2FA key, so that a key copied the way
-  /// authenticator setup screens often show it, in groups
-  /// (`JBSW Y3DP EHPK 3PXP`), works: authenticator apps ignore the spaces
-  /// too.
-  ///
-  /// A workaround for yvanvds/dartschool#79: before 0.3.2 the library passed
-  /// the key on unchanged, and the otp package rejected white space. 0.3.2
-  /// ignores white space (and hyphens) itself: remove this, with
-  /// [mfaProblem], in yvanvds/smartschool-mcp#34.
-  static String normalizeTotpSecret(String key) =>
-      key.replaceAll(RegExp(r'\s'), '');
-
-  /// Whether [key], without white space, can be a TOTP secret: RFC 4648
-  /// Base32 in upper or lower case (the library upper-cases it, and
-  /// authenticator apps take either), optionally with `=` padding at the end
-  /// (which the library accepts), and not digits only.
-  ///
-  /// Digits only is a code of the authenticator app typed instead of its
-  /// key: a 6-digit code made of the digits 2 to 7 is valid Base32, but a
-  /// random 16-character key has no letter at all with a chance of less than
-  /// 1 in 10^11.
-  static bool isTotpSecret(String key) =>
-      _base32.hasMatch(key) && key.contains(RegExp('[A-Za-z]'));
-
-  static final _base32 = RegExp(r'^[A-Za-z2-7]+=*$');
 
   /// Reduces what a teacher may type as the Smartschool address
   /// (`https://school.smartschool.be/`, with spaces, ...) to the host name

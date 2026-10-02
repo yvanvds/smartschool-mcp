@@ -29,7 +29,7 @@ const settingHints = {
   Setting.mainUrl: 'het adres van je school, bv. school.smartschool.be',
   Setting.username: 'je gebruikersnaam voor Smartschool',
   Setting.password: 'je wachtwoord voor Smartschool',
-  Setting.mfa: 'je 2FA-sleutel, niet de code van zes cijfers',
+  Setting.mfa: 'alleen met 2FA: je 2FA-sleutel, niet de code van zes cijfers',
   Setting.downloadDir: 'niet verplicht: de map voor bewaarde bestanden',
 };
 

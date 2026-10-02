@@ -17,7 +17,7 @@ const maxSavedFileBytes = 200 * 1024 * 1024;
 
 /// `save_intradesk_file`: saves one file on Intradesk into the download
 /// folder ([downloads]), so that Claude can open it with its own file tools
-/// (in a Cowork project) or the teacher can.
+/// (in a Cowork project) or the user can.
 ///
 /// The file's path, size and kind come from the index in [cache] when there
 /// is one: a folder, or a file larger than [maxBytes], is refused without
@@ -153,7 +153,7 @@ void _refuseBeforeDownload(String id, IntradeskItem? known, int maxBytes) {
     throw ToolError(
       '${intradeskFileTitle(id, known, size: size)} is too large to save '
       'here: files up to ${formatFileSize(maxBytes)} can be saved. The '
-      'teacher can download it in Smartschool.',
+      'user can download it in Smartschool.',
     );
   }
 }

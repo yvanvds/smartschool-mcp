@@ -7,6 +7,8 @@ library;
 import 'dart:io';
 
 import 'package:dart_mcp/client.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    show IntradeskListing, IntradeskService;
 import 'package:smartschool_mcp/src/intradesk/intradesk_access.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_index.dart';
@@ -703,5 +705,42 @@ void main() {
 
       await expectLater(walk(), throwsA(isA<Exception>()));
     });
+
+    test('a folder whose listing fails with a StateError that is not the '
+        "disposed client's is left out, and the walk goes on", () async {
+      // Only the library's SmartschoolClientDisposedError stops the walk
+      // (yvanvds/dartschool#73); the shutdown itself is covered by
+      // "when the server shuts down during the walk" above.
+      final index = await session.run(
+        (client) => buildIntradeskIndex(
+          _StateErrorIntradesk(client, failing: _documenten),
+        ),
+      );
+
+      expect(index.unlisted, 1);
+      expect(
+        [for (final item in index.items) (item.kind.name, item.path)],
+        [
+          ('folder', 'Documenten'),
+          ('folder', 'Examens'),
+          ('file', 'welkom.docx'),
+        ],
+      );
+      expect(server.intradesk.listed, ['', _examens]);
+    });
   });
+}
+
+/// An [IntradeskService] whose listing of the folder [failing] throws a
+/// plain [StateError], like a bug in the library would.
+class _StateErrorIntradesk extends IntradeskService {
+  _StateErrorIntradesk(super.client, {required this.failing});
+
+  final String failing;
+
+  @override
+  Future<IntradeskListing> getFolderListing(String folderId) async {
+    if (folderId == failing) throw StateError('No element');
+    return super.getFolderListing(folderId);
+  }
 }

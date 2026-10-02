@@ -307,7 +307,7 @@ void main() {
         await error('save_intradesk_file', {'file_id': id}),
         'Intradesk file Documenten / opname.mp4 (id $id, 427 MB, changed '
         '2024-08-29) is too large to save here: files up to 1.0 MB can be '
-        'saved. The teacher can download it in Smartschool.',
+        'saved. The user can download it in Smartschool.',
       );
       expect(server.intradesk.downloaded, isEmpty);
       expect(downloads.existsSync(), isFalse);
@@ -323,7 +323,7 @@ void main() {
       expect(
         await error('save_intradesk_file', {'file_id': id}),
         'Intradesk file (id $id, 1.0 MB) is too large to save here: files up '
-        'to 1.0 MB can be saved. The teacher can download it in Smartschool.',
+        'to 1.0 MB can be saved. The user can download it in Smartschool.',
       );
       expect(saved(), isEmpty, reason: 'no temporary file left');
       await server.intradesk.stops.reached(1);
@@ -341,7 +341,7 @@ void main() {
       expect(
         await error('save_intradesk_file', {'file_id': id}),
         'Intradesk file (id $id) is too large to save here (more than 1.0 '
-        'MB): files up to 1.0 MB can be saved. The teacher can download it '
+        'MB): files up to 1.0 MB can be saved. The user can download it '
         'in Smartschool.',
       );
       expect(saved(), isEmpty, reason: 'no temporary file left');
@@ -770,7 +770,7 @@ void main() {
           'attachment': 'opname.mp4',
         }),
         'Attachment 1 of message 103 (Inbox), "opname.mp4" (1.5 MB) is too '
-        'large to save here: files up to 1.0 MB can be saved. The teacher '
+        'large to save here: files up to 1.0 MB can be saved. The user '
         'can download it in Smartschool.',
       );
       expect(saved(), isEmpty);
@@ -785,7 +785,7 @@ void main() {
         }),
         'Attachment 1 of message 103 (Inbox), "opname.mp4" is too large to '
         'save here (more than 1.0 MB): files up to 1.0 MB can be saved. The '
-        'teacher can download it in Smartschool.',
+        'user can download it in Smartschool.',
       );
       expect(saved(), isEmpty);
       await server.mailbox.attachmentStops.reached(2);
@@ -800,7 +800,7 @@ void main() {
           'attachment': 2,
         }),
         'Smartschool could not download attachment 2 of message 103 (Inbox), '
-        '"weg.pdf" (status 404). Try again later; the teacher can download '
+        '"weg.pdf" (status 404). Try again later; the user can download '
         'it in Smartschool.',
       );
       expect(saved(), isEmpty);

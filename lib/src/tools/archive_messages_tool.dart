@@ -97,9 +97,10 @@ typedef _Result = ({int id, _Outcome outcome, ShortMessage? header});
 /// so one that is already there is not a failure (Claude repeating a call
 /// whose answer got lost, for example).
 ///
-/// Runs inside [withMessages], so it may run twice. The archive request
-/// comes last: when Smartschool rejects the session, nothing has been
-/// archived yet, and the repeat starts again from the inbox listing.
+/// Runs inside [withMessages], so it may run more than once. The archive
+/// request comes last: when Smartschool rejects the session or restarts a
+/// listing, nothing has been archived yet, and the repeat starts again from
+/// the inbox listing.
 Future<List<_Result>> _archiveIds(
   MessagesService messages,
   List<int> ids,

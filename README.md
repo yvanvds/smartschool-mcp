@@ -2,9 +2,9 @@
 
 A local [MCP](https://modelcontextprotocol.io) server that gives Claude
 Desktop, and the ChatGPT app (Codex), access to Smartschool. It is built for
-teachers on Windows and distributed as a Claude Desktop extension (`.mcpb`)
-and as an executable that installs itself for ChatGPT (see *ChatGPT and
-Codex* below).
+teachers on Windows, and works for students too (they sign in without 2FA).
+It is distributed as a Claude Desktop extension (`.mcpb`) and as an
+executable that installs itself for ChatGPT (see *ChatGPT and Codex* below).
 
 It is written in Dart on top of
 [`flutter_smartschool`](https://github.com/yvanvds/dartschool) and
@@ -13,9 +13,10 @@ Windows executable, so users do not need Node, Python or Dart installed.
 
 **Colleagues:** the installation guide, in Dutch, is
 [docs/installatie.md](docs/installatie.md). It covers what you need, finding
-the 2FA key, installing, testing, example questions, updating,
-troubleshooting, security and privacy, and uninstalling. For the ChatGPT app
-it is [docs/installatie-chatgpt.md](docs/installatie-chatgpt.md).
+the 2FA key (only for an account with 2FA), installing, testing, example
+questions, updating, troubleshooting, security and privacy, and uninstalling.
+For the ChatGPT app it is
+[docs/installatie-chatgpt.md](docs/installatie-chatgpt.md).
 
 ## Development
 
@@ -43,6 +44,7 @@ For development the server can read its Smartschool settings from a
 main_url: yourschool.smartschool.be
 username: your.username
 password: your-password
+# Only for an account with 2FA (teachers): the TOTP secret.
 mfa: YOUR-TOTP-BASE32-SECRET
 # Optional: where save_intradesk_file and save_message_attachment save.
 download_dir: C:\Users\you\Downloads\Smartschool
@@ -125,12 +127,16 @@ via *Settings → Developer → Edit Config*
 }
 ```
 
-`SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP); MFA
-is mandatory for teachers. Spaces in it are ignored; a value that is not
-Base32 (such as the app's 6-digit code) is reported before any login. `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see
-*Saving files* below). Restart Claude Desktop after editing the file. The
-server's stderr ends up in Claude Desktop's MCP log
-(`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
+`SMARTSCHOOL_MFA` is the Base32 secret of your authenticator app (TOTP). It
+is only needed for an account with two-factor authentication, as teachers
+have; students who sign in with only their password leave it empty (or leave
+the variable out). Spaces and hyphens in it are ignored; a value that is not
+Base32 (such as the app's 6-digit code) is reported without sending the
+password. When Smartschool asks for a 2FA code and the key is empty, the
+server says that the account uses 2FA and that the key must be filled in.
+`SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below). Restart
+Claude Desktop after editing the file. The server's stderr ends up in Claude
+Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
 Then ask Claude "Werkt mijn Smartschool-verbinding?": the
 `smartschool_status` tool reports whether the settings are complete, whether
@@ -454,7 +460,8 @@ and that they disappear after 7 days.
 ### Login
 
 The server logs in automatically on the first tool call, including the 2FA
-step (TOTP from `SMARTSCHOOL_MFA`). The session cookies are kept in
+step (TOTP from `SMARTSCHOOL_MFA`) when Smartschool asks for one; an account
+without 2FA logs in with only the password. The session cookies are kept in
 `%USERPROFILE%\.cache\smartschool\<username>`, so a restart only logs in
 again when the saved session has expired. The log shows which happened.
 

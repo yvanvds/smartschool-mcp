@@ -200,50 +200,172 @@ void main() {
     expectNoSecretsOrTraces(text);
   });
 
-  test(
-    'with missing settings: names them and does not contact Smartschool',
-    () async {
-      final (result, text) = await status(
-        source: fakeExtensionSettings(FakeCredentials(password: '', mfa: '')),
-      );
-
-      expect(result.isError, isNot(true));
-      expect(text, startsWith('Smartschool connection: NOT working\n'));
-      expect(
-        text,
-        contains(
-          'Problem: Not all Smartschool settings are filled in. Missing: '
-          '"Wachtwoord" (SMARTSCHOOL_PASSWORD), "2FA-sleutel" (SMARTSCHOOL_MFA).',
-        ),
-      );
-      expect(
-        text,
-        contains(
-          'Settings: extension settings (Smartschool-adres: filled in, '
-          'Gebruikersnaam: filled in, Wachtwoord: missing, '
-          '2FA-sleutel: missing)',
-        ),
-      );
-      expect(text, contains('Server version: $packageVersion'));
-      expect(server.requests, isEmpty);
-    },
-  );
-
-  test('with the 2FA key copied in groups: working', () async {
+  test('with missing settings: names them, not the empty 2FA key, and does not '
+      'contact Smartschool', () async {
     final (result, text) = await status(
-      source: fakeExtensionSettings(
-        FakeCredentials(mfa: 'JBSW Y3DP EHPK 3PXP'),
-      ),
+      source: fakeExtensionSettings(FakeCredentials(password: '', mfa: '')),
     );
 
     expect(result.isError, isNot(true));
-    expect(text, startsWith('Smartschool connection: working\n'));
-    expect(server.logins, 1);
+    expect(text, startsWith('Smartschool connection: NOT working\n'));
+    expect(
+      text,
+      contains(
+        'Problem: Not all Smartschool settings are filled in. Missing: '
+        '"Wachtwoord" (SMARTSCHOOL_PASSWORD). Fill it in in',
+      ),
+    );
+    expect(
+      text,
+      contains(
+        'Settings: extension settings (Smartschool-adres: filled in, '
+        'Gebruikersnaam: filled in, Wachtwoord: missing, '
+        '2FA-sleutel: empty (only needed for an account with 2FA))',
+      ),
+    );
+    expect(text, contains('Server version: $packageVersion'));
+    expect(server.requests, isEmpty);
+  });
+
+  group('without a 2FA key (#41)', () {
+    test('for an account without 2FA, such as a student\'s: working, and '
+        'the key is shown as empty, not missing', () async {
+      server = FakeSmartschool(secondStep: SecondStep.none);
+
+      final (result, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(mfa: '')),
+      );
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        'Smartschool connection: working\n'
+        'Logged in as: $fakeDisplayName\n'
+        'Smartschool address: $fakeHost\n'
+        'Settings: extension settings (Smartschool-adres: filled in, '
+        'Gebruikersnaam: filled in, Wachtwoord: filled in, 2FA-sleutel: '
+        'empty (only needed for an account with 2FA))\n'
+        'Server version: $packageVersion\n'
+        'Updates: not checked (the update check is turned off)',
+      );
+      expect(server.logins, 1);
+      expect(server.requests, isNot(contains(startsWith('POST /2fa'))));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('with a credentials file without the key mfa: working, and the '
+        'key is named by its key in the file', () async {
+      server = FakeSmartschool(secondStep: SecondStep.none);
+      final dir = await Directory.systemTemp.createTemp('smartschool_status_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}${Platform.pathSeparator}credentials.yml')
+        ..writeAsStringSync(
+          'username: jan.peeters\n'
+          'password: $fakePassword\n'
+          'main_url: $fakeHost\n',
+        );
+
+      final (_, text) = await status(source: CredentialsFile(file.path));
+
+      expect(text, startsWith('Smartschool connection: working\n'));
+      expect(
+        text,
+        contains(
+          'Settings: credentials file ${file.absolute.path} (main_url: '
+          'filled in, username: filled in, password: filled in, mfa: empty '
+          '(only needed for an account with 2FA))\n',
+        ),
+      );
+      expect(server.logins, 1);
+    });
+
+    test('in ChatGPT, without the variable SMARTSCHOOL_MFA: working, and the '
+        'key is named by its variable', () async {
+      server = FakeSmartschool(secondStep: SecondStep.none);
+      final client = ClientContext();
+
+      final (_, text) = await status(
+        source: ExtensionSettings(
+          client: client,
+          read: () => FakeCredentials(mfa: null),
+          environment: () => {'SYSTEMROOT': r'C:\Windows'},
+        ),
+        client: client,
+        clientName: ClientApp.codexClientName,
+      );
+
+      expect(text, startsWith('Smartschool connection: working\n'));
+      expect(
+        text,
+        contains(
+          '\nSettings: environment variables of the MCP server '
+          '(SMARTSCHOOL_MAIN_URL: filled in, SMARTSCHOOL_USERNAME: filled '
+          'in, SMARTSCHOOL_PASSWORD: filled in, SMARTSCHOOL_MFA: empty (only '
+          'needed for an account with 2FA))\n',
+        ),
+      );
+    });
+
+    test('when Smartschool asks for a 2FA code: NOT working, says the '
+        'account uses 2FA and names "2FA-sleutel"; a second call does not '
+        'contact Smartschool', () async {
+      final session = SmartschoolSession(
+        fakeExtensionSettings(FakeCredentials(mfa: '')),
+        createClient: fakeClientFactory(server, await tempCache()),
+      );
+      addTearDown(session.close);
+      final (connection, _) = await connect(tools: [statusTool(session)]);
+
+      final (result, text) = await callTool(connection, 'smartschool_status');
+      final requests = server.requests.length;
+      final (_, again) = await callTool(connection, 'smartschool_status');
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        startsWith(
+          'Smartschool connection: NOT working\n'
+          'Problem: This Smartschool account uses two-factor authentication '
+          '(2FA): after the password, Smartschool asks for a code from an '
+          'authenticator app, but "2FA-sleutel" (SMARTSCHOOL_MFA) is empty. '
+          'Fill it in in the Smartschool extension settings in Claude Desktop '
+          '(Settings → Extensions) with the key Smartschool shows when you '
+          'add an authenticator app, not the 6-digit code the app shows. Then '
+          'restart Claude Desktop.\n'
+          'Smartschool address: $fakeHost\n'
+          'Settings: extension settings (Smartschool-adres: filled in, '
+          'Gebruikersnaam: filled in, Wachtwoord: filled in, 2FA-sleutel: '
+          'empty (only needed for an account with 2FA))\n',
+        ),
+      );
+      expectNoSecretsOrTraces(text);
+      expect(again, text);
+      expect(server.requests, hasLength(requests));
+      expect(server.logins, 0);
+    });
+  });
+
+  test('with the 2FA key copied in groups, with spaces or hyphens: '
+      'working', () async {
+    for (final key in ['JBSW Y3DP EHPK 3PXP', 'JBSW-Y3DP-EHPK-3PXP']) {
+      server = FakeSmartschool();
+      final (result, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(mfa: key)),
+      );
+
+      expect(result.isError, isNot(true), reason: key);
+      expect(
+        text,
+        startsWith('Smartschool connection: working\n'),
+        reason: key,
+      );
+      expect(server.logins, 1, reason: key);
+    }
   });
 
   test('with a 6-digit code as 2FA key: names "2FA-sleutel", says it is not '
-      'the code, and does not contact Smartschool, also on a second '
-      'call', () async {
+      'the code, and does not post the password; a second call does not '
+      'contact Smartschool', () async {
     final session = SmartschoolSession(
       fakeExtensionSettings(FakeCredentials(mfa: '123456')),
       createClient: fakeClientFactory(server, await tempCache()),
@@ -252,6 +374,7 @@ void main() {
     final (connection, _) = await connect(tools: [statusTool(session)]);
 
     final (result, text) = await callTool(connection, 'smartschool_status');
+    final requests = server.requests.length;
     final (_, again) = await callTool(connection, 'smartschool_status');
 
     expect(result.isError, isNot(true));
@@ -260,19 +383,20 @@ void main() {
       startsWith(
         'Smartschool connection: NOT working\n'
         'Problem: The two-factor authentication (2FA) key is not valid, so '
-        'Smartschool was not contacted. Check "2FA-sleutel" (SMARTSCHOOL_MFA) '
-        'in the Smartschool extension settings in Claude Desktop (Settings → '
-        'Extensions): it must be the key Smartschool shows when you add an '
-        'authenticator app, made of letters and the digits 2 to 7 (spaces do '
-        'not matter), not the 6-digit code the app shows. Then restart Claude '
-        'Desktop.\n'
+        'the login to Smartschool was stopped. Check "2FA-sleutel" '
+        '(SMARTSCHOOL_MFA) in the Smartschool extension settings in Claude '
+        'Desktop (Settings → Extensions): it must be the key Smartschool shows '
+        'when you add an authenticator app, made of letters and the digits 2 '
+        'to 7 (spaces and hyphens do not matter), not the 6-digit code the '
+        'app shows. Then restart Claude Desktop.\n'
         'Smartschool address: $fakeHost\n',
       ),
     );
     expect(text, isNot(contains('123456')));
     expectNoSecretsOrTraces(text);
     expect(again, text);
-    expect(server.requests, isEmpty);
+    expect(server.requests, isNot(contains('POST /login')));
+    expect(server.requests, hasLength(requests));
   });
 
   test('with a missing credentials file: says so', () async {

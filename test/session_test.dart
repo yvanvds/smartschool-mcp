@@ -351,6 +351,85 @@ void main() {
     });
   });
 
+  group('when Smartschool restarts the paging of a box the call lists '
+      '(yvanvds/dartschool#76)', () {
+    const restarted = SmartschoolPagingRestartedError(
+      'Smartschool restarted the paging of the box',
+    );
+
+    test('the call runs once more, on the same client, and says so in the '
+        'log', () async {
+      final session = newSession();
+      var attempts = 0;
+      late String result;
+
+      final lines = await _logOf(() async {
+        result = await session.run((client) async {
+          if (++attempts == 1) throw restarted;
+          return 'listed';
+        });
+      });
+
+      expect(result, 'listed');
+      expect(attempts, 2);
+      expect(server.logins, 1);
+      expect(clientsCreated, 1);
+      expect(
+        lines,
+        contains(
+          'Smartschool restarted the listing of a message box '
+          '($restarted); listing it again',
+        ),
+      );
+    });
+
+    test('restarted again: reported, and not run a third time', () async {
+      final session = newSession();
+      var attempts = 0;
+
+      await expectLater(
+        session.run((client) async {
+          attempts++;
+          throw restarted;
+        }),
+        throwsA(_problem(ProblemKind.listingRestarted)),
+      );
+      expect(attempts, 2);
+    });
+
+    test('a refused session and a restarted listing are each repeated '
+        'once', () async {
+      final session = newSession();
+      var attempts = 0;
+
+      expect(
+        await session.run((client) async {
+          switch (++attempts) {
+            case 1:
+              throw restarted;
+            case 2:
+              throw const SmartschoolSessionExpiredError();
+          }
+          return 'listed';
+        }),
+        'listed',
+      );
+      expect(attempts, 3);
+
+      attempts = 0;
+      await expectLater(
+        session.run((client) async {
+          attempts++;
+          throw attempts == 2
+              ? const SmartschoolSessionExpiredError()
+              : restarted;
+        }),
+        throwsA(_problem(ProblemKind.listingRestarted)),
+      );
+      expect(attempts, 3);
+    });
+  });
+
   group('with a saved session that expired (an old cookie cache)', () {
     test('a new process logs in once, and its first call succeeds on that '
         'client', () async {
@@ -386,108 +465,222 @@ void main() {
     });
   });
 
-  test(
-    'missing settings are reported without contacting Smartschool',
-    () async {
+  test('missing settings are reported without contacting Smartschool; an '
+      'empty 2FA key is not one of them', () async {
+    final session = newSession(
+      source: fakeExtensionSettings(
+        FakeCredentials(mainUrl: '', password: ' ', mfa: ' '),
+      ),
+    );
+
+    await expectLater(
+      session.run(_post),
+      throwsA(
+        _problem(ProblemKind.missingSettings).having(
+          (p) => p.message,
+          'message',
+          allOf(
+            contains(
+              'Missing: "Smartschool-adres" (SMARTSCHOOL_MAIN_URL), '
+              '"Wachtwoord" (SMARTSCHOOL_PASSWORD). Fill them in',
+            ),
+            isNot(contains('2FA')),
+          ),
+        ),
+      ),
+    );
+    expect(clientsCreated, 0);
+    expect(server.requests, isEmpty);
+  });
+
+  group('without a 2FA key (#41)', () {
+    test('an account without 2FA, such as a student\'s, logs in with only '
+        'the password, whether the key is empty, only spaces or not set at '
+        'all; later calls reuse the client', () async {
+      for (final key in ['', '  ', null]) {
+        server = FakeSmartschool(secondStep: SecondStep.none);
+        cache = await tempCache();
+        clientsCreated = 0;
+        final session = newSession(
+          source: fakeExtensionSettings(FakeCredentials(mfa: key)),
+        );
+
+        expect(await session.run(_post), '<ok/>', reason: '"$key"');
+        expect(await session.run(_post), '<ok/>', reason: '"$key"');
+
+        expect(server.logins, 1, reason: '"$key"');
+        expect(clientsCreated, 1, reason: '"$key"');
+        expect(
+          server.requests.where((r) => r == 'POST /login'),
+          hasLength(1),
+          reason: '"$key"',
+        );
+        expect(server.requests, isNot(contains(startsWith('GET /2fa'))));
+        expect(server.requests, isNot(contains(startsWith('POST /2fa'))));
+      }
+    });
+
+    test('a new process of an account without 2FA reuses the saved session '
+        'cookies', () async {
+      server = FakeSmartschool(secondStep: SecondStep.none);
+      SmartschoolSession student() =>
+          newSession(source: fakeExtensionSettings(FakeCredentials(mfa: '')));
+
+      await student().run(_post);
+      server.requests.clear();
+      expect(await student().run(_post), '<ok/>');
+
+      expect(server.logins, 1);
+      expect(server.requests, isNot(contains('POST /login')));
+    });
+
+    test('when Smartschool asks for a 2FA code: reported as a missing 2FA '
+        'key, naming "2FA-sleutel", and not tried again', () async {
       final session = newSession(
-        source: fakeExtensionSettings(FakeCredentials(mainUrl: '', mfa: ' ')),
+        source: fakeExtensionSettings(FakeCredentials(mfa: '')),
+      );
+      final missingKey = _problem(ProblemKind.twoFactorKeyMissing).having(
+        (p) => p.message,
+        'message',
+        allOf(
+          startsWith(
+            'This Smartschool account uses two-factor authentication (2FA): '
+            'after the password, Smartschool asks for a code from an '
+            'authenticator app, but "2FA-sleutel" (SMARTSCHOOL_MFA) is '
+            'empty. Fill it in in the Smartschool extension settings in '
+            'Claude Desktop',
+          ),
+          endsWith('Then restart Claude Desktop.'),
+        ),
+      );
+
+      final log = await _logOf(() async {
+        await expectLater(session.run(_post), throwsA(missingKey));
+      });
+      final requests = server.requests.length;
+      await expectLater(session.run(_post), throwsA(missingKey));
+
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+      expect(
+        server.requests,
+        isNot(contains('POST /2fa/api/v1/google-authenticator')),
+      );
+      expect(server.requests, hasLength(requests));
+      expect(server.logins, 0);
+      expect(
+        log,
+        contains(startsWith('Smartschool problem (twoFactorKeyMissing)')),
+      );
+    });
+
+    test('when Smartschool asks for account verification: reported as '
+        'such, without assuming a teacher', () async {
+      server = FakeSmartschool(secondStep: SecondStep.accountVerification);
+      final session = newSession(
+        source: fakeExtensionSettings(FakeCredentials(mfa: '')),
       );
 
       await expectLater(
         session.run(_post),
         throwsA(
-          _problem(ProblemKind.missingSettings).having(
+          _problem(ProblemKind.accountVerification).having(
             (p) => p.message,
             'message',
-            contains(
-              '"Smartschool-adres" (SMARTSCHOOL_MAIN_URL), "2FA-sleutel"',
+            allOf(
+              startsWith(
+                'Smartschool asks for account verification (a date of '
+                'birth) after the password.',
+              ),
+              contains('"2FA-sleutel" (SMARTSCHOOL_MFA)'),
+              isNot(contains('teacher')),
             ),
           ),
         ),
       );
-      expect(clientsCreated, 0);
-      expect(server.requests, isEmpty);
-    },
-  );
-
-  test('a 2FA key that is not valid is reported without contacting '
-      'Smartschool, also on later calls, and the log does not quote '
-      'it', () async {
-    final session = newSession(
-      source: fakeExtensionSettings(FakeCredentials(mfa: '123 456')),
-    );
-    final key = _problem(ProblemKind.twoFactorKeyInvalid).having(
-      (p) => p.message,
-      'message',
-      contains('Check "2FA-sleutel" (SMARTSCHOOL_MFA) in the Smartschool'),
-    );
-
-    final log = await _logOf(() async {
-      await expectLater(session.run(_post), throwsA(key));
-      await expectLater(session.run(_post), throwsA(key));
+      expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+      expect(server.logins, 0);
     });
-
-    expect(clientsCreated, 0);
-    expect(server.requests, isEmpty);
-    expect(log, [
-      'Smartschool settings: the 2FA key is not valid (not Base32: a '
-          'character other than the letters A to Z, the digits 2 to 7 and '
-          '"=" padding at the end)',
-    ]);
   });
 
-  test('a 2FA key the library refuses is reported as not valid, not as an '
-      'unexpected error: the password is not posted, later calls do not '
-      'contact Smartschool, and the log does not quote it', () async {
-    // SmartschoolSettings.mfaProblem refuses every such key before the
-    // library sees it (until yvanvds/smartschool-mcp#34), so the client is
-    // given one that the settings never pass on.
-    const code = '123456';
-    final create = fakeClientFactory(server, cache);
-    final session = SmartschoolSession(
-      fakeExtensionSettings(),
-      createClient: (credentials) {
-        clientsCreated++;
-        return create(
-          AppCredentials(
-            username: credentials.username,
-            password: credentials.password,
-            mainUrl: credentials.mainUrl,
-            mfa: code,
+  test('a 2FA key that is not valid is reported without posting the '
+      'password, also on later calls, which do not contact Smartschool, and '
+      'the log does not quote it', () async {
+    // The 6-digit code of the app, typed with a space, and a key with a "1":
+    // the library refuses both before it posts the password
+    // (yvanvds/dartschool#79).
+    for (final code in ['123 456', 'JBSW Y3DP EHPK 3PX1']) {
+      server = FakeSmartschool();
+      cache = await tempCache();
+      clientsCreated = 0;
+      final session = newSession(
+        source: fakeExtensionSettings(FakeCredentials(mfa: code)),
+      );
+      final key = _problem(ProblemKind.twoFactorKeyInvalid).having(
+        (p) => p.message,
+        'message',
+        allOf(
+          startsWith(
+            'The two-factor authentication (2FA) key is not valid, so the '
+            'login to Smartschool was stopped. Check "2FA-sleutel" '
+            '(SMARTSCHOOL_MFA) in the Smartschool',
           ),
-        );
-      },
-    );
-    addTearDown(session.close);
-    final key = _problem(ProblemKind.twoFactorKeyInvalid).having(
-      (p) => p.message,
-      'message',
-      contains('Check "2FA-sleutel" (SMARTSCHOOL_MFA) in the Smartschool'),
-    );
+          isNot(contains(code)),
+        ),
+      );
 
-    late int requests;
-    final log = await _logOf(() async {
-      await expectLater(session.run(_post), throwsA(key));
-      requests = server.requests.length;
-      await expectLater(session.run(_post), throwsA(key));
-    });
+      late int requests;
+      final log = await _logOf(() async {
+        await expectLater(session.run(_post), throwsA(key), reason: code);
+        requests = server.requests.length;
+        await expectLater(session.run(_post), throwsA(key), reason: code);
+      });
 
-    expect(server.requests, isNot(contains('POST /login')));
-    expect(server.requests, hasLength(requests));
-    expect(clientsCreated, 1);
-    expect(
-      log,
-      contains(startsWith('Smartschool problem (twoFactorKeyInvalid)')),
-    );
-    expect(log, everyElement(isNot(contains(code))));
+      expect(server.requests, isNot(contains('POST /login')), reason: code);
+      expect(server.requests, hasLength(requests), reason: code);
+      expect(server.logins, 0, reason: code);
+      expect(clientsCreated, 1, reason: code);
+      expect(
+        log,
+        contains(startsWith('Smartschool problem (twoFactorKeyInvalid)')),
+        reason: code,
+      );
+      expect(log, everyElement(isNot(contains(code))), reason: code);
+    }
   });
 
-  test('a 2FA key copied in groups, in lower case or with "=" padding: the '
-      'library logs in with it', () async {
-    // The keys SmartschoolSettings accepts must be keys the library can
-    // make a code with.
+  test('a date as 2FA key, where Smartschool asks for a 2FA code: reported '
+      'as not valid after the password, and not tried again', () async {
+    // The library keeps a date for an account verification, so it posts the
+    // password first, and refuses the date as a key at the 2FA step.
+    const date = '2010-05-15';
+    final session = newSession(
+      source: fakeExtensionSettings(FakeCredentials(mfa: date)),
+    );
+
+    await expectLater(
+      session.run(_post),
+      throwsA(_problem(ProblemKind.twoFactorKeyInvalid)),
+    );
+    final requests = server.requests.length;
+    await expectLater(
+      session.run(_post),
+      throwsA(_problem(ProblemKind.twoFactorKeyInvalid)),
+    );
+
+    expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+    expect(
+      server.requests,
+      isNot(contains('POST /2fa/api/v1/google-authenticator')),
+    );
+    expect(server.requests, hasLength(requests));
+    expect(server.logins, 0);
+  });
+
+  test('a 2FA key copied in groups (with spaces or hyphens), in lower case '
+      'or with "=" padding: the library logs in with it', () async {
     for (final key in [
       'JBSW Y3DP EHPK 3PXP',
+      'JBSW-Y3DP-EHPK-3PXP',
       'jbswy3dpehpk3pxp',
       'JBSWY3DPEHPK3PXPJBSWY3DPEH======',
     ]) {
@@ -537,11 +730,14 @@ void main() {
   });
 
   test('each login failure yields its own problem', () async {
-    Future<SmartschoolProblem> failure(FakeSmartschool fake) async {
+    Future<SmartschoolProblem> failure(
+      FakeSmartschool fake, [
+      FakeCredentials? credentials,
+    ]) async {
       server = fake;
       cache = await tempCache();
       try {
-        await newSession().run(_post);
+        await newSession(source: fakeExtensionSettings(credentials)).run(_post);
       } on SmartschoolProblem catch (problem) {
         return problem;
       }
@@ -551,6 +747,7 @@ void main() {
     final problems = [
       await failure(FakeSmartschool(passwordAccepted: false)),
       await failure(FakeSmartschool(twoFactorAccepted: false)),
+      await failure(FakeSmartschool(), FakeCredentials(mfa: '')),
       await failure(
         FakeSmartschool(secondStep: SecondStep.twoFactorWithoutApp),
       ),
@@ -563,11 +760,12 @@ void main() {
     expect(problems.map((p) => p.kind), [
       ProblemKind.wrongPassword,
       ProblemKind.twoFactorRejected,
+      ProblemKind.twoFactorKeyMissing,
       ProblemKind.twoFactorUnsupported,
       ProblemKind.accountVerification,
       ProblemKind.unreachable,
     ]);
-    expect(problems.map((p) => p.message).toSet(), hasLength(5));
+    expect(problems.map((p) => p.message).toSet(), hasLength(6));
   });
 
   test('an unreachable Smartschool is retried on the next call', () async {

@@ -18,9 +18,11 @@ enum ProblemKind {
   credentialsFileInvalid(permanent: true),
 
   /// The 2FA key in the settings cannot be a TOTP secret (not Base32, or a
-  /// code of the authenticator app): found before logging in, see
-  /// [SmartschoolSettings.mfaProblem], or by the library before it posts the
-  /// password ([SmartschoolInvalidTotpSecretError]).
+  /// code of the authenticator app): the library refuses it when it logs in
+  /// ([SmartschoolInvalidTotpSecretError]), before it posts the password.
+  /// Only a date, which the library keeps for an account verification, is
+  /// refused after the password, when Smartschool asks for a 2FA code
+  /// instead.
   twoFactorKeyInvalid(permanent: true),
 
   /// Smartschool rejected the username or password.
@@ -29,11 +31,16 @@ enum ProblemKind {
   /// Smartschool rejected the 2FA code: wrong key, or a wrong PC clock.
   twoFactorRejected(permanent: true),
 
+  /// Smartschool asks for a 2FA code, but the 2FA key in the settings is
+  /// empty ([SmartschoolTwoFactorRequiredError]): the account uses 2FA. The
+  /// key is optional, as an account without 2FA (a student's) has none.
+  twoFactorKeyMissing(permanent: true),
+
   /// The account uses a 2FA method other than an authenticator app.
   twoFactorUnsupported(permanent: true),
 
-  /// Smartschool asks for account verification (date of birth) instead of
-  /// a 2FA code.
+  /// Smartschool asks for account verification (date of birth) after the
+  /// password, with or without a 2FA key in the settings.
   accountVerification(permanent: true),
 
   /// Smartschool could not be reached: no network, or a wrong address.
@@ -41,6 +48,11 @@ enum ProblemKind {
 
   /// Smartschool did not accept the session (for example after it expired).
   sessionRejected(permanent: false),
+
+  /// Smartschool restarted the paging of a message box that was being
+  /// listed: the box was listed elsewhere on the account meanwhile, for
+  /// example in the web client ([SmartschoolPagingRestartedError]).
+  listingRestarted(permanent: false),
 
   /// Anything else.
   unexpected(permanent: false);
@@ -79,12 +91,12 @@ final class SmartschoolProblem implements Exception {
         'use SmartschoolProblem.credentialsFile',
       ),
       ProblemKind.twoFactorKeyInvalid =>
-        'The two-factor authentication (2FA) key is not valid, so Smartschool '
-            'was not contacted. Check ${name(Setting.mfa)} ${source.where}: '
-            'it must be the key Smartschool shows when you add an '
-            'authenticator app, made of letters and the digits 2 to 7 (spaces '
-            'do not matter), not the 6-digit code the app shows. Then '
-            '$restart.',
+        'The two-factor authentication (2FA) key is not valid, so the login '
+            'to Smartschool was stopped. Check ${name(Setting.mfa)} '
+            '${source.where}: it must be the key Smartschool shows when you '
+            'add an authenticator app, made of letters and the digits 2 to 7 '
+            '(spaces and hyphens do not matter), not the 6-digit code the app '
+            'shows. Then $restart.',
       ProblemKind.wrongPassword =>
         'Smartschool did not accept the username or password. Check '
             '${name(Setting.username)} and ${name(Setting.password)} '
@@ -97,16 +109,23 @@ final class SmartschoolProblem implements Exception {
             '6-digit code. Also check that the clock of this PC is correct '
             '(Windows Settings → Time & language → Set time automatically): '
             'the codes depend on it. Then $restart.',
+      ProblemKind.twoFactorKeyMissing =>
+        'This Smartschool account uses two-factor authentication (2FA): '
+            'after the password, Smartschool asks for a code from an '
+            'authenticator app, but ${name(Setting.mfa)} is empty. Fill it in '
+            '${source.where} with the key Smartschool shows when you add an '
+            'authenticator app, not the 6-digit code the app shows. Then '
+            '$restart.',
       ProblemKind.twoFactorUnsupported =>
         'Smartschool asks for a kind of two-factor authentication (2FA) this '
             'extension cannot handle. It only works with an authenticator '
             'app: set one up in your Smartschool profile, enter its key in '
             '${name(Setting.mfa)} ${source.where}, then $restart.',
       ProblemKind.accountVerification =>
-        'Smartschool asks for account verification (a date of birth) '
-            'instead of a two-factor authentication (2FA) code. That usually '
-            'means 2FA with an authenticator app is not set up for this '
-            'account. Set it up in your Smartschool profile, enter its key in '
+        'Smartschool asks for account verification (a date of birth) after '
+            'the password. That usually means two-factor authentication (2FA) '
+            'with an authenticator app is not set up for this account. Set it '
+            'up in your Smartschool profile, enter its key in '
             '${name(Setting.mfa)} ${source.where}, then $restart.',
       ProblemKind.unreachable =>
         'Could not reach Smartschool at ${settings.host}. Check the internet '
@@ -116,6 +135,12 @@ final class SmartschoolProblem implements Exception {
       ProblemKind.sessionRejected =>
         'Smartschool did not accept the login session. Try again in a '
             'moment. If it keeps happening, $restart.',
+      ProblemKind.listingRestarted =>
+        'Smartschool restarted the listing of a message box while it was '
+            'being read, also when it was listed again. That happens when '
+            'the same box is opened or listed elsewhere on the account at the '
+            'same time, for example in Smartschool in the browser or in '
+            'another app. Try again in a moment.',
       ProblemKind.unexpected =>
         'Talking to Smartschool failed with an unexpected error. Try again '
             'in a moment. If it keeps happening, $restart; the technical '
@@ -130,13 +155,15 @@ final class SmartschoolProblem implements Exception {
           ProblemKind.credentialsFileInvalid,
           'The credentials file ${error.path} (given with --credentials) '
           'could not be read. It must be YAML with the keys main_url, '
-          'username, password and mfa. Fix it, then restart the server.',
+          'username and password, and mfa (the 2FA key) for an account with '
+          'two-factor authentication. Fix it, then restart the server.',
         )
       : SmartschoolProblem(
           ProblemKind.credentialsFileMissing,
           'The credentials file ${error.path} (given with --credentials) '
           'does not exist. Fix the path or create the file with the keys '
-          'main_url, username, password and mfa, then restart the server.',
+          'main_url, username and password, and mfa (the 2FA key) for an '
+          'account with two-factor authentication, then restart the server.',
         );
 
   final ProblemKind kind;
@@ -159,7 +186,8 @@ final class SmartschoolProblem implements Exception {
   }
 }
 
-/// Classifies [error] as a login or connection problem.
+/// Classifies [error] as a login or connection problem, or as a box listing
+/// Smartschool restarted ([ProblemKind.listingRestarted]).
 ///
 /// Returns null when [error] is something else (for example a tool-specific
 /// failure), which the caller handles itself.
@@ -193,17 +221,21 @@ ProblemKind? classifyFailure(Object error) {
       return ProblemKind.unreachable;
     case SmartschoolSessionExpiredError():
       return ProblemKind.sessionRejected;
+    // The session is fine: Smartschool keeps the paging position per user
+    // and box, and a listing of the box elsewhere restarted it
+    // (yvanvds/dartschool#76).
+    case SmartschoolPagingRestartedError():
+      return ProblemKind.listingRestarted;
     case SmartschoolInvalidCredentialsError():
       return ProblemKind.wrongPassword;
-    // A missing TOTP secret cannot happen: an empty key is caught as a
-    // missing setting first.
-    case SmartschoolTwoFactorRejectedError() ||
-        SmartschoolTwoFactorRequiredError():
+    case SmartschoolTwoFactorRejectedError():
       return ProblemKind.twoFactorRejected;
+    // The library throws it only for an empty key: the 2FA key is optional,
+    // for an account without 2FA.
+    case SmartschoolTwoFactorRequiredError():
+      return ProblemKind.twoFactorKeyMissing;
     // A key that is not a TOTP secret, which the library refuses before it
-    // posts the password (yvanvds/dartschool#79). For now
-    // SmartschoolSettings.mfaProblem refuses such a key before logging in
-    // (yvanvds/smartschool-mcp#34).
+    // posts the password (yvanvds/dartschool#79).
     case SmartschoolInvalidTotpSecretError():
       return ProblemKind.twoFactorKeyInvalid;
     case SmartschoolUnsupportedTwoFactorMethodError():

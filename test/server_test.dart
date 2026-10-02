@@ -25,6 +25,17 @@ void main() {
     },
   );
 
+  test('the instructions do not assume a teacher: students sign in too '
+      '(#41)', () async {
+    final (_, result) = await connect();
+
+    expect(
+      result.instructions,
+      'Tools for working with Smartschool on behalf of the signed-in user, a '
+      'teacher or a student.',
+    );
+  });
+
   test('tools/list is empty when no tools are registered', () async {
     final (connection, _) = await connect();
 
