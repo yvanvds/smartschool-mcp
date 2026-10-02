@@ -10,6 +10,9 @@ Je vraagt het gewoon in een gesprek:
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
+Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
+[installatiegids voor ChatGPT](installatie-chatgpt.md).
+
 Deze gids legt uit hoe je de extensie installeert, test, gebruikt, bijwerkt en
 weer verwijdert. Lees zeker ook [Veiligheid en privacy](#8-veiligheid-en-privacy)
 voor je begint.

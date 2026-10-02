@@ -1,15 +1,22 @@
-/// The colleague guide `docs/installatie.md` against the server: it must use
-/// the names colleagues see (the install form's field titles, the release
-/// asset, the question that runs `smartschool_status`) and say what the server
-/// keeps where, as the server does it; its links within the page must work;
-/// and the README, the release notes and the extension manifest must link to
-/// it.
+/// The colleague guides against the server.
+///
+/// `docs/installatie.md` (Claude Desktop) must use the names colleagues see
+/// (the install form's field titles, the release asset, the question that
+/// runs `smartschool_status`) and say what the server keeps where, as the
+/// server does it. `docs/installatie-chatgpt.md` must name the release exe,
+/// the folder the installer uses, the keys and the server name the
+/// installer shows, and where ChatGPT keeps the settings, as the server's
+/// messages say. The links within and between the guides must work, and
+/// the README, the release notes and the extension manifest must link to
+/// them.
 library;
 
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
+import 'package:smartschool_mcp/src/install.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
@@ -19,8 +26,10 @@ import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:test/test.dart';
 
 const _guidePath = 'docs/installatie.md';
+const _chatGptGuidePath = 'docs/installatie-chatgpt.md';
 const _repository = 'https://github.com/yvanvds/smartschool-mcp';
 const _guideUrl = '$_repository/blob/main/$_guidePath';
+const _chatGptGuideUrl = '$_repository/blob/main/$_chatGptGuidePath';
 const _latestRelease = '$_repository/releases/latest';
 
 String _read(String path) =>
@@ -91,21 +100,32 @@ void main() {
     expect(text, contains('${maxSavedFileBytes ~/ (1024 * 1024)} MB'));
   });
 
-  test('links only to headings on the page that exist', () {
-    final anchors = {
-      for (final match in RegExp(
-        r'^#{1,6} (.+)$',
-        multiLine: true,
-      ).allMatches(guide))
-        _gitHubAnchor(match.group(1)!),
+  test('links only to headings on the page, or in the other guide, that '
+      'exist', () {
+    final guides = {
+      'installatie.md': guide,
+      'installatie-chatgpt.md': _read(_chatGptGuidePath),
     };
-    final links = [
-      for (final match in RegExp(r'\]\(#([^)]+)\)').allMatches(guide))
-        match.group(1)!,
-    ];
-    expect(links, isNotEmpty);
-    for (final link in links) {
-      expect(anchors, contains(link), reason: '#$link');
+    final anchors = {
+      for (final MapEntry(:key, :value) in guides.entries)
+        key: {
+          for (final match in RegExp(
+            r'^#{1,6} (.+)$',
+            multiLine: true,
+          ).allMatches(value))
+            _gitHubAnchor(match.group(1)!),
+        },
+    };
+    final link = RegExp(r'\]\(((?:installatie(?:-chatgpt)?\.md)?)#([^)]+)\)');
+    for (final MapEntry(key: name, value: text) in guides.entries) {
+      final links = [
+        for (final match in link.allMatches(text))
+          (match.group(1)!.isEmpty ? name : match.group(1)!, match.group(2)!),
+      ];
+      expect(links, isNotEmpty, reason: name);
+      for (final (page, anchor) in links) {
+        expect(anchors[page], contains(anchor), reason: '$name: $page#$anchor');
+      }
     }
   });
 
@@ -119,6 +139,92 @@ void main() {
     );
     final manifest = jsonDecode(_read('manifest.json')) as Map<String, Object?>;
     expect(manifest['documentation'], _guideUrl);
+  });
+
+  group('the ChatGPT guide', () {
+    final chatGpt = _read(_chatGptGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+
+    test('downloads the exe the update notice names, from the latest '
+        'release, and the release publishes it', () {
+      const asset = UpdateChecker.exeAssetName;
+      expect(chatGpt, contains('($_latestRelease/download/$asset)'));
+      expect(chatGpt, contains('`$asset`'));
+      expect(asset, installedName);
+      expect(
+        _read('.github/workflows/release.yml'),
+        contains('bundle/server/$asset'),
+      );
+    });
+
+    test('names the folder the installer copies the server to', () {
+      final folder = installDirectory({'LOCALAPPDATA': '%LOCALAPPDATA%'})!;
+      expect(chatGpt, contains('`$folder\\$installedName`'));
+    });
+
+    test('has the form the installer describes: the server name the '
+        'messages use, no arguments, and every key', () {
+      expect(
+        chatGpt,
+        contains('| **Naam** | `${ClientApp.codexServerName}` |'),
+      );
+      expect(chatGpt, contains('| **Argumenten** | Niets.'));
+      for (final setting in Setting.values) {
+        expect(
+          chatGpt,
+          contains('| `${setting.envVar}` |'),
+          reason: setting.name,
+        );
+        expect(
+          chatGpt,
+          contains('| **${setting.formTitle}** | `${setting.envVar}` |'),
+          reason: '${setting.name}: the table for the other guide',
+        );
+      }
+      final instructions = installInstructions(
+        const Installation(r'C:\x.exe', copied: true, replaced: false),
+        onClipboard: false,
+      );
+      for (final words in ["MCP's", 'Aangepaste MCP-server maken']) {
+        expect(chatGpt, contains(words));
+        expect(instructions, contains(words));
+      }
+    });
+
+    test('says where ChatGPT keeps the settings, as the messages do', () {
+      const config = r'%USERPROFILE%\.codex\config.toml';
+      expect(chatGpt, contains('`$config`'));
+      final where = ExtensionSettings(
+        client: ClientContext(ClientApp.codex),
+      ).where;
+      expect(where, contains(config));
+      const path = "Instellingen → Plug-ins → MCP's → smartschool";
+      expect(chatGpt, contains('**$path**'));
+      expect(where.replaceAll(' (Settings)', ''), contains(path));
+    });
+
+    test('quotes the message about a mistyped key as the server words '
+        'it', () {
+      final message = MisnamedSetting.describe(
+        MisnamedSetting.find(['SMARTSCHOOL_MAINURL']),
+      )!;
+      // Quoted without the full stop at the end.
+      expect(
+        chatGpt,
+        contains('`${message.substring(0, message.length - 1)}`'),
+      );
+    });
+
+    test('tests with the same question, and is linked from the other guide, '
+        'the README, the release notes and the installer', () {
+      expect(chatGpt, contains('> Werkt mijn Smartschool-verbinding?'));
+      expect(guide, contains('](installatie-chatgpt.md)'));
+      expect(_read('README.md'), contains('](docs/installatie-chatgpt.md)'));
+      expect(
+        _read('.github/release-notes.md'),
+        contains('($_chatGptGuideUrl)'),
+      );
+      expect(chatGptGuideUrl, _chatGptGuideUrl);
+    });
   });
 }
 

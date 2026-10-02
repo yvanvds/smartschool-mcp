@@ -2,7 +2,9 @@ name: Release
 
 # Pushing a tag vX.Y.Z builds the Claude Desktop extension and publishes it
 # as a full GitHub release (not a draft or pre-release: the update check asks
-# for /releases/latest) with the stable asset name smartschool-mcp.mcpb.
+# for /releases/latest) with the stable asset names smartschool-mcp.mcpb and
+# smartschool-mcp.exe (the server itself, which installs itself for ChatGPT
+# and Codex when double-clicked).
 on:
   push:
     tags:
@@ -39,10 +41,12 @@ jobs:
         run: npx --yes "$env:MCPB" pack bundle smartschool-mcp.mcpb
       - name: Publish the release
         # The notes start with .github/release-notes.md (how to install, with
-        # a link to the colleague guide); gh puts the generated notes after it.
+        # links to the colleague guides); gh puts the generated notes after
+        # it. The exe is the one in the extension, under its own name.
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release create "$env:TAG" smartschool-mcp.mcpb
+          bundle/server/smartschool-mcp.exe
           --title "$env:TAG" --notes-file .github/release-notes.md
           --generate-notes --verify-tag

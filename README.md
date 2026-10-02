@@ -1,8 +1,10 @@
 # smartschool-mcp
 
 A local [MCP](https://modelcontextprotocol.io) server that gives Claude
-Desktop access to Smartschool. It is built for teachers on Windows and
-distributed as a Claude Desktop extension (`.mcpb`).
+Desktop, and the ChatGPT app (Codex), access to Smartschool. It is built for
+teachers on Windows and distributed as a Claude Desktop extension (`.mcpb`)
+and as an executable that installs itself for ChatGPT (see *ChatGPT and
+Codex* below).
 
 It is written in Dart on top of
 [`flutter_smartschool`](https://github.com/yvanvds/dartschool) and
@@ -12,7 +14,8 @@ Windows executable, so users do not need Node, Python or Dart installed.
 **Colleagues:** the installation guide, in Dutch, is
 [docs/installatie.md](docs/installatie.md). It covers what you need, finding
 the 2FA key, installing, testing, example questions, updating,
-troubleshooting, security and privacy, and uninstalling.
+troubleshooting, security and privacy, and uninstalling. For the ChatGPT app
+it is [docs/installatie-chatgpt.md](docs/installatie-chatgpt.md).
 
 ## Development
 
@@ -132,6 +135,79 @@ server's stderr ends up in Claude Desktop's MCP log
 Then ask Claude "Werkt mijn Smartschool-verbinding?": the
 `smartschool_status` tool reports whether the settings are complete, whether
 the login works and who is logged in, or what to fix.
+
+### ChatGPT and Codex
+
+The ChatGPT desktop app for Windows, the Codex CLI and the Codex IDE
+extension start local MCP servers from `%USERPROFILE%\.codex\config.toml`
+(`CODEX_HOME` when set). The ChatGPT app edits it under *Instellingen →
+Plug-ins → MCP's → Toevoegen → Aangepaste MCP-server maken*: a name, the
+command, its arguments and environment variables, saved as
+`[mcp_servers.<name>]` and `[mcp_servers.<name>.env]`. The server runs there
+unchanged, with the same `SMARTSCHOOL_*` variables. For development, the
+command can be `bin\smartschool_mcp.exe` (or the one in `bundle\server`) with
+the arguments `--credentials` and the path to `credentials.yml`.
+
+**Installer.** For colleagues there is no `.mcpb`: Codex plugins cannot ask
+for settings. Started with a console on stdin (a double-click) and without
+`--credentials`, or with `--install`, the executable installs itself instead
+of serving MCP (`lib/src/install.dart`):
+
+- it copies itself to `%LOCALAPPDATA%\Programs\smartschool-mcp\smartschool-mcp.exe`
+  (per user, no administrator rights). A copy that is running (ChatGPT open)
+  is renamed out of the way first. The installer and the next server start
+  delete it once it no longer runs;
+- it puts that path on the clipboard (`--no-clipboard` for tests);
+- it shows, in Dutch, what to fill in in ChatGPT: the name `smartschool`, the
+  command, no arguments and the five variables. It waits for Enter so the
+  window stays open.
+
+It never touches `config.toml` and never asks for a setting: the teacher
+enters the settings in ChatGPT's form, which stores them in `config.toml` in
+plain text. An MCP client always starts the server with pipes, never a
+console, so serving is unchanged. The release attaches the executable as
+`smartschool-mcp.exe`. It is not signed, so SmartScreen warns on the
+double-click; the colleague guide says what to do.
+
+**Messages per app.** The client names itself in MCP's `initialize`
+(`clientInfo.name`): Codex sends `codex-mcp-client`, Claude Desktop
+`claude-ai`. The server records the app (`ClientApp` and `ClientContext` in
+`lib/src/client_app.dart`). Its messages then say where to fix a setting,
+what to restart and how to update in that app. Under Codex:
+
+- the ChatGPT form, or `[mcp_servers.smartschool.env]` in `config.toml`;
+- "restart ChatGPT (or Codex)";
+- download `smartschool-mcp.exe` and double-click it.
+
+Settings are named by their variable first (`SMARTSCHOOL_MFA
+("2FA-sleutel")`), as the form shows them. Any other client gets the Claude
+Desktop wording.
+
+**Mistyped keys.** Codex starts a server with a cleared environment: a fixed
+list of Windows variables (`WINDOWS_CORE_ENV_VARS` in openai/codex) plus the
+form's. So a variable that is close to a setting's name (`SMARTSCHOOL_MAINURL`,
+`SMARTSCHOOL_MFA ` with a space) or starts with `SMARTSCHOOL` comes from a
+mistyped key. `smartschool_status` and the missing-settings message name it
+and the setting it probably means (`MisnamedSetting` in
+`lib/src/settings.dart`), never its value. `SMARTSCHOOL_MCP_*` and
+`SMARTSCHOOL_LIVE_*` are not settings to begin with. Windows compares names
+without case, so `smartschool_mfa` is simply the setting.
+
+Known limits in Codex (2026):
+
+- **Images:** image results (`read_intradesk_file` on a PNG or JPEG) do not
+  reliably reach the model (openai/codex#4819, #46927).
+- **Long text:** Codex cuts long tool output to the model's budget, about 10k
+  tokens, well below `read_intradesk_file`'s 100,000 characters.
+- **Approval:** Codex asks approval for a tool marked destructive
+  (`reply_to_message`), unless it runs with *Full access*.
+- **`HOME`:** Codex does not pass `HOME` on. A user who has `HOME` set gets
+  another cache folder under Codex than under Claude Desktop, so the server
+  logs in once more there.
+
+`test/install_e2e_test.dart` installs the compiled server into a temporary
+`LOCALAPPDATA`, and starts the installed copy with Codex's environment and
+client name. It also installs again while that copy runs.
 
 ### Tools
 
@@ -419,9 +495,10 @@ keeps running asks again after 24 hours, on a tool call.
 
 When a newer release exists, the first successful tool result after the
 check gets one extra text after its content: the new version, the release
-page and "download `smartschool-mcp.mcpb` and double-click it", for Claude to
-pass on. That happens once per server process (Claude Desktop starts one per
-session), and not at all after `smartschool_status` showed it. Error results
+page and "download `smartschool-mcp.mcpb` and double-click it" (under Codex:
+download `smartschool-mcp.exe`, double-click it and restart ChatGPT), for the
+model to pass on. That happens once per server process (Claude Desktop starts
+one per session), and not at all after `smartschool_status` showed it. Error results
 never get it. `smartschool_status` always asks GitHub (while it checks the
 login, so it takes no longer) and shows the result on its `Updates:` line.
 The code is in `lib/src/update_check.dart`; the server adds the notice in
@@ -440,8 +517,8 @@ GitHub.
 
 A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
 full release (not a draft or pre-release), and carry the extension as
-`smartschool-mcp.mcpb`: the notice names that file and links to the release
-page. The release workflow takes care of all three (see below).
+`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe`: the notice
+names those files and links to the release page. The release workflow takes care of all three (see below).
 
 ### Extension and releases
 
@@ -458,9 +535,13 @@ tools of *Tools* above (add a tool to both, in the same order) and the icon.
 
 The colleague guide, `docs/installatie.md`, names the same form fields, the
 release asset, the question that runs `smartschool_status`, the cache and
-download files, and the size and time limits. `test/guide_test.dart` checks
-those against the server, and that the README, the release notes and the
-manifest's `documentation` link to the guide. Parts that wait for the manual
+download files, and the size and time limits. The guide for ChatGPT,
+`docs/installatie-chatgpt.md`, names the release exe, the install folder, the
+form with its keys, and `config.toml`. `test/guide_test.dart` checks those
+against the server and the installer; it also checks the links between the
+guides, and that the README, the release notes and the manifest's
+`documentation` link to them. Parts that wait for the manual check in ChatGPT
+are marked `TE BEVESTIGEN (#40)`. Parts that wait for the manual
 install checks (#30) are marked `TE BEVESTIGEN (#30)` in HTML comments, and
 missing screenshots `SCHERMAFBEELDING (#33)`.
 
@@ -497,10 +578,11 @@ To release:
 The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
 checks the tag against the version, runs the tests, builds the extension,
 validates and packs it with `mcpb`, and publishes a full GitHub release with
-the extension attached as `smartschool-mcp.mcpb` (always that name: the
-update notice links to it). Its notes start with `.github/release-notes.md`
-(how to install, in Dutch, with a link to the colleague guide), followed by
-the generated release notes. Both workflows pin the same `mcpb` version. The
+the extension attached as `smartschool-mcp.mcpb` and the server in it as
+`smartschool-mcp.exe` (always those names: the update notice names them).
+Its notes start with `.github/release-notes.md` (how to install, in Dutch,
+with links to both colleague guides), followed by the generated release
+notes. Both workflows pin the same `mcpb` version. The
 executable is not signed.
 
 ## License
