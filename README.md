@@ -191,7 +191,7 @@ what to restart and how to update in that app. Under Codex:
 
 - the ChatGPT form, or `[mcp_servers.smartschool.env]` in `config.toml`;
 - "restart ChatGPT (or Codex)";
-- download `smartschool-mcp.exe` and double-click it.
+- the download link of `smartschool-mcp.exe`, to double-click it.
 
 Settings are named by their variable first (`SMARTSCHOOL_MFA
 ("2FA-sleutel")`), as the form shows them. Any other client gets the Claude
@@ -227,7 +227,8 @@ client name. It also installs again while that copy runs.
 
 - `smartschool_status`: whether the connection works, or what to fix, the
   download folder and whether it is writable, and whether a newer version
-  is available (see *Update check* below).
+  is available, with its download link and what is new (see *Update check*
+  below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool lists a box 50 messages at a time; the tool asks for the next
@@ -489,51 +490,70 @@ included, sent nothing, so `run` may repeat it (see `_send` in
 ### Update check
 
 At startup, in the background (startup never waits for it), the server asks
-GitHub for the latest release of this repository
-(`https://api.github.com/repos/yvanvds/smartschool-mcp/releases/latest`,
-unauthenticated; GitHub leaves out drafts and pre-releases) and compares its
-tag (`vX.Y.Z`) with the built-in version (`lib/src/version.dart`). A tag that
-is not a version is ignored. GitHub answers 404 while no release has been
+GitHub for the releases of this repository
+(`https://api.github.com/repos/yvanvds/smartschool-mcp/releases`,
+unauthenticated; the first page, with the 30 newest). GitHub leaves out
+drafts; the server ignores pre-releases and tags that are not a version
+(`vX.Y.Z`). It compares the highest version with the built-in one
+(`lib/src/version.dart`). An empty list means that no release has been
 published: nothing to report. A check waits at most 5 seconds; offline, rate
 limited or an answer it does not understand is only logged.
 
-It asks at most once a day. The time and result of the last successful check
-are kept in
+It asks at most once a day. The time and the releases of the last successful
+check (tag, release page, download links and what is new) are kept in
 
 ```
 %USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json
 ```
 
 (`%HOME%` instead of `%USERPROFILE%` when `HOME` is set), so a restart within
-24 hours does not ask again. It needs no Smartschool settings. A server that
-keeps running asks again after 24 hours, on a tool call.
+24 hours does not ask again. A file of an older format is ignored. It needs no
+Smartschool settings. A server that keeps running asks again after 24 hours,
+on a tool call.
 
 When a newer release exists, the first successful tool result after the
-check gets one extra text after its content: the new version, the release
-page and "download `smartschool-mcp.mcpb` and double-click it" (under Codex:
-download `smartschool-mcp.exe`, double-click it and restart ChatGPT), for the
-model to pass on. That happens once per server process (Claude Desktop starts
-one per session), and not at all after `smartschool_status` showed it. Error results
-never get it. `smartschool_status` always asks GitHub (while it checks the
-login, so it takes no longer) and shows the result on its `Updates:` line.
-The code is in `lib/src/update_check.dart`; the server adds the notice in
+check gets one extra text after its content, for the model to pass on:
+
+- the new version and the running one;
+- "Give the user this download link": the direct link to the file for the
+  app the server runs in (the release asset's `browser_download_url`):
+  `smartschool-mcp.mcpb` in Claude Desktop, `smartschool-mcp.exe` under
+  Codex. A release without that file gets the link to its release page
+  instead;
+- what to do with it: double-click it (under Codex also: restart ChatGPT);
+- the release page, as a second link;
+- what is new: the `## Nieuw in deze versie` section of the notes of every
+  release newer than the running one, newest first, with the request to
+  summarise it for the user in a few plain words. The notes are treated as
+  data: only that section, as plain text (links keep their text; images,
+  HTML and control characters go), at most 1,500 characters in all. Releases
+  without the section (from before `CHANGELOG.md`) add nothing.
+
+That happens once per server process (Claude Desktop starts one per session),
+and not at all after `smartschool_status` showed it. Error results never get
+it. `smartschool_status` always asks GitHub (while it checks the login, so it
+takes no longer) and shows the same on its `Updates:` lines; its description
+asks the model to give the download link and say what is new. The code is in
+`lib/src/update_check.dart`; the server adds the notice in
 `lib/src/server.dart`.
 
 For tests and development:
 
 - `SMARTSCHOOL_MCP_UPDATE_CHECK=off` turns the check off;
 - `SMARTSCHOOL_MCP_UPDATE_URL=<address>` asks that address instead of the
-  GitHub API (it must answer the same way).
+  GitHub API (it must answer the same way, with a list of releases).
 
-The tests use a local fake GitHub (`test/support/fake_github.dart`).
+The tests use a local fake GitHub (`test/support/fake_github.dart`), whose
+releases have notes as the release workflow writes them.
 `ServerProcess.start` in `test/support/exe.dart` turns the check off unless a
 test asks for it with its own fake, so no test and no CI run asks the real
 GitHub.
 
 A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
-full release (not a draft or pre-release), and carry the extension as
-`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe`: the notice
-names those files and links to the release page. The release workflow takes care of all three (see below).
+full release (not a draft or pre-release), carry the extension as
+`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe` (the notice
+links to those files), and have the `## Nieuw in deze versie` section in its
+notes. The release workflow takes care of all of it (see below).
 
 ### Extension and releases
 
@@ -582,23 +602,33 @@ Desktop does.
 
 The version is in three files: `pubspec.yaml`, `lib/src/version.dart` and
 `manifest.json`. `dart run tool/check_version.dart` fails when they differ,
-and with `--tag vX.Y.Z` also when the tag does; CI runs it, and
-`test/version_test.dart` checks the same.
+with `--tag vX.Y.Z` also when the tag does, and when `CHANGELOG.md` has no
+section for the version; CI runs it, and `test/version_test.dart` checks the
+same.
+
+`CHANGELOG.md` says what is new in each version, in Dutch and for colleagues:
+a section under `## X.Y.Z` with a few lines on what they notice, without
+technical details, links or headings of level 1 or 2. Colleagues on an older
+version see it in the update notice.
 
 To release:
 
-1. Set the new version in the three files; commit and merge.
+1. Set the new version in the three files and write its section in
+   `CHANGELOG.md`; commit and merge.
 2. Tag that commit `vX.Y.Z` and push the tag.
 
 The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
 checks the tag against the version, runs the tests, builds the extension,
 validates and packs it with `mcpb`, and publishes a full GitHub release with
 the extension attached as `smartschool-mcp.mcpb` and the server in it as
-`smartschool-mcp.exe` (always those names: the update notice names them).
-Its notes start with `.github/release-notes.md` (how to install, in Dutch,
-with links to both colleague guides), followed by the generated release
-notes. Both workflows pin the same `mcpb` version. The
-executable is not signed.
+`smartschool-mcp.exe` (always those names: the update notice links to
+them). `tool/release_notes.dart` writes its notes: the version's section of
+`CHANGELOG.md` under `## Nieuw in deze versie` (what the update notice
+shows), then `.github/release-notes.md` under `## Installeren of bijwerken`
+(how to install, in Dutch, with links to both colleague guides). The
+generated release notes follow. `test/release_notes_test.dart` checks that the
+update check reads exactly that section back. Both workflows pin the same
+`mcpb` version. The executable is not signed.
 
 ## License
 

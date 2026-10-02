@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:pub_semver/pub_semver.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/install.dart';
@@ -24,14 +25,19 @@ import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
+import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
+
+import '../tool/release_notes.dart';
+import 'support/fake_github.dart';
 
 const _guidePath = 'docs/installatie.md';
 const _chatGptGuidePath = 'docs/installatie-chatgpt.md';
 const _repository = 'https://github.com/yvanvds/smartschool-mcp';
 const _guideUrl = '$_repository/blob/main/$_guidePath';
 const _chatGptGuideUrl = '$_repository/blob/main/$_chatGptGuidePath';
-const _latestRelease = '$_repository/releases/latest';
+const _releases = '$_repository/releases';
+const _latestRelease = '$_releases/latest';
 
 String _read(String path) =>
     File(path).readAsStringSync().replaceAll('\r\n', '\n');
@@ -63,6 +69,25 @@ void main() {
     expect(text, contains('($_latestRelease/download/$asset)'));
     expect(text, contains('($_latestRelease)'));
     expect(text, contains('`$asset`'));
+  });
+
+  test('says under Bijwerken that the answer gives the download link of the '
+      'extension and what is new, as the update notice does (#59)', () {
+    final section = _section(text, '## 6. Bijwerken naar een nieuwe versie');
+    expect(
+      section,
+      contains(
+        'een downloadlink naar `${UpdateChecker.assetName}` en in een paar '
+        'woorden wat er nieuw is.',
+      ),
+    );
+    expect(
+      section,
+      contains('wat er nieuw is in elke versie die je overslaat'),
+    );
+    expect(section, contains('1. Klik op de downloadlink uit het antwoord'));
+    expect(section, contains('`$_releases/`'));
+    _expectNoticeGives(ClientApp.claudeDesktop, UpdateChecker.assetName);
   });
 
   test('names the files and folders the server keeps', () {
@@ -175,10 +200,15 @@ void main() {
   test('is linked from the README, the release notes and the extension '
       'manifest', () {
     expect(_read('README.md'), contains('](docs/installatie.md)'));
-    expect(_read('.github/release-notes.md'), contains('($_guideUrl)'));
+    expect(installNotesFile, '.github/release-notes.md');
+    expect(_read(installNotesFile), contains('($_guideUrl)'));
+    expect(
+      releaseNotesFor(Directory.current, 'v$packageVersion'),
+      contains('($_guideUrl)'),
+    );
     expect(
       _read('.github/workflows/release.yml'),
-      contains('--notes-file .github/release-notes.md'),
+      contains('dart run tool/release_notes.dart'),
     );
     final manifest = jsonDecode(_read('manifest.json')) as Map<String, Object?>;
     expect(manifest['documentation'], _guideUrl);
@@ -197,6 +227,28 @@ void main() {
         _read('.github/workflows/release.yml'),
         contains('bundle/server/$asset'),
       );
+    });
+
+    test('says under Bijwerken that the answer gives the download link of '
+        'the exe and what is new, as the update notice does (#59)', () {
+      final section = _section(
+        chatGpt,
+        '## 6. Bijwerken naar een nieuwe versie',
+      );
+      expect(
+        section,
+        contains(
+          'een downloadlink naar `${UpdateChecker.exeAssetName}` en in een '
+          'paar woorden wat er nieuw is.',
+        ),
+      );
+      expect(
+        section,
+        contains('wat er nieuw is in elke versie die je overslaat'),
+      );
+      expect(section, contains('1. Klik op de downloadlink uit het antwoord'));
+      expect(section, contains('`$_releases/`'));
+      _expectNoticeGives(ClientApp.codex, UpdateChecker.exeAssetName);
     });
 
     test('names the folder the installer copies the server to', () {
@@ -278,6 +330,37 @@ void main() {
       expect(chatGptGuideUrl, _chatGptGuideUrl);
     });
   });
+}
+
+/// The part of [text] (a guide with every run of white space as one space)
+/// from [heading] up to the next heading of level 2.
+String _section(String text, String heading) {
+  final start = text.indexOf(heading);
+  expect(start, isNonNegative, reason: heading);
+  final end = text.indexOf(' ## ', start + heading.length);
+  return text.substring(start, end < 0 ? text.length : end);
+}
+
+/// Checks that the update notice in [app] gives what the guides say: the
+/// download link of [asset], on GitHub's release pages, and what is new.
+void _expectNoticeGives(ClientApp app, String asset) {
+  final link = downloadLink('v9.9.9', asset);
+  expect(link, startsWith('$_releases/'));
+  final release = Release(
+    Version(9, 9, 9),
+    tag: 'v9.9.9',
+    url: Uri.parse(releasePage('v9.9.9')),
+    assets: {asset: Uri.parse(link)},
+    notes: '- Iets nieuws.',
+  );
+  expect(
+    UpdateChecker.howToUpdate(release, app),
+    startsWith('Give the user this download link: $link\n'),
+  );
+  expect(
+    UpdateChecker.whatIsNew([release], Version(0, 1, 0)),
+    allOf(contains('Summarise it for the user'), endsWith('- Iets nieuws.')),
+  );
 }
 
 /// The anchor GitHub gives a heading: lower case, without punctuation, with

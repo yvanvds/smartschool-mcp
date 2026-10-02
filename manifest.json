@@ -35,7 +35,7 @@
   "tools": [
     {
       "name": "smartschool_status",
-      "description": "Controleert of de verbinding met Smartschool werkt (of wat je moet aanpassen), toont de downloadmap en of er een nieuwere versie is."
+      "description": "Controleert of de verbinding met Smartschool werkt (of wat je moet aanpassen), toont de downloadmap en of er een nieuwere versie is, met de downloadlink en wat er nieuw is."
     },
     {
       "name": "list_messages",

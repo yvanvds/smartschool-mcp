@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
 
-import '../tool/check_version.dart' show versionFiles, versionProblems;
+import '../tool/check_version.dart'
+    show changelogFile, changelogSection, versionFiles, versionProblems;
 
 void main() {
   test('packageVersion matches the version in pubspec.yaml', () {
@@ -18,8 +19,35 @@ void main() {
   });
 
   test('pubspec.yaml, version.dart and manifest.json carry the same '
-      'version', () {
+      'version, and CHANGELOG.md says what is new in it', () {
     expect(versionProblems(Directory.current), isEmpty);
+    expect(
+      changelogSection(File(changelogFile).readAsStringSync(), packageVersion),
+      isNotNull,
+    );
+  });
+
+  group('changelogSection', () {
+    const changelog =
+        '# Wat is er nieuw?\r\n\r\n<!-- uitleg -->\r\n\r\n'
+        '## 0.3.0\r\n\r\n- Nieuw.\r\n### Klein\r\n- Ook nieuw.\r\n\r\n'
+        '## 0.2.0\r\n\r\n- Ouder.\r\n\r\n'
+        '## 0.1.0\r\n\r\n';
+
+    test('is the lines under "## <version>" up to the next heading of '
+        'level 1 or 2', () {
+      expect(
+        changelogSection(changelog, '0.3.0'),
+        '- Nieuw.\n### Klein\n- Ook nieuw.',
+      );
+      expect(changelogSection(changelog, '0.2.0'), '- Ouder.');
+    });
+
+    test('is null without the heading, or without lines under it', () {
+      expect(changelogSection(changelog, '0.1.0'), isNull);
+      expect(changelogSection(changelog, '0.4.0'), isNull);
+      expect(changelogSection(changelog, '0.3'), isNull);
+    });
   });
 
   group('tool/check_version.dart', () {
@@ -50,10 +78,32 @@ void main() {
     setUp(() async {
       project = await Directory.systemTemp.createTemp('smartschool_mcp_ver_');
       addTearDown(() => project.delete(recursive: true));
-      for (final file in versionFiles) {
+      for (final file in [...versionFiles, changelogFile]) {
         copied(file).parent.createSync(recursive: true);
         File(file).copySync(copied(file).path);
       }
+    });
+
+    test('CHANGELOG.md without a section for the version, with an empty one, '
+        'or missing: says so', () {
+      final changelog = copied(changelogFile);
+      final heading = '## $packageVersion';
+      final text = changelog.readAsStringSync();
+      expect(text, contains(heading));
+
+      changelog.writeAsStringSync(text.replaceAll(heading, '## 0.0.1'));
+      expect(versionProblems(project), [
+        'CHANGELOG.md: no section "## $packageVersion" with what is new in '
+            'this version, in Dutch, for colleagues',
+      ]);
+
+      changelog.writeAsStringSync('# Wat is er nieuw?\n\n$heading\n\n');
+      expect(versionProblems(project), hasLength(1));
+
+      changelog.deleteSync();
+      expect(versionProblems(project), [
+        startsWith('CHANGELOG.md: cannot be read ('),
+      ]);
     });
 
     test('accepts the release tag of the version, also as a tag ref', () {
@@ -128,6 +178,14 @@ void main() {
       final right = await run('v$packageVersion');
       expect(right.exitCode, 0, reason: '${right.stderr}');
       expect(right.stdout, contains('Version check passed'));
+
+      copied(changelogFile).writeAsStringSync('# Wat is er nieuw?\n');
+      final noChangelog = await run('v$packageVersion');
+      expect(noChangelog.exitCode, 1);
+      expect(
+        noChangelog.stderr,
+        contains('CHANGELOG.md: no section "## $packageVersion"'),
+      );
     });
   });
 }

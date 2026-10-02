@@ -37,8 +37,9 @@ ServerTool statusTool(
         'Smartschool-verbinding?") or whether there is an update, or when '
         'another Smartschool tool reports a login problem. When the '
         'connection does not work, the result says what to fix; pass that on '
-        'to the user. When a newer version is available, tell the user how '
-        'to update.',
+        'to the user. When a newer version is available, give the user the '
+        'download link from the result, tell them how to update, and say in '
+        'a few plain words what is new.',
     inputSchema: Schema.object(),
     annotations: ToolAnnotations(
       title: 'Smartschool connection status',
@@ -102,7 +103,9 @@ Future<CallToolResult> _status(
     'Server version: $packageVersion',
   ];
   final update = await updateCheck;
-  report.add(_describeUpdate(update, client?.app ?? ClientApp.claudeDesktop));
+  report.add(
+    _describeUpdate(update, updates, client?.app ?? ClientApp.claudeDesktop),
+  );
   if (update case UpdateAvailable(:final release)) {
     // Shown here, so no tool result repeats it as a notice.
     updates?.announced(release);
@@ -110,20 +113,26 @@ Future<CallToolResult> _status(
   return CallToolResult(content: [TextContent(text: report.join('\n'))]);
 }
 
-/// The `Updates:` line: what the update check found, or that it is off; how
-/// to update in [app].
-String _describeUpdate(UpdateCheckResult? result, ClientApp app) =>
-    switch (result) {
-      null => 'Updates: not checked (the update check is turned off)',
-      UpdateAvailable(:final release) =>
-        'Updates: version ${release.version} is available. To update, '
-            '${UpdateChecker.howToUpdate(release, app)}.',
-      UpToDate(latest: null) =>
-        'Updates: up to date (no release published yet)',
-      UpToDate(:final latest?) =>
-        'Updates: up to date (latest release: ${latest.version})',
-      UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
-    };
+/// The `Updates:` line: what the update check found, or that it is off.
+/// For a newer release also the lines that give the download link and say
+/// how to update in [app] and what is new since this version ([updates]'s
+/// [UpdateChecker.current]).
+String _describeUpdate(
+  UpdateCheckResult? result,
+  UpdateChecker? updates,
+  ClientApp app,
+) => switch (result) {
+  null => 'Updates: not checked (the update check is turned off)',
+  UpdateAvailable(:final release, :final newer) => [
+    'Updates: version ${release.version} is available.',
+    UpdateChecker.howToUpdate(release, app),
+    if (updates != null) ?UpdateChecker.whatIsNew(newer, updates.current),
+  ].join('\n'),
+  UpToDate(latest: null) => 'Updates: up to date (no release published yet)',
+  UpToDate(:final latest?) =>
+    'Updates: up to date (latest release: ${latest.version})',
+  UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
+};
 
 /// The `Download folder:` line: the folder, where its path comes from, and
 /// whether files can be saved in it, or how to choose another.

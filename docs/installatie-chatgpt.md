@@ -227,17 +227,22 @@ verschillen:
 
 Eén keer per dag kijkt Smartschool voor ChatGPT op GitHub of er een nieuwe
 versie is. Is die er, dan meldt ChatGPT dat in een antwoord, met het nieuwe
-versienummer en een link naar de releasepagina. Ook "Werkt mijn
-Smartschool-verbinding?" toont altijd of er een nieuwere versie is.
+versienummer, een downloadlink naar `smartschool-mcp.exe` en in een paar
+woorden wat er nieuw is. Sla je versies over, dan hoor je wat er nieuw is in
+elke versie die je overslaat. Ook "Werkt mijn Smartschool-verbinding?" toont
+altijd of er een nieuwere versie is, met de downloadlink en wat er nieuw is.
 
 Zo werk je bij:
 
-1. Open de link uit het antwoord, of de
-   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
-2. Download `smartschool-mcp.exe` (onder **Assets**).
-3. Dubbelklik erop, zoals bij [Installeren](#3-installeren). Het zet de nieuwe
+1. Klik op de downloadlink uit het antwoord: die downloadt
+   `smartschool-mcp.exe` van de releasepagina (de link begint met
+   `https://github.com/yvanvds/smartschool-mcp/releases/`). Geen
+   downloadlink? Open dan de
+   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest)
+   en download `smartschool-mcp.exe` (onder **Assets**).
+2. Dubbelklik erop, zoals bij [Installeren](#3-installeren). Het zet de nieuwe
    versie over de oude, ook als ChatGPT open staat.
-4. Herstart ChatGPT en vraag "Werkt mijn Smartschool-verbinding?". Controleer
+3. Herstart ChatGPT en vraag "Werkt mijn Smartschool-verbinding?". Controleer
    dat de verbinding werkt en dat de nieuwe versie draait.
 
 Je instellingen in ChatGPT blijven bewaard, en ook wat Smartschool voor

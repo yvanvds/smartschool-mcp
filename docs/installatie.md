@@ -249,22 +249,27 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
 ## 6. Bijwerken naar een nieuwe versie
 
 Eén keer per dag kijkt de extensie op GitHub of er een nieuwe versie is. Is
-die er, dan meldt Claude dat in een antwoord, met het nieuwe versienummer en
-een link naar de releasepagina. Dat gebeurt één keer, niet bij elk antwoord.
-Ook "Werkt mijn Smartschool-verbinding?" toont altijd of er een nieuwere
-versie is.
+die er, dan meldt Claude dat in een antwoord, met het nieuwe versienummer, een
+downloadlink naar `smartschool-mcp.mcpb` en in een paar woorden wat er nieuw
+is. Sla je versies over, dan hoor je wat er nieuw is in elke versie die je
+overslaat. Dat gebeurt één keer, niet bij elk antwoord. Ook "Werkt mijn
+Smartschool-verbinding?" toont altijd of er een nieuwere versie is, met de
+downloadlink en wat er nieuw is.
 
 <!-- SCHERMAFBEELDING (#33): een antwoord van Claude met de melding dat er
 een nieuwe versie is. -->
 
 Zo werk je bij:
 
-1. Open de link uit het antwoord van Claude, of de
-   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
-2. Download `smartschool-mcp.mcpb` (onder **Assets**).
-3. Dubbelklik op het bestand. Claude Desktop installeert de nieuwe versie over
+1. Klik op de downloadlink uit het antwoord van Claude: die downloadt
+   `smartschool-mcp.mcpb` van de releasepagina (de link begint met
+   `https://github.com/yvanvds/smartschool-mcp/releases/`). Geen
+   downloadlink? Open dan de
+   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest)
+   en download `smartschool-mcp.mcpb` (onder **Assets**).
+2. Dubbelklik op het bestand. Claude Desktop installeert de nieuwe versie over
    de oude; volg wat het op het scherm vraagt.
-4. Herstart Claude Desktop en vraag "Werkt mijn Smartschool-verbinding?".
+3. Herstart Claude Desktop en vraag "Werkt mijn Smartschool-verbinding?".
    Controleer dat de verbinding werkt en dat de nieuwe versie draait.
 
 **Je instellingen.** Vraagt Claude Desktop bij het bijwerken opnieuw om het
@@ -383,7 +388,7 @@ na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
 | Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
 | De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
 | De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |
-| Wanneer de extensie het laatst naar een nieuwe versie keek | `%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json` |
+| Wanneer de extensie het laatst naar een nieuwe versie keek, en wat ze vond | `%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json` |
 | De bijlagen en Intradesk-bestanden die Claude bewaarde | Je downloadmap, 7 dagen lang |
 
 `%USERPROFILE%` is je gebruikersmap, bijvoorbeeld `C:\Users\jan.peeters`.
