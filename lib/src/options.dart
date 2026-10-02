@@ -94,7 +94,7 @@ authentication (teachers); students without 2FA leave it empty.
 
   --credentials <path>  Read the settings from this credentials.yml instead
                         (keys: main_url, username, password, and optionally
-                        mfa and download_dir). For development.
+                        mfa, download_dir and skore). For development.
 
   --install             Install for ChatGPT and Codex instead of serving:
                         copy this executable to
@@ -108,6 +108,10 @@ save_intradesk_file and save_message_attachment save files into the folder in
 SMARTSCHOOL_DOWNLOAD_DIR (then download_dir in the credentials file), by
 default %USERPROFILE%\\Downloads\\Smartschool. The server deletes the files it
 saved there after 7 days and never touches other files.
+
+SMARTSCHOOL_SKORE=true (then skore: true in the credentials file) offers the
+Skore tools, for an account with the rights for score management in Skore.
+Off by default.
 
 Once a day the server asks GitHub whether a newer release exists.
 SMARTSCHOOL_MCP_UPDATE_CHECK=off turns that off; SMARTSCHOOL_MCP_UPDATE_URL

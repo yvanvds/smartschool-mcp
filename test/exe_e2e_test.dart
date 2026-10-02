@@ -7,12 +7,45 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
+import 'package:smartschool_mcp/src/session.dart';
+import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
 
 import 'support/exe.dart';
 import 'support/fake_github.dart';
+
+/// Words that make the user a teacher, which no tool text may use: students
+/// sign in too (#41, #62). The texts #62 changed said "what the teacher is
+/// looking for" and "the teacher can open it"; others say "the signed-in
+/// teacher" or "the teacher's own planner".
+///
+/// Teachers as what a tool is about are fine: the Skore tools list the
+/// teachers of a course and the teachers that can be assigned, by their
+/// teacher id (#42). Write "a teacher", "its teachers", "the teacher to
+/// assign"; never "the teacher" as the one who uses the tool.
+final _userAsTeacher = RegExp(
+  r"\bthe (?:signed-in |logged-in |current )?teacher(?:'s)? "
+  r'(?:is|was|can|could|has|had|wants|asks|asked|sees|looks|uses|types|'
+  r'opens|downloads|reads|gets|own)\b'
+  r'|\b(?:signed-in|logged-in) teacher\b'
+  r"|\bteacher's own\b"
+  r'|\b(?:you|user|account) (?:is|are) a teacher\b'
+  r'|\bas a teacher\b',
+  caseSensitive: false,
+);
+
+/// The names of the tools whose subject is teachers: those of the opt-in
+/// group "Skore-beheer".
+final _teachersAsSubject = {
+  for (final tool in skoreOptIn(
+    SmartschoolSession(const ExtensionSettings()),
+    SwitchState.on,
+  ).tools)
+    tool.definition.name,
+};
 
 void main() {
   late String exePath;
@@ -430,24 +463,72 @@ void main() {
     expect(await server.stderr, contains('serving MCP on stdio'));
   });
 
-  test('no tool assumes a teacher: students sign in too, so titles and '
-      'descriptions speak of the user (#62)', () async {
+  test('the check below for words that make the user a teacher catches the '
+      'texts #62 changed, and lets the Skore tools speak of teachers as '
+      'their subject', () {
+    for (final text in [
+      'so Claude can check what the teacher is looking for',
+      'The teacher can open it in Smartschool.',
+      'Try again later; the teacher can download it in Smartschool.',
+      'Tools for working with Smartschool on behalf of the signed-in teacher.',
+      "Lists the teacher's own planner.",
+      'For the user, a teacher: lists classes. You are a teacher.',
+    ]) {
+      expect(text, matches(_userAsTeacher), reason: text);
+    }
+    for (final text in [
+      'with the teachers assigned to each',
+      'or which teachers are assigned: each with name, teacher id and '
+          'assignment id',
+      'Lists the teachers that Skore lets assign to a course',
+      'the id of the teacher to assign',
+      "the teacher's name as Skore shows it",
+      'what the user is looking for',
+    ]) {
+      expect(text, isNot(matches(_userAsTeacher)), reason: text);
+    }
+    expect(_teachersAsSubject, {
+      'list_skore_classes',
+      'list_skore_courses',
+      'list_skore_teachers',
+    });
+  });
+
+  test('no tool assumes the user is a teacher: students sign in too, so '
+      'titles and descriptions speak of the user (#62). Only the Skore '
+      'tools, with "Skore-beheer" on, speak of teachers, as their subject '
+      '(#42)', () async {
     final server = await ServerProcess.start(
       exePath,
-      environment: environmentWithoutSmartschool(),
+      environment: {
+        ...environmentWithoutSmartschool(),
+        Setting.skore.envVar: 'true',
+      },
     );
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(27));
+    expect(tools, hasLength(30));
+    expect([
+      for (final tool in tools.cast<Map<String, Object?>>())
+        if (_teachersAsSubject.contains(tool['name'])) tool['name'],
+    ], _teachersAsSubject.toList());
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
+      final definition = jsonEncode(tool);
       expect(
-        jsonEncode(tool).toLowerCase(),
-        isNot(contains('teacher')),
+        definition,
+        isNot(matches(_userAsTeacher)),
         reason: '${tool['name']}',
       );
+      if (!_teachersAsSubject.contains(tool['name'])) {
+        expect(
+          definition.toLowerCase(),
+          isNot(contains('teacher')),
+          reason: '${tool['name']}',
+        );
+      }
     }
     final readFile = tools.cast<Map<String, Object?>>().singleWhere(
       (tool) => tool['name'] == 'read_intradesk_file',
@@ -455,6 +536,128 @@ void main() {
     expect(readFile['description'], contains('what the user is looking for'));
 
     await server.stop();
+  });
+
+  group('the opt-in switch "Skore-beheer" (#42)', () {
+    const skoreTools = [
+      'list_skore_classes',
+      'list_skore_courses',
+      'list_skore_teachers',
+    ];
+
+    Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
+        ((await server.request('tools/list'))['tools'] as List)
+            .cast<Map<String, Object?>>();
+
+    test('off, as Claude Desktop passes an untouched switch ("false"), or '
+        'not set: no Skore tool is offered, and smartschool_status says it '
+        'is off and how to turn it on', () async {
+      for (final environment in [
+        {...environmentWithoutSmartschool(), 'SMARTSCHOOL_SKORE': 'false'},
+        environmentWithoutSmartschool(),
+      ]) {
+        final server = await ServerProcess.start(
+          exePath,
+          environment: environment,
+        );
+        await server.initialize();
+
+        final tools = await listTools(server);
+        expect(tools, hasLength(27));
+        expect([
+          for (final tool in tools) tool['name'],
+        ], everyElement(isNot(isIn(skoreTools))));
+        final (_, status) = await server.callTool('smartschool_status');
+        expect(
+          status,
+          contains(
+            '\nSkore-beheer: off: its tools are not offered. For an account '
+            'with the rights for score management in Skore (Rapporten > '
+            'Modellen and Puntenboeken), as a Skore administrator has: turn '
+            'on "Skore-beheer" (SMARTSCHOOL_SKORE) in the Smartschool '
+            'extension settings in Claude Desktop (Settings → Extensions), '
+            'then restart Claude Desktop.\n',
+          ),
+        );
+        final (isError, text) = await server.callTool('list_skore_classes');
+        expect(isError, isTrue);
+        expect(text, contains('list_skore_classes'));
+
+        await server.stop();
+        expect(await server.stderr, contains('Skore-beheer: off'));
+      }
+    });
+
+    test('on: the Skore tools come last, read-only, with their arguments; '
+        'smartschool_status says it is on; without settings they name the '
+        'missing settings, before any login', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          'SMARTSCHOOL_SKORE': 'true',
+        },
+      );
+      await server.initialize();
+
+      final tools = await listTools(server);
+      expect(tools, hasLength(30));
+      expect([for (final tool in tools.skip(27)) tool['name']], skoreTools);
+      final byName = {for (final tool in tools) tool['name']: tool};
+      for (final name in skoreTools) {
+        expect(byName[name]!['annotations'], {
+          'title': isA<String>(),
+          'readOnlyHint': true,
+          'idempotentHint': true,
+          'openWorldHint': true,
+        }, reason: name);
+      }
+      for (final name in ['list_skore_classes', 'list_skore_teachers']) {
+        final schema = byName[name]!['inputSchema'] as Map;
+        expect(schema, isNot(contains('required')), reason: name);
+        expect((schema['properties'] as Map).keys, ['query'], reason: name);
+      }
+      final coursesSchema = byName['list_skore_courses']!['inputSchema'] as Map;
+      expect(coursesSchema['required'], ['class_id']);
+      expect((coursesSchema['properties'] as Map)['class_id'], {
+        'type': 'integer',
+        'description': isA<String>(),
+        'minimum': 1,
+      });
+
+      final (statusError, status) = await server.callTool('smartschool_status');
+      expect(statusError, isNot(true));
+      expect(
+        status,
+        contains(
+          '\nSkore-beheer: on; access not checked, as the connection does '
+          'not work.\n',
+        ),
+      );
+      for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+        ('list_skore_classes', {'query': '5WW'}),
+        ('list_skore_courses', {'class_id': 2516}),
+        ('list_skore_teachers', {}),
+      ]) {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+        );
+        expect(isError, isTrue, reason: tool);
+        expect(
+          text,
+          startsWith('Not all Smartschool settings are filled in. Missing: '),
+          reason: tool,
+        );
+        expect(text, isNot(contains('#0')), reason: 'no stack trace');
+      }
+
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('Skore-beheer: on, 3 tools offered'),
+      );
+    });
   });
 
   test('smartschool_status without --credentials and without SMARTSCHOOL_* '

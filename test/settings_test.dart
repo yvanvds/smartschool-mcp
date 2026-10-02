@@ -278,6 +278,7 @@ void main() {
           'SMARTSCHOOL_2FA',
           'SMARTSCHOOL-USERNAME',
           'SMARTSCHOOL_DOWNLOADDIR',
+          'SMARTSCHOOL_SCORE',
         ]),
         [
           ('SMARTSCHOOL-USERNAME', Setting.username),
@@ -285,6 +286,7 @@ void main() {
           ('SMARTSCHOOL_DOWNLOADDIR', Setting.downloadDir),
           ('SMARTSCHOOL_MAINURL', Setting.mainUrl),
           ('SMARTSCHOOL_MFA ', Setting.mfa),
+          ('SMARTSCHOOL_SCORE', Setting.skore),
           ('SMARTSHOOL_PASSWORD', Setting.password),
         ],
       );
@@ -318,7 +320,8 @@ void main() {
         ),
         '"SMARTSCHOOL_WACHTWOORD" is set, but that is not the name of a '
         'setting: the names are SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, '
-        'SMARTSCHOOL_PASSWORD, SMARTSCHOOL_MFA and SMARTSCHOOL_DOWNLOAD_DIR.',
+        'SMARTSCHOOL_PASSWORD, SMARTSCHOOL_MFA, SMARTSCHOOL_DOWNLOAD_DIR and '
+        'SMARTSCHOOL_SKORE.',
       );
     });
 
@@ -332,6 +335,164 @@ void main() {
         ['SMARTSCHOOL_MAINURL'],
       );
       expect(CredentialsFile('credentials.yml').misnamed, isEmpty);
+    });
+  });
+
+  group('opt-in switches (#42)', () {
+    test('"Skore-beheer" is an optional switch, not for logging in', () {
+      expect(Setting.switches, [Setting.skore]);
+      expect(Setting.skore.formTitle, 'Skore-beheer');
+      expect(Setting.skore.envVar, 'SMARTSCHOOL_SKORE');
+      expect(Setting.skore.fileKey, 'skore');
+      expect(Setting.skore.required, isFalse);
+      expect(Setting.skore.isSwitch, isTrue);
+      expect(Setting.login, isNot(contains(Setting.skore)));
+      expect([
+        for (final setting in Setting.values)
+          if (setting.isSwitch) setting,
+      ], Setting.switches);
+    });
+
+    test('a value turns a switch on, off, or is unclear (and off)', () {
+      for (final value in [
+        'true',
+        ' TRUE ',
+        'True',
+        '1',
+        'yes',
+        'on',
+        'ja',
+        'Aan',
+        true,
+        1,
+      ]) {
+        expect(SwitchState.parse(value), SwitchState.on, reason: '"$value"');
+      }
+      for (final value in [
+        null,
+        '',
+        '  ',
+        'false',
+        'FALSE',
+        '0',
+        'no',
+        'off',
+        'nee',
+        'uit',
+        false,
+        0,
+      ]) {
+        expect(SwitchState.parse(value), SwitchState.off, reason: '"$value"');
+      }
+      for (final value in ['maybe', r'${user_config.skore}', '2', 'tru']) {
+        expect(
+          SwitchState.parse(value),
+          SwitchState.unclear,
+          reason: '"$value"',
+        );
+        expect(SwitchState.parse(value).isOn, isFalse, reason: '"$value"');
+      }
+    });
+
+    test('extension settings: read from the variable; off when it is not '
+        'set or empty, as Claude Desktop passes an untouched switch as '
+        '"false"', () {
+      Switches read(Map<String, String> environment) =>
+          Switches.read(const ExtensionSettings(), environment: environment);
+
+      expect(
+        read({'SMARTSCHOOL_SKORE': 'true'})[Setting.skore],
+        SwitchState.on,
+      );
+      expect(read({'SMARTSCHOOL_SKORE': 'true'}).isOn(Setting.skore), isTrue);
+      expect(
+        read({'SMARTSCHOOL_SKORE': 'false'})[Setting.skore],
+        SwitchState.off,
+      );
+      expect(read({'SMARTSCHOOL_SKORE': ''})[Setting.skore], SwitchState.off);
+      expect(read({})[Setting.skore], SwitchState.off);
+      expect(
+        read({'SMARTSCHOOL_SKORE': 'misschien'})[Setting.skore],
+        SwitchState.unclear,
+      );
+      expect(const Switches()[Setting.skore], SwitchState.off);
+    });
+
+    group('a credentials file', () {
+      late Directory dir;
+      setUp(() async {
+        dir = await Directory.systemTemp.createTemp('smartschool_switches_');
+        addTearDown(() => dir.delete(recursive: true));
+      });
+
+      CredentialsFile file(String lines) => CredentialsFile(
+        (File('${dir.path}/dev.yml')..writeAsStringSync(
+              'username: jan.peeters\n'
+              'password: $fakePassword\n'
+              'main_url: $fakeHost\n'
+              '$lines',
+            ))
+            .path,
+      );
+
+      test('its key turns a switch on, as a YAML boolean or text', () {
+        for (final value in ['true', 'yes', 'ja', '"true"']) {
+          expect(
+            Switches.read(
+              file('skore: $value\n'),
+              environment: const {},
+            )[Setting.skore],
+            SwitchState.on,
+            reason: value,
+          );
+        }
+        expect(
+          Switches.read(
+            file('skore: false\n'),
+            environment: const {},
+          )[Setting.skore],
+          SwitchState.off,
+        );
+      });
+
+      test('without the key, or unreadable: off', () {
+        expect(
+          Switches.read(file(''), environment: const {})[Setting.skore],
+          SwitchState.off,
+        );
+        expect(
+          Switches.read(
+            CredentialsFile('${dir.path}/missing.yml'),
+            environment: const {},
+          )[Setting.skore],
+          SwitchState.off,
+        );
+        expect(
+          Switches.read(
+            file('skore: [true\n'),
+            environment: const {},
+          )[Setting.skore],
+          SwitchState.off,
+        );
+      });
+
+      test('the variable, when set and not empty, comes first', () {
+        final source = file('skore: true\n');
+        expect(
+          Switches.read(
+            source,
+            environment: {'SMARTSCHOOL_SKORE': 'false'},
+          )[Setting.skore],
+          SwitchState.off,
+        );
+        expect(
+          Switches.read(
+            source,
+            environment: {'SMARTSCHOOL_SKORE': ' '},
+          )[Setting.skore],
+          SwitchState.on,
+        );
+      });
     });
   });
 }

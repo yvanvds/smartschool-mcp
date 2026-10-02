@@ -19,6 +19,10 @@ Je vraagt het gewoon in een gesprek:
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
+- **Skore**, alleen voor wie er de rechten voor puntenbeheer heeft, zoals een
+  Skore-beheerder: de klassen bekijken, de vakken van een klas met de
+  leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Dat zet je aan
+  met **Skore-beheer**.
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
 [installatiegids voor ChatGPT](installatie-chatgpt.md).
@@ -132,6 +136,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Wachtwoord** | Je wachtwoord voor Smartschool. |
    | **2FA-sleutel** (alleen met tweestapsverificatie) | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat dit veld dan leeg. |
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
+   | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore](#skore). De meeste leerkrachten en alle leerlingen laten het uit. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
 
@@ -292,6 +297,21 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   Claude verplaatst je toets of taak naar de prullenbak van de planner, na
   jouw akkoord. Daar kun je ze in Smartschool nog 30 dagen terugzetten.
 
+### Skore
+
+Alleen met **Skore-beheer** aan, en alleen voor wie in Skore de rechten heeft
+voor puntenbeheer: Rapporten > Modellen en Puntenboeken, zoals een
+Skore-beheerder. De meeste leerkrachten en alle leerlingen hebben die rechten
+niet. Zet je **Skore-beheer** aan zonder die rechten, dan zegt Claude dat je
+account ze niet heeft; vraag ze dan aan de Smartschool-beheerder van je
+school, of zet **Skore-beheer** weer uit.
+
+- "Wie geeft wiskunde in 3B1?"
+- "Welke vakken van 5WW1 hebben nog geen leerkracht?"
+- "Aan welke vakken is mevrouw Dupré gekoppeld in 5WW1?"
+
+Claude kijkt in Skore alleen: het verandert er niets.
+
 ### Bestanden bewaren
 
 Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
@@ -326,8 +346,10 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   wachtwoord, OpenDocument-bestanden (`.odt`, `.ods`, ...) en bestanden groter
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
-- De extensie werkt alleen met berichten, Intradesk en de planner. Andere
-  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner
+- De extensie werkt alleen met berichten, Intradesk, de planner en, met
+  **Skore-beheer** aan, Skore. Andere onderdelen van Smartschool kent ze
+  niet. In Skore leest ze alleen de klassen, vakken en leerkrachten. In de
+  planner
   verandert ze alleen je eigen planner: ze vult je lesuren in, plant toetsen
   en taken in je lesuren, past je eigen lessen, toetsen en taken aan, maakt
   lesuren weer leeg en verplaatst je toetsen en taken naar de prullenbak.
@@ -476,7 +498,7 @@ na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
 
 | Wat | Waar |
 | --- | --- |
-| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel en downloadmap | In Claude Desktop, op deze pc |
+| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel, downloadmap en Skore-beheer | In Claude Desktop, op deze pc |
 | Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
 | De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
 | De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |

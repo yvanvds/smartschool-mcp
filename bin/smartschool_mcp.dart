@@ -12,6 +12,7 @@ import 'package:smartschool_mcp/src/options.dart';
 import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
@@ -82,6 +83,10 @@ Future<void> _serve(ServerOptions options) async {
       final intradeskIndex = IntradeskIndexCache.of(session);
       final downloads = DownloadFolder.resolve(source);
       final updates = UpdateChecker.fromEnvironment();
+      // The tools only some accounts can use, each group behind a switch
+      // that is read once, now: the server offers them only when it is on.
+      final switches = Switches.read(source);
+      final optIns = [skoreOptIn(session, switches[Setting.skore])];
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
         client: client,
@@ -91,6 +96,7 @@ Future<void> _serve(ServerOptions options) async {
             updates: updates,
             downloads: () => downloads,
             client: client,
+            optIns: optIns,
           ),
           listMessagesTool(session),
           readMessageTool(session),
@@ -118,11 +124,18 @@ Future<void> _serve(ServerOptions options) async {
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
+          for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,
       );
       log('version $packageVersion serving MCP on stdio');
       log('Smartschool settings: ${source.logDescription}');
+      for (final optIn in optIns) {
+        log(
+          '${optIn.setting.formTitle}: ${optIn.state.name}'
+          '${optIn.state.isOn ? ', ${optIn.tools.length} tools offered' : ''}',
+        );
+      }
       log(
         downloads == null
             ? 'downloads: no download folder'

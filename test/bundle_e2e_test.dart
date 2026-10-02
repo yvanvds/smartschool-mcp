@@ -7,10 +7,23 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/session.dart';
+import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:test/test.dart';
 
 import 'support/claude_desktop.dart';
 import 'support/exe.dart';
+
+/// The tools of the manifest that the server offers only with the switch
+/// "Skore-beheer" on (#42).
+final _skoreTools = [
+  for (final tool in skoreOptIn(
+    SmartschoolSession(const ExtensionSettings()),
+    SwitchState.on,
+  ).tools)
+    tool.definition.name,
+];
 
 void main() {
   late Directory bundle;
@@ -126,10 +139,11 @@ void main() {
     expect(folder.listSync(), hasLength(2));
   });
 
-  test('installed with the required settings and "Downloadmap" left empty: '
-      'the server reports the manifest\'s version and tools, names the '
-      'settings to fix by their titles in the install form, and saves in '
-      'the default download folder', () async {
+  test('installed with the required settings, and "Downloadmap" and '
+      '"Skore-beheer" left alone: the server reports the manifest\'s version '
+      'and its tools but the Skore tools, names the settings to fix by their '
+      'titles in the install form, and saves in the default download '
+      'folder', () async {
     final home = await tempHome();
     // Only spaces: Claude Desktop takes them as filled in, the server as
     // empty, so it reports them without logging in anywhere.
@@ -141,9 +155,13 @@ void main() {
     final init = await server.initialize();
     expect((init['serverInfo'] as Map)['version'], manifest['version']);
     final tools = (await server.request('tools/list'))['tools'] as List;
+    expect(_skoreTools, hasLength(3));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
-      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+      [
+        for (final tool in manifest['tools'] as List)
+          if (!_skoreTools.contains((tool as Map)['name'])) tool['name'],
+      ],
     );
 
     final (isError, text) = await server.callTool('smartschool_status');
@@ -173,6 +191,48 @@ void main() {
 
     await server.stop();
     expect(home.listSync(), isEmpty);
+  });
+
+  test('installed with "Skore-beheer" ticked: Claude Desktop passes it as '
+      'true, and the server offers every tool of the manifest, the Skore '
+      'tools last, and says the switch is on (#42)', () async {
+    final home = await tempHome();
+    final required = {
+      for (final MapEntry(:key, :value) in fields().entries)
+        if (value['required'] == true) key: ' ',
+    };
+    final untouched = claudeDesktopConfig(
+      manifest,
+      extensionPath: bundle.path,
+      userConfig: required,
+      home: home.path,
+    );
+    expect(untouched?.env[Setting.skore.envVar], 'false');
+    final server = await startInstalled({
+      ...required,
+      Setting.skore.fileKey: 'true',
+    }, home);
+
+    await server.initialize();
+    final tools = (await server.request('tools/list'))['tools'] as List;
+    expect(
+      [for (final tool in tools) (tool as Map)['name']],
+      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+    );
+    expect(
+      [for (final tool in tools) (tool as Map)['name']].skip(tools.length - 3),
+      _skoreTools,
+    );
+    final (_, text) = await server.callTool('smartschool_status');
+    expect(
+      text,
+      contains(
+        '\nSkore-beheer: on; access not checked, as the connection does not '
+        'work.\n',
+      ),
+    );
+
+    await server.stop();
   });
 
   test('installed with the 6-digit code of the app in "2FA-sleutel": the '

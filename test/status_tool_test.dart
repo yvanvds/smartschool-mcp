@@ -5,6 +5,7 @@ import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
@@ -22,11 +23,15 @@ void main() {
   ///
   /// The client calls itself [clientName]; the server records the app in
   /// [client], which [source] should share.
+  ///
+  /// With [skore], the Skore tools are an opt-in group whose switch,
+  /// "Skore-beheer", is set to it.
   Future<(CallToolResult, String)> status({
     CredentialSource? source,
     DownloadFolder? Function()? downloads,
     ClientContext? client,
     String clientName = 'test',
+    SwitchState? skore,
   }) async {
     final session = SmartschoolSession(
       source ?? fakeExtensionSettings(),
@@ -34,7 +39,14 @@ void main() {
     );
     addTearDown(session.close);
     final (connection, _) = await connect(
-      tools: [statusTool(session, downloads: downloads, client: client)],
+      tools: [
+        statusTool(
+          session,
+          downloads: downloads,
+          client: client,
+          optIns: [if (skore != null) skoreOptIn(session, skore)],
+        ),
+      ],
       client: client,
       clientName: clientName,
     );
@@ -397,6 +409,172 @@ void main() {
     expect(again, text);
     expect(server.requests, isNot(contains('POST /login')));
     expect(server.requests, hasLength(requests));
+  });
+
+  group('with the opt-in switch "Skore-beheer" (#42)', () {
+    const rights =
+        'the rights for score management in Skore (Rapporten > Modellen and '
+        'Puntenboeken), as a Skore administrator has';
+    const fix =
+        "ask the school's Smartschool administrator for them, or turn off "
+        '"Skore-beheer" (SMARTSCHOOL_SKORE) in the Smartschool extension '
+        'settings in Claude Desktop (Settings → Extensions), then restart '
+        'Claude Desktop';
+
+    setUp(() => server.skore.loadSchool());
+
+    test('off: says so after the settings, how to turn it on and for whom, '
+        'and does not ask Skore', () async {
+      final (result, text) = await status(skore: SwitchState.off);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        'Smartschool connection: working\n'
+        'Logged in as: $fakeDisplayName\n'
+        'Smartschool address: $fakeHost\n'
+        'Settings: extension settings (all filled in)\n'
+        'Skore-beheer: off: its tools are not offered. For an account with '
+        '$rights: turn on "Skore-beheer" (SMARTSCHOOL_SKORE) in the '
+        'Smartschool extension settings in Claude Desktop (Settings → '
+        'Extensions), then restart Claude Desktop.\n'
+        'Server version: $packageVersion\n'
+        'Updates: not checked (the update check is turned off)',
+      );
+      expect(server.skore.requests, isEmpty);
+    });
+
+    test('set to something that is neither true nor false: off, and says '
+        'so', () async {
+      final (_, text) = await status(skore: SwitchState.unclear);
+
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: off, as "Skore-beheer" (SMARTSCHOOL_SKORE) is set '
+          'to neither true nor false: its tools are not offered. For an '
+          'account with $rights: set it to true in the Smartschool extension '
+          'settings in Claude Desktop (Settings → Extensions), then restart '
+          'Claude Desktop.\n',
+        ),
+      );
+      expect(server.skore.requests, isEmpty);
+    });
+
+    test('on, with the rights: access, checked with one read of the '
+        'teachers', () async {
+      final (result, text) = await status(skore: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nSettings: extension settings (all filled in)\n'
+          'Skore-beheer: on; access: yes (Skore lists 6 teachers that can be '
+          'assigned)\n'
+          'Server version: ',
+        ),
+      );
+      expect(server.skore.calls, ['POST $fakeSkoreOwnersRpcPath getTeachers']);
+    });
+
+    test('on, refused by Skore (HTTP 403): no access, with the rights it '
+        'needs and what to do', () async {
+      server.skore.refusal = SkoreRefusal.forbidden;
+
+      final (result, text) = await status(skore: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(text, startsWith('Smartschool connection: working\n'));
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: on; access: NO. This account has no rights for '
+          'score management in Skore: Skore refused it its report management '
+          '(Rapporten > Modellen). The Skore tools need $rights: $fix.\n',
+        ),
+      );
+      expect(text, isNot(contains(fakeSkoreNoAccessName)));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('on, answered with a page instead of data: no access, as the '
+        'account usually lacks the rights (dartschool#91), without quoting '
+        'the page', () async {
+      server.skore.refusal = SkoreRefusal.page;
+
+      final (_, text) = await status(skore: SwitchState.on);
+
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: on; access: NO. Skore gave an answer the server '
+          'could not use; usually the account lacks $rights. If so, $fix. '
+          'Otherwise try again in a moment; the technical details are in the '
+          'server log.\n',
+        ),
+      );
+      expect(text, isNot(contains(fakeSkoreNoAccessName)));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('on, but Skore lists no teachers: no access, as an account without '
+        'the rights may get an empty answer', () async {
+      server.skore.teachers.clear();
+
+      final (_, text) = await status(skore: SwitchState.on);
+
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: on; access: NO. Skore lists no teachers that can '
+          'be assigned, as it may for an account without $rights. If so, '
+          '$fix.\n',
+        ),
+      );
+    });
+
+    test('on, while the connection does not work: access not checked, and '
+        'Skore not asked', () async {
+      final (_, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(password: '')),
+        skore: SwitchState.on,
+      );
+
+      expect(text, startsWith('Smartschool connection: NOT working\n'));
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: on; access not checked, as the connection does '
+          'not work.\n',
+        ),
+      );
+      expect(server.requests, isEmpty);
+    });
+
+    test('in ChatGPT: names the variable first, and where to change it '
+        'there', () async {
+      final client = ClientContext();
+      final (_, text) = await status(
+        source: fakeExtensionSettings(null, client),
+        client: client,
+        clientName: ClientApp.codexClientName,
+        skore: SwitchState.off,
+      );
+
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: off: its tools are not offered. For an account '
+          'with $rights: turn on SMARTSCHOOL_SKORE ("Skore-beheer") in the '
+          "ChatGPT app, under Instellingen (Settings) → Plug-ins → MCP's → "
+          'smartschool → Omgevingsvariabelen (Environment variables); in the '
+          'Codex CLI or IDE extension, under [mcp_servers.smartschool.env] '
+          r'in %USERPROFILE%\.codex\config.toml, then restart ChatGPT (or '
+          'Codex).\n',
+        ),
+      );
+    });
   });
 
   test('with a missing credentials file: says so', () async {

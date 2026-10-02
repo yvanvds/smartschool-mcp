@@ -31,6 +31,8 @@ const settingHints = {
   Setting.password: 'je wachtwoord voor Smartschool',
   Setting.mfa: 'alleen met 2FA: je 2FA-sleutel, niet de code van zes cijfers',
   Setting.downloadDir: 'niet verplicht: de map voor bewaarde bestanden',
+  Setting.skore:
+      'niet verplicht: true voor Skore-beheer, met de rechten ervoor',
 };
 
 /// The folder the installer puts the server in:

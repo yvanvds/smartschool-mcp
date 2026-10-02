@@ -48,10 +48,12 @@ password: your-password
 mfa: YOUR-TOTP-BASE32-SECRET
 # Optional: where save_intradesk_file and save_message_attachment save.
 download_dir: C:\Users\you\Downloads\Smartschool
+# Optional: true offers the Skore tools (see Opt-in tools below).
+skore: false
 ```
 
 `SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
-*Saving files* below).
+*Saving files* below), and `SMARTSCHOOL_SKORE` before `skore`.
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -120,7 +122,8 @@ via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_USERNAME": "your.username",
         "SMARTSCHOOL_PASSWORD": "your-password",
         "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
-        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder"
+        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder",
+        "SMARTSCHOOL_SKORE": "false"
       }
     }
   }
@@ -134,7 +137,9 @@ the variable out). Spaces and hyphens in it are ignored; a value that is not
 Base32 (such as the app's 6-digit code) is reported without sending the
 password. When Smartschool asks for a 2FA code and the key is empty, the
 server says that the account uses 2FA and that the key must be filled in.
-`SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below). Restart
+`SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below), and so
+is `SMARTSCHOOL_SKORE`, which offers the Skore tools when `true` (see
+*Opt-in tools* below). Restart
 Claude Desktop after editing the file. The server's stderr ends up in Claude
 Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -171,7 +176,7 @@ of serving MCP (`lib/src/install.dart`):
   locally only with `SMARTSCHOOL_MCP_CLIPBOARD_TEST=on`, since they replace
   what is on the clipboard (they put back the text that was there);
 - it shows, in Dutch, what to fill in in ChatGPT: the name `smartschool`, the
-  command, no arguments and the five variables. Before those steps it warns
+  command, no arguments and the six variables. Before those steps it warns
   that what ChatGPT reads goes to OpenAI, sensitive information about pupils
   included. So: a paid plan only, with *Improve the model for everyone* off
   (#50). It waits for Enter so the window stays open.
@@ -226,10 +231,11 @@ client name. It also installs again while that copy runs.
 
 ### Tools
 
-- `smartschool_status`: whether the connection works, or what to fix, the
-  download folder and whether it is writable, and whether a newer version
-  is available, with its download link and what is new (see *Update check*
-  below).
+- `smartschool_status`: whether the connection works, or what to fix,
+  whether each opt-in switch is on and, when it is, whether the account has
+  the rights for its tools (see *Opt-in tools* below), the download folder
+  and whether it is writable, and whether a newer version is available,
+  with its download link and what is new (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool lists a box 50 messages at a time; the tool asks for the next
@@ -486,6 +492,46 @@ clear, a create or a trash means the write was not carried out: the session
 repeats the call, which reads the element again (a lesson hour filled
 meanwhile is gone, so nothing is sent).
 
+The Skore tools are offered only when the switch "Skore-beheer" is on (see
+*Opt-in tools* below): they need the rights for score management in Skore
+(Rapporten > Modellen and Puntenboeken), as a Skore administrator has, and
+most teachers and all pupils lack them. They read Skore with the library's
+`SkoreService` (dartschool#70) and change nothing:
+
+- `list_skore_classes`: the classes of Skore's report models
+  (`getClasses`), one line per class with its name, Skore class id, group
+  and report model, in Skore's order. `query` keeps the classes whose name
+  or group holds every word (ignoring case and accents, as
+  `search_messages`), since a school has many classes. The class id is
+  Skore's own, not a planner id.
+- `list_skore_courses`: the courses of one class (`class_id`, from
+  `list_skore_classes`) with the teachers assigned to each, Skore's
+  "lesopdrachten" (`getCourses`), in Skore's order and indented by depth.
+  Per row: its label, course id, code and depth, and then that it is a
+  group header (which cannot get a teacher), that it has no teacher, or
+  its teachers with their teacher id and assignment id (which is also the
+  gradebook's id). The first line counts the courses, those without a
+  teacher, and the group headers. Course codes are not unique within a
+  class (a course and its sub-course can share one), so the description
+  tells Claude to name a course by its id. An empty list means a class
+  without a course structure or an unknown id; the result says so.
+- `list_skore_teachers`: the teachers Skore lets assign to a course
+  (`getTeachers`), by name with their teacher id (the Smartschool user id),
+  in Skore's order; `query` as for `list_skore_classes`.
+
+Skore refusing a request to the account (HTTP 403,
+`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
+rights, with the part of Skore it was refused, what rights are needed, and
+to ask the school's Smartschool administrator for them or turn
+"Skore-beheer" off. What Skore really answers such an account has not been
+captured yet (yvanvds/dartschool#91): most likely a page instead of data,
+which the library reports as a plain `SmartschoolSkoreError`. Until then,
+any other `SmartschoolSkoreError` is reported as "Skore gave an answer the
+server could not use; usually the account lacks the rights", with the same
+advice; the library's message goes to the log only, as it can quote the
+page. #74 tracks dropping that hedge once dartschool#91 is done, and #75
+the live check.
+
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
 in `message_box.dart`, the HTML-to-text converter `htmlToText` in
@@ -562,6 +608,19 @@ rename, change of the info, clear), the plan of a lesfiche of
 dartschool#88, and the create and the trash of an assignment of
 dartschool#89 as the live planner did.
 
+Skore helpers for later tools live in `lib/src/skore/`. In
+`skore_access.dart`: `withSkore`, which runs an action with a
+`SkoreService` on the session and turns Skore's errors into `ToolError`s
+(`skoreToolError`: no rights, or an answer the server cannot use, whose
+details go to the log only), and `checkSkoreAccess`, the access check of
+`smartschool_status`. In `skore_format.dart`: one line per class, course
+row, assignment and teacher, and the `query` filter (`skoreMatches`). In
+`skore_opt_in.dart`: the Skore tools behind their switch (`skoreOptIn`).
+The tests run against a fake Skore (`test/support/fake_skore.dart`) that
+serves the endpoints `SkoreService` reads, in the shape of dartschool's
+anonymised captures, with fake names; it can refuse an account without the
+rights with HTTP 403 or with a page instead of data.
+
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
 `document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
@@ -572,6 +631,36 @@ through `flutter_smartschool`'s streamed download with a size limit
 (`IntradeskService.downloadFileStream`, `MessageAttachment.downloadStream`,
 both with `maxBytes`), which also gives the file name from the
 `Content-Disposition` header.
+
+### Opt-in tools
+
+Some tools only work for accounts with extra rights in Smartschool, such as
+the Skore tools. They sit behind an opt-in switch, a setting that is off by
+default (`Setting.isSwitch` in `lib/src/settings.dart`): "Skore-beheer"
+(`SMARTSCHOOL_SKORE`, `skore` in a credentials file). The server only
+offers the group's tools when its switch is on (`OptInTools` in
+`lib/src/opt_in.dart`), so accounts without the rights never see tools they
+cannot use, and those tools take up no context in their conversations. The
+switches are read once, at startup (`Switches.read`): the environment
+variable when it is set and not empty, else the credentials file's key.
+`true`, `1`, `yes`, `on`, `ja` and `aan` (any case) turn a switch on; empty,
+`false`, `0`, `no`, `off`, `nee` and `uit` leave it off; anything else
+counts as off, and `smartschool_status` says so.
+
+`smartschool_status` has a line per switch: off, with how to turn it on and
+for whom; or on, with whether the account has the rights, checked with one
+cheap read once the connection works (`OptInTools.checkAccess`; for Skore,
+`getTeachers`, where an empty list of teachers counts as no access too).
+Registering the tools only once access is detected
+(`notifications/tools/list_changed`) was not chosen: the server logs in at
+the first tool call, so the tools would show up only later in the
+conversation, and it would cost Skore requests at every start.
+
+To add a group: a `Setting` with `isSwitch: true` (a `boolean` field with
+the default `false` in the manifest's `user_config`, its variable in
+`mcp_config.env`, a hint in the installer's `settingHints`, and a row in both
+colleague guides), an `OptInTools` with its tools, rights and access check,
+and the group in the entry point's `optIns`.
 
 ### Message text cache
 
@@ -838,11 +927,14 @@ are marked `TE BEVESTIGEN (#40)`. Parts that wait for the manual
 install checks (#30) are marked `TE BEVESTIGEN (#30)` in HTML comments, and
 missing screenshots `SCHERMAFBEELDING (#33)`.
 
-"Downloadmap" is the only optional field, and its default is empty on
-purpose: Claude Desktop passes a field without a value or a default literally,
-as `${user_config.download_dir}` (modelcontextprotocol/mcpb#250), and does not
-replace `${HOME}` in a default (modelcontextprotocol/mcpb#251). Empty, the
-server uses its own default (see *Saving files*).
+Every optional field has a default on purpose: Claude Desktop passes a field
+without a value or a default literally, as `${user_config.download_dir}`
+(modelcontextprotocol/mcpb#250), and does not replace `${HOME}` in a default
+(modelcontextprotocol/mcpb#251). The default of "2FA-sleutel" and
+"Downloadmap" is empty; empty, the server uses its own download folder (see
+*Saving files*). "Skore-beheer", a switch, is a `boolean` field with the
+default `false`, which Claude Desktop passes as `true` or `false`
+(`getMcpConfigForManifest` in `@anthropic-ai/mcpb`).
 
 Build and pack the extension locally (`npx` needs Node):
 
