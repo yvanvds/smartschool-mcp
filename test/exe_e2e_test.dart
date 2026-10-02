@@ -159,6 +159,33 @@ void main() {
     expect(await server.stderr, contains('serving MCP on stdio'));
   });
 
+  test('no tool assumes a teacher: students sign in too, so titles and '
+      'descriptions speak of the user (#62)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    final tools = (await server.request('tools/list'))['tools'] as List;
+    expect(tools, hasLength(11));
+    for (final tool in tools.cast<Map<String, Object?>>()) {
+      // The whole definition: its title, description and the descriptions
+      // of its arguments.
+      expect(
+        jsonEncode(tool).toLowerCase(),
+        isNot(contains('teacher')),
+        reason: '${tool['name']}',
+      );
+    }
+    final readFile = tools.cast<Map<String, Object?>>().singleWhere(
+      (tool) => tool['name'] == 'read_intradesk_file',
+    );
+    expect(readFile['description'], contains('what the user is looking for'));
+
+    await server.stop();
+  });
+
   test('smartschool_status without --credentials and without SMARTSCHOOL_* '
       'variables reports the missing settings', () async {
     final server = await ServerProcess.start(

@@ -244,7 +244,7 @@ void main() {
         await error(id),
         'Intradesk file Documenten / opname.pdf (id $id, 427 MB, changed '
         '2024-08-29) is too large to open here: files up to 25 MB can be read. '
-        'The teacher can open it in Smartschool.',
+        'The user can open it in Smartschool.',
       );
       expect(server.intradesk.downloaded, isEmpty);
     },
@@ -259,7 +259,7 @@ void main() {
     expect(
       await error(id),
       'Intradesk file (id $id, 25 MB) is too large to open here: files up '
-      'to 25 MB can be read. The teacher can open it in Smartschool.',
+      'to 25 MB can be read. The user can open it in Smartschool.',
     );
     expect(server.intradesk.downloaded, [id]);
     // The download is cancelled, not left running in the background.
@@ -277,7 +277,7 @@ void main() {
     expect(
       await error(id),
       'Intradesk file (id $id) is too large to open here (more than 25 MB): '
-      'files up to 25 MB can be read. The teacher can open it in Smartschool.',
+      'files up to 25 MB can be read. The user can open it in Smartschool.',
     );
     await server.intradesk.stops.reached(1);
     expect(server.intradesk.stoppedDownloads, 1);
