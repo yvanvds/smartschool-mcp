@@ -1,0 +1,728 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    show PlannerService;
+
+/// The planner user id of the fake's own account: the `authenticatedUser.id`
+/// of the fake's pages ([fakeDisplayName] in `fake_smartschool.dart`).
+const fakePlannerMe = '12_345_0';
+
+const _api = '/planner/api/v1';
+
+/// The moment [year]-[month]-[day] [hour]:[minute]:[second] in the time of
+/// this PC, written as the planner writes a date and time: ISO 8601 with the
+/// offset (`2026-10-05T10:20:00+02:00` in Belgium in October,
+/// `2026-11-20T11:10:00+01:00` in November).
+///
+/// The elements of the captures are written so, so that a test reads the
+/// same clock times on any PC, in CI (UTC) too; on a PC in Belgium they are
+/// the captures' own times. A test of the offsets themselves writes them out.
+String plannerTime(
+  int year,
+  int month,
+  int day, [
+  int hour = 0,
+  int minute = 0,
+  int second = 0,
+]) => PlannerService.formatDateTime(
+  DateTime(year, month, day, hour, minute, second),
+);
+
+/// A user as the planner names one: an organiser or a participant.
+class FakePlannerUser {
+  const FakePlannerUser(this.id, this.name, this.nameLastFirst);
+
+  /// The fake's own account.
+  static const me = FakePlannerUser(
+    fakePlannerMe,
+    'Jan Peeters',
+    'Peeters Jan',
+  );
+
+  /// The planner user id, `{platformId}_{userId}_{coaccount}`.
+  final String id;
+  final String name;
+  final String nameLastFirst;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'pictureHash': 'initials_XX',
+    'pictureUrl':
+        'https://userpicture20.smartschool.be/User/Userimage/hashimage/hash/'
+        'initials_XX/plain/1/res/128',
+    'description': {'startingWithFirstName': '', 'startingWithLastName': ''},
+    'name': {
+      'startingWithFirstName': name,
+      'startingWithLastName': nameLastFirst,
+    },
+    'sort': nameLastFirst.toLowerCase().replaceAll(' ', '-'),
+    'deleted': false,
+  };
+}
+
+/// A class as the planner names one.
+class FakePlannerGroup {
+  const FakePlannerGroup(this.id, this.name);
+
+  /// The planner group id, `{platformId}_{groupId}`.
+  final String id;
+  final String name;
+
+  Map<String, Object?> toJson() => {
+    'identifier': id,
+    'id': id,
+    'platformId': int.parse(id.split('_').first),
+    'name': name,
+    'type': 'K',
+    'icon': 'briefcase',
+    'sort': name,
+  };
+}
+
+/// A course as the planner names one.
+class FakePlannerCourse {
+  const FakePlannerCourse(this.id, this.name, [this.codes = const []]);
+
+  final String id;
+  final String name;
+  final List<String> codes;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'platformId': 4069,
+    'name': name,
+    'scheduleCodes': codes,
+    'icon': 'schoolbord',
+    'courseCluster': null,
+    'isVisible': true,
+  };
+}
+
+/// A room as the planner names one; its planner is `location/4069_<id>`.
+class FakePlannerRoom {
+  const FakePlannerRoom(this.id, this.title);
+
+  final String id;
+  final String title;
+
+  /// The planner id of the room, as `search_planners` prints it.
+  String get planner => 'location/4069_$id';
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'platformId': 4069,
+    'platformName': 'Springfield Academy',
+    'number': '',
+    'title': title,
+    'icon': '',
+    'type': 'mini-db-item',
+    'selectable': true,
+  };
+}
+
+/// An assignment type, such as `KO Kleine Overhoring`.
+class FakeAssignmentType {
+  const FakeAssignmentType(this.id, this.name, this.abbreviation);
+
+  static const ko = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000001',
+    'Kleine Overhoring',
+    'KO',
+  );
+  static const gt = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000002',
+    'Grote Taak',
+    'GT',
+  );
+
+  final String id;
+  final String name;
+  final String abbreviation;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'abbreviation': abbreviation,
+    'isVisible': true,
+    'defaultTiming': 'deadline',
+    'weight': 0,
+  };
+}
+
+/// An element of the fake planner, which it serves in the calendars it was
+/// added to (the list form) and on its own (the detail).
+///
+/// The JSON has the shape of dartschool's anonymised captures of the live
+/// planner (`test/planner_service_test.dart` there): a list element, and a
+/// detail that adds the info texts, labels, attachments and weblinks, and
+/// for an assignment its visibility and announcement. [from] and [to] are
+/// written as the planner writes them, with the school's offset
+/// (`2026-10-05T10:20:00+02:00`).
+class FakePlannedElement {
+  FakePlannedElement({
+    required this.id,
+    required this.type,
+    required this.from,
+    required this.to,
+    this.name,
+    this.platformId = 4069,
+    this.wholeDay = false,
+    this.deadline = false,
+    this.organisers = const [],
+    this.groups = const [],
+    this.users = const [],
+    this.courses = const [],
+    this.rooms = const [],
+    this.assignmentType,
+    this.publicInfo = '',
+    this.privateInfo = '',
+    this.labels = const [],
+    this.attachments = const [],
+    this.weblinks = const [],
+    this.visibleFrom,
+    this.isAnnounced,
+  });
+
+  final String id;
+
+  /// The planner's name of the type (`planned-lessons`).
+  final String type;
+  final int platformId;
+  final String? name;
+  final String from;
+  final String to;
+  final bool wholeDay;
+  final bool deadline;
+  final List<FakePlannerUser> organisers;
+  final List<FakePlannerGroup> groups;
+  final List<FakePlannerUser> users;
+  final List<FakePlannerCourse> courses;
+  final List<FakePlannerRoom> rooms;
+  final FakeAssignmentType? assignmentType;
+
+  /// HTML, as the planner keeps it.
+  final String publicInfo;
+  final String privateInfo;
+
+  /// The texts of the labels.
+  final List<String> labels;
+
+  /// The names of the attachments.
+  final List<String> attachments;
+
+  /// The weblinks: name and address.
+  final List<(String, String)> weblinks;
+  final String? visibleFrom;
+  final bool? isAnnounced;
+
+  /// The element id as the planner tools print it.
+  String get ref => '$type/$platformId/$id';
+
+  bool get _isAssignment => type == 'planned-assignments';
+
+  bool overlaps(DateTime start, DateTime end) =>
+      !DateTime.parse(from).isAfter(end) && !DateTime.parse(to).isBefore(start);
+
+  Map<String, Object?> listJson() => {
+    'id': id,
+    'platformId': platformId,
+    'name': ?name,
+    if (assignmentType case final type?) 'assignmentType': type.toJson(),
+    'period': {
+      'dateTimeFrom': from,
+      'dateTimeTo': to,
+      'wholeDay': wholeDay,
+      'deadline': deadline,
+    },
+    'organisers': {
+      'users': [for (final user in organisers) user.toJson()],
+      'groups': <Object?>[],
+    },
+    'participants': {
+      'users': [for (final user in users) user.toJson()],
+      'groups': [for (final group in groups) group.toJson()],
+      'userRoles': <Object?>[],
+      'groupFilters': {'filters': <Object?>[], 'additionalUsers': <Object?>[]},
+    },
+    'plannedElementType': type,
+    'isParticipant': false,
+    'capabilities': {
+      'canUserEdit': organisers.any((user) => user.id == fakePlannerMe),
+      'canUserSeeProperties': {'id': true, 'name': true},
+    },
+    'onlineSession': null,
+    if (_isAssignment) 'resolvedStatus': 'unresolved',
+    if (name != null)
+      'icon': _isAssignment ? 'flags_red_yellow' : 'document_observation',
+    'courses': [for (final course in courses) course.toJson()],
+    'locations': [for (final room in rooms) room.toJson()],
+    'sort': '${from.replaceAll(RegExp(r'\D'), '').substring(0, 14)}_$id',
+    'unconfirmed': false,
+    'pinned': false,
+    'color': 'aqua-200',
+  };
+
+  Map<String, Object?> detailJson() => {
+    ...listJson(),
+    'info': privateInfo,
+    'privateInfo': privateInfo,
+    'publicInfo': publicInfo,
+    'miniDBItems': <Object?>[],
+    'labels': [
+      for (final (index, text) in labels.indexed)
+        {
+          'identifier': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'type': 'platform',
+          'text': text,
+          'color': 'aqua',
+          'isVisible': true,
+          'id': '4069_d0000000-0000-4000-8000-00000000000$index',
+        },
+    ],
+    'attachments': [
+      for (final (index, name) in attachments.indexed)
+        {'id': 'f0000000-0000-4000-8000-00000000003$index', 'name': name},
+    ],
+    'weblinks': [
+      for (final (index, (name, url)) in weblinks.indexed)
+        {
+          'id': 'e0000000-0000-4000-8000-00000000002$index',
+          'name': name,
+          'url': url,
+          'icon': 'earth',
+          'visibility': {'option': 'always', 'daysAfterEnd': null},
+        },
+    ],
+    'courseLinks': <Object?>[],
+    'goals': <Object?>[],
+    'reminders': <Object?>[],
+    if (_isAssignment) ...{
+      'uploadFolder': null,
+      'isAnnounced': isAnnounced ?? false,
+      'visibility': {'afterDate': ?visibleFrom},
+      'hasLinkedEvaluation': false,
+      'linkedEvaluation': null,
+      'dateCreated': visibleFrom ?? from,
+    },
+  };
+}
+
+/// A hit of the planner's search, in the shape of dartschool's anonymised
+/// captures of `POST quick-search/planner/search`.
+class FakePlannerHit {
+  FakePlannerHit.group(String id, this.name, {String description = ''})
+    : json = {
+        'identifier': {'id': id, 'type': 'group'},
+        'title': [
+          {'part': name, 'isHighlighted': false},
+        ],
+        'description': <Object?>[],
+        'graphic': {'type': 'icon', 'value': 'briefcase'},
+        'origin': {
+          'groupIdentifier': id,
+          'name': name,
+          'description': description,
+        },
+      };
+
+  /// A person: [listedAs] is the title of the search list, last name first,
+  /// for a pupil with the class (`Janssens Lotte • 6A1`).
+  FakePlannerHit.user(
+    FakePlannerUser user, {
+    String? listedAs,
+    String description = '',
+  }) : name = user.name,
+       json = {
+         'identifier': {'id': user.id, 'type': 'user'},
+         'title': [
+           {'part': listedAs ?? user.nameLastFirst, 'isHighlighted': false},
+         ],
+         'description': <Object?>[],
+         'graphic': {'type': 'image', 'value': 'https://example.invalid/48'},
+         'origin': {
+           'userIdentifier': user.id,
+           'name': user.name,
+           'nameReverse': user.nameLastFirst,
+           'description': description,
+         },
+       };
+
+  FakePlannerHit.room(FakePlannerRoom room)
+    : name = room.title,
+      json = {
+        'identifier': {'id': '4069_${room.id}', 'type': 'mini-db-2'},
+        'title': [
+          {'part': room.title, 'isHighlighted': true},
+        ],
+        'description': [
+          {'part': 'Locatie', 'isHighlighted': false},
+        ],
+        'graphic': {'type': 'icon', 'value': 'location_ic_action'},
+        'origin': {
+          'itemId': room.id,
+          'name': room.title,
+          'breadCrumbs': ['Locatie'],
+          'modules': ['location'],
+        },
+      };
+
+  /// A hit of a kind the library cannot map to a planner (made up in
+  /// dartschool's tests too: none was seen live).
+  FakePlannerHit.other(String id, String type, this.name)
+    : json = {
+        'identifier': {'id': id, 'type': type},
+        'title': [
+          {'part': name, 'isHighlighted': true},
+        ],
+        'description': <Object?>[],
+        'graphic': {'type': 'icon', 'value': type},
+        'origin': {'name': name},
+      };
+
+  final String name;
+  final Map<String, Object?> json;
+}
+
+/// The planner module of a fake Smartschool: the elements of the calendars
+/// of users, classes and rooms, the detail of each element, and the search.
+///
+/// It serves:
+/// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
+///   `from`, `to` and an optional `types`: the elements added to that
+///   calendar that overlap the period, of those types. A calendar it does
+///   not know is answered with `400`, as the planner answers an id it
+///   refuses;
+/// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
+///   detail, or the planner's `404` for an element it does not have;
+/// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
+///   name or title holds the search string, ignoring case.
+///
+/// Every planner request is recorded in [requests]. [failing] answers a
+/// path with another status instead.
+class FakePlanner {
+  /// The elements of each calendar, by `user/{id}`, `group/{id}` or
+  /// `location/{id}`.
+  final Map<String, List<FakePlannedElement>> calendars = {};
+
+  /// Every element, by [FakePlannedElement.ref].
+  final Map<String, FakePlannedElement> elements = {};
+
+  /// What the search finds.
+  final List<FakePlannerHit> hits = [];
+
+  /// The planner requests, in order.
+  final List<
+    ({String method, String path, Map<String, String> query, Object? data})
+  >
+  requests = [];
+
+  /// Paths answered with this status (and an answer the planner might give)
+  /// instead.
+  final Map<String, int> failing = {};
+
+  /// Adds [element] to each of [calendars] (such as `group/4069_2001`), and
+  /// makes its detail readable.
+  void add(FakePlannedElement element, {required List<String> calendars}) {
+    elements[element.ref] = element;
+    for (final calendar in calendars) {
+      this.calendars.putIfAbsent(calendar, () => []).add(element);
+    }
+  }
+
+  /// Makes [calendar] known, without elements.
+  void addCalendar(String calendar) =>
+      calendars.putIfAbsent(calendar, () => []);
+
+  /// The `from`, `to` and `types` of the calendar requests, in order.
+  List<Map<String, String>> get calendarQueries => [
+    for (final request in requests)
+      if (request.path.startsWith('$_api/planned-elements/')) request.query,
+  ];
+
+  ResponseBody? respond(RequestOptions options) {
+    final path = options.uri.path;
+    if (!path.startsWith('$_api/')) return null;
+    requests.add((
+      method: options.method,
+      path: path,
+      query: options.uri.queryParameters,
+      data: options.data,
+    ));
+    if (failing[path] case final status?) {
+      return _json(
+        '{"status":$status,"title":"Error","detail":"","type":""}',
+        status: status,
+      );
+    }
+    final route = path.substring(_api.length + 1).split('/');
+    if (options.method == 'POST' &&
+        route.join('/') == 'quick-search/planner/search') {
+      return _search(options.data);
+    }
+    if (options.method != 'GET') return null;
+    if (route case ['planned-elements', final kind, final id]) {
+      return _calendar(
+        '$kind/${Uri.decodeComponent(id)}',
+        options.uri.queryParameters,
+      );
+    }
+    if (route case [final type, final platform, final id]) {
+      final element = elements['$type/$platform/${Uri.decodeComponent(id)}'];
+      if (element == null) {
+        return _json(
+          '{"status":404,"title":"Not Found","detail":"","type":""}',
+          status: 404,
+        );
+      }
+      return _json(jsonEncode(element.detailJson()));
+    }
+    return null;
+  }
+
+  ResponseBody _calendar(String calendar, Map<String, String> query) {
+    final listed = calendars[calendar];
+    if (listed == null) {
+      return _json(
+        '{"status":400,"title":"Bad Request","detail":"","type":""}',
+        status: 400,
+      );
+    }
+    final from = DateTime.parse(query['from']!);
+    final to = DateTime.parse(query['to']!);
+    final types = query['types']?.split(',').toSet();
+    return _json(
+      jsonEncode([
+        for (final element in listed)
+          if (element.overlaps(from, to) &&
+              (types == null || types.contains(element.type)))
+            element.listJson(),
+      ]),
+    );
+  }
+
+  ResponseBody _search(Object? data) {
+    final text = ((data as Map)['searchString'] as String).toLowerCase();
+    // The names, first or last name first: the class a pupil's title ends
+    // in is not searched (the captured search for 6A found only classes).
+    bool matches(FakePlannerHit hit) => [
+      hit.name,
+      ?(hit.json['origin'] as Map)['nameReverse'] as String?,
+    ].any((name) => name.toLowerCase().contains(text));
+
+    return _json(
+      jsonEncode([
+        for (final hit in hits)
+          if (matches(hit)) hit.json,
+      ]),
+    );
+  }
+
+  ResponseBody _json(String body, {int status = 200}) =>
+      ResponseBody.fromString(
+        body,
+        status,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+}
+
+// ---------------------------------------------------------------------------
+// The planner of dartschool's captures
+// ---------------------------------------------------------------------------
+
+/// Class 6A1, whose planner is `group/4069_2001`.
+const fake6A1 = FakePlannerGroup('4069_2001', '6A1');
+const fake6A2 = FakePlannerGroup('4069_2002', '6A2');
+const fake6B1 = FakePlannerGroup('4069_2003', '6B1');
+
+/// Colleagues; Piet Peeters's planner is `user/4069_1002_0`.
+const fakePiet = FakePlannerUser('4069_1002_0', 'Piet Peeters', 'Peeters Piet');
+const fakeWim = FakePlannerUser('4069_1003_0', 'Wim Willems', 'Willems Wim');
+
+const fakeRoom101 = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000101',
+  '101',
+);
+const fakeRoom102 = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000102',
+  '102',
+);
+const fakeRoom103 = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000103',
+  '103',
+);
+
+const _wiskunde = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000001',
+  'wiskunde',
+  ['WISKU'],
+);
+const _biologie = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000002',
+  'biologie',
+  ['BIOLO'],
+);
+const _nederlands = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000003',
+  'Nederlands',
+  ['NEDER'],
+);
+const _lo = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000004',
+  'lichamelijke opvoeding',
+  ['LO'],
+);
+const fakeInformatica = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000005',
+  'informatica',
+  ['INFO'],
+);
+
+/// The elements of dartschool's capture of one week of class 6A1 (Monday
+/// 2026-10-05 to Friday 2026-10-09; see [plannerTime] for the times): a
+/// colleague's empty lesson
+/// hour in two rooms, a colleague's lesson with info, a colleague's
+/// assignment, a lesson without a room, and an element of a type the
+/// library does not know.
+final fakeSlot = FakePlannedElement(
+  id: 'e0000000-0000-5000-8000-000000000001',
+  type: 'planned-placeholders',
+  from: plannerTime(2026, 10, 5, 14, 40),
+  to: plannerTime(2026, 10, 5, 15, 30),
+  organisers: [fakePiet],
+  groups: [fake6A1, fake6B1],
+  courses: [_wiskunde],
+  rooms: [fakeRoom101, fakeRoom102],
+);
+final fakeLesson = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000002',
+  type: 'planned-lessons',
+  name: 'Erfelijkheid',
+  from: plannerTime(2026, 10, 9, 14, 40),
+  to: plannerTime(2026, 10, 9, 15, 30),
+  organisers: [fakeWim],
+  groups: [fake6A1, fake6A2],
+  courses: [_biologie],
+  rooms: [fakeRoom103],
+  publicInfo: r'<p>Lees hoofdstuk 4</p>',
+  privateInfo: r'<p><strong>Opmerkingen</strong><br />Boek meebrengen</p>',
+  labels: ['JAAR 6', 'TRIMESTER 1'],
+  attachments: ['hoofdstuk4.pdf'],
+  weblinks: [('Opdracht', 'https://example.com/opdracht')],
+);
+final fakeAssignment = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000003',
+  type: 'planned-assignments',
+  name: 'Test: hoofdstuk 3',
+  from: plannerTime(2026, 10, 6, 8, 30),
+  to: plannerTime(2026, 10, 6, 9, 20),
+  deadline: true,
+  organisers: [fakePiet],
+  groups: [fake6A1],
+  courses: [_nederlands],
+  rooms: [fakeRoom102],
+  assignmentType: FakeAssignmentType.ko,
+  visibleFrom: plannerTime(2026, 9, 26, 10, 50),
+);
+final fakeGymLesson = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000004',
+  type: 'planned-lessons',
+  name: 'Volleybal: de opslag',
+  from: plannerTime(2026, 10, 7, 10, 20),
+  to: plannerTime(2026, 10, 7, 11, 10),
+  organisers: [fakeWim],
+  groups: [fake6A1],
+  courses: [_lo],
+);
+final fakeExcursion = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000005',
+  type: 'planned-excursions',
+  name: 'Uitstap naar Brussel',
+  from: plannerTime(2026, 10, 8, 0, 0),
+  to: plannerTime(2026, 10, 8, 23, 59, 59),
+  wholeDay: true,
+  organisers: [fakePiet],
+  groups: [fake6A1],
+);
+
+/// An empty lesson hour of the fake's own planner in November, as in
+/// dartschool's capture of an own slot (winter time in Belgium, `+01:00`).
+final fakeOwnSlot = FakePlannedElement(
+  id: 'e0000000-0000-5000-8000-000000000006',
+  type: 'planned-placeholders',
+  from: plannerTime(2026, 11, 20, 11, 10),
+  to: plannerTime(2026, 11, 20, 12, 0),
+  organisers: [FakePlannerUser.me],
+  groups: [fake6A1, fake6A2],
+  courses: [fakeInformatica],
+  rooms: [fakeRoom101],
+);
+
+/// A lesson of the fake's own planner in October (summer time in Belgium,
+/// `+02:00`).
+final fakeOwnLesson = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000007',
+  type: 'planned-lessons',
+  name: 'Lussen: for en while',
+  from: plannerTime(2026, 10, 5, 10, 20),
+  to: plannerTime(2026, 10, 5, 11, 10),
+  organisers: [FakePlannerUser.me],
+  groups: [fake6A1, fake6A2],
+  courses: [fakeInformatica],
+  rooms: [fakeRoom101],
+  publicInfo: '<p>Breng je laptop mee.</p>',
+);
+
+/// The captures, served by [FakePlanner.loadCaptures].
+extension FakePlannerCaptures on FakePlanner {
+  /// Serves dartschool's captures: the week of 6A1 in its class planner,
+  /// the colleagues' elements in their own planners, the own lesson and
+  /// empty lesson hour in the own planner (`user/12_345_0`), every element
+  /// with a room in that room's planner, and the search hits of the
+  /// captures (the classes 6A1 and 6A2, three people called Janssens, the
+  /// room 101, and a hit of a kind without a planner).
+  void loadCaptures() {
+    for (final element in [
+      fakeSlot,
+      fakeLesson,
+      fakeAssignment,
+      fakeGymLesson,
+      fakeExcursion,
+      fakeOwnLesson,
+      fakeOwnSlot,
+    ]) {
+      add(
+        element,
+        calendars: {
+          for (final group in element.groups) 'group/${group.id}',
+          for (final user in element.organisers) 'user/${user.id}',
+          for (final room in element.rooms) room.planner,
+        }.toList(),
+      );
+    }
+    addCalendar('user/$fakePlannerMe');
+    hits.addAll([
+      FakePlannerHit.group('4069_2001', '6A1', description: '6 Latijn 1'),
+      FakePlannerHit.group('4069_2002', '6A2', description: '6 Latijn 2'),
+      FakePlannerHit.user(
+        const FakePlannerUser('4069_1001_0', 'Jan Janssens', 'Janssens Jan'),
+      ),
+      FakePlannerHit.user(
+        const FakePlannerUser(
+          '4069_3001_0',
+          'Lotte Janssens',
+          'Janssens Lotte',
+        ),
+        listedAs: 'Janssens Lotte • 6A1',
+      ),
+      FakePlannerHit.user(
+        const FakePlannerUser('4069_1004_1', 'ELS JANSSENS', 'JANSSENS ELS'),
+        description: 'Interimaris van Piet Peeters',
+      ),
+      FakePlannerHit.room(fakeRoom101),
+      FakePlannerHit.other('4069_77', 'partner', 'Bibliotheek Springfield'),
+    ]);
+  }
+}

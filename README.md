@@ -330,6 +330,34 @@ client name. It also installs again while that copy runs.
   and returns its full path, name and size, for a file `read_intradesk_file`
   cannot read (a scan, an old Office file, any other format) or when the
   user wants the file itself (see *Saving files* below).
+- `search_planners`: finds the planner of a class, a person or a room by
+  name, with the planner's own search (the library's `searchCalendars`).
+  Each hit is listed with its kind (class, person, room), its name, what
+  the planner says about it (a class's full name, a co-account's
+  "Interimaris van …", the class a pupil is listed with) and its planner
+  id, like `group/4069_4256`, `user/4069_218_0` or `location/4069_<id>`,
+  which `list_planner` takes. People are pupils and staff alike: the
+  planner's answer does not tell them apart. A hit of another kind is shown
+  without a planner id.
+- `list_planner`: what is planned in a planner (`me`, the default, or a
+  planner id) in a period (`from` and `until`, today to 7 days ahead by
+  default), optionally only some kinds (`types`: lessons, assignments,
+  empty lesson hours, other). Per day, in date order, one line per element:
+  the time (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the
+  kind (an assignment with its type, such as `KO Kleine Overhoring`), name,
+  course, classes, organiser (left out in the user's own planner), rooms
+  and the element id. A class planner holds a timetable slot for every
+  teacher of every hour (32 in one week of a class seen live), so at most
+  200 elements are shown, with a note on how to narrow down; the request
+  itself may span a school year.
+- `read_planned_element`: one element in full, by its id: what its list
+  line says, plus its public and private info as plain text (through
+  `htmlToText`, never raw HTML), its labels, the names of its attachments
+  and its weblinks, and for an assignment from when pupils see it, whether
+  it was announced and its status. Private info is hidden from pupils, but
+  colleagues who can see the element read it too (dartschool#84). The
+  labels, attachments and weblinks are read from the detail's raw JSON
+  until the library types them (yvanvds/dartschool#98, #70).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -364,6 +392,22 @@ name with extension, path, size, date changed, `extension`, `mimeType`) and
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
 `intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
 lines in `intradesk_format.dart`.
+
+Planner helpers for later tools live in `lib/src/planner/`. In
+`planner_access.dart`: `withPlanner`, which runs an action on the session
+and turns the planner's errors into `ToolError`s (`plannerToolError`: an
+element that is gone or got a new id, an answer the server cannot use,
+whose details go to the log only, and a request the library refused before
+sending it); the planner ids (`PlannerRef`, `me` or `user/…`, `group/…`,
+`location/…`, and `formatPlannerId`); the compound element id
+`<plannedElementType>/<platformId>/<id>` (`PlannedElementRef`, which also
+reads an element's detail); and the `from` and `until` arguments with a
+default period (`plannerPeriodArguments`). In `planner_format.dart`: dates
+and times in the time of this PC, the kind and time of an element, one line
+per element (`formatElementLine`), elements per day (`elementsByDay`) and an
+element's detail (`formatElementDetail`). The tests run against a fake
+planner (`test/support/fake_planner.dart`), built from dartschool's
+anonymised captures of the live planner.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

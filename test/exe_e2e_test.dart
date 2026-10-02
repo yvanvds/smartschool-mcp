@@ -55,6 +55,9 @@ void main() {
       'list_intradesk_folder',
       'read_intradesk_file',
       'save_intradesk_file',
+      'search_planners',
+      'list_planner',
+      'read_planned_element',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -75,6 +78,18 @@ void main() {
       'read_intradesk_file',
     ]) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
+    }
+    for (final name in [
+      'search_planners',
+      'list_planner',
+      'read_planned_element',
+    ]) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': true,
+        'idempotentHint': true,
+        'openWorldHint': true,
+      });
     }
     final searchSchema = tools['search_messages']!['inputSchema'] as Map;
     expect(searchSchema['required'], ['query']);
@@ -266,6 +281,29 @@ void main() {
         {'type': 'string', 'minLength': 1},
       ],
     });
+    final plannersSchema = tools['search_planners']!['inputSchema'] as Map;
+    expect(plannersSchema['required'], ['query']);
+    expect((plannersSchema['properties'] as Map).keys, ['query']);
+    final plannerSchema = tools['list_planner']!['inputSchema'] as Map;
+    expect(plannerSchema, isNot(contains('required')));
+    expect((plannerSchema['properties'] as Map).keys, [
+      'planner',
+      'from',
+      'until',
+      'types',
+    ]);
+    expect((plannerSchema['properties'] as Map)['types'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'minItems': 1,
+      'items': {
+        'enum': ['lessons', 'assignments', 'empty_lesson_hours', 'other'],
+        'type': 'string',
+      },
+    });
+    final elementSchema = tools['read_planned_element']!['inputSchema'] as Map;
+    expect(elementSchema['required'], ['id']);
+    expect((elementSchema['properties'] as Map).keys, ['id']);
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -280,7 +318,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(16));
+    expect(tools, hasLength(19));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -642,6 +680,75 @@ void main() {
     expect(Directory(server.downloads!).listSync(), isEmpty);
 
     await server.stop();
+  });
+
+  test('the planner tools without settings: an error result that names the '
+      'missing settings; an invalid planner, element id, date or type: an '
+      'error that says what to fix, before any login (#51)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+      ('search_planners', {'query': '6WE'}),
+      ('list_planner', {}),
+      (
+        'list_planner',
+        {
+          'planner': 'group/4069_4256',
+          'from': '2026-10-05',
+          'until': '2026-10-09 16:00',
+          'types': ['assignments', 'empty_lesson_hours'],
+        },
+      ),
+      (
+        'read_planned_element',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: tool);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: tool,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (tool, arguments, message)
+        in <(String, Map<String, Object?>, String)>[
+          ('search_planners', {'query': '  '}, 'query is empty'),
+          ('list_planner', {'planner': '6WEWI1'}, 'planner must be me'),
+          ('list_planner', {'from': 'maandag'}, '"maandag" is not'),
+          (
+            'list_planner',
+            {'from': '2026-10-09', 'until': '2026-10-05'},
+            'until must not be before from',
+          ),
+          (
+            'list_planner',
+            {
+              'types': ['tests'],
+            },
+            '"tests" is not one of the allowed values',
+          ),
+          (
+            'read_planned_element',
+            {'id': '225c0b54-0000-4000-8000-000000000000'},
+            'id must be the id of a planner element',
+          ),
+        ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: '$tool $arguments');
+      expect(text, contains(message), reason: '$tool $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
   });
 
   test('the tools accept a whole number written with a decimal part '

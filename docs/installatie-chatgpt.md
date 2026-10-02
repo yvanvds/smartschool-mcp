@@ -10,6 +10,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
+- **Planner:** je eigen planner bekijken, en die van klassen, collega's en
+  lokalen: lessen, toetsen en taken, en lege lesuren. ChatGPT leest de
+  planner alleen: het verandert er niets in.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 
@@ -326,11 +329,11 @@ Het programma zelf staat in
 
 ### Wat gaat er naar ChatGPT?
 
-- Vraag je ChatGPT iets over een bericht, een bijlage of een document, dan
-  geeft Smartschool voor ChatGPT de inhoud daarvan aan ChatGPT. Die gaat dan
-  naar de servers van OpenAI, het bedrijf achter ChatGPT, net zoals alles wat
-  je zelf in het gesprek typt. Daar horen ook namen en gegevens van collega's,
-  leerlingen en ouders bij.
+- Vraag je ChatGPT iets over een bericht, een bijlage, een document of de
+  planner, dan geeft Smartschool voor ChatGPT de inhoud daarvan aan ChatGPT.
+  Die gaat dan naar de servers van OpenAI, het bedrijf achter ChatGPT, net
+  zoals alles wat je zelf in het gesprek typt. Daar horen ook namen en
+  gegevens van collega's, leerlingen en ouders bij.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals

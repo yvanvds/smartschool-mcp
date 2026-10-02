@@ -10,6 +10,9 @@ Je vraagt het gewoon in een gesprek:
   goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
+- **Planner:** je eigen planner bekijken, en die van klassen, collega's en
+  lokalen: lessen, toetsen en taken, en lege lesuren. Claude leest de
+  planner alleen: het verandert er niets in.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
@@ -228,6 +231,25 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 - "Vat het verslag van de laatste personeelsvergadering op Intradesk samen."
 - "Bewaar het formulier voor de uitstap van Intradesk."
 
+### Planner
+
+- "Wat staat er deze week in mijn planner?"
+- "Toon de planner van 6WEWI1 voor volgende week."
+  Claude zoekt eerst de planner van de klas. Daarin staan de lessen, toetsen
+  en taken van alle leerkrachten van de klas, en elk lesuur van hun
+  lessenrooster dat nog leeg is. Wil je alleen de toetsen en taken, zeg het
+  dan erbij.
+- "Wat geeft meneer Peeters op dinsdag?"
+  Vindt Claude meer dan één persoon met die naam, dan vraagt het wie je
+  bedoelt. Leerlingen en personeel staan door elkaar in de zoekresultaten.
+- "Is lokaal 611 vrij woensdag het 3e uur?"
+  Claude kent de uren van je school niet vanzelf: zeg erbij hoe laat dat uur
+  begint, of laat Claude het afleiden uit je eigen planner.
+- "Wat moeten de leerlingen meebrengen voor mijn les van morgen in 5WW1?"
+  Claude leest dan de info van die les. De info voor leerlingen zien je
+  leerlingen. De privé-info zien je leerlingen niet, maar collega's die de les
+  kunnen zien, lezen ze wel.
+
 ### Bestanden bewaren
 
 Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
@@ -262,8 +284,12 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   wachtwoord, OpenDocument-bestanden (`.odt`, `.ods`, ...) en bestanden groter
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
-- De extensie werkt alleen met berichten en Intradesk. Andere onderdelen van
-  Smartschool, zoals de agenda, kent ze niet.
+- De extensie werkt alleen met berichten, Intradesk en de planner. Andere
+  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner leest
+  ze alleen.
+- Net na een wijziging in de planner (in Smartschool zelf) kan het overzicht
+  nog enkele seconden de oude toestand tonen. Een les of toets apart openen
+  toont meteen de nieuwe.
 
 ## 6. Bijwerken naar een nieuwe versie
 
