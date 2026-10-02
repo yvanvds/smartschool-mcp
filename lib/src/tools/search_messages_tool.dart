@@ -130,8 +130,8 @@ Future<CallToolResult> _search(
   final stopwatch = Stopwatch()..start();
   // Counted over both runs when Smartschool refuses the session halfway.
   var downloads = 0;
-  // Like every session action, this may run twice. The second run lists the
-  // boxes again and finds the texts the first one saved in the cache.
+  // Like every session action, this may run more than once. A repeat lists
+  // the boxes again and finds the texts an earlier run saved in the cache.
   final (:listed, :candidates, :fromCache, :notSearched) = await withMessages(
     session,
     (messages) async {

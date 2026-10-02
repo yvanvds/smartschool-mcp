@@ -119,7 +119,7 @@ enum SubmitAnswer {
 /// `.../{get,post}/composemessage/`, and the behaviour seen live: a box is
 /// listed [pageSize] headers at a time, newest first (a `message list`
 /// answers with the first page, each `continue_messages` with the next, see
-/// [newSession]), an unknown message id gets a placeholder message instead
+/// [listElsewhere]), an unknown message id gets a placeholder message instead
 /// of nothing, and the archive endpoint lists only the ids it moved from the
 /// inbox as successful (for a message already in the archive it answers
 /// `{"success":[]}`).
@@ -219,8 +219,23 @@ class FakeMailbox {
   /// was sent.
   int get stoppedAttachmentDownloads => attachmentStops.count;
 
-  /// How many headers of each box the current session was sent since the
-  /// box was last listed, by `boxType/boxID`: the box's paging position.
+  /// Called with each dispatcher call, as [actions] records it, before it is
+  /// answered, so that a test can change the mailbox in between: for
+  /// example [listElsewhere] between two pages of a listing.
+  void Function(String action)? beforeAnswer;
+
+  /// How many headers of each box were sent since the box was last listed,
+  /// by `boxType/boxID`: the box's paging position.
+  ///
+  /// As seen live (yvanvds/dartschool#15, #76), Smartschool keeps the
+  /// paging position per user and box, not in the session: a `message list`
+  /// of a box, in any session of the account, restarts it at the second
+  /// page, and each `continue_messages` of the box answers with the page
+  /// after the position, whichever listing sent it. A new login keeps the
+  /// positions: Smartschool goes on with the next page in the new session.
+  /// A `continue_messages` of a box that was not listed is answered like
+  /// one after the last page (only `rebuildfinish`); what Smartschool
+  /// answers then has not been seen.
   final Map<String, int> _paging = {};
 
   /// The recipients registered on each open compose form, by its
@@ -239,15 +254,13 @@ class FakeMailbox {
   String _userName(int id) =>
       _userIds.entries.firstWhere((entry) => entry.value == id).key;
 
-  /// Starts a new session, which has no paging positions.
-  ///
-  /// As seen live (yvanvds/dartschool#15), Smartschool keeps one paging
-  /// position per box in the session: a `message list` of a box restarts it
-  /// at the second page, and each `continue_messages` of the box answers
-  /// with the page after the position. A `continue_messages` of a box the
-  /// session has not listed is answered like one after the last page (only
-  /// `rebuildfinish`); what Smartschool answers then has not been seen.
-  void newSession() => _paging.clear();
+  /// Lists the box ([boxType], [boxId]) the way a `message list` in another
+  /// session of the account does, such as the user opening the box in the
+  /// web client: it restarts the box's paging position (see [_paging]), so
+  /// the next `continue_messages` of a listing that got past its second page
+  /// answers with the second page again. Not recorded in [actions].
+  void listElsewhere({String boxType = 'inbox', String boxId = '0'}) =>
+      _list(boxType, boxId);
 
   /// Whether [options] submits a compose form, which sends a message.
   static bool isSubmit(RequestOptions options) =>
@@ -314,6 +327,7 @@ class FakeMailbox {
         for (final key in params.keys.toList()..sort()) '$key=${params[key]}',
       ].join(' '),
     );
+    beforeAnswer?.call(actions.last);
     final id = int.tryParse(params['msgID'] ?? '');
     return switch (action) {
       'message list' => _list(params['boxType']!, params['boxID'] ?? '0'),

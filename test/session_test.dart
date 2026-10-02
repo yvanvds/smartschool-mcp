@@ -351,6 +351,85 @@ void main() {
     });
   });
 
+  group('when Smartschool restarts the paging of a box the call lists '
+      '(yvanvds/dartschool#76)', () {
+    const restarted = SmartschoolPagingRestartedError(
+      'Smartschool restarted the paging of the box',
+    );
+
+    test('the call runs once more, on the same client, and says so in the '
+        'log', () async {
+      final session = newSession();
+      var attempts = 0;
+      late String result;
+
+      final lines = await _logOf(() async {
+        result = await session.run((client) async {
+          if (++attempts == 1) throw restarted;
+          return 'listed';
+        });
+      });
+
+      expect(result, 'listed');
+      expect(attempts, 2);
+      expect(server.logins, 1);
+      expect(clientsCreated, 1);
+      expect(
+        lines,
+        contains(
+          'Smartschool restarted the listing of a message box '
+          '($restarted); listing it again',
+        ),
+      );
+    });
+
+    test('restarted again: reported, and not run a third time', () async {
+      final session = newSession();
+      var attempts = 0;
+
+      await expectLater(
+        session.run((client) async {
+          attempts++;
+          throw restarted;
+        }),
+        throwsA(_problem(ProblemKind.listingRestarted)),
+      );
+      expect(attempts, 2);
+    });
+
+    test('a refused session and a restarted listing are each repeated '
+        'once', () async {
+      final session = newSession();
+      var attempts = 0;
+
+      expect(
+        await session.run((client) async {
+          switch (++attempts) {
+            case 1:
+              throw restarted;
+            case 2:
+              throw const SmartschoolSessionExpiredError();
+          }
+          return 'listed';
+        }),
+        'listed',
+      );
+      expect(attempts, 3);
+
+      attempts = 0;
+      await expectLater(
+        session.run((client) async {
+          attempts++;
+          throw attempts == 2
+              ? const SmartschoolSessionExpiredError()
+              : restarted;
+        }),
+        throwsA(_problem(ProblemKind.listingRestarted)),
+      );
+      expect(attempts, 3);
+    });
+  });
+
   group('with a saved session that expired (an old cookie cache)', () {
     test('a new process logs in once, and its first call succeeds on that '
         'client', () async {

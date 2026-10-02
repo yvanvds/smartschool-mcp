@@ -42,6 +42,11 @@ enum ProblemKind {
   /// Smartschool did not accept the session (for example after it expired).
   sessionRejected(permanent: false),
 
+  /// Smartschool restarted the paging of a message box that was being
+  /// listed: the box was listed elsewhere on the account meanwhile, for
+  /// example in the web client ([SmartschoolPagingRestartedError]).
+  listingRestarted(permanent: false),
+
   /// Anything else.
   unexpected(permanent: false);
 
@@ -116,6 +121,12 @@ final class SmartschoolProblem implements Exception {
       ProblemKind.sessionRejected =>
         'Smartschool did not accept the login session. Try again in a '
             'moment. If it keeps happening, $restart.',
+      ProblemKind.listingRestarted =>
+        'Smartschool restarted the listing of a message box while it was '
+            'being read, also when it was listed again. That happens when '
+            'the same box is opened or listed elsewhere on the account at the '
+            'same time, for example in Smartschool in the browser or in '
+            'another app. Try again in a moment.',
       ProblemKind.unexpected =>
         'Talking to Smartschool failed with an unexpected error. Try again '
             'in a moment. If it keeps happening, $restart; the technical '
@@ -159,7 +170,8 @@ final class SmartschoolProblem implements Exception {
   }
 }
 
-/// Classifies [error] as a login or connection problem.
+/// Classifies [error] as a login or connection problem, or as a box listing
+/// Smartschool restarted ([ProblemKind.listingRestarted]).
 ///
 /// Returns null when [error] is something else (for example a tool-specific
 /// failure), which the caller handles itself.
@@ -193,6 +205,11 @@ ProblemKind? classifyFailure(Object error) {
       return ProblemKind.unreachable;
     case SmartschoolSessionExpiredError():
       return ProblemKind.sessionRejected;
+    // The session is fine: Smartschool keeps the paging position per user
+    // and box, and a listing of the box elsewhere restarted it
+    // (yvanvds/dartschool#76).
+    case SmartschoolPagingRestartedError():
+      return ProblemKind.listingRestarted;
     case SmartschoolInvalidCredentialsError():
       return ProblemKind.wrongPassword;
     // A missing TOTP secret cannot happen: an empty key is caught as a

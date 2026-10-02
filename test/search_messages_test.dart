@@ -592,6 +592,52 @@ void main() {
     );
   });
 
+  test('a box listed elsewhere while it is paged (the user opening it in the '
+      'web client) is listed again: a message on its third page is found '
+      '(yvanvds/dartschool#76)', () async {
+    server.mailbox.archive
+      ..addAll(hourlyMessages(110, firstId: 2000, newest: '2024-01-31 18:00'))
+      // The oldest of 113, on the third page of 50.
+      ..add(
+        FakeMessage(
+          id: 800,
+          sender: 'Directie',
+          subject: 'Nog ouder',
+          date: '2023-11-01 10:00',
+          body: '<p>Het zwembad is dicht.</p>',
+        ),
+      );
+    const nextArchivePage =
+        'continue_messages boxID=305 boxType=inbox layout=new';
+    var pages = 0;
+    server.mailbox.beforeAnswer = (action) {
+      if (action == nextArchivePage && ++pages == 2) {
+        server.mailbox.listElsewhere(boxId: '305');
+      }
+    };
+
+    final text = await ok({'query': 'zwembad', 'until': '2023-12-31'});
+
+    expect(
+      text,
+      'Inbox and Archive: 1 of the 1 message searched contains all of: '
+      'zwembad, newest first.\n'
+      '- archive | id 800 | 2023-11-01 10:00 | from Directie | Nog ouder\n'
+      '  Het zwembad is dicht.',
+    );
+    final listings = [
+      startsWith('message list boxID=0 boxType=inbox '),
+      startsWith('message list boxID=305 boxType=inbox '),
+      nextArchivePage,
+      nextArchivePage,
+    ];
+    expect(
+      server.mailbox.actions.where((a) => !a.startsWith('show message ')),
+      [...listings, ...listings],
+    );
+    expect(downloadCounts(), {800: 1});
+  });
+
   test('since: lists each box only until it reaches past since', () async {
     server.mailbox.inbox.addAll(
       hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),

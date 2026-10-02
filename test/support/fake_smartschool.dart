@@ -170,7 +170,6 @@ class FakeSmartschool implements HttpClientAdapter {
       logins++;
       _validSession = 'session$logins';
       _passwordDone = false;
-      mailbox.newSession();
       _rejectsLeft = rejectsAfterLogin;
       return _json(
         '{"success":true,"redirectTo":"/"}',

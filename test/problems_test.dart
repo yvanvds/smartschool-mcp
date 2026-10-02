@@ -108,6 +108,34 @@ void main() {
     expect(classifyFailure(error!), ProblemKind.unreachable);
   });
 
+  test('classifyFailure of a box paging that Smartschool restarted, because '
+      'the box was listed elsewhere, as the library throws it '
+      '(yvanvds/dartschool#76)', () async {
+    final server = FakeSmartschool();
+    server.mailbox.inbox.addAll(
+      hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),
+    );
+    var pages = 0;
+    server.mailbox.beforeAnswer = (action) {
+      if (action.startsWith('continue_messages') && ++pages == 2) {
+        server.mailbox.listElsewhere();
+      }
+    };
+    final client = await fakeClientFactory(server, await tempCache())(
+      FakeCredentials(),
+    );
+    final messages = MessagesService(client);
+    addTearDown(messages.dispose);
+
+    final error = await messages.getAllHeaders().then<Object?>(
+      (_) => null,
+      onError: (Object e) => e,
+    );
+
+    expect(error, isA<SmartschoolPagingRestartedError>());
+    expect(classifyFailure(error!), ProblemKind.listingRestarted);
+  });
+
   group('classifyFailure of other errors', () {
     test('network failures are "unreachable"', () {
       final request = RequestOptions(path: '/');
@@ -332,6 +360,21 @@ void main() {
           contains('restart the server'),
         ),
       );
+    });
+
+    test('a listing restarted again says where the box was listed and to try '
+        'again, not to restart or fix a setting', () {
+      final text = message(ProblemKind.listingRestarted);
+      expect(
+        text,
+        allOf(
+          contains('listed elsewhere on the account'),
+          contains('in the browser'),
+          contains('Try again in a moment.'),
+        ),
+      );
+      expect(text, isNot(contains('restart Claude Desktop')));
+      expect(text, isNot(contains('SMARTSCHOOL_')));
     });
 
     test('account verification says what Smartschool asks for', () {

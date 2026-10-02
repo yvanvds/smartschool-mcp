@@ -232,6 +232,33 @@ void main() {
     expect(server.mailbox.actions, [_inboxListing, 'archive msgIDs=1001']);
   });
 
+  test('the inbox listed elsewhere while it is paged (the user opening it in '
+      'the web client): it is listed again, and an old id is archived, not '
+      'reported as not in the inbox (yvanvds/dartschool#76)', () async {
+    server.mailbox.inbox.addAll(
+      hourlyMessages(120, firstId: 1000, newest: '2024-04-30 18:00'),
+    );
+    var pages = 0;
+    server.mailbox.beforeAnswer = (action) {
+      if (action == _nextInboxPage && ++pages == 2) {
+        server.mailbox.listElsewhere();
+      }
+    };
+
+    expect(await ok([103]), 'Archived 1 message.\nArchived:\n$_line103');
+    expect(server.mailbox.actions, [
+      _inboxListing,
+      _nextInboxPage,
+      // Answered with the second page again: the paging was restarted.
+      _nextInboxPage,
+      _inboxListing,
+      _nextInboxPage,
+      _nextInboxPage,
+      'archive msgIDs=103',
+    ]);
+    expect(_ids(server.mailbox.archive), contains(103));
+  });
+
   test('an id in neither box: both are listed to the end', () async {
     server.mailbox
       ..inbox.addAll(
