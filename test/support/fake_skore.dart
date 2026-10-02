@@ -5,7 +5,9 @@ import 'package:dio/dio.dart';
 // A fake of Smartschool's Skore module: the endpoints the library's
 // `SkoreService` reads, answered in the shape of dartschool's anonymised
 // captures of the live Skore (`test/skore_service_test.dart` there, read-only,
-// 2026-10-01), with fake names.
+// 2026-10-01), with fake names; and the assignment of a teacher to a course
+// (`saveOwner`, with `getMyGroups` before a replace), carried out as the live
+// Skore did in dartschool#71 (`test/skore_service_assign_test.dart` there).
 
 /// The tree of report models (`select_models`), answered as JSON.
 const fakeSkoreModelsPath = '/modules/Skore/modules/rapportbeheer/data.php';
@@ -17,6 +19,14 @@ const fakeSkoreOwnersPagePath =
 /// The RPC service behind the assignments page (`getTeachers`; the writes of
 /// #43 call `getMyGroups` and `saveOwner` on it).
 const fakeSkoreOwnersRpcPath = '/modules/Skore/backend/models/owners.php';
+
+/// The RPC methods of [fakeSkoreOwnersRpcPath] the fake serves. It answers
+/// any other (such as `deleteOwner` or `explodeMyGroups`, which delete) with
+/// HTTP 501.
+const fakeSkoreOwnersRpcMethods = {'getTeachers', 'getMyGroups', 'saveOwner'};
+
+/// The id the fake gives the first assignment a save adds.
+const fakeSkoreFirstNewAssignment = 35001;
 
 /// The RPC service behind the "share gradebooks" manager (#44).
 const fakeSkoreGradebooksRpcPath =
@@ -37,6 +47,20 @@ enum SkoreRefusal {
   /// data: most likely what such an account gets. The library reports it
   /// as a plain `SmartschoolSkoreError` (an answer it cannot use).
   page,
+}
+
+/// How the fake answers a save (`saveOwner`), for the tests of a save that
+/// Skore does not confirm.
+enum SkoreSave {
+  /// Carried out, and answered with the assignment and its teacher, as the
+  /// live Skore did (`{"ownerID": 34826, "userID": 146}`).
+  confirmed,
+
+  /// Carried out, but the connection drops before the answer arrives.
+  answerLost,
+
+  /// Not carried out: answered with HTTP 500 and Smartschool's error page.
+  serverError,
 }
 
 /// A teacher as Skore names one (`"Last, First"`), by Smartschool user id.
@@ -203,10 +227,12 @@ const fakeSkore1B2 = FakeSkoreClass(2378, '1B2');
 /// A fake Skore, served by `FakeSmartschool` to logged-in requests.
 ///
 /// Every Skore request is recorded in [requests]. With [refusal] set, every
-/// request is refused as for an account without the rights. The RPC
-/// services answer only the reads: another method of `owners.php` (the
-/// writes of #43) is answered with HTTP 501, and the gradebooks service
-/// (#44) is not served yet.
+/// request is refused as for an account without the rights. Of the RPC
+/// service `owners.php` it serves [fakeSkoreOwnersRpcMethods]: the read of
+/// the teachers, whether a teacher works with "Mijn lesgroepen" for a course
+/// ([myGroups]), and the save of an assignment, which it carries out on the
+/// classes as the live Skore did, or not, as [save] says. The gradebooks
+/// service (#44) is not served yet.
 class FakeSkore {
   /// The report models, with their groups and classes.
   final List<FakeSkoreModel> models = [];
@@ -217,9 +243,23 @@ class FakeSkore {
   /// When set, how every request is refused.
   SkoreRefusal? refusal;
 
-  /// The Skore requests, in order; `rpc` is the RPC method of a POST.
+  /// How the fake answers a save (`saveOwner`).
+  SkoreSave save = SkoreSave.confirmed;
+
+  /// The teachers who work with "Mijn lesgroepen" (their own groups of
+  /// pupils) for a course of a class, as (teacher id, class id, course id).
+  final Set<(int, int, int)> myGroups = {};
+
+  /// The Skore requests, in order; `rpc` is the RPC method of a POST, and
+  /// `form` the fields of its form.
   final List<
-    ({String method, String path, Map<String, String> query, String? rpc})
+    ({
+      String method,
+      String path,
+      Map<String, String> query,
+      String? rpc,
+      Map<String, String> form,
+    })
   >
   requests = [];
 
@@ -228,6 +268,74 @@ class FakeSkore {
     for (final request in requests)
       [request.method, request.path, ?request.rpc].join(' '),
   ];
+
+  /// The parameters of each call of RPC [method] that reached Skore, in
+  /// order: its `rpc_params`, the JSON array Skore's web client sends.
+  List<List<Object?>> paramsOf(String method) => [
+    for (final request in requests)
+      if (request.rpc == method)
+        (jsonDecode(request.form['rpc_params'] ?? 'null') as List).cast(),
+  ];
+
+  /// The saves (`saveOwner`) that reached Skore, as their parameters:
+  /// class id, course id, assignment id (empty to add one) and teacher id.
+  List<List<Object?>> get saves => paramsOf('saveOwner');
+
+  /// The assignments that a save or [addAssignment] changed, by class id
+  /// and course id; the other courses have those they were loaded with.
+  final Map<(int, int), List<FakeSkoreAssignment>> _changed = {};
+
+  int _nextAssignment = fakeSkoreFirstNewAssignment;
+
+  /// The assignments of [course] of class [classId] now.
+  List<FakeSkoreAssignment> assignmentsOf(
+    int classId,
+    FakeSkoreCourse course,
+  ) => _changed[(classId, course.id)] ?? course.assignments;
+
+  /// Adds an assignment of [teacher] to course [courseId] of class
+  /// [classId], with a new id, as a save without an assignment id does (and
+  /// as the green + in Skore's web client does); returns it, or null when
+  /// the class has no such course.
+  FakeSkoreAssignment? addAssignment(
+    int classId,
+    int courseId,
+    FakeSkoreTeacher teacher,
+  ) {
+    final course = _courseOf(classId, courseId);
+    if (course == null) return null;
+    final assignment = FakeSkoreAssignment(_nextAssignment++, teacher);
+    _changed[(classId, courseId)] = [
+      ...assignmentsOf(classId, course),
+      assignment,
+    ];
+    return assignment;
+  }
+
+  /// Gives assignment [assignmentId] of course [courseId] of class [classId]
+  /// teacher [teacher], keeping its id, as a save with that assignment id
+  /// does; returns it, or null when the course has no such assignment.
+  FakeSkoreAssignment? replaceTeacher(
+    int classId,
+    int courseId,
+    int assignmentId,
+    FakeSkoreTeacher teacher,
+  ) {
+    final course = _courseOf(classId, courseId);
+    if (course == null) return null;
+    final assignments = assignmentsOf(classId, course);
+    if (!assignments.any((a) => a.id == assignmentId)) return null;
+    final replaced = FakeSkoreAssignment(assignmentId, teacher);
+    _changed[(classId, courseId)] = [
+      for (final assignment in assignments)
+        assignment.id == assignmentId ? replaced : assignment,
+    ];
+    return replaced;
+  }
+
+  FakeSkoreCourse? _courseOf(int classId, int courseId) => classWithId(
+    classId,
+  )?.courses?.where((course) => course.id == courseId).firstOrNull;
 
   /// The school of dartschool's capture, trimmed: three report models; the
   /// classes 1B1, 1B2 (no course structure) and 2B1, 3B1, and 5WW1, and
@@ -281,6 +389,7 @@ class FakeSkore {
       path: path,
       query: options.uri.queryParameters,
       rpc: form['rpc_method'],
+      form: form,
     ));
     if (refusal case final refusal?) {
       return _html(
@@ -307,27 +416,90 @@ class FakeSkore {
         );
       case ('POST', fakeSkoreOwnersRpcPath):
         final method = form['rpc_method'];
-        if (method != 'getTeachers') {
-          return _json(
-            '{"error":"the fake does not serve $method"}',
-            status: 501,
-          );
-        }
-        return _json(
-          jsonEncode({
-            'result': [
+        final params = jsonDecode(form['rpc_params'] ?? '[]') as List;
+        final ids = [for (final param in params) int.tryParse('$param')];
+        switch (method) {
+          case 'getTeachers':
+            return _rpc('getTeachers', [
               for (final teacher in teachers)
                 {'userID': '${teacher.id}', 'name': teacher.name},
-            ],
-            'session': 1,
-            'method': 'getTeachers',
-            'timelimit': 0,
-            'limitInfo': null,
-          }),
+            ]);
+          // getMyGroups(userID, classID, courseID). Skore answers
+          // {"mygroups": null} for a teacher without groups (seen live); the
+          // answer with groups has not been seen: a list, judging from
+          // Skore's web client (dartschool#71).
+          case 'getMyGroups':
+            final [teacherId, classId, courseId] = ids;
+            final groups = myGroups.contains((teacherId, classId, courseId));
+            return _rpc('getMyGroups', {
+              'mygroups': groups
+                  ? [
+                      {'groupID': '77', 'name': 'Groep A'},
+                    ]
+                  : null,
+            });
+          // saveOwner(classID, courseID, ownerID, userID): ownerID empty
+          // for a new assignment.
+          case 'saveOwner':
+            return _saveOwner(options, params, ids);
+        }
+        return _json(
+          '{"error":"the fake does not serve $method"}',
+          status: 501,
         );
     }
     return null;
   }
+
+  /// Carries out a save (`saveOwner`) as [save] says, and answers it as
+  /// the live Skore did: `{"ownerID": 34826, "userID": 146}`, the
+  /// assignment (new, or the same for a replace) and its teacher.
+  ///
+  /// The library checks a save before it sends it, so a save the fake
+  /// cannot carry out (another class, course or assignment, an unknown
+  /// teacher) is answered with HTTP 400, which no test expects.
+  ResponseBody _saveOwner(
+    RequestOptions options,
+    List<Object?> params,
+    List<int?> ids,
+  ) {
+    if (save == SkoreSave.serverError) {
+      return _html(_errorPage, status: 500);
+    }
+    final [classId, courseId, assignmentId, teacherId] = ids;
+    final teacher = teachers.where((t) => t.id == teacherId).firstOrNull;
+    final FakeSkoreAssignment? saved;
+    if (classId == null || courseId == null || teacher == null) {
+      saved = null;
+    } else if ('${params[2]}'.isEmpty) {
+      saved = addAssignment(classId, courseId, teacher);
+    } else if (assignmentId == null) {
+      saved = null;
+    } else {
+      saved = replaceTeacher(classId, courseId, assignmentId, teacher);
+    }
+    if (saved == null) {
+      return _json('{"error":"the fake cannot save $params"}', status: 400);
+    }
+    if (save == SkoreSave.answerLost) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'Connection reset by peer',
+      );
+    }
+    return _rpc('saveOwner', {'ownerID': saved.id, 'userID': saved.teacher.id});
+  }
+
+  /// An RPC answer of Skore to [method] with [result], as in the captures.
+  static ResponseBody _rpc(String method, Object? result) => _json(
+    jsonEncode({
+      'result': result,
+      'session': 1,
+      'method': method,
+      'timelimit': 0,
+      'limitInfo': null,
+    }),
+  );
 
   /// The tree of report models as Skore answers `select_models`: a model
   /// node holds a members node, which holds groups (`childmember`) of
@@ -396,16 +568,13 @@ class FakeSkore {
       'align="absmidle"/>&nbsp;${_text.convert(name)}';
 
   /// The assignments page of [skoreClass], a row per course.
-  static String _ownersPage(
-    FakeSkoreClass skoreClass,
-    List<FakeSkoreCourse> courses,
-  ) {
+  String _ownersPage(FakeSkoreClass skoreClass, List<FakeSkoreCourse> courses) {
     final rows = StringBuffer();
     for (final course in courses) {
       final kind = course.groupHeader ? 'owners_vz' : 'owners_v';
       final header = course.groupHeader ? ' grouponly="true"' : '';
       final owners = StringBuffer();
-      for (final assignment in course.assignments) {
+      for (final assignment in assignmentsOf(skoreClass.id, course)) {
         owners.write(
           '<div dojoType="ownernode" ownerID="${assignment.id}" '
           'userID="${assignment.teacher.id}" courseID="${course.id}" '
@@ -449,6 +618,11 @@ class FakeSkore {
 const _noStructurePage =
     '<span data-i18n="class_has_no_structure">Deze klas bevat nog geen '
     "structuur. Geef deze klas een structuur via 'Koppeling'.</span>";
+
+/// Smartschool's generic error page.
+const _errorPage =
+    '<!DOCTYPE html><html><head><title></title></head><body>'
+    '<div id="#smscMain"><h1>Oeps, er ging iets mis</h1></div></body></html>';
 
 /// A "no access" page that names the user, as a refusal might.
 const fakeSkoreNoAccessName = 'Lena Vermeulen';

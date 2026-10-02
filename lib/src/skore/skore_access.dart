@@ -20,7 +20,7 @@ const skoreRights =
 ///
 /// Like every [SmartschoolSession.run] action, [action] may run twice (when
 /// Smartschool refuses the session), so it must be safe to repeat; the
-/// reads are.
+/// reads are, and so are the library's writes (see `skore_writes.dart`).
 ///
 /// Skore's own errors, which [SmartschoolSession.run] passes on as they
 /// are, become [ToolError]s ([skoreToolError]); login and connection
@@ -43,6 +43,14 @@ Future<T> withSkore<T>(
 ///
 /// - [SmartschoolSkoreAccessDeniedError]: Skore refused the request to the
 ///   account (HTTP 403), which lacks the rights for that part of Skore.
+/// - [SmartschoolSkoreMyGroupsError], from a write (`replaceTeacher`): the
+///   current teacher of the assignment works with "Mijn lesgroepen" for the
+///   course, so nothing was saved. Those groups are handled in Skore itself;
+///   the library never deletes them, and no tool may try another way.
+/// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
+///   save refused the change, so nothing was saved. Its message, which the
+///   library writes from what it read and quotes nothing else of Skore's
+///   answers, is the reason passed on, so that Claude can correct the call.
 /// - Any other [SmartschoolSkoreError]: an answer the server cannot use.
 ///   What Skore answers an account without the rights has not been
 ///   captured yet (yvanvds/dartschool#91): it most likely ends up here (an
@@ -51,14 +59,38 @@ Future<T> withSkore<T>(
 ///   workaround; its removal is #74). The library's message can quote
 ///   Skore's page, which may hold names, so it goes to the log only.
 ///
-/// The writes' errors (#43, #44: a [SmartschoolSkoreChangeRefusedError],
-/// whose message says why a change was refused) need a case of their own,
-/// before the last one.
+/// A write that went out without Skore confirming it
+/// ([SmartschoolSkoreSaveUnconfirmedError], deliberately not a
+/// [SmartschoolSkoreError]) is not a [ToolError]: the write tools report it
+/// themselves, with what to read to check it (`skoreWriteNotConfirmed` in
+/// `skore_writes.dart`).
 ToolError? skoreToolError(Object error, CredentialSource source) {
   switch (error) {
     case SmartschoolSkoreAccessDeniedError(:final area):
       log('skore: $error');
       return ToolError(skoreAccessDenied(area, source));
+    case SmartschoolSkoreMyGroupsError(
+      :final classId,
+      :final courseId,
+      :final teacherId,
+    ):
+      log('skore: $error');
+      return ToolError(
+        'Skore did not save the change: the current teacher of the '
+        'assignment (teacher id $teacherId) works with "Mijn lesgroepen", '
+        'their own groups of pupils, for course id $courseId of class id '
+        '$classId. Those groups have to be handled in Skore itself first: '
+        'tell the user, who can make this change in Skore, where Skore asks '
+        'to delete the groups (which cannot be undone). The server never '
+        'deletes them; do not try another way to change this assignment.',
+      );
+    case SmartschoolSkoreChangeRefusedError(:final message):
+      log('skore: $error');
+      return ToolError(
+        'Skore refused the change before saving it: ${_refusal(message)} '
+        'Read the class again with list_skore_courses (and the teachers '
+        'with list_skore_teachers) to correct the call.',
+      );
     case SmartschoolSkoreError():
       log('skore: $error');
       return ToolError(
@@ -68,6 +100,18 @@ ToolError? skoreToolError(Object error, CredentialSource source) {
       );
   }
   return null;
+}
+
+/// The reason in [message], the message of a
+/// [SmartschoolSkoreChangeRefusedError]: without the name of the library's
+/// method in front (`addTeacher: `) and its closing `Nothing was saved.`,
+/// which the write tools say in their own words.
+String _refusal(String message) {
+  final reason = message
+      .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
+      .replaceFirst(RegExp(r'\s*Nothing was saved\.\s*$'), '')
+      .trim();
+  return reason.endsWith('.') ? reason : '$reason.';
 }
 
 /// What the Skore tools say when Skore refused [area] to the account.

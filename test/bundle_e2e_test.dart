@@ -155,7 +155,7 @@ void main() {
     final init = await server.initialize();
     expect((init['serverInfo'] as Map)['version'], manifest['version']);
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(_skoreTools, hasLength(3));
+    expect(_skoreTools, hasLength(5));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       [
@@ -195,7 +195,7 @@ void main() {
 
   test('installed with "Skore-beheer" ticked: Claude Desktop passes it as '
       'true, and the server offers every tool of the manifest, the Skore '
-      'tools last, and says the switch is on (#42)', () async {
+      'tools last, and says the switch is on (#42, #43)', () async {
     final home = await tempHome();
     final required = {
       for (final MapEntry(:key, :value) in fields().entries)
@@ -220,7 +220,9 @@ void main() {
       [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
     );
     expect(
-      [for (final tool in tools) (tool as Map)['name']].skip(tools.length - 3),
+      [
+        for (final tool in tools) (tool as Map)['name'],
+      ].skip(tools.length - _skoreTools.length),
       _skoreTools,
     );
     final (_, text) = await server.callTool('smartschool_status');

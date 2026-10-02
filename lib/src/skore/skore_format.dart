@@ -10,13 +10,13 @@ import '../messages/message_search.dart';
 ///
 /// For example `1B1 | class id 2376 | group 1B | model 1gr B-str.`.
 String formatSkoreClass(SkoreClass skoreClass) => [
-  _name(skoreClass.name),
+  skoreName(skoreClass.name),
   'class id ${skoreClass.id}',
   switch (skoreClass.groupName?.trim()) {
     final group? when group.isNotEmpty => 'group $group',
     _ => 'no group',
   },
-  'model ${_name(skoreClass.modelName)}',
+  'model ${skoreName(skoreClass.modelName)}',
 ].join(' | ');
 
 /// One row of a class's courses, indented two spaces per [SkoreCourse.depth]:
@@ -32,7 +32,7 @@ String formatSkoreCourse(SkoreCourse course) {
       ? 'teacher'
       : '${assignments.length} teachers';
   final parts = [
-    _name(course.label.trim().isEmpty ? course.name : course.label),
+    _courseLabel(course),
     'course id ${course.id}',
     switch (course.code) {
       final code? when code.isNotEmpty => 'code $code',
@@ -49,17 +49,35 @@ String formatSkoreCourse(SkoreCourse course) {
   return '${'  ' * course.depth}- ${parts.join(' | ')}';
 }
 
+/// Course [courseId] in a sentence: the label of [course] in quotes, then its
+/// course id, such as `course "Project 1 (3e graad) [PROJE1]" (course id
+/// 1840)`; only `course id 1840` when [course] is null (not read).
+String formatSkoreCourseName(SkoreCourse? course, int courseId) =>
+    course == null
+    ? 'course id $courseId'
+    : 'course "${_courseLabel(course)}" (course id $courseId)';
+
+/// The label of [course] as the tools show it: Skore's label, else its
+/// name.
+String _courseLabel(SkoreCourse course) =>
+    skoreName(course.label.trim().isEmpty ? course.name : course.label);
+
 /// A teacher on a course: name, teacher id and the assignment, whose id is
 /// also the gradebook's. For example `Janssens, Jan (teacher id 1001,
 /// assignment 31882)`.
 String formatSkoreAssignment(SkoreAssignment assignment) =>
-    '${_name(assignment.teacherName)} (teacher id ${assignment.teacherId}, '
+    '${skoreName(assignment.teacherName)} (teacher id ${assignment.teacherId}, '
     'assignment ${assignment.id})';
+
+/// The teacher of [assignment]: name and teacher id. For example `Janssens,
+/// Jan (teacher id 1001)`.
+String formatSkoreTeacherOf(SkoreAssignment assignment) =>
+    '${skoreName(assignment.teacherName)} (teacher id ${assignment.teacherId})';
 
 /// One teacher Skore lets assign: name and teacher id. For example
 /// `Dupré, Céline | teacher id 1003`.
 String formatSkoreTeacher(SkoreTeacher teacher) =>
-    '${_name(teacher.name)} | teacher id ${teacher.id}';
+    '${skoreName(teacher.name)} | teacher id ${teacher.id}';
 
 /// The items of [items] in whose texts ([textsOf]) every word of [query]
 /// occurs, ignoring case and accents, also as part of a longer word; all of
@@ -79,7 +97,7 @@ List<T> skoreMatches<T>(
 
 /// [name] on one line, every run of white space as one space (Skore's
 /// labels hold double spaces), or `(no name)` when it is empty.
-String _name(String name) {
+String skoreName(String name) {
   final words = name.trim().replaceAll(_whitespace, ' ');
   return words.isEmpty ? '(no name)' : words;
 }

@@ -495,8 +495,9 @@ meanwhile is gone, so nothing is sent).
 The Skore tools are offered only when the switch "Skore-beheer" is on (see
 *Opt-in tools* below): they need the rights for score management in Skore
 (Rapporten > Modellen and Puntenboeken), as a Skore administrator has, and
-most teachers and all pupils lack them. They read Skore with the library's
-`SkoreService` (dartschool#70) and change nothing:
+most teachers and all pupils lack them. The first three read Skore with the
+library's `SkoreService` (dartschool#70) and change nothing; the last two
+assign teachers to courses (dartschool#71):
 
 - `list_skore_classes`: the classes of Skore's report models
   (`getClasses`), one line per class with its name, Skore class id, group
@@ -518,6 +519,48 @@ most teachers and all pupils lack them. They read Skore with the library's
 - `list_skore_teachers`: the teachers Skore lets assign to a course
   (`getTeachers`), by name with their teacher id (the Smartschool user id),
   in Skore's order; `query` as for `list_skore_classes`.
+- `add_skore_teacher`: assigns a teacher (`teacher_id`, from
+  `list_skore_teachers`) to a course (`course_id`) of a class (`class_id`),
+  with the library's `addTeacher`: a new assignment, which holds all pupils
+  of the class; the teachers already on the course keep theirs. Marked
+  destructive, not idempotent: Claude is told to read the class and look up
+  the teacher first, to show the user the class, the course's label, its
+  teachers now and the teacher to assign, and to wait for the user's
+  confirmation; that nothing needs to happen when the teacher is already on
+  the course; and to use `replace_skore_teacher`, not this tool, to give a
+  course another teacher. The result gives the assignment as saved: the
+  course's label, the class id, the teacher and the assignment id.
+- `replace_skore_teacher`: gives an assignment (`assignment_id`, from
+  `list_skore_courses`) of a course of a class another teacher
+  (`teacher_id`), with `replaceTeacher`: the assignment keeps its id, and
+  its gradebook stays. Marked destructive, not idempotent, with the same
+  confirmation. Before the save the library asks Skore (`getMyGroups`)
+  whether the current teacher works with "Mijn lesgroepen" for the course;
+  if so, nothing is saved (`SmartschoolSkoreMyGroupsError`), and Claude is
+  told to leave those groups to the user in Skore: the library never deletes
+  them (`explodeMyGroups`), and the tool tries no other way. The result also
+  names the teacher replaced.
+
+For both writes, the library reads the class (`getCourses`) and the teachers
+(`getTeachers`) again and refuses, before saving, a course that is not in the
+class or is a group header, an assignment that is not the course's, a
+teacher already on the course (for a replace, its current one too) and one
+Skore does not let assign (`SmartschoolSkoreChangeRefusedError`); the tool
+passes the reason on, says that nothing was changed, and tells Claude to read
+the class again. The save (`saveOwner`) is sent once, never again after
+logging in again. A save that Skore does not confirm
+(`SmartschoolSkoreSaveUnconfirmedError`: another answer, an error page, a
+connection lost after it went out) is reported as maybe saved, with what to
+look for in `list_skore_courses`, and Claude is told not to call the tool
+again for it, as for a message whose send Smartschool did not confirm. A
+session that Smartschool refused for the save means the save was not carried
+out: the session repeats the call, which reads the class again, so a teacher
+who is on the course by then is refused rather than added twice. The writes
+return only the assignment, so the tools read the course themselves first, to
+name it and the teacher replaced (`readSkoreCourse`, a workaround for
+yvanvds/dartschool#102; its removal is tracked in #74). Removing an
+assignment, choosing its pupils and Skore's import of assignments are not
+offered.
 
 Skore refusing a request to the account (HTTP 403,
 `SmartschoolSkoreAccessDeniedError`) is reported as an account without the
@@ -529,7 +572,8 @@ which the library reports as a plain `SmartschoolSkoreError`. Until then,
 any other `SmartschoolSkoreError` is reported as "Skore gave an answer the
 server could not use; usually the account lacks the rights", with the same
 advice; the library's message goes to the log only, as it can quote the
-page. #74 tracks dropping that hedge once dartschool#91 is done, and #75
+page. From a write, each of these errors also says that nothing was changed
+in Skore. #74 tracks dropping that hedge once dartschool#91 is done, and #75
 the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
@@ -613,13 +657,22 @@ Skore helpers for later tools live in `lib/src/skore/`. In
 `SkoreService` on the session and turns Skore's errors into `ToolError`s
 (`skoreToolError`: no rights, or an answer the server cannot use, whose
 details go to the log only), and `checkSkoreAccess`, the access check of
-`smartschool_status`. In `skore_format.dart`: one line per class, course
-row, assignment and teacher, and the `query` filter (`skoreMatches`). In
-`skore_opt_in.dart`: the Skore tools behind their switch (`skoreOptIn`).
-The tests run against a fake Skore (`test/support/fake_skore.dart`) that
-serves the endpoints `SkoreService` reads, in the shape of dartschool's
-anonymised captures, with fake names; it can refuse an account without the
-rights with HTTP 403 or with a page instead of data.
+`smartschool_status`; `skoreToolError` also passes on why a check refused a
+change, and says what to do about "Mijn lesgroepen". In `skore_writes.dart`,
+for the tools that change Skore: `withSkoreWrite`, which runs a write and
+adds to its `ToolError` that nothing was changed, `skoreWriteNotConfirmed`,
+the result of a save Skore did not confirm, and `readSkoreCourse`. In
+`skore_format.dart`: one line per class, course row, assignment and teacher,
+a course or a teacher in a sentence, and the `query` filter
+(`skoreMatches`). In `skore_opt_in.dart`: the Skore tools behind their
+switch (`skoreOptIn`). The tests run against a fake Skore
+(`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
+reads, in the shape of dartschool's anonymised captures, with fake names;
+it can refuse an account without the rights with HTTP 403 or with a page
+instead of data. It carries out the save of an assignment (`saveOwner`) and
+answers `getMyGroups` as the live Skore did in dartschool#71, can lose the
+answer to a save or answer it with an error page, and answers any other RPC
+method with HTTP 501.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

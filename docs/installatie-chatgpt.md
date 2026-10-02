@@ -167,7 +167,7 @@ installatie. -->
    | `SMARTSCHOOL_PASSWORD` | Je wachtwoord voor Smartschool. |
    | `SMARTSCHOOL_MFA` | Alleen met tweestapsverificatie: je 2FA-sleutel uit [stap 2](#2-je-2fa-sleutel-opzoeken). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat deze regel dan weg. |
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
-   | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken. De meeste leerkrachten en alle leerlingen laten deze regel weg. |
+   | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen. De meeste leerkrachten en alle leerlingen laten deze regel weg. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.
 5. Bewaar, en herstart ChatGPT (zie hieronder).

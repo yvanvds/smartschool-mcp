@@ -24,8 +24,9 @@ import 'support/fake_github.dart';
 ///
 /// Teachers as what a tool is about are fine: the Skore tools list the
 /// teachers of a course and the teachers that can be assigned, by their
-/// teacher id (#42). Write "a teacher", "its teachers", "the teacher to
-/// assign"; never "the teacher" as the one who uses the tool.
+/// teacher id (#42), and assign them (#43). Write "a teacher", "its
+/// teachers", "the teacher to assign", "the teacher of the assignment";
+/// never "the teacher" as the one who uses the tool.
 final _userAsTeacher = RegExp(
   r"\bthe (?:signed-in |logged-in |current )?teacher(?:'s)? "
   r'(?:is|was|can|could|has|had|wants|asks|asked|sees|looks|uses|types|'
@@ -483,6 +484,11 @@ void main() {
       'Lists the teachers that Skore lets assign to a course',
       'the id of the teacher to assign',
       "the teacher's name as Skore shows it",
+      'If the teacher to assign already has an assignment on the course',
+      'When the teacher of the assignment now works with "Mijn lesgroepen"',
+      'the current teacher of the assignment (teacher id 1005) works with',
+      'only its teacher changes: the teacher it had is no longer on the '
+          'course',
       'what the user is looking for',
     ]) {
       expect(text, isNot(matches(_userAsTeacher)), reason: text);
@@ -491,13 +497,15 @@ void main() {
       'list_skore_classes',
       'list_skore_courses',
       'list_skore_teachers',
+      'add_skore_teacher',
+      'replace_skore_teacher',
     });
   });
 
   test('no tool assumes the user is a teacher: students sign in too, so '
       'titles and descriptions speak of the user (#62). Only the Skore '
       'tools, with "Skore-beheer" on, speak of teachers, as their subject '
-      '(#42)', () async {
+      '(#42, #43)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: {
@@ -508,7 +516,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(30));
+    expect(tools, hasLength(32));
     expect([
       for (final tool in tools.cast<Map<String, Object?>>())
         if (_teachersAsSubject.contains(tool['name'])) tool['name'],
@@ -539,11 +547,13 @@ void main() {
   });
 
   group('the opt-in switch "Skore-beheer" (#42)', () {
-    const skoreTools = [
+    const skoreReads = [
       'list_skore_classes',
       'list_skore_courses',
       'list_skore_teachers',
     ];
+    const skoreWrites = ['add_skore_teacher', 'replace_skore_teacher'];
+    const skoreTools = [...skoreReads, ...skoreWrites];
 
     Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
         ((await server.request('tools/list'))['tools'] as List)
@@ -588,9 +598,10 @@ void main() {
       }
     });
 
-    test('on: the Skore tools come last, read-only, with their arguments; '
-        'smartschool_status says it is on; without settings they name the '
-        'missing settings, before any login', () async {
+    test('on: the Skore tools come last, the reads read-only and the writes '
+        '(#43) destructive, with their arguments; smartschool_status says it '
+        'is on; without settings they name the missing settings, before any '
+        'login', () async {
       final server = await ServerProcess.start(
         exePath,
         environment: {
@@ -601,16 +612,48 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(30));
+      expect(tools, hasLength(32));
       expect([for (final tool in tools.skip(27)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
-      for (final name in skoreTools) {
+      for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
           'title': isA<String>(),
           'readOnlyHint': true,
           'idempotentHint': true,
           'openWorldHint': true,
         }, reason: name);
+      }
+      // Claude Desktop asks approval before every call of a write.
+      for (final name in skoreWrites) {
+        expect(byName[name]!['annotations'], {
+          'title': isA<String>(),
+          'readOnlyHint': false,
+          'destructiveHint': true,
+          'idempotentHint': false,
+          'openWorldHint': true,
+        }, reason: name);
+      }
+      for (final (name, required) in [
+        ('add_skore_teacher', ['class_id', 'course_id', 'teacher_id']),
+        (
+          'replace_skore_teacher',
+          ['class_id', 'course_id', 'assignment_id', 'teacher_id'],
+        ),
+      ]) {
+        final schema = byName[name]!['inputSchema'] as Map;
+        expect(schema['required'], required, reason: name);
+        expect(
+          (schema['properties'] as Map).keys,
+          unorderedEquals(required),
+          reason: name,
+        );
+        for (final property in (schema['properties'] as Map).values) {
+          expect(property, {
+            'type': 'integer',
+            'description': isA<String>(),
+            'minimum': 1,
+          }, reason: name);
+        }
       }
       for (final name in ['list_skore_classes', 'list_skore_teachers']) {
         final schema = byName[name]!['inputSchema'] as Map;
@@ -638,6 +681,19 @@ void main() {
         ('list_skore_classes', {'query': '5WW'}),
         ('list_skore_courses', {'class_id': 2516}),
         ('list_skore_teachers', {}),
+        (
+          'add_skore_teacher',
+          {'class_id': 2516, 'course_id': 2142, 'teacher_id': 1005},
+        ),
+        (
+          'replace_skore_teacher',
+          {
+            'class_id': 2516,
+            'course_id': 1588,
+            'assignment_id': 34826,
+            'teacher_id': 1006,
+          },
+        ),
       ]) {
         final (isError, text) = await server.callTool(
           tool,
@@ -655,7 +711,7 @@ void main() {
       await server.stop();
       expect(
         await server.stderr,
-        contains('Skore-beheer: on, 3 tools offered'),
+        contains('Skore-beheer: on, 5 tools offered'),
       );
     });
   });

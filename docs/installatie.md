@@ -21,8 +21,10 @@ Je vraagt het gewoon in een gesprek:
   Claude of jijzelf ze kan openen.
 - **Skore**, alleen voor wie er de rechten voor puntenbeheer heeft, zoals een
   Skore-beheerder: de klassen bekijken, de vakken van een klas met de
-  leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Dat zet je aan
-  met **Skore-beheer**.
+  leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Een leerkracht
+  aan een vak van een klas koppelen, of een lesopdracht een andere
+  leerkracht geven, telkens pas nadat jij het goedgekeurd hebt. Dat zet je
+  aan met **Skore-beheer**.
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
 [installatiegids voor ChatGPT](installatie-chatgpt.md).
@@ -309,8 +311,22 @@ school, of zet **Skore-beheer** weer uit.
 - "Wie geeft wiskunde in 3B1?"
 - "Welke vakken van 5WW1 hebben nog geen leerkracht?"
 - "Aan welke vakken is mevrouw Dupré gekoppeld in 5WW1?"
+- "Koppel mevrouw Dupré aan Eye4Skills in 5WW1."
+  Claude zoekt de klas, het vak en de leerkracht op, toont wat het gaat
+  koppelen, en koppelt pas na jouw akkoord. Daarna vraagt Claude Desktop
+  nog eens toestemming. Het vak krijgt zo een nieuwe lesopdracht, met alle
+  leerlingen van de klas. De leerkrachten die al aan het vak gekoppeld
+  waren, blijven gekoppeld.
+- "Wiskunde in 3B1 krijgt meneer Janssens in plaats van mevrouw Maes."
+  Claude geeft de lesopdracht een andere leerkracht, na jouw akkoord. De
+  lesopdracht en haar puntenboek blijven: alleen de leerkracht verandert.
+  Werkt de huidige leerkracht voor dat vak met **Mijn lesgroepen**, dan
+  verandert Claude niets: regel die groepen eerst zelf in Skore.
 
-Claude kijkt in Skore alleen: het verandert er niets.
+Claude verandert in Skore alleen iets na jouw akkoord, telkens voor één vak
+van één klas. Een lesopdracht verwijderen, de leerlingen van een
+lesopdracht kiezen of lesopdrachten importeren kan Claude niet: dat doe je
+zelf in Skore.
 
 ### Bestanden bewaren
 
@@ -348,7 +364,8 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   zelf.
 - De extensie werkt alleen met berichten, Intradesk, de planner en, met
   **Skore-beheer** aan, Skore. Andere onderdelen van Smartschool kent ze
-  niet. In Skore leest ze alleen de klassen, vakken en leerkrachten. In de
+  niet. In Skore leest ze de klassen, vakken en leerkrachten, en koppelt ze
+  leerkrachten aan vakken: een lesopdracht verwijderen kan ze niet. In de
   planner
   verandert ze alleen je eigen planner: ze vult je lesuren in, plant toetsen
   en taken in je lesuren, past je eigen lessen, toetsen en taken aan, maakt
