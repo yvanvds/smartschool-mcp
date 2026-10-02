@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:dart_mcp/server.dart';
 
+import 'client_app.dart';
 import 'log.dart';
 import 'problems.dart';
 import 'tools/server_tool.dart';
@@ -21,12 +24,18 @@ import 'version.dart';
 /// With [updates], the server adds the update notice
 /// ([UpdateChecker.takeNotice]) to the first successful tool result after a
 /// newer release became known.
+///
+/// On `initialize`, the server sets [client] to the app the client names
+/// (`clientInfo.name`), so that messages say how to fix, restart and update
+/// in that app.
 base class SmartschoolServer extends MCPServer with ToolsSupport {
   SmartschoolServer(
     super.channel, {
     Iterable<ServerTool> tools = const [],
     UpdateChecker? updates,
+    ClientContext? client,
   }) : _updates = updates,
+       client = client ?? ClientContext(),
        super.fromStreamChannel(
          implementation: Implementation(
            name: serverName,
@@ -45,6 +54,17 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
   static const String serverName = 'smartschool';
 
   final UpdateChecker? _updates;
+
+  /// The app the server runs in, known after `initialize`.
+  final ClientContext client;
+
+  @override
+  FutureOr<InitializeResult> initialize(InitializeRequest request) {
+    final info = request.clientInfo;
+    client.app = ClientApp.fromClientName(info.name);
+    log('client: ${info.name} ${info.version} (${client.app.name})');
+    return super.initialize(request);
+  }
 
   Future<CallToolResult> _call(
     ServerTool tool,
@@ -82,7 +102,7 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
     final updates = _updates;
     if (updates == null || result.isError == true) return result;
     try {
-      final notice = updates.takeNotice();
+      final notice = updates.takeNotice(app: client.app);
       if (notice == null) return result;
       log('update notice added to the ${tool.definition.name} result');
       return CallToolResult(

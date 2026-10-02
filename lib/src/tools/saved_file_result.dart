@@ -53,11 +53,11 @@ String tooLargeToSave(SmartschoolDownloadTooLargeError error) {
 }
 
 /// The error when there is no download folder (no setting and no home
-/// folder for the default).
-ToolError noDownloadFolder() => ToolError(
+/// folder for the default); says where to set one in [source].
+ToolError noDownloadFolder(CredentialSource source) => ToolError(
   'There is no download folder to save files in. Set '
-  '"${Setting.downloadDir.formTitle}" (${Setting.downloadDir.envVar}) in the '
-  'Smartschool extension settings to a folder, then restart Claude Desktop.',
+  '${source.name(Setting.downloadDir)} ${source.where} to a folder, then '
+  '${source.restart}.',
 );
 
 /// What happened to the name of [saved], for the log; never the name.

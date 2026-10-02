@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_format.dart';
@@ -49,7 +50,7 @@ void main() {
     downloads = Directory('${root.path}${_sep}Downloads${_sep}Smartschool');
     folder = DownloadFolder(
       downloads.path,
-      origin: const DownloadFolderOrigin(
+      origin: DownloadFolderOrigin(
         'set in "Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR)',
         fix: 'choose another folder in "Downloadmap"',
       ),
@@ -476,34 +477,57 @@ void main() {
       },
     );
 
-    test('without a download folder: how to set one', () async {
-      final session = SmartschoolSession(
-        fakeExtensionSettings(),
-        createClient: fakeClientFactory(server, cookies),
-      );
-      addTearDown(session.close);
-      final (connection, _) = await connect(
-        tools: [
-          saveIntradeskFileTool(session, IntradeskIndexCache.of(session), null),
-          saveMessageAttachmentTool(session, null),
-        ],
-      );
-
-      for (final (tool, arguments) in [
+    test('without a download folder: how to set one, in the app the server '
+        'runs in', () async {
+      for (final (clientName, expected) in [
         (
-          'save_intradesk_file',
-          {'file_id': 'cccc1111-1111-4111-b111-111111111111'},
-        ),
-        ('save_message_attachment', {'message_id': 101, 'attachment': 1}),
-      ]) {
-        final (result, text) = await callTool(connection, tool, arguments);
-        expect(result.isError, isTrue);
-        expect(
-          text,
+          'claude-ai',
           'There is no download folder to save files in. Set "Downloadmap" '
-          '(SMARTSCHOOL_DOWNLOAD_DIR) in the Smartschool extension settings '
-          'to a folder, then restart Claude Desktop.',
+              '(SMARTSCHOOL_DOWNLOAD_DIR) in the Smartschool extension '
+              'settings in Claude Desktop (Settings → Extensions) to a folder, '
+              'then restart Claude Desktop.',
+        ),
+        (
+          ClientApp.codexClientName,
+          'There is no download folder to save files in. Set '
+              'SMARTSCHOOL_DOWNLOAD_DIR ("Downloadmap") in the ChatGPT app, '
+              "under Instellingen (Settings) → Plug-ins → MCP's → smartschool "
+              '→ Omgevingsvariabelen (Environment variables); in the Codex '
+              'CLI or IDE extension, under [mcp_servers.smartschool.env] in '
+              r'%USERPROFILE%\.codex\config.toml to a folder, then restart '
+              'ChatGPT (or Codex).',
+        ),
+      ]) {
+        final client = ClientContext();
+        final session = SmartschoolSession(
+          fakeExtensionSettings(null, client),
+          createClient: fakeClientFactory(server, cookies),
         );
+        addTearDown(session.close);
+        final (connection, _) = await connect(
+          tools: [
+            saveIntradeskFileTool(
+              session,
+              IntradeskIndexCache.of(session),
+              null,
+            ),
+            saveMessageAttachmentTool(session, null),
+          ],
+          client: client,
+          clientName: clientName,
+        );
+
+        for (final (tool, arguments) in [
+          (
+            'save_intradesk_file',
+            {'file_id': 'cccc1111-1111-4111-b111-111111111111'},
+          ),
+          ('save_message_attachment', {'message_id': 101, 'attachment': 1}),
+        ]) {
+          final (result, text) = await callTool(connection, tool, arguments);
+          expect(result.isError, isTrue);
+          expect(text, expected, reason: '$clientName $tool');
+        }
       }
       expect(server.requests, isEmpty);
     });

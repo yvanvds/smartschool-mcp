@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:yaml/yaml.dart';
 
+import 'client_app.dart';
+
 /// A setting of the server: the four values it needs to log in to
 /// Smartschool ([login]), and the optional download folder.
 ///
@@ -38,7 +40,8 @@ enum Setting {
   /// The title of the field in the extension's install form.
   final String formTitle;
 
-  /// The environment variable Claude Desktop fills from that field.
+  /// The environment variable Claude Desktop fills from that field, and the
+  /// key the teacher enters in ChatGPT's form for the MCP server.
   final String envVar;
 
   /// The key in a `credentials.yml` file (the library's `PathCredentials`
@@ -79,37 +82,176 @@ sealed class CredentialSource {
 
   /// One line for the startup log saying which source is used.
   String get logDescription;
+
+  /// Settings given under a name that is not a setting's, such as a key
+  /// mistyped in ChatGPT's form; none for most sources.
+  List<MisnamedSetting> get misnamed => const [];
 }
 
-/// The settings of the Claude Desktop extension, which Claude Desktop passes
-/// as `SMARTSCHOOL_*` environment variables (the library's
+/// The settings as `SMARTSCHOOL_*` environment variables (the library's
 /// [EnvCredentials]).
+///
+/// Claude Desktop fills them from the extension's install form. In ChatGPT
+/// and Codex the teacher enters them as the environment variables of the
+/// MCP server. The messages say where to fix them in the app [client] names.
 final class ExtensionSettings extends CredentialSource {
-  /// [read] defaults to [EnvCredentials]; tests pass their own.
-  const ExtensionSettings({Credentials Function()? read}) : _read = read;
+  /// [read] defaults to [EnvCredentials] and [environment] to this process's
+  /// environment; tests pass their own. Without [client], the messages are
+  /// for Claude Desktop.
+  const ExtensionSettings({
+    this.client,
+    Credentials Function()? read,
+    Map<String, String> Function()? environment,
+  }) : _read = read,
+       _environment = environment;
+
+  /// The app the server runs in.
+  final ClientContext? client;
 
   final Credentials Function()? _read;
+  final Map<String, String> Function()? _environment;
+
+  ClientApp get _app => client?.app ?? ClientApp.claudeDesktop;
 
   @override
   Credentials read() => (_read ?? EnvCredentials.new)();
 
   @override
-  String get label => 'extension settings';
+  String get label => switch (_app) {
+    ClientApp.claudeDesktop => 'extension settings',
+    ClientApp.codex => 'environment variables of the MCP server',
+  };
 
   @override
-  String name(Setting setting) => '"${setting.formTitle}" (${setting.envVar})';
+  String name(Setting setting) => switch (_app) {
+    ClientApp.claudeDesktop => '"${setting.formTitle}" (${setting.envVar})',
+    // ChatGPT's form shows the variable, which the teacher typed.
+    ClientApp.codex => '${setting.envVar} ("${setting.formTitle}")',
+  };
 
   @override
-  String get where =>
+  String get where => switch (_app) {
+    ClientApp.claudeDesktop =>
       'in the Smartschool extension settings in Claude Desktop '
-      '(Settings → Extensions)';
+          '(Settings → Extensions)',
+    ClientApp.codex =>
+      'in the ChatGPT app, under Instellingen (Settings) → Plug-ins → '
+          "MCP's → ${ClientApp.codexServerName} → Omgevingsvariabelen "
+          '(Environment variables); in the Codex CLI or IDE extension, under '
+          '[mcp_servers.${ClientApp.codexServerName}.env] in '
+          r'%USERPROFILE%\.codex\config.toml',
+  };
 
   @override
-  String get restart => 'restart Claude Desktop';
+  String get restart => switch (_app) {
+    ClientApp.claudeDesktop => 'restart Claude Desktop',
+    ClientApp.codex => 'restart ChatGPT (or Codex)',
+  };
 
   @override
   String get logDescription =>
       'extension settings (SMARTSCHOOL_* environment variables)';
+
+  @override
+  List<MisnamedSetting> get misnamed =>
+      MisnamedSetting.find((_environment ?? () => Platform.environment)().keys);
+}
+
+/// An environment variable that looks like a setting but is not one, such
+/// as `SMARTSCHOOL_MAINURL`, or `SMARTSCHOOL_MFA ` with a space: a key
+/// mistyped in ChatGPT's form, where the teacher types the names.
+///
+/// Codex starts the server with a cleared environment (a fixed list of
+/// Windows variables, `WINDOWS_CORE_ENV_VARS` in
+/// `codex-rs/protocol/src/shell_environment.rs`, plus the server's own), so
+/// there such a variable comes from the form.
+final class MisnamedSetting {
+  const MisnamedSetting(this.name, this.meant);
+
+  /// The variable's name as set.
+  final String name;
+
+  /// The setting it most likely means, or null when none is close.
+  final Setting? meant;
+
+  /// The variables in [names] that are not a setting but look like one:
+  /// the name without case, spaces and punctuation is close to a setting's
+  /// (at most [_maxDistance] edits), or starts with `SMARTSCHOOL`. Names
+  /// are compared without case, as Windows does. The server's own
+  /// variables (`SMARTSCHOOL_MCP_*`) and the tests' (`SMARTSCHOOL_LIVE_*`)
+  /// are not settings to begin with.
+  static List<MisnamedSetting> find(Iterable<String> names) =>
+      [for (final name in names) ?_misnamed(name)]
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+  /// How many letters a name may differ from a setting's to be taken as
+  /// that setting.
+  static const _maxDistance = 3;
+
+  static MisnamedSetting? _misnamed(String name) {
+    final upper = name.toUpperCase();
+    if (Setting.values.any((setting) => setting.envVar == upper) ||
+        upper.startsWith('SMARTSCHOOL_MCP_') ||
+        upper.startsWith('SMARTSCHOOL_LIVE_')) {
+      return null;
+    }
+    final compact = _compact(upper);
+    Setting? closest;
+    var distance = _maxDistance + 1;
+    for (final setting in Setting.values) {
+      final d = _distance(compact, _compact(setting.envVar));
+      if (d < distance) (closest, distance) = (setting, d);
+    }
+    if (closest != null) return MisnamedSetting(name, closest);
+    return compact.startsWith('SMARTSCHOOL')
+        ? MisnamedSetting(name, null)
+        : null;
+  }
+
+  static String _compact(String name) =>
+      name.replaceAll(RegExp('[^A-Z0-9]'), '');
+
+  /// The Levenshtein distance between [a] and [b].
+  static int _distance(String a, String b) {
+    var previous = List<int>.generate(b.length + 1, (i) => i);
+    for (var i = 1; i <= a.length; i++) {
+      final current = List<int>.filled(b.length + 1, i);
+      for (var j = 1; j <= b.length; j++) {
+        final substitution = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+        current[j] = [
+          previous[j] + 1,
+          current[j - 1] + 1,
+          substitution,
+        ].reduce((x, y) => x < y ? x : y);
+      }
+      previous = current;
+    }
+    return previous[b.length];
+  }
+
+  /// A sentence about [misnamed], for messages to the teacher, e.g.
+  /// `"SMARTSCHOOL_MAINURL" is set, but that is not the name of a setting:
+  /// probably SMARTSCHOOL_MAIN_URL.`; null when [misnamed] is empty. Names
+  /// only, never a value.
+  static String? describe(List<MisnamedSetting> misnamed) {
+    if (misnamed.isEmpty) return null;
+    final names = [for (final variable in misnamed) '"${variable.name}"'];
+    final meant = {
+      for (final variable in misnamed)
+        if (variable.meant case final setting?) setting.envVar,
+    };
+    final isAre = misnamed.length == 1
+        ? 'is set, but that is not the name of a setting'
+        : 'are set, but those are not names of settings';
+    final fix = meant.isEmpty
+        ? 'the names are ${_list([for (final s in Setting.values) s.envVar])}'
+        : 'probably ${_list([...meant])}';
+    return '${_list(names)} $isAre: $fix.';
+  }
+
+  static String _list(List<String> items) => items.length == 1
+      ? items.single
+      : '${items.sublist(0, items.length - 1).join(', ')} and ${items.last}';
 }
 
 /// A `credentials.yml` file named with `--credentials`, for development.

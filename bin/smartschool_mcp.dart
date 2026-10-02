@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_mcp/stdio.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/log.dart';
@@ -40,9 +41,10 @@ Future<void> main(List<String> args) async {
         return;
       }
 
+      final client = ClientContext();
       final source = switch (options.credentialsPath) {
         final path? => CredentialsFile(path),
-        null => const ExtensionSettings(),
+        null => ExtensionSettings(client: client),
       };
       final session = SmartschoolSession(source);
       final intradeskIndex = IntradeskIndexCache.of(session);
@@ -50,8 +52,14 @@ Future<void> main(List<String> args) async {
       final updates = UpdateChecker.fromEnvironment();
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
+        client: client,
         tools: [
-          statusTool(session, updates: updates, downloads: () => downloads),
+          statusTool(
+            session,
+            updates: updates,
+            downloads: () => downloads,
+            client: client,
+          ),
           listMessagesTool(session),
           readMessageTool(session),
           saveMessageAttachmentTool(session, downloads),
