@@ -19,7 +19,8 @@ enum ProblemKind {
 
   /// The 2FA key in the settings cannot be a TOTP secret (not Base32, or a
   /// code of the authenticator app): found before logging in, see
-  /// [SmartschoolSettings.mfaProblem].
+  /// [SmartschoolSettings.mfaProblem], or by the library before it posts the
+  /// password ([SmartschoolInvalidTotpSecretError]).
   twoFactorKeyInvalid(permanent: true),
 
   /// Smartschool rejected the username or password.
@@ -195,12 +196,16 @@ ProblemKind? classifyFailure(Object error) {
     case SmartschoolInvalidCredentialsError():
       return ProblemKind.wrongPassword;
     // A missing TOTP secret cannot happen: an empty key is caught as a
-    // missing setting first. Nor can a key that is not Base32, which the
-    // library reports as a bare FormatException (yvanvds/dartschool#79):
-    // SmartschoolSettings.mfaProblem catches it first.
+    // missing setting first.
     case SmartschoolTwoFactorRejectedError() ||
         SmartschoolTwoFactorRequiredError():
       return ProblemKind.twoFactorRejected;
+    // A key that is not a TOTP secret, which the library refuses before it
+    // posts the password (yvanvds/dartschool#79). For now
+    // SmartschoolSettings.mfaProblem refuses such a key before logging in
+    // (yvanvds/smartschool-mcp#34).
+    case SmartschoolInvalidTotpSecretError():
+      return ProblemKind.twoFactorKeyInvalid;
     case SmartschoolUnsupportedTwoFactorMethodError():
       return ProblemKind.twoFactorUnsupported;
     case SmartschoolAccountVerificationRequiredError() ||

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -558,4 +560,114 @@ void main() {
       },
     );
   });
+
+  group('writeDownload', () {
+    // With the library's real download against a fake Smartschool. Since
+    // flutter_smartschool 0.3.2 a download that is neither read nor
+    // cancelled keeps its connection open, so every way out must stop it.
+    late FakeSmartschool server;
+    late SmartschoolClient client;
+
+    setUp(() async {
+      server = FakeSmartschool();
+      client = await fakeClientFactory(server, await tempCache())(
+        FakeCredentials(),
+      );
+    });
+
+    test('writes the whole download into the file', () async {
+      final content = Uint8List.fromList([
+        for (var i = 0; i < 200 * 1024; i++) i % 251,
+      ]);
+      final id = server.intradesk.addFile('les.pptx', content: content);
+      final file = File(inRoot('les.pptx'));
+
+      final download = await writeDownload(
+        file,
+        () => IntradeskService(client).downloadFileStream(id),
+      );
+
+      expect(download.fileName, 'les.pptx');
+      expect(file.readAsBytesSync(), content);
+      expect(server.intradesk.stoppedDownloads, 0);
+    });
+
+    test('a file that cannot be written: fails with that error, closes the '
+        'file, and stops the download', () async {
+      const size = 4 * 1024 * 1024;
+      final id = server.intradesk.addFile('les.pptx', content: Uint8List(size));
+      final file = _FullDisk(File(inRoot('les.pptx')), room: 64 * 1024);
+
+      await expectLater(
+        writeDownload(
+          file,
+          () => IntradeskService(client).downloadFileStream(id),
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      expect(file.closed, isTrue);
+      await server.intradesk.stops.reached(1);
+      expect(server.intradesk.stoppedDownloads, 1);
+      expect(server.intradesk.bytesSent, lessThan(size));
+    });
+  });
+}
+
+/// A file on a disk with [room] bytes free: writing more fails, as on a
+/// full disk.
+final class _FullDisk implements File {
+  _FullDisk(this._file, {required this.room});
+
+  final File _file;
+  final int room;
+
+  /// Whether the file opened with [open] was closed.
+  bool closed = false;
+
+  @override
+  String get path => _file.path;
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) async =>
+      _FullDiskOutput(this, await _file.open(mode: mode));
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FullDiskOutput implements RandomAccessFile {
+  _FullDiskOutput(this._disk, this._output);
+
+  final _FullDisk _disk;
+  final RandomAccessFile _output;
+  int _written = 0;
+
+  @override
+  Future<RandomAccessFile> writeFrom(
+    List<int> buffer, [
+    int start = 0,
+    int? end,
+  ]) async {
+    final length = (end ?? buffer.length) - start;
+    if (_written + length > _disk.room) {
+      throw FileSystemException(
+        'Write failed',
+        _disk.path,
+        const OSError('There is not enough space on the disk.', 112),
+      );
+    }
+    _written += length;
+    await _output.writeFrom(buffer, start, end);
+    return this;
+  }
+
+  @override
+  Future<void> close() async {
+    _disk.closed = true;
+    await _output.close();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
