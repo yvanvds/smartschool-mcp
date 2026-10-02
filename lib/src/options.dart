@@ -1,14 +1,28 @@
 /// The command-line options of the server.
 final class ServerOptions {
-  const ServerOptions({this.credentialsPath});
+  const ServerOptions({
+    this.credentialsPath,
+    this.install = false,
+    this.clipboard = true,
+  });
 
   /// Parses [args].
   ///
   /// Throws a [FormatException] for an unknown or incomplete option.
   factory ServerOptions.parse(List<String> args) {
     String? credentialsPath;
+    var install = false;
+    var clipboard = true;
     for (var i = 0; i < args.length; i++) {
       final arg = args[i];
+      if (arg == '--install') {
+        install = true;
+        continue;
+      }
+      if (arg == '--no-clipboard') {
+        clipboard = false;
+        continue;
+      }
       final String? value;
       if (arg == '--credentials') {
         if (i + 1 >= args.length) {
@@ -28,7 +42,19 @@ final class ServerOptions {
       }
       credentialsPath = value;
     }
-    return ServerOptions(credentialsPath: credentialsPath);
+    if (install && credentialsPath != null) {
+      throw const FormatException(
+        '--install and --credentials cannot be combined',
+      );
+    }
+    if (!clipboard && !install) {
+      throw const FormatException('--no-clipboard only goes with --install');
+    }
+    return ServerOptions(
+      credentialsPath: credentialsPath,
+      install: install,
+      clipboard: clipboard,
+    );
   }
 
   /// The `credentials.yml` to read the Smartschool settings from, or null to
@@ -39,16 +65,42 @@ final class ServerOptions {
   /// `credentials.yml`.
   final String? credentialsPath;
 
+  /// Whether to install the server for ChatGPT and Codex instead of serving
+  /// MCP (`lib/src/install.dart`). A double-click does the same without the
+  /// option: see [installs].
+  final bool install;
+
+  /// Whether the installer puts the installed path on the clipboard; off for
+  /// tests.
+  final bool clipboard;
+
+  /// Whether to install rather than serve: with `--install`, or when started
+  /// without options from a console ([interactive]), as a double-click
+  /// does. An MCP client always starts the server with pipes, never a
+  /// console.
+  bool installs({required bool interactive}) =>
+      install || (interactive && credentialsPath == null);
+
   static const usage = '''
 Usage: smartschool_mcp [--credentials <path>]
+       smartschool_mcp --install [--no-clipboard]
 
 Serves MCP on stdin/stdout. Without options, the Smartschool settings come
 from the SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, SMARTSCHOOL_PASSWORD and
-SMARTSCHOOL_MFA environment variables (the Claude Desktop extension settings).
+SMARTSCHOOL_MFA environment variables: the Claude Desktop extension settings,
+or the environment variables of the MCP server in ChatGPT or Codex.
 
   --credentials <path>  Read the settings from this credentials.yml instead
                         (keys: main_url, username, password, mfa, and
                         optionally download_dir). For development.
+
+  --install             Install for ChatGPT and Codex instead of serving:
+                        copy this executable to
+                        %LOCALAPPDATA%\\Programs\\smartschool-mcp and show, in
+                        Dutch, what to fill in in ChatGPT. Started from a
+                        console without options (a double-click), the
+                        server does the same.
+  --no-clipboard        With --install: leave the clipboard alone.
 
 save_intradesk_file and save_message_attachment save files into the folder in
 SMARTSCHOOL_DOWNLOAD_DIR (then download_dir in the credentials file), by
