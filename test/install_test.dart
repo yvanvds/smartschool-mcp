@@ -151,6 +151,24 @@ void main() {
       expect(text, endsWith(chatGptGuideUrl));
     });
 
+    test('ask, before the steps, for a paid plan and for model training to '
+        'be off (#50)', () {
+      for (final installation in const [
+        Installation(path, copied: true, replaced: false),
+        Installation(path, copied: true, replaced: true),
+        Installation(path, copied: false, replaced: false),
+      ]) {
+        final text = installInstructions(installation, onClipboard: false);
+        final warning = privacyWarning.join('\n');
+        expect(text, contains('\n$warning\n'));
+        expect(text.indexOf(warning), lessThan(text.indexOf('1. Open')));
+      }
+      final warning = privacyWarning.join(' ');
+      expect(warning, contains('gevoelige gegevens over leerlingen'));
+      expect(warning, contains('betalend ChatGPT-abonnement'));
+      expect(warning, contains('(Improve the model for everyone) uit'));
+    });
+
     test('an update says the settings in ChatGPT stay; a second run that '
         'the server is already installed', () {
       final update = installInstructions(

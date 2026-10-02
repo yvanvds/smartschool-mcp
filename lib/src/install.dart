@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'client_app.dart';
+import 'clipboard.dart';
 import 'settings.dart';
 import 'version.dart';
 
@@ -122,8 +123,18 @@ Future<void> deleteReplacedCopies(String directory) async {
   }
 }
 
-/// What to do after installing, in Dutch: how to add the server in ChatGPT
-/// with [path] as its command, and the settings to enter.
+/// The lines of the instructions that ask for a paid plan and for model
+/// training to be off, before the server can read the teacher's messages;
+/// the colleague guide asks the same, in more detail.
+const privacyWarning = [
+  'Belangrijk: ChatGPT stuurt wat het leest naar OpenAI, ook gevoelige',
+  'gegevens over leerlingen. Gebruik dit daarom alleen met een betalend',
+  'ChatGPT-abonnement, en zet in ChatGPT eerst "Het model verbeteren voor',
+  'iedereen" (Improve the model for everyone) uit, bij het gegevensbeheer.',
+];
+
+/// What to do after installing, in Dutch: [privacyWarning], how to add the
+/// server in ChatGPT with [path] as its command, and the settings to enter.
 String installInstructions(
   Installation installation, {
   required bool onClipboard,
@@ -140,6 +151,8 @@ String installInstructions(
     else
       'Smartschool is al geïnstalleerd in: $path',
     if (onClipboard) 'Dat pad staat ook op je klembord.',
+    '',
+    ...privacyWarning,
     '',
     if (installation.replaced) ...[
       'Je instellingen in ChatGPT blijven bewaard. Herstart ChatGPT om de',
@@ -237,29 +250,9 @@ Future<int> _install(
     );
     return 1;
   }
-  final onClipboard = clipboard && await _copyToClipboard(installation.path);
+  final onClipboard = clipboard && copyToClipboard(installation.path);
   out.writeln(installInstructions(installation, onClipboard: onClipboard));
   return 0;
-}
-
-/// Puts [text] on the Windows clipboard with `clip.exe`, as UTF-16 with a
-/// byte order mark, so a path with accents arrives intact. Returns whether
-/// it worked; never throws.
-Future<bool> _copyToClipboard(String text) async {
-  try {
-    final process = await Process.start('clip', const []);
-    process.stdin.add([
-      0xFF,
-      0xFE,
-      for (final unit in text.codeUnits) ...[unit & 0xFF, unit >> 8],
-    ]);
-    await process.stdin.close();
-    await process.stdout.drain<void>();
-    await process.stderr.drain<void>();
-    return await process.exitCode == 0;
-  } on Exception {
-    return false;
-  }
 }
 
 /// 16 random hex digits, for the names of a new and a replaced copy.

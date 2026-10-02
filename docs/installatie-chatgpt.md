@@ -37,9 +37,14 @@ Smartschool of OpenAI en er ook niet mee verbonden.
 ## 1. Wat heb je nodig?
 
 - **Een Windows-pc** die alleen jij gebruikt, met je eigen Windows-account.
-- **De ChatGPT-app voor Windows**, uit de Microsoft Store, en een
-  ChatGPT-account. Smartschool werkt niet in ChatGPT in je browser: ChatGPT
-  moet het programma op je pc kunnen starten.
+- **De ChatGPT-app voor Windows**, uit de Microsoft Store. Smartschool werkt
+  niet in ChatGPT in je browser: ChatGPT moet het programma op je pc kunnen
+  starten.
+- **Een betalend ChatGPT-abonnement:** Plus of Pro, of een account van je
+  school (Business, Edu of Enterprise). Gebruik Smartschool voor ChatGPT niet
+  met een gratis account. ChatGPT leest dan je berichten en documenten, en
+  daar staan vaak gevoelige gegevens over leerlingen in (zie
+  [Veiligheid en privacy](#8-veiligheid-en-privacy)).
 - **Een Smartschool-account waarmee je inlogt met een gebruikersnaam en een
   wachtwoord.** Kun je alleen inloggen via Microsoft of Google, dan werkt het
   niet.
@@ -60,8 +65,30 @@ extensie invult, vul je hem hier in bij `SMARTSCHOOL_MFA` (zie stap 3).
 
 ## 3. Installeren
 
-Je installeert in twee delen: eerst zet je het programma op je pc, daarna voeg
-je het toe in ChatGPT.
+Je installeert in drie delen: eerst zorg je dat OpenAI niet traint met je
+gesprekken, dan zet je het programma op je pc, en daarna voeg je het toe in
+ChatGPT.
+
+### Eerst: OpenAI niet laten trainen met je gesprekken
+
+Vraag je ChatGPT iets over een bericht, een bijlage of een document, dan gaat
+de inhoud daarvan naar OpenAI, het bedrijf achter ChatGPT. Daar staan vaak
+gevoelige gegevens over leerlingen in: namen, punten, zorg, gezondheid, de
+thuissituatie. Zorg er daarom vóór je Smartschool toevoegt voor dat OpenAI je
+gesprekken niet gebruikt om zijn modellen te verbeteren:
+
+1. Open in ChatGPT **Instellingen** en zoek het gegevensbeheer (*Data
+   controls*).
+2. Zet **Het model verbeteren voor iedereen** (*Improve the model for
+   everyone*) uit.
+
+Werk je met een ChatGPT-account van je school (Business, Edu of Enterprise),
+dan traint OpenAI standaard niet met je gesprekken. Vraag bij twijfel aan wie
+dat account beheert hoe het bij jullie ingesteld is.
+
+<!-- TE BEVESTIGEN (#50): waar staat deze instelling in de ChatGPT-app voor
+Windows, en hoe heten het menu en de schakelaar in het Nederlands? Pas de
+namen hierboven en in lib/src/install.dart aan. -->
 
 ### Het programma op je pc zetten
 
@@ -291,9 +318,11 @@ Het programma zelf staat in
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
   hun gezondheid, zorg of thuissituatie.
-- Kijk in de instellingen van je ChatGPT-account wat er met je gesprekken mag
-  gebeuren, bijvoorbeeld of ze gebruikt mogen worden om modellen te
-  verbeteren.
+- Gebruik daarom alleen een betalend abonnement, en laat OpenAI niet trainen
+  met je gesprekken (zie
+  [Eerst: OpenAI niet laten trainen met je gesprekken](#eerst-openai-niet-laten-trainen-met-je-gesprekken)).
+  Ook dan gaan de gegevens naar OpenAI: ga dus nog altijd na of dat mag
+  volgens het privacybeleid van je school.
 - Je wachtwoord en je 2FA-sleutel geeft Smartschool voor ChatGPT nooit aan
   ChatGPT: het gebruikt ze alleen om in te loggen op Smartschool.
 

@@ -202,6 +202,19 @@ void main() {
       expect(where.replaceAll(' (Settings)', ''), contains(path));
     });
 
+    test('asks for a paid plan and for model training to be off, with the '
+        'setting named as the installer names it (#50)', () {
+      expect(chatGpt, contains('**Een betalend ChatGPT-abonnement:**'));
+      final setting = RegExp(
+        r'"(.+)" \((Improve the model for everyone)\)',
+      ).firstMatch(privacyWarning.join(' '))!;
+      expect(
+        chatGpt,
+        contains('**${setting.group(1)}** (*${setting.group(2)}*) uit.'),
+      );
+      expect(chatGpt, contains('### Eerst: OpenAI niet laten trainen'));
+    });
+
     test('quotes the message about a mistyped key as the server words '
         'it', () {
       final message = MisnamedSetting.describe(
