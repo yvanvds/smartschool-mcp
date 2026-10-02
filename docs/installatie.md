@@ -5,8 +5,9 @@ Je vraagt het gewoon in een gesprek:
 
 - **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
   ongelezen markeren, een gekleurde vlag geven, archiveren, naar de
-  prullenbak verplaatsen en beantwoorden. Een antwoord vertrekt, en een
-  bericht gaat naar de prullenbak, pas nadat jij het goedgekeurd hebt.
+  prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen. Een
+  bericht vertrekt, en een bericht gaat naar de prullenbak, pas nadat jij het
+  goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -211,6 +212,13 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   liefst niet om het altijd toe te staan, dan blijft Claude Desktop het elke
   keer vragen. Het antwoord vertrekt vanuit jouw account, als antwoord op het
   oorspronkelijke bericht.
+- "Stuur Sven Lamber een bericht: de toets van vrijdag gaat niet door."
+  Claude zoekt eerst wie Sven Lamber is en toont de ontvangers (met hun
+  klas), het onderwerp en de tekst, en wacht op jouw akkoord. Vindt het
+  meer dan één Sven Lamber, of niemand met die naam, dan vraagt Claude wie
+  je bedoelt: het kiest nooit zelf. Je kunt ook een groep kiezen, zoals een
+  klas: dan krijgen alle leden het bericht. Daarna vraagt Claude Desktop nog
+  eens toestemming om te versturen.
 - "Open de bijlage van het bericht van de directie."
 
 ### Intradesk
@@ -452,10 +460,10 @@ in jouw naam in te loggen. Daarom:
 
 - Alleen met Smartschool, en één keer per dag met GitHub, om te vragen wat de
   nieuwste versie is. Aan GitHub stuurt ze niets over jou of je school.
-- De extensie handelt in jouw naam: een antwoord vertrekt vanuit jouw
-  account, en archiveren en weggooien verplaatsen jouw berichten. Claude
-  vraagt je akkoord voordat het iets verstuurt of naar de prullenbak
-  verplaatst.
+- De extensie handelt in jouw naam: een antwoord of een nieuw bericht
+  vertrekt vanuit jouw account, en archiveren en weggooien verplaatsen jouw
+  berichten. Claude vraagt je akkoord voordat het iets verstuurt of naar de
+  prullenbak verplaatst.
 
 ## 9. Verwijderen
 

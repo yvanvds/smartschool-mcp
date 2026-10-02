@@ -24,6 +24,8 @@ import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/search_recipients_tool.dart';
+import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
@@ -88,6 +90,8 @@ Future<void> _serve(ServerOptions options) async {
           flagMessagesTool(session),
           trashMessagesTool(session),
           replyToMessageTool(session),
+          searchRecipientsTool(session),
+          sendMessageTool(session),
           searchIntradeskTool(session, intradeskIndex),
           listIntradeskFolderTool(session, intradeskIndex),
           readIntradeskFileTool(session, intradeskIndex),

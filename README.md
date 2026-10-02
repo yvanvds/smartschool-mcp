@@ -214,7 +214,8 @@ Known limits in Codex (2026):
 - **Long text:** Codex cuts long tool output to the model's budget, about 10k
   tokens, well below `read_intradesk_file`'s 100,000 characters.
 - **Approval:** Codex asks approval for a tool marked destructive
-  (`trash_messages`, `reply_to_message`), unless it runs with *Full access*.
+  (`trash_messages`, `reply_to_message`, `send_message`), unless it runs
+  with *Full access*.
 - **`HOME`:** Codex does not pass `HOME` on. A user who has `HOME` set gets
   another cache folder under Codex than under Claude Desktop, so the server
   logs in once more there.
@@ -291,6 +292,26 @@ client name. It also installs again while that copy runs.
   the reply may have been sent and to check the sent box. The reply is sent
   with the message's own reply form, so Smartschool links it to the
   original.
+- `search_recipients`: the users and groups (such as a class) a new message
+  can go to, found by name with the search of Smartschool's compose form
+  (the library's `searchRecipientsForCompose`). Each is listed as
+  `send_message` takes it, its name with its kind and id in brackets, like
+  `Sven Lamber (user 146)` or `5GZ (group 298)`, then what tells namesakes
+  apart (a class, a co-account, a group's description). It changes nothing
+  in Smartschool: the compose form it searches on is left unused.
+- `send_message`: sends a new message (plain text or simple Markdown, as
+  `reply_to_message`) to recipients in To, CC and BCC, users or groups.
+  Claude is told to look every recipient up with `search_recipients`, show
+  the user the recipients, subject and text, and wait for the user's
+  confirmation first; the tool is marked destructive, so Claude Desktop
+  asks for approval every time. Each recipient is a name or a reference as
+  `search_recipients` lists it; the tool looks each one up again and sends
+  only when each names exactly one user or group (the name exactly,
+  ignoring case and extra spaces, and the kind and id of a reference). A
+  name that no one has exactly, or that several users or groups have (also
+  a user and a group), stops the send before anything is sent, with who the
+  search finds, for the user to choose: the tool never picks one. It sends
+  once, as `reply_to_message` does (`submitOnce`).
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so
@@ -316,10 +337,11 @@ in `message_box.dart`, the HTML-to-text converter `htmlToText` in
 `html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
 writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
 who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
-filters and date-range arguments in `message_filter.dart`, the output lines in
-`message_format.dart`, full-text matching and snippets (`SearchQuery`) in
-`message_search.dart` and the message text cache (`MessageTextCache`) in
-`message_cache.dart`.
+recipients of a new message (`searchRecipients`, `RecipientRequest`) in
+`recipient_search.dart`, the filters and date-range arguments in
+`message_filter.dart`, the output lines in `message_format.dart`, full-text
+matching and snippets (`SearchQuery`) in `message_search.dart` and the message
+text cache (`MessageTextCache`) in `message_cache.dart`.
 
 The tools that change messages named by id share their `message_ids`
 argument (`messageIdsSchema`, `messageIdsArgument`) and, for a change made
@@ -327,7 +349,11 @@ one message at a time, the per-id loop and result (`changeEach`,
 `changesResult`) in `lib/src/tools/message_changes.dart`. A change that
 takes a message out of its box (`trash_messages`) passes `changeEach` a
 `started` map, so that a repeat of the call (after Smartschool refused the
-session) does not report a message moved before as not in the box.
+session) does not report a message moved before as not in the box. The tools
+that send a message (`reply_to_message`, `send_message`) share the submit
+that is never repeated (`submitOnce`) and how its outcome is reported
+(`notConfirmedResult`, `sendSummary`) in
+`lib/src/tools/message_sending.dart`.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
@@ -516,11 +542,11 @@ teacher which setting to fix. When a request finds the session expired,
 requests share that one login. When Smartschool still refuses the session,
 `run` runs the action once more, so an action must be safe to repeat.
 Sending is not, once Smartschool has handled the submit: `reply_to_message`
-turns a submit that Smartschool does not confirm
+and `send_message` turn a submit that Smartschool does not confirm
 (`SmartschoolSendUnconfirmedError`) into a result that is not retried. A
 step of the send that Smartschool refused the session for, the submit
-included, sent nothing, so `run` may repeat it (see `_send` in
-`lib/src/tools/reply_to_message_tool.dart`).
+included, sent nothing, so `run` may repeat it (see `submitOnce` in
+`lib/src/tools/message_sending.dart`).
 
 ### Update check
 

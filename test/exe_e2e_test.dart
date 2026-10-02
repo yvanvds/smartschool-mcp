@@ -49,6 +49,8 @@ void main() {
       'flag_messages',
       'trash_messages',
       'reply_to_message',
+      'search_recipients',
+      'send_message',
       'search_intradesk',
       'list_intradesk_folder',
       'read_intradesk_file',
@@ -67,6 +69,7 @@ void main() {
       'list_messages',
       'read_message',
       'search_messages',
+      'search_recipients',
       'search_intradesk',
       'list_intradesk_folder',
       'read_intradesk_file',
@@ -189,6 +192,41 @@ void main() {
       'reply_all',
       'box',
     ]);
+    final recipientsSchema = tools['search_recipients']!['inputSchema'] as Map;
+    expect(recipientsSchema['required'], ['query']);
+    expect((recipientsSchema['properties'] as Map).keys, ['query']);
+    // Like a reply: sending cannot be undone, so Claude Desktop asks for
+    // approval.
+    final send = tools['send_message'] as Map;
+    expect(send['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': true,
+      'idempotentHint': false,
+      'openWorldHint': true,
+    });
+    expect(
+      send['description'],
+      contains(
+        'only call it after the user has explicitly confirmed all of it',
+      ),
+    );
+    final sendSchema = send['inputSchema'] as Map;
+    expect(sendSchema['required'], ['to', 'subject', 'body']);
+    expect((sendSchema['properties'] as Map).keys, [
+      'to',
+      'cc',
+      'bcc',
+      'subject',
+      'body',
+    ]);
+    expect((sendSchema['properties'] as Map)['to'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string', 'minLength': 1},
+      'minItems': 1,
+      'maxItems': 50,
+    });
     final intradeskSearchSchema =
         tools['search_intradesk']!['inputSchema'] as Map;
     expect(intradeskSearchSchema['required'], ['query']);
@@ -242,7 +280,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(14));
+    expect(tools, hasLength(16));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -478,6 +516,31 @@ void main() {
       'reply_to_message',
       arguments: {'message_id': 123, 'body': ' '},
     );
+    final (recipientsError, recipientsText) = await server.callTool(
+      'search_recipients',
+      arguments: {'query': 'Sven Lamber'},
+    );
+    final (sendError, sendText) = await server.callTool(
+      'send_message',
+      arguments: {
+        'to': ['Sven Lamber (user 146)'],
+        'cc': ['5GZ (group 298)'],
+        'subject': 'Uitstap',
+        'body': 'Donderdag vertrekken we om 8 uur.',
+      },
+    );
+    final (emptySubjectError, emptySubjectText) = await server.callTool(
+      'send_message',
+      arguments: {
+        'to': ['Sven Lamber'],
+        'subject': ' ',
+        'body': 'Hallo',
+      },
+    );
+    final (noRecipientError, noRecipientText) = await server.callTool(
+      'send_message',
+      arguments: {'to': <String>[], 'subject': 'Uitstap', 'body': 'Hallo'},
+    );
     final (intradeskError, intradeskText) = await server.callTool(
       'search_intradesk',
       arguments: {'query': 'formulier uitstap', 'refresh': true},
@@ -534,6 +597,8 @@ void main() {
       (flagError, flagText),
       (trashError, trashText),
       (replyError, replyText),
+      (recipientsError, recipientsText),
+      (sendError, sendText),
       (intradeskError, intradeskText),
       (folderError, folderText),
       (fileError, fileText),
@@ -559,6 +624,11 @@ void main() {
     expect(trashBoxText, contains('"trash" is not one of the allowed values'));
     expect(emptyError, isTrue);
     expect(emptyText, contains('body is empty'));
+    expect(emptySubjectError, isTrue);
+    expect(emptySubjectText, contains('subject is empty'));
+    expect(noRecipientError, isTrue);
+    expect(noRecipientText, contains('to'));
+    expect(noRecipientText, isNot(startsWith('Not all Smartschool')));
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
     expect(badIdError, isTrue);

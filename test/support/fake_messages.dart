@@ -62,6 +62,31 @@ class FakeMessage {
   final bool canReply;
 }
 
+/// A user or a group that the search of a compose form finds, in
+/// [FakeMailbox.directory].
+class FakeRecipient {
+  /// A user; with the user id [FakeMailbox.userId] gives [name], unless
+  /// [id] is given (for a second user with the same name).
+  const FakeRecipient.user(this.name, {this.id, this.className})
+    : isGroup = false,
+      description = null;
+
+  /// A group, such as a class.
+  const FakeRecipient.group(this.name, {required int this.id, this.description})
+    : isGroup = true,
+      className = null;
+
+  final String name;
+  final int? id;
+  final bool isGroup;
+
+  /// A user's class, as Smartschool shows it (`Klas: 5GZ`).
+  final String? className;
+
+  /// A group's description.
+  final String? description;
+}
+
 /// [count] messages an hour apart, newest first: ids [firstId] and up, the
 /// first dated [newest] (Smartschool time, like `2024-04-30 18:00`), each
 /// with the subject `$subject <n>` (n counting from 0) and the body
@@ -114,7 +139,8 @@ enum SubmitAnswer {
 /// `save msglabel`, and moving a message to the trash: `quickmove
 /// messages`), attachment downloads, the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
-/// compose forms, adding recipients to a form and taking them off, and
+/// compose forms, searching recipients on a form (in the [directory]), adding
+/// recipients (users and groups) to a form and taking them off, and
 /// submitting it.
 ///
 /// Responses have the shape of the dartschool fixtures under
@@ -194,24 +220,38 @@ class FakeMailbox {
   final Set<int> refuseToTrash = {};
 
   /// Every dispatcher call, as `action param=value ...` (params sorted),
-  /// every archive request, as `archive msgIDs=1,2`, and every message sent,
-  /// as `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with
-  /// the reply form of message 101, `send reply-to=101 to=...`.
+  /// every archive request, as `archive msgIDs=1,2`, every recipient search
+  /// on a compose form, as `search val=Sven`, and every message sent, as
+  /// `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with the
+  /// reply form of message 101, `send reply-to=101 to=...`. A group
+  /// recipient is named `G (group)`, after the users of its field; a user
+  /// who shares a name with another user of the [directory] is named with
+  /// the user id, as `A #1001`.
   final List<String> actions = [];
+
+  /// The users and groups the search of a compose form finds: those whose
+  /// name holds every word searched for, ignoring case (how Smartschool
+  /// matches has not been checked live), users first, in this order.
+  final List<FakeRecipient> directory = [];
 
   /// The names the reply form of a received message shows in To instead
   /// of its sender, by message id.
   final Map<int, List<String>> replyFormNames = {};
 
-  /// Recipients Smartschool does not register on a compose form: it answers
-  /// adding them with an empty body, as seen live for an unknown user
-  /// (yvanvds/dartschool#39).
+  /// Recipients (users and groups, by name) Smartschool does not register
+  /// on a compose form: it answers adding them with an empty body, as seen
+  /// live for an unknown user (yvanvds/dartschool#39).
   final Set<String> unregistered = {};
 
   /// Recipients Smartschool does not take off a compose form: it answers
   /// taking them off with an empty list, as seen live for an entry the form
   /// does not have (yvanvds/dartschool#42).
   final Set<String> notRemovable = {};
+
+  /// Whether compose forms carry their `uniqueUsc`. Without it the library
+  /// cannot search recipients on a form or send it, which it says is what
+  /// an account that may not send messages gets (not seen live).
+  bool composeTokens = true;
 
   /// How the next submits of the compose form are answered.
   SubmitAnswer submitAnswer = SubmitAnswer.sent;
@@ -265,6 +305,10 @@ class FakeMailbox {
   /// The recipients registered on each open compose form, by its
   /// `uniqueUsc`: user ids by field (`typeatt`: `0` To, `2` CC, `3` BCC).
   final Map<String, Map<String, List<int>>> _forms = {};
+
+  /// The groups registered on each open compose form, by its `uniqueUsc`:
+  /// group ids by field, as in [_forms].
+  final Map<String, Map<String, List<int>>> _formGroups = {};
   int _formsOpened = 0;
   int _messagesSent = 0;
 
@@ -276,7 +320,30 @@ class FakeMailbox {
       _userIds.putIfAbsent(name, () => 200 + _userIds.length);
 
   String _userName(int id) =>
+      _directoryUser(id)?.name ??
       _userIds.entries.firstWhere((entry) => entry.value == id).key;
+
+  /// The user of the [directory] with [id], when it was given one.
+  FakeRecipient? _directoryUser(int id) =>
+      directory.where((r) => !r.isGroup && r.id == id).firstOrNull;
+
+  int _idOf(FakeRecipient recipient) => recipient.id ?? userId(recipient.name);
+
+  /// How [actions] names user [id]: by name, with the id when another user
+  /// of the [directory] has that name.
+  String _userLabel(int id) {
+    final name = _userName(id);
+    final namesakes = directory
+        .where((r) => !r.isGroup && r.name == name)
+        .map(_idOf)
+        .toSet();
+    return namesakes.length > 1 ? '$name #$id' : name;
+  }
+
+  FakeRecipient _group(int id) => directory.firstWhere(
+    (r) => r.isGroup && r.id == id,
+    orElse: () => throw UnsupportedError('fake mailbox: no group $id'),
+  );
 
   /// Lists the box ([boxType], [boxId]) the way a `message list` in another
   /// session of the account does, such as the user opening the box in the
@@ -313,6 +380,14 @@ class FakeMailbox {
       return _downloadAttachment(int.parse(query['fileID']!), cancelled);
     }
     if (isSubmit(options)) return _submit(options);
+    if (options.method == 'POST' &&
+        query['file'] == 'searchUsers' &&
+        query['function'] == null) {
+      return _response(
+        _search((options.data as Map).cast<String, String>()),
+        'text/xml',
+      );
+    }
     if (options.method == 'POST' &&
         query['file'] == 'searchUsers' &&
         query['function'] == 'addUserToSelected') {
@@ -737,6 +812,7 @@ ${[for (final (i, a) in attachments.indexed) '''
       '2': [for (final name in cc) userId(name)],
       '3': [for (final name in bcc) userId(name)],
     };
+    _formGroups[usc] = {'0': [], '2': [], '3': []};
     String spans(List<String> names, String type) => [
       for (final name in names)
         '<div class="receiverSpan" idatt="U${userId(name)}" '
@@ -759,7 +835,7 @@ window.tinymceInitConfig = {
 </head><body>
 <form id="composeForm" method="post">
 <input type="hidden" name="randomDir" value="dir$_formsOpened">
-<input type="hidden" name="uniqueUsc" value="$usc">
+${composeTokens ? '<input type="hidden" name="uniqueUsc" value="$usc">' : ''}
 <input type="hidden" name="encryptedSender" value="76542a9717766d29">
 <input type="hidden" name="origMsgID" value="${message?.id ?? 0}">
 <input type="hidden" name="composeAction" value="${message == null ? 0 : 2}">
@@ -776,31 +852,91 @@ ${spans(bcc, '3')}
 </body></html>''';
   }
 
-  /// Adds a recipient to the compose form named by `uniqueUsc`.
+  /// Searches the [directory] for the words of `val`, on the compose form
+  /// named by `uniqueUsc`, and answers like the live platform (the
+  /// dartschool fixtures `search-user.xml` and `search-group.xml`).
+  String _search(Map<String, String> fields) {
+    if (!_forms.containsKey(fields['uniqueUsc'])) {
+      throw UnsupportedError('fake mailbox: search on an unknown form');
+    }
+    final value = fields['val']!;
+    actions.add('search val=$value');
+    final words = value.toLowerCase().split(RegExp(r'\s+'))
+      ..removeWhere((word) => word.isEmpty);
+    final found = [
+      for (final recipient in directory)
+        if (words.every(recipient.name.toLowerCase().contains)) recipient,
+    ];
+    String element(String tag, String? value) =>
+        value == null ? '<$tag />' : '<$tag>${_escape(value)}</$tag>';
+    final users = [
+      for (final user in found.where((r) => !r.isGroup))
+        '<user><userID>${_idOf(user)}</userID>'
+            '<text>${_escape(user.name)}</text>'
+            '<value>${_escape(user.name)}</value><selectable>on</selectable>'
+            '<ssID>$platformId</ssID><ssPlName /><userLT>0</userLT>'
+            '<coaccountname />${element('classname', user.className)}'
+            '<schoolname>Sint-Jozefscollege</schoolname>'
+            '<picture>https://userpicture20.smartschool.be/User/x</picture>'
+            '</user>',
+    ];
+    final groups = [
+      for (final group in found.where((r) => r.isGroup))
+        '<group><groupID>${group.id}</groupID>'
+            '<text>${_escape(group.name)}</text>'
+            '<value>${_escape(group.name)}</value><selectable>on</selectable>'
+            '<icon>smsc/img/briefcase/briefcase_16x16.png</icon>'
+            '<ssID>$platformId</ssID><ssPlName />'
+            '${element('description', group.description)}'
+            '</group>',
+    ];
+    String list(String tag, List<String> items) =>
+        items.isEmpty ? '<$tag />' : '<$tag>\n${items.join('\n')}\n</$tag>';
+    return '''
+<results>
+<type>0</type>
+<ssID>$platformId</ssID>
+<parentNodeId>insertSearchFieldContainer_0_0</parentNodeId>
+${list('groups', groups)}
+${list('users', users)}
+<sgrdetails>
+<sgrselect>1</sgrselect>
+<dosgrsearch>0</dosgrsearch>
+</sgrdetails>
+</results>''';
+  }
+
+  /// Adds a recipient, a user or a group, to the compose form named by
+  /// `uniqueUsc`.
   String _addUser(Map<String, String> fields) {
-    final form = _forms[fields['uniqueUsc']];
+    final usc = fields['uniqueUsc'];
+    final form = _forms[usc];
     final id = int.parse(fields['id']!);
+    final typeId = fields['typeId'];
     if (form == null ||
-        fields['typeId'] != 'users' ||
+        (typeId != 'users' && typeId != 'groups') ||
         fields['ssid'] != '$platformId') {
       throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
     }
-    final field = form[fields['type']]!;
+    final group = typeId == 'groups';
+    final field = (group ? _formGroups[usc]! : form)[fields['type']]!;
+    final name = group ? _group(id).name : _userName(id);
     // Smartschool answers a second registration in the same field with an
     // empty body too (yvanvds/dartschool#39).
-    if (unregistered.contains(_userName(id)) || field.contains(id)) return '';
+    if (unregistered.contains(name) || field.contains(id)) return '';
     field.add(id);
+    final kind = group ? 'G' : 'U';
     return '''
 <users>
 <user>
 <type>${fields['type']}</type>
 <ssID>$platformId</ssID>
 <parentNodeId>${fields['parentNodeId']}</parentNodeId>
-<userID>U$id</userID>
-<name>${_escape(_userName(id))}</name>
+<userID>$kind$id</userID>
+<name>${_escape(name)}</name>
 <userLT>0</userLT>
-<userType>U</userType>
-<typeId>users</typeId>
+<userType>$kind</userType>
+<typeId>$typeId</typeId>
 <realUserId>$id</realUserId>
 </user>
 </users>''';
@@ -844,7 +980,8 @@ ${spans(bcc, '3')}
         key: value,
     };
     final form = _forms.remove(fields['uniqueUsc']);
-    if (form == null) {
+    final formGroups = _formGroups.remove(fields['uniqueUsc']);
+    if (form == null || formGroups == null) {
       throw UnsupportedError('fake mailbox: submit of an unknown form');
     }
     switch (submitAnswer) {
@@ -861,7 +998,12 @@ ${spans(bcc, '3')}
     }
     List<String> names(String field) => [
       for (final id in form[field]!) _userName(id),
+      for (final id in formGroups[field]!) _group(id).name,
     ];
+    String labels(String field) => [
+      for (final id in form[field]!) _userLabel(id),
+      for (final id in formGroups[field]!) '${_group(id).name} (group)',
+    ].join(',');
     final to = names('0');
     final cc = names('2');
     final bcc = names('3');
@@ -876,8 +1018,8 @@ ${spans(bcc, '3')}
         : '';
     sentBodies.add(body);
     actions.add(
-      'send ${reply}to=${to.join(',')} cc=${cc.join(',')} '
-      'bcc=${bcc.join(',')} subject=$subject',
+      'send ${reply}to=${labels('0')} cc=${labels('2')} '
+      'bcc=${labels('3')} subject=$subject',
     );
     FakeMessage copy({required bool unread}) => FakeMessage(
       id: id,
