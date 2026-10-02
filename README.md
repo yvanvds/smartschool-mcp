@@ -157,7 +157,13 @@ of serving MCP (`lib/src/install.dart`):
   (per user, no administrator rights). A copy that is running (ChatGPT open)
   is renamed out of the way first. The installer and the next server start
   delete it once it no longer runs;
-- it puts that path on the clipboard (`--no-clipboard` for tests);
+- it puts that path on the clipboard (`--no-clipboard` for tests). It goes
+  through the Windows API (`lib/src/clipboard.dart`), not `clip.exe`, which
+  kept a byte order mark in front of the path, and ChatGPT could then not
+  start the server (#49). `test/clipboard_test.dart` and a test in
+  `test/install_e2e_test.dart` read the clipboard back. They run in CI, and
+  locally only with `SMARTSCHOOL_MCP_CLIPBOARD_TEST=on`, since they replace
+  what is on the clipboard (they put back the text that was there);
 - it shows, in Dutch, what to fill in in ChatGPT: the name `smartschool`, the
   command, no arguments and the five variables. It waits for Enter so the
   window stays open.

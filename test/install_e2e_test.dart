@@ -14,6 +14,7 @@ import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/install.dart';
 import 'package:test/test.dart';
 
+import 'support/clipboard.dart';
 import 'support/exe.dart';
 
 /// The variables Codex passes on to an MCP server on Windows, next to the
@@ -164,6 +165,29 @@ void main() {
     expect(replacedCopies(), isEmpty, reason: 'deleted at the next start');
     await restarted.stop();
   });
+
+  test('puts exactly the installed path on the clipboard, for the teacher to '
+      'paste into ChatGPT (#49)', () async {
+    restoreClipboardAfterTest();
+
+    final result = await Process.run(
+      exePath,
+      ['--install'],
+      environment: {
+        ...environmentWithoutSmartschool(),
+        'LOCALAPPDATA': local.path,
+      },
+      includeParentEnvironment: false,
+      stdoutEncoding: utf8,
+    );
+
+    expect(result.exitCode, 0, reason: '${result.stdout}');
+    if (!(result.stdout as String).contains('op je klembord')) {
+      markTestSkipped('the clipboard cannot be opened here');
+      return;
+    }
+    expect(readClipboard(), installed);
+  }, skip: clipboardSkipReason);
 
   test('the compiled server words its messages for the app that started '
       'it, by the name it gives in initialize', () async {

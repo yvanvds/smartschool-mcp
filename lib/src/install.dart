@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'client_app.dart';
+import 'clipboard.dart';
 import 'settings.dart';
 import 'version.dart';
 
@@ -237,29 +238,9 @@ Future<int> _install(
     );
     return 1;
   }
-  final onClipboard = clipboard && await _copyToClipboard(installation.path);
+  final onClipboard = clipboard && copyToClipboard(installation.path);
   out.writeln(installInstructions(installation, onClipboard: onClipboard));
   return 0;
-}
-
-/// Puts [text] on the Windows clipboard with `clip.exe`, as UTF-16 with a
-/// byte order mark, so a path with accents arrives intact. Returns whether
-/// it worked; never throws.
-Future<bool> _copyToClipboard(String text) async {
-  try {
-    final process = await Process.start('clip', const []);
-    process.stdin.add([
-      0xFF,
-      0xFE,
-      for (final unit in text.codeUnits) ...[unit & 0xFF, unit >> 8],
-    ]);
-    await process.stdin.close();
-    await process.stdout.drain<void>();
-    await process.stderr.drain<void>();
-    return await process.exitCode == 0;
-  } on Exception {
-    return false;
-  }
 }
 
 /// 16 random hex digits, for the names of a new and a replaced copy.
