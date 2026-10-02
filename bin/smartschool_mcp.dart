@@ -13,20 +13,31 @@ import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
+import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_recipients_tool.dart';
 import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -96,6 +107,17 @@ Future<void> _serve(ServerOptions options) async {
           listIntradeskFolderTool(session, intradeskIndex),
           readIntradeskFileTool(session, intradeskIndex),
           saveIntradeskFileTool(session, intradeskIndex, downloads),
+          searchPlannersTool(session),
+          listPlannerTool(session),
+          readPlannedElementTool(session),
+          listClassAssignmentsTool(session),
+          planLessonTool(session),
+          editPlannedElementTool(session),
+          clearLessonTool(session),
+          listLesfichesTool(session),
+          planLesficheTool(session),
+          planAssignmentTool(session),
+          trashAssignmentTool(session),
         ],
         updates: updates,
       );

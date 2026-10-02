@@ -10,9 +10,11 @@ import 'package:test/test.dart';
 
 import 'fake_intradesk.dart';
 import 'fake_messages.dart';
+import 'fake_planner.dart';
 
 export 'fake_intradesk.dart';
 export 'fake_messages.dart';
+export 'fake_planner.dart';
 
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
@@ -83,6 +85,10 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The Intradesk module, served to logged-in requests.
   final FakeIntradesk intradesk = FakeIntradesk();
+
+  /// The planner, served to logged-in requests. Its own account is
+  /// [fakePlannerMe], the user of the fake's pages.
+  final FakePlanner planner = FakePlanner();
 
   /// How long every request takes, so that concurrent requests overlap.
   Duration latency = Duration.zero;
@@ -193,7 +199,9 @@ class FakeSmartschool implements HttpClientAdapter {
         _rejectsLeft--;
         return ResponseBody.fromString('', 401);
       }
-      return mailbox.respond(options) ?? _html('<ok/>');
+      return mailbox.respond(options) ??
+          planner.respond(options) ??
+          _html('<ok/>');
     }
 
     // A GET anywhere else needs a session; without one the server redirects
@@ -212,6 +220,7 @@ class FakeSmartschool implements HttpClientAdapter {
     }
     return mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
+        planner.respond(options) ??
         _html(_homePage);
   }
 

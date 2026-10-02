@@ -330,6 +330,161 @@ client name. It also installs again while that copy runs.
   and returns its full path, name and size, for a file `read_intradesk_file`
   cannot read (a scan, an old Office file, any other format) or when the
   user wants the file itself (see *Saving files* below).
+- `search_planners`: finds the planner of a class, a person or a room by
+  name, with the planner's own search (the library's `searchCalendars`).
+  Each hit is listed with its kind (class, person, room), its name, what
+  the planner says about it (a class's full name, a co-account's
+  "Interimaris van …", the class a pupil is listed with) and its planner
+  id, like `group/4069_4256`, `user/4069_218_0` or `location/4069_<id>`,
+  which `list_planner` takes. People are pupils and staff alike: the
+  planner's answer does not tell them apart. A hit of another kind is shown
+  without a planner id.
+- `list_planner`: what is planned in a planner (`me`, the default, or a
+  planner id) in a period (`from` and `until`, today to 7 days ahead by
+  default), optionally only some kinds (`types`: lessons, assignments,
+  empty lesson hours, other). Per day, in date order, one line per element:
+  the time (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the
+  kind (an assignment with its type, such as `KO Kleine Overhoring`), name,
+  course, classes, organiser (left out in the user's own planner), rooms
+  and the element id. A class planner holds a timetable slot for every
+  teacher of every hour (32 in one week of a class seen live), so at most
+  200 elements are shown, with a note on how to narrow down; the request
+  itself may span a school year.
+- `read_planned_element`: one element in full, by its id: what its list
+  line says, plus its public and private info as plain text (through
+  `htmlToText`, never raw HTML), its labels, the names of its attachments
+  and its weblinks, and for an assignment from when pupils see it, whether
+  it was announced and its status. Private info is hidden from pupils, but
+  colleagues who can see the element read it too (dartschool#84). The
+  labels, attachments and weblinks are read from the detail's raw JSON
+  until the library types them (yvanvds/dartschool#98, #70).
+- `list_class_assignments`: the assignments (tests and tasks) of 1 to 10
+  classes (`classes`, planner ids such as `group/4069_4256`) in a period
+  (`from` and `until`, today to 4 weeks ahead by default), of everyone who
+  plans them, read in one request (the library's `getAssignmentsOfGroups`,
+  the planner's workload view). Per day, in date order, one line per
+  assignment as `list_planner` writes it; a weekday without assignments
+  reads `no assignments`, so free days show at a glance, and a Saturday or
+  Sunday is listed only when something falls on it. When the school set a
+  workload limit for a class (`getWorkloadSchedule`, a limit of 0 or more),
+  the answer gives it with the planner's own figure for the days it is not
+  0, such as `6A1: limit 2 per day (soft); 2026-10-06 is at 2`; the figures
+  are not interpreted (at the school seen live every class had `Geen
+  limiet`, and every weight was 0). It also lists the school's assignment
+  types (`getAssignmentTypes`, read once per session). The tool only reads:
+  choosing the moment is left to the user, with Claude, and
+  `plan_assignment` plans the test.
+- `plan_lesson`: fills an empty lesson hour of the user's own planner
+  (`hour`, an id `planned-placeholders/…` from `list_planner` with `me`)
+  with a lesson: a `name`, and optionally `public_info` (what pupils see)
+  and `private_info`, written as plain text (the library's `planLesson`,
+  dartschool#87). The server turns the text into the HTML the planner's own
+  editor makes, escaping every character (`plainTextToHtml`: a `<p>` per
+  paragraph, `<br />` per line break). Pupils of the hour's classes see the
+  name and public info at once. The tool is marked destructive, so Claude
+  Desktop asks for approval every time, and Claude is told to show the user
+  every hour (date and time, class, course, name and info) and wait for
+  the user's confirmation first; one confirmation for a week's list is
+  enough, with one call per hour. The library reads the hour again and
+  refuses, before sending anything, an hour that is not the user's own, or
+  that the planner does not let the user fill; an hour that was filled
+  since it was listed is gone under its id. It sends the fill once, never
+  again after logging in again. The result gives the lesson as saved and
+  its new id (the hour's id is gone), and says that `list_planner` can
+  show the old state for a few seconds while `read_planned_element` is up
+  to date at once.
+- `edit_planned_element`: changes the `name`, `public_info` and/or
+  `private_info` (plain text, as `plan_lesson`; an empty text empties an
+  info) of a lesson or an assignment of the user's own planner, by its id
+  (`renameElement`, `changePublicInfo`, `changePrivateInfo`, in that
+  order). Marked destructive and idempotent: each change sets a value, and
+  the library sends nothing for a value the element already has. The
+  library refuses a colleague's element, or a change the planner does not
+  allow, before sending it. When one change fails after another was saved,
+  the answer says which were saved.
+- `clear_lesson`: empties a lesson hour of the user's own planner again
+  (`clearLesson`): the lesson, its name and info are gone, and the hour is
+  an empty lesson hour with a **new** id, which the result gives. Marked
+  destructive. The library refuses a colleague's lesson, and a lesson the
+  planner lets the user trash or delete (one outside the timetable, which
+  it does not clear), and sends the clear once.
+- `list_lesfiches`: the user's lesfiches in the Lesfiches module (the
+  library's `LessonContentService.getItems`, dartschool#88), read in full
+  on every call: lesson lesfiches by default, or assignments or all
+  (`type`), with every `label` given (the whole label, case-insensitive,
+  such as `JAAR 6` and `TRIMESTER 1`) and every word of `query` in the
+  name. One line per lesfiche, by name with the numbers in order (`Les 2`
+  before `Les 10`): kind (an assignment with its type), name, labels,
+  courses, visible or hidden in the module, the day it was last changed
+  (the module's dates have no offset: Smartschool time) and its id. The
+  module names a lesfiche's courses by id only (dartschool#101), so the
+  tool names them after the user's own planner of the 4 weeks before and
+  after today (`ownCourseNames`, one planner read per call, only when a
+  lesfiche listed has a course); a course without a lesson hour there is
+  "not in your planner", and when that read fails only the number of
+  courses is shown. A label filter that matches nothing lists the labels
+  there are. At most 200 lines, with a note to narrow the list. An answer
+  of the module the server cannot use (`SmartschoolLessonContentError`) is
+  "the Lesfiches module gave an answer the server could not use", with the
+  details in the log only.
+- `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
+  `list_lesfiches`) into an empty lesson hour of the user's own planner
+  (`hour`, as `plan_lesson`) with the library's `planLessonContent`
+  (dartschool#88): the planner names the lesson after the lesfiche and
+  takes over its content (seen live: its labels and goals; the info of the
+  lesfiche tried was empty, and whether attachments and weblinks come along
+  was not checked). It works as `plan_lesson` does: marked destructive, Claude shows the
+  mapping of lesfiches onto hours (date and time, class, course, lesfiche)
+  and plans after the user's confirmation, one call per hour, in order;
+  the result gives the lesson as saved and its new id. The library reads
+  the lesfiches before it plans and refuses, before sending anything, an id
+  the user has no lesfiche with and an assignment lesfiche; the tool passes
+  that reason on. A hidden lesfiche is planned like any other.
+- `plan_assignment`: plans an assignment (a test, a task, something to
+  bring along) in one of the user's own lesson hours (`hour`, an empty
+  lesson hour or a lesson from `list_planner` with `me`) with the library's
+  `planAssignment` (dartschool#89): of a `type`, by abbreviation or name
+  (`KO`, `Kleine Overhoring`), matched against the school's types (read
+  once per session; one that matches none is an error that lists them),
+  with a `name` and optionally `public_info` and `private_info` (plain
+  text, as `plan_lesson`). The server reads the hour's detail and takes
+  from it the classes (all of them, or those `classes` names, by name or
+  planner id; a class that is not the hour's is an error), the course (the
+  first), the rooms and the period: the assignment is due at the start of
+  the hour and runs to its end, and the hour itself stays as it is. The
+  library's create takes no hour, so the server refuses an hour that is not
+  the user's own, and one without classes or a course, before sending
+  anything. Pupils of the classes see the assignment at once; it is not
+  announced (Smartschool's "aankondigen" is not offered). Marked
+  destructive, not idempotent: Claude is told to check the class's other
+  tests with `list_class_assignments` first, to show the user the classes,
+  the date and hour, the type, the name and the info, and to wait for the
+  user's confirmation. The library checks the type against the school's
+  types again and sends the create
+  (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
+  once. The result gives the assignment as saved, with its id. Its name and
+  info change with `edit_planned_element`; its date, type and classes do
+  not change.
+- `trash_assignment`: moves an assignment of the user's own planner (`id`)
+  to the planner's trash (`trashAssignment`, dartschool#89). Smartschool
+  keeps it there for 30 days, and it can be restored in Smartschool itself;
+  the tool restores nothing and never deletes for good. Marked
+  destructive, not idempotent; Claude is told to say that it can be
+  restored. The library reads the assignment again and refuses, before
+  sending anything, a colleague's assignment, one the planner does not let
+  the user trash (`canUserTrash`) and one with a linked Skore evaluation; it
+  sends the trash once, and confirms it by reading the assignment again
+  (the planner answers `404`).
+
+For the six planner writes, a write that went out without the planner
+confirming it (`SmartschoolPlannerSaveUnconfirmedError`) is reported as
+maybe saved, with what to read to check it, and Claude is told not to call
+the tool again for it, as for a message whose send Smartschool did not
+confirm (for a new assignment: the class's assignments, with
+`list_class_assignments`). A session that Smartschool refused for a fill, a
+clear, a create or a trash means the write was not carried out: the session
+repeats the call, which reads the element again (a lesson hour filled
+meanwhile is gone, so nothing is sent).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -364,6 +519,48 @@ name with extension, path, size, date changed, `extension`, `mimeType`) and
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
 `intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
 lines in `intradesk_format.dart`.
+
+Planner helpers for later tools live in `lib/src/planner/`. In
+`planner_access.dart`: `withPlanner`, which runs an action on the session
+and turns the planner's errors into `ToolError`s (`plannerToolError`: an
+element that is gone or got a new id, an answer the server cannot use of
+the planner or of the Lesfiches module, whose details go to the log only,
+and a request the library refused before sending it), and
+`withPlannerClient`, the same with the client itself, for a tool that also
+needs the Lesfiches module; the planner ids (`PlannerRef`, `me` or `user/…`, `group/…`,
+`location/…`, and `formatPlannerId`); the compound element id
+`<plannedElementType>/<platformId>/<id>` (`PlannedElementRef`, which also
+reads an element's detail); the `classes` argument, 1 to a maximum of
+class planner ids (`classPlannersArgument`); the `from` and `until`
+arguments with a default period (`plannerPeriodArguments`); and the
+school's assignment types, read once per session (`AssignmentTypes.of`). In
+`planner_format.dart`: dates and times in the time of this PC, a period
+(`formatPlannerPeriod`), the kind and time of an element, an assignment
+type (`formatAssignmentType`), one line per element (`formatElementLine`),
+an element in a few words for a write's result (`formatElementSummary`),
+elements per day (`elementsByDay`) and an element's detail
+(`formatElementDetail`). In `planner_writes.dart`, for the tools that
+change the planner: the info text Claude writes as HTML
+(`plainTextToHtml`), the `hour` argument (`emptyHourArgument`), the fill of
+an empty lesson hour with its result (`fillLessonHour`, which takes the
+library call that fills, so a lesfiche can be planned the same way), the
+lesson hour, the classes and the type of a new assignment
+(`lessonHourArgument`, `lessonHourClassesArgument`, `lessonHourClasses`,
+`assignmentTypeArgument`), `withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
+error), and the result of a write the planner did not confirm
+(`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
+refused a write (`SmartschoolPlannerWriteRefusedError`). In
+`lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
+`lesfiche` argument (`lesficheArgument`), the course names from the own
+planner (`ownCourseNames`, a workaround for dartschool#101), the filters
+(`lesficheMatches`), the order of the names (`compareLesficheNames`) and one
+line per lesfiche (`formatLesficheLine`). The tests run against a fake
+planner (`test/support/fake_planner.dart`), built from dartschool's
+anonymised captures of the live planner, its workload view and the
+Lesfiches list, which carries out the writes of dartschool#87 (fill,
+rename, change of the info, clear), the plan of a lesfiche of
+dartschool#88, and the create and the trash of an assignment of
+dartschool#89 as the live planner did.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

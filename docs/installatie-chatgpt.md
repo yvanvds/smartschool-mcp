@@ -10,6 +10,13 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
+- **Planner:** je eigen planner bekijken, en die van klassen, collega's en
+  lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
+  toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
+  kiezen, en die toets of taak dan plannen. Je eigen lesuren invullen met
+  lessen of met je lesfiches uit de module Lesfiches, die lessen aanpassen en
+  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
+  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 
@@ -214,8 +221,9 @@ Hetzelfde als in Claude Desktop: zie
 Claude Desktop. Wat daar over Claude staat, geldt hier voor ChatGPT. Een paar
 verschillen:
 
-- **Berichten versturen en weggooien.** ChatGPT toont eerst de tekst en de
-  ontvangers, of de berichten die naar de prullenbak gaan, en wacht op jouw
+- **Berichten versturen en weggooien, de planner invullen.** ChatGPT toont
+  eerst de tekst en de ontvangers, de berichten die naar de prullenbak gaan,
+  of de lessen die in je planner komen of verdwijnen, en wacht op jouw
   akkoord. Daarna vraagt de app nog eens toestemming. Kies daar niet om het
   altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
   (*Full access*): dan vraagt de app nergens meer toestemming voor.
@@ -326,11 +334,11 @@ Het programma zelf staat in
 
 ### Wat gaat er naar ChatGPT?
 
-- Vraag je ChatGPT iets over een bericht, een bijlage of een document, dan
-  geeft Smartschool voor ChatGPT de inhoud daarvan aan ChatGPT. Die gaat dan
-  naar de servers van OpenAI, het bedrijf achter ChatGPT, net zoals alles wat
-  je zelf in het gesprek typt. Daar horen ook namen en gegevens van collega's,
-  leerlingen en ouders bij.
+- Vraag je ChatGPT iets over een bericht, een bijlage, een document of de
+  planner, dan geeft Smartschool voor ChatGPT de inhoud daarvan aan ChatGPT.
+  Die gaat dan naar de servers van OpenAI, het bedrijf achter ChatGPT, net
+  zoals alles wat je zelf in het gesprek typt. Daar horen ook namen en
+  gegevens van collega's, leerlingen en ouders bij.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals

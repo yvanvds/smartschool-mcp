@@ -55,6 +55,17 @@ void main() {
       'list_intradesk_folder',
       'read_intradesk_file',
       'save_intradesk_file',
+      'search_planners',
+      'list_planner',
+      'read_planned_element',
+      'list_class_assignments',
+      'plan_lesson',
+      'edit_planned_element',
+      'clear_lesson',
+      'list_lesfiches',
+      'plan_lesfiche',
+      'plan_assignment',
+      'trash_assignment',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -75,6 +86,20 @@ void main() {
       'read_intradesk_file',
     ]) {
       expect(tools[name]!['annotations'], containsPair('readOnlyHint', true));
+    }
+    for (final name in [
+      'search_planners',
+      'list_planner',
+      'read_planned_element',
+      'list_class_assignments',
+      'list_lesfiches',
+    ]) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': true,
+        'idempotentHint': true,
+        'openWorldHint': true,
+      });
     }
     final searchSchema = tools['search_messages']!['inputSchema'] as Map;
     expect(searchSchema['required'], ['query']);
@@ -266,6 +291,140 @@ void main() {
         {'type': 'string', 'minLength': 1},
       ],
     });
+    final plannersSchema = tools['search_planners']!['inputSchema'] as Map;
+    expect(plannersSchema['required'], ['query']);
+    expect((plannersSchema['properties'] as Map).keys, ['query']);
+    final plannerSchema = tools['list_planner']!['inputSchema'] as Map;
+    expect(plannerSchema, isNot(contains('required')));
+    expect((plannerSchema['properties'] as Map).keys, [
+      'planner',
+      'from',
+      'until',
+      'types',
+    ]);
+    expect((plannerSchema['properties'] as Map)['types'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'minItems': 1,
+      'items': {
+        'enum': ['lessons', 'assignments', 'empty_lesson_hours', 'other'],
+        'type': 'string',
+      },
+    });
+    final elementSchema = tools['read_planned_element']!['inputSchema'] as Map;
+    expect(elementSchema['required'], ['id']);
+    expect((elementSchema['properties'] as Map).keys, ['id']);
+    final assignmentsSchema =
+        tools['list_class_assignments']!['inputSchema'] as Map;
+    expect(assignmentsSchema['required'], ['classes']);
+    expect((assignmentsSchema['properties'] as Map).keys, [
+      'classes',
+      'from',
+      'until',
+    ]);
+    expect((assignmentsSchema['properties'] as Map)['classes'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
+    // The planner writes (#53, #54, #55): pupils see a change at once, so
+    // Claude Desktop asks for approval. A fill, a clear, a new assignment
+    // and a trash are not idempotent; an edit sets values, so it is.
+    for (final (name, idempotent) in [
+      ('plan_lesson', false),
+      ('edit_planned_element', true),
+      ('clear_lesson', false),
+      ('plan_lesfiche', false),
+      ('plan_assignment', false),
+      ('trash_assignment', false),
+    ]) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': false,
+        'destructiveHint': true,
+        'idempotentHint': idempotent,
+        'openWorldHint': true,
+      }, reason: name);
+      expect(
+        tools[name]!['description'],
+        contains('after the user has explicitly confirmed it'),
+        reason: name,
+      );
+    }
+    final planSchema = tools['plan_lesson']!['inputSchema'] as Map;
+    expect(planSchema['required'], ['hour', 'name']);
+    expect((planSchema['properties'] as Map).keys, [
+      'hour',
+      'name',
+      'public_info',
+      'private_info',
+    ]);
+    final editSchema = tools['edit_planned_element']!['inputSchema'] as Map;
+    expect(editSchema['required'], ['id']);
+    expect((editSchema['properties'] as Map).keys, [
+      'id',
+      'name',
+      'public_info',
+      'private_info',
+    ]);
+    final clearSchema = tools['clear_lesson']!['inputSchema'] as Map;
+    expect(clearSchema['required'], ['id']);
+    expect((clearSchema['properties'] as Map).keys, ['id']);
+    // The lesfiches (#54): listed by label, name and kind; one planned into
+    // an empty lesson hour by its id.
+    final lesfichesSchema = tools['list_lesfiches']!['inputSchema'] as Map;
+    expect(lesfichesSchema['required'], isNull);
+    expect((lesfichesSchema['properties'] as Map).keys, [
+      'query',
+      'label',
+      'type',
+    ]);
+    expect((lesfichesSchema['properties'] as Map)['label'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
+    expect((lesfichesSchema['properties'] as Map)['type'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'enum': ['lessons', 'assignments', 'all'],
+    });
+    final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
+    expect(planLesficheSchema['required'], ['hour', 'lesfiche']);
+    expect((planLesficheSchema['properties'] as Map).keys, [
+      'hour',
+      'lesfiche',
+    ]);
+    // The assignments (#55): planned in an own lesson hour, for its classes
+    // or some of them, and moved to the planner's trash by id.
+    final planAssignmentSchema =
+        tools['plan_assignment']!['inputSchema'] as Map;
+    expect(planAssignmentSchema['required'], ['hour', 'type', 'name']);
+    expect((planAssignmentSchema['properties'] as Map).keys, [
+      'hour',
+      'type',
+      'name',
+      'public_info',
+      'private_info',
+      'classes',
+    ]);
+    expect((planAssignmentSchema['properties'] as Map)['classes'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
+    expect(
+      tools['plan_assignment']!['description'],
+      contains('Pupils of the classes see a new assignment at once.'),
+    );
+    final trashAssignmentSchema =
+        tools['trash_assignment']!['inputSchema'] as Map;
+    expect(trashAssignmentSchema['required'], ['id']);
+    expect((trashAssignmentSchema['properties'] as Map).keys, ['id']);
+    expect(
+      tools['trash_assignment']!['description'],
+      contains('restored from the planner\'s trash in Smartschool'),
+    );
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -280,7 +439,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(16));
+    expect(tools, hasLength(27));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -642,6 +801,263 @@ void main() {
     expect(Directory(server.downloads!).listSync(), isEmpty);
 
     await server.stop();
+  });
+
+  test('the planner tools without settings: an error result that names the '
+      'missing settings; an invalid planner, element id, hour, class, date, '
+      'type, name or lesfiche: an error that says what to fix, before any '
+      'login (#51, #52, #53, #54, #55)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+      ('search_planners', {'query': '6WE'}),
+      ('list_planner', {}),
+      (
+        'list_planner',
+        {
+          'planner': 'group/4069_4256',
+          'from': '2026-10-05',
+          'until': '2026-10-09 16:00',
+          'types': ['assignments', 'empty_lesson_hours'],
+        },
+      ),
+      (
+        'read_planned_element',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256', 'group/4069_4258'],
+        },
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256'],
+          'from': '2026-10-05',
+          'until': '2026-10-30',
+        },
+      ),
+      (
+        'plan_lesson',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': 'Lussen: for en while',
+          'public_info': 'Breng je laptop mee.',
+          'private_info': 'Oefening 3 overslaan.',
+        },
+      ),
+      (
+        'edit_planned_element',
+        {
+          'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'public_info': '',
+        },
+      ),
+      (
+        'clear_lesson',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      ('list_lesfiches', {}),
+      (
+        'list_lesfiches',
+        {
+          'query': 'lussen',
+          'label': ['JAAR 6', 'TRIMESTER 1'],
+          'type': 'all',
+        },
+      ),
+      (
+        'plan_lesfiche',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'lesfiche': 'b0000000-0000-4000-8000-000000000001',
+        },
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Kleine overhoring: hoofdstuk 3',
+          'public_info': 'Leerstof: hoofdstuk 3.',
+          'private_info': 'Versie A en B.',
+          'classes': ['6WEWI1'],
+        },
+      ),
+      (
+        'trash_assignment',
+        {'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: tool);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: tool,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (tool, arguments, message) in <(String, Map<String, Object?>, String)>[
+      ('search_planners', {'query': '  '}, 'query is empty'),
+      ('list_planner', {'planner': '6WEWI1'}, 'planner must be me'),
+      ('list_planner', {'from': 'maandag'}, '"maandag" is not'),
+      (
+        'list_planner',
+        {'from': '2026-10-09', 'until': '2026-10-05'},
+        'until must not be before from',
+      ),
+      (
+        'list_planner',
+        {
+          'types': ['tests'],
+        },
+        '"tests" is not one of the allowed values',
+      ),
+      (
+        'read_planned_element',
+        {'id': '225c0b54-0000-4000-8000-000000000000'},
+        'id must be the id of a planner element',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': [for (var i = 0; i < 11; i++) 'group/4069_${4256 + i}'],
+        },
+        'classes holds 11 classes, and at most 10 fit in one call',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['6WEWI1'],
+        },
+        'each item of classes must be the planner id of a class',
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256'],
+          'until': '30 oktober',
+        },
+        '"30 oktober" is not',
+      ),
+      ('list_class_assignments', {'classes': 'group/4069_4256'}, 'classes'),
+      (
+        'plan_lesson',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'name': 'Lussen',
+        },
+        'is a lesson, not an empty lesson hour',
+      ),
+      (
+        'plan_lesson',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': ' ',
+        },
+        'name is empty',
+      ),
+      (
+        'edit_planned_element',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+        'pass at least one of name, public_info and private_info',
+      ),
+      (
+        'clear_lesson',
+        {
+          'id':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+        },
+        'is an empty lesson hour already',
+      ),
+      (
+        'list_lesfiches',
+        {'type': 'tests'},
+        '"tests" is not one of the allowed values',
+      ),
+      ('list_lesfiches', {'label': 'JAAR 6'}, 'label'),
+      (
+        'plan_lesfiche',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'lesfiche': 'b0000000-0000-4000-8000-000000000001',
+        },
+        'is a lesson, not an empty lesson hour',
+      ),
+      (
+        'plan_lesfiche',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'lesfiche': 'Herhaling: lussen',
+        },
+        'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Toets',
+        },
+        'is an assignment. Nothing was sent.',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'type': ' ',
+          'name': 'Toets',
+        },
+        'type is empty',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Toets',
+          'classes': <String>[],
+        },
+        'classes is empty',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': 'Toets',
+        },
+        'type',
+      ),
+      (
+        'trash_assignment',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+        'is a lesson, not an assignment',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: '$tool $arguments');
+      expect(text, contains(message), reason: '$tool $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
   });
 
   test('the tools accept a whole number written with a decimal part '
