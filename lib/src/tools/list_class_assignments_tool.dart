@@ -45,9 +45,9 @@ ServerTool listClassAssignmentsTool(
         'planner shows them. To choose a moment, also look at when the user '
         'has lessons with the class (list_planner with planner me). Propose '
         'moments to the user and let the user choose: this tool only reads '
-        'and never plans anything. For questions like "wanneer kan ik best '
-        'een toets plannen in 6WEWI1?" or "welke toetsen heeft 5WW1 '
-        'volgende week?".',
+        'and never plans anything; plan_assignment plans the test the user '
+        'chose. For questions like "wanneer kan ik best een toets plannen in '
+        '6WEWI1?" or "welke toetsen heeft 5WW1 volgende week?".',
     inputSchema: Schema.object(
       properties: {
         'classes': Schema.list(

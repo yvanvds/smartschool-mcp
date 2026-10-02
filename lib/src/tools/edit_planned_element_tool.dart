@@ -36,10 +36,12 @@ ServerTool editPlannedElementTool(SmartschoolSession session) => ServerTool(
         'plain text, with a blank line between paragraphs; HTML in it is not '
         'interpreted, it shows as text. An info replaces the whole info: to '
         'add to it, pass the old text with the addition; an empty text '
-        'empties it. The result gives the element as saved. If the result '
-        'says a change may or may not have been saved, do not call this tool '
-        'again for it: check the element with read_planned_element and tell '
-        'the user.',
+        'empties it. Of an assignment (a test or task, such as one planned '
+        'with plan_assignment) only the name and the info change here, not '
+        'its date, type or classes. The result gives the element as saved. '
+        'If the result says a change may or may not have been saved, do not '
+        'call this tool again for it: check the element with '
+        'read_planned_element and tell the user.',
     inputSchema: Schema.object(
       properties: {
         'id': Schema.string(

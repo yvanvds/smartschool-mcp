@@ -64,6 +64,8 @@ void main() {
       'clear_lesson',
       'list_lesfiches',
       'plan_lesfiche',
+      'plan_assignment',
+      'trash_assignment',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -325,14 +327,16 @@ void main() {
       'description': isA<String>(),
       'items': {'type': 'string'},
     });
-    // The planner writes (#53, #54): pupils see a change at once, so Claude
-    // Desktop asks for approval. A fill and a clear are not idempotent; an
-    // edit sets values, so it is.
+    // The planner writes (#53, #54, #55): pupils see a change at once, so
+    // Claude Desktop asks for approval. A fill, a clear, a new assignment
+    // and a trash are not idempotent; an edit sets values, so it is.
     for (final (name, idempotent) in [
       ('plan_lesson', false),
       ('edit_planned_element', true),
       ('clear_lesson', false),
       ('plan_lesfiche', false),
+      ('plan_assignment', false),
+      ('trash_assignment', false),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -391,6 +395,36 @@ void main() {
       'hour',
       'lesfiche',
     ]);
+    // The assignments (#55): planned in an own lesson hour, for its classes
+    // or some of them, and moved to the planner's trash by id.
+    final planAssignmentSchema =
+        tools['plan_assignment']!['inputSchema'] as Map;
+    expect(planAssignmentSchema['required'], ['hour', 'type', 'name']);
+    expect((planAssignmentSchema['properties'] as Map).keys, [
+      'hour',
+      'type',
+      'name',
+      'public_info',
+      'private_info',
+      'classes',
+    ]);
+    expect((planAssignmentSchema['properties'] as Map)['classes'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
+    expect(
+      tools['plan_assignment']!['description'],
+      contains('Pupils of the classes see a new assignment at once.'),
+    );
+    final trashAssignmentSchema =
+        tools['trash_assignment']!['inputSchema'] as Map;
+    expect(trashAssignmentSchema['required'], ['id']);
+    expect((trashAssignmentSchema['properties'] as Map).keys, ['id']);
+    expect(
+      tools['trash_assignment']!['description'],
+      contains('restored from the planner\'s trash in Smartschool'),
+    );
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -405,7 +439,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(25));
+    expect(tools, hasLength(27));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -772,7 +806,7 @@ void main() {
   test('the planner tools without settings: an error result that names the '
       'missing settings; an invalid planner, element id, hour, class, date, '
       'type, name or lesfiche: an error that says what to fix, before any '
-      'login (#51, #52, #53, #54)', () async {
+      'login (#51, #52, #53, #54, #55)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -846,6 +880,21 @@ void main() {
               'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
           'lesfiche': 'b0000000-0000-4000-8000-000000000001',
         },
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Kleine overhoring: hoofdstuk 3',
+          'public_info': 'Leerstof: hoofdstuk 3.',
+          'private_info': 'Versie A en B.',
+          'classes': ['6WEWI1'],
+        },
+      ),
+      (
+        'trash_assignment',
+        {'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000'},
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
@@ -954,6 +1003,51 @@ void main() {
           'lesfiche': 'Herhaling: lussen',
         },
         'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Toets',
+        },
+        'is an assignment. Nothing was sent.',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'type': ' ',
+          'name': 'Toets',
+        },
+        'type is empty',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'type': 'KO',
+          'name': 'Toets',
+          'classes': <String>[],
+        },
+        'classes is empty',
+      ),
+      (
+        'plan_assignment',
+        {
+          'hour':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'name': 'Toets',
+        },
+        'type',
+      ),
+      (
+        'trash_assignment',
+        {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+        'is a lesson, not an assignment',
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);

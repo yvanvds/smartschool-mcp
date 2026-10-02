@@ -262,6 +262,7 @@ class FakePlannedElement {
     this.weblinks = const [],
     this.visibleFrom,
     this.isAnnounced,
+    this.hasLinkedEvaluation = false,
     this.capabilities = const {},
   });
 
@@ -296,6 +297,9 @@ class FakePlannedElement {
   final List<(String, String)> weblinks;
   final String? visibleFrom;
   final bool? isAnnounced;
+
+  /// Whether a Skore evaluation is linked to the assignment.
+  final bool hasLinkedEvaluation;
 
   /// Capabilities that differ from what the planner gives an element of
   /// this type ([capabilityJson]), such as `{'canUserReplace': false}`.
@@ -375,6 +379,7 @@ class FakePlannedElement {
     weblinks: weblinks,
     visibleFrom: visibleFrom,
     isAnnounced: isAnnounced,
+    hasLinkedEvaluation: hasLinkedEvaluation,
     capabilities: capabilities,
   );
 
@@ -483,7 +488,7 @@ class FakePlannedElement {
       'uploadFolder': null,
       'isAnnounced': isAnnounced ?? false,
       'visibility': {'afterDate': ?visibleFrom},
-      'hasLinkedEvaluation': false,
+      'hasLinkedEvaluation': hasLinkedEvaluation,
       'linkedEvaluation': null,
       'dateCreated': visibleFrom ?? from,
     },
@@ -721,7 +726,20 @@ class FakePlannerHit {
 ///   (`newInfo`): changes the element, and answers with it;
 /// - `POST /planner/api/v1/planned-elements/clear` (`type`, `elementId`,
 ///   `elementPlatformId`): clears the lesson as [clearLesson] does, and
-///   answers with the empty lesson hour.
+///   answers with the empty lesson hour;
+/// - `POST /planner/api/v1/planned-assignments/blanco` (dartschool#89, with
+///   `waitForRefresh=true`): makes the assignment of the body, organised by
+///   its organisers, for its classes, of its course and rooms (each one the
+///   fake knows), of one of the [assignmentTypes], due at its period's start
+///   (`deadline`), with its name, info and icon, visible to pupils from
+///   [createdAt] and not announced; adds it to the planners of its classes,
+///   organisers and rooms, and answers `201` with it, as the live planner
+///   did. A body without an icon is answered with `400`, as live (nothing is
+///   made); so is one with something the fake does not know (made up);
+/// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/trash`
+///   (dartschool#89, no body): moves the element to the planner's [trash],
+///   as [trashElement] does, and answers `200` with `[]`, as live; its
+///   detail is then `404`.
 ///
 /// A write of an element the fake does not have is answered with `404`.
 /// The fake does not check whose element it changes: the library does that
@@ -746,6 +764,26 @@ class FakePlanner {
   /// The classes the fake knows, by id: those of the elements and of the
   /// class calendars.
   final Map<String, FakePlannerGroup> classes = {};
+
+  /// The courses the fake knows, by id: those of the elements added.
+  final Map<String, FakePlannerCourse> courses = {};
+
+  /// The rooms the fake knows, by id: those of the elements added.
+  final Map<String, FakePlannerRoom> rooms = {};
+
+  /// The people the fake knows, by planner user id: the fake's own account
+  /// and the organisers of the elements added.
+  final Map<String, FakePlannerUser> users = {
+    fakePlannerMe: FakePlannerUser.me,
+  };
+
+  /// The elements moved to the planner's trash, in order.
+  final List<FakePlannedElement> trash = [];
+
+  /// When the planner makes an assignment, as it writes it: pupils see the
+  /// assignment from then. The moment of dartschool's capture of the create
+  /// (#89) by default.
+  String createdAt = plannerTime(2026, 10, 2, 16, 30);
 
   /// The school's assignment types.
   final List<FakeAssignmentType> assignmentTypes = [];
@@ -829,8 +867,23 @@ class FakePlanner {
     return slot;
   }
 
+  /// Moves the element [ref] (`planned-assignments/4069/<id>`) to the
+  /// planner's [trash], as the planner does: it is gone from every planner,
+  /// and its detail is `404`. Returns the element, or null when the fake has
+  /// no such element.
+  FakePlannedElement? trashElement(String ref) {
+    final element = elements.remove(ref);
+    if (element == null) return null;
+    for (final listed in calendars.values) {
+      listed.remove(element);
+    }
+    trash.add(element);
+    return element;
+  }
+
   /// A new element id, with [version] as its third part (`4000` for a
-  /// lesson, `5000` for an empty lesson hour, as in the captures).
+  /// lesson or an assignment, `5000` for an empty lesson hour, as in the
+  /// captures).
   String _newId(String version) =>
       'e0000000-0000-$version-9000-${(++_made).toString().padLeft(12, '0')}';
 
@@ -851,6 +904,15 @@ class FakePlanner {
     elements[element.ref] = element;
     for (final group in element.groups) {
       classes.putIfAbsent(group.id, () => group);
+    }
+    for (final course in element.courses) {
+      courses.putIfAbsent(course.id, () => course);
+    }
+    for (final room in element.rooms) {
+      rooms.putIfAbsent(room.id, () => room);
+    }
+    for (final user in element.organisers) {
+      users.putIfAbsent(user.id, () => user);
     }
     for (final calendar in calendars) {
       this.calendars.putIfAbsent(calendar, () => []).add(element);
@@ -940,6 +1002,10 @@ class FakePlanner {
             options.data,
           ),
         ['planned-elements', 'clear'] => _clear(options.data),
+        ['planned-assignments', 'blanco'] => _createAssignment(options.data),
+        [final type, final platform, final id, 'trash'] => _trash(
+          '$type/$platform/${Uri.decodeComponent(id)}',
+        ),
         [
           final type,
           final platform,
@@ -1022,6 +1088,79 @@ class FakePlanner {
     );
     if (slot == null) return _notFound();
     return _json(jsonEncode(slot.detailJson()));
+  }
+
+  ResponseBody _createAssignment(Object? data) {
+    final body = data as Map;
+    T? known<T>(Map<String, T> registry, Object? id) =>
+        id is String ? registry[id] : null;
+    final organisers = [
+      for (final id in (body['organisers'] as Map)['users'] as List)
+        known(users, id),
+    ];
+    final groups = [
+      for (final id in (body['participants'] as Map)['groups'] as List)
+        known(classes, id),
+    ];
+    final courses = [
+      for (final course in body['courses'] as List)
+        known(this.courses, (course as Map)['id']),
+    ];
+    final rooms = [
+      for (final location in body['locations'] as List)
+        known(this.rooms, (location as Map)['id']),
+    ];
+    final typeId = '${body['assignmentType']}'.toLowerCase();
+    final type = assignmentTypes
+        .where((type) => type.id.toLowerCase() == typeId)
+        .firstOrNull;
+    final period = body['period'] as Map;
+    final icon = body['icon'];
+    final name = body['name'];
+    if (icon is! String ||
+        icon.isEmpty ||
+        name is! String ||
+        organisers.isEmpty ||
+        organisers.contains(null) ||
+        groups.isEmpty ||
+        groups.contains(null) ||
+        courses.contains(null) ||
+        rooms.contains(null) ||
+        type == null ||
+        period['deadline'] != true) {
+      return _badRequest();
+    }
+    final assignment = FakePlannedElement(
+      id: _newId('4000'),
+      type: 'planned-assignments',
+      name: name,
+      from: period['dateTimeFrom'] as String,
+      to: period['dateTimeTo'] as String,
+      deadline: true,
+      organisers: organisers.nonNulls.toList(),
+      groups: groups.nonNulls.toList(),
+      courses: courses.nonNulls.toList(),
+      rooms: rooms.nonNulls.toList(),
+      assignmentType: type,
+      publicInfo: body['publicInfo'] as String,
+      privateInfo: body['privateInfo'] as String,
+      visibleFrom: createdAt,
+      isAnnounced: false,
+    );
+    add(
+      assignment,
+      calendars: {
+        for (final group in assignment.groups) 'group/${group.id}',
+        for (final user in assignment.organisers) 'user/${user.id}',
+        for (final room in assignment.rooms) room.planner,
+      }.toList(),
+    );
+    return _json(jsonEncode(assignment.detailJson()), status: 201);
+  }
+
+  ResponseBody _trash(String ref) {
+    if (trashElement(ref) == null) return _notFound();
+    return _json('[]');
   }
 
   ResponseBody _edit(String ref, String action, Object? data) {

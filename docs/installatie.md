@@ -13,9 +13,10 @@ Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen. Je eigen lesuren invullen met lessen of met je lesfiches uit de
-  module Lesfiches, die lessen aanpassen en een lesuur weer leegmaken, pas
-  nadat jij het goedgekeurd hebt.
+  kiezen, en die toets of taak dan plannen. Je eigen lesuren invullen met
+  lessen of met je lesfiches uit de module Lesfiches, die lessen aanpassen en
+  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
+  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
@@ -267,8 +268,8 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   collega's raakt het niet aan.
 - "Zet bij mijn les van dinsdag in 5WW1 dat ze hun rekenmachine moeten
   meebrengen."
-  Claude past de titel, de info voor leerlingen of de privé-info van een les
-  aan, na jouw akkoord. De nieuwe info vervangt de oude.
+  Claude past de titel, de info voor leerlingen of de privé-info van een
+  les, toets of taak aan, na jouw akkoord. De nieuwe info vervangt de oude.
 - "Maak mijn les van vrijdag het 3e uur weer leeg."
   De les verdwijnt met haar titel en info, en het lesuur is weer leeg. Dat
   kun je niet ongedaan maken: Claude vraagt eerst je akkoord.
@@ -278,6 +279,18 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
   lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
   kunnen zo: een lesfiche van een toets of taak niet.
+- "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
+  uur."
+  Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken
+  de klas al heeft. Het toont de klas, de dag en het uur, het soort toets, de
+  titel en de info, en wacht op jouw akkoord. Je leerlingen zien de toets
+  meteen in de planner. Claude kondigt de toets niet aan: dat doe je, als je
+  wilt, zelf in Smartschool. Een toets plant Claude altijd in een van je
+  eigen lesuren; heb je dat uur met twee klassen, zeg dan voor welke klas
+  hij is.
+- "Haal de toets van dinsdag in 6WEWI1 weg."
+  Claude verplaatst je toets of taak naar de prullenbak van de planner, na
+  jouw akkoord. Daar kun je ze in Smartschool nog 30 dagen terugzetten.
 
 ### Bestanden bewaren
 
@@ -314,11 +327,13 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
 - De extensie werkt alleen met berichten, Intradesk en de planner. Andere
-  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner vult
-  ze alleen je eigen lesuren in, past ze je eigen lessen, toetsen en taken
-  aan en maakt ze lesuren weer leeg. Een nieuwe toets of taak plannen kan ze
-  niet. In de module Lesfiches leest ze je lesfiches alleen: ze verandert
-  er niets in.
+  onderdelen van Smartschool, zoals Skore, kent ze niet. In de planner
+  verandert ze alleen je eigen planner: ze vult je lesuren in, plant toetsen
+  en taken in je lesuren, past je eigen lessen, toetsen en taken aan, maakt
+  lesuren weer leeg en verplaatst je toetsen en taken naar de prullenbak.
+  Een toets of taak aankondigen, ze uit de prullenbak terugzetten of voor
+  altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
+  module Lesfiches leest ze je lesfiches alleen: ze verandert er niets in.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
   toets apart openen toont meteen de nieuwe.

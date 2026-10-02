@@ -372,7 +372,8 @@ client name. It also installs again while that copy runs.
   are not interpreted (at the school seen live every class had `Geen
   limiet`, and every weight was 0). It also lists the school's assignment
   types (`getAssignmentTypes`, read once per session). The tool only reads:
-  choosing the moment is left to the user, with Claude.
+  choosing the moment is left to the user, with Claude, and
+  `plan_assignment` plans the test.
 - `plan_lesson`: fills an empty lesson hour of the user's own planner
   (`hour`, an id `planned-placeholders/…` from `list_planner` with `me`)
   with a lesson: a `name`, and optionally `public_info` (what pupils see)
@@ -439,14 +440,51 @@ client name. It also installs again while that copy runs.
   the lesfiches before it plans and refuses, before sending anything, an id
   the user has no lesfiche with and an assignment lesfiche; the tool passes
   that reason on. A hidden lesfiche is planned like any other.
+- `plan_assignment`: plans an assignment (a test, a task, something to
+  bring along) in one of the user's own lesson hours (`hour`, an empty
+  lesson hour or a lesson from `list_planner` with `me`) with the library's
+  `planAssignment` (dartschool#89): of a `type`, by abbreviation or name
+  (`KO`, `Kleine Overhoring`), matched against the school's types (read
+  once per session; one that matches none is an error that lists them),
+  with a `name` and optionally `public_info` and `private_info` (plain
+  text, as `plan_lesson`). The server reads the hour's detail and takes
+  from it the classes (all of them, or those `classes` names, by name or
+  planner id; a class that is not the hour's is an error), the course (the
+  first), the rooms and the period: the assignment is due at the start of
+  the hour and runs to its end, and the hour itself stays as it is. The
+  library's create takes no hour, so the server refuses an hour that is not
+  the user's own, and one without classes or a course, before sending
+  anything. Pupils of the classes see the assignment at once; it is not
+  announced (Smartschool's "aankondigen" is not offered). Marked
+  destructive, not idempotent: Claude is told to check the class's other
+  tests with `list_class_assignments` first, to show the user the classes,
+  the date and hour, the type, the name and the info, and to wait for the
+  user's confirmation. The library checks the type against the school's
+  types again and sends the create
+  (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
+  once. The result gives the assignment as saved, with its id. Its name and
+  info change with `edit_planned_element`; its date, type and classes do
+  not change.
+- `trash_assignment`: moves an assignment of the user's own planner (`id`)
+  to the planner's trash (`trashAssignment`, dartschool#89). Smartschool
+  keeps it there for 30 days, and it can be restored in Smartschool itself;
+  the tool restores nothing and never deletes for good. Marked
+  destructive, not idempotent; Claude is told to say that it can be
+  restored. The library reads the assignment again and refuses, before
+  sending anything, a colleague's assignment, one the planner does not let
+  the user trash (`canUserTrash`) and one with a linked Skore evaluation; it
+  sends the trash once, and confirms it by reading the assignment again
+  (the planner answers `404`).
 
-For the four planner writes, a write that went out without the planner
+For the six planner writes, a write that went out without the planner
 confirming it (`SmartschoolPlannerSaveUnconfirmedError`) is reported as
 maybe saved, with what to read to check it, and Claude is told not to call
 the tool again for it, as for a message whose send Smartschool did not
-confirm. A session that Smartschool refused for a fill or a clear means the
-write was not carried out: the session repeats the call, which reads the
-element again (a lesson hour filled meanwhile is gone, so nothing is sent).
+confirm (for a new assignment: the class's assignments, with
+`list_class_assignments`). A session that Smartschool refused for a fill, a
+clear, a create or a trash means the write was not carried out: the session
+repeats the call, which reads the element again (a lesson hour filled
+meanwhile is gone, so nothing is sent).
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -505,8 +543,10 @@ elements per day (`elementsByDay`) and an element's detail
 change the planner: the info text Claude writes as HTML
 (`plainTextToHtml`), the `hour` argument (`emptyHourArgument`), the fill of
 an empty lesson hour with its result (`fillLessonHour`, which takes the
-library call that fills, so a lesfiche can be planned the same way),
-`withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
+library call that fills, so a lesfiche can be planned the same way), the
+lesson hour, the classes and the type of a new assignment
+(`lessonHourArgument`, `lessonHourClassesArgument`, `lessonHourClasses`,
+`assignmentTypeArgument`), `withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
 error), and the result of a write the planner did not confirm
 (`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
 refused a write (`SmartschoolPlannerWriteRefusedError`). In
@@ -518,8 +558,9 @@ line per lesfiche (`formatLesficheLine`). The tests run against a fake
 planner (`test/support/fake_planner.dart`), built from dartschool's
 anonymised captures of the live planner, its workload view and the
 Lesfiches list, which carries out the writes of dartschool#87 (fill,
-rename, change of the info, clear) and the plan of a lesfiche of
-dartschool#88 as the live planner did.
+rename, change of the info, clear), the plan of a lesfiche of
+dartschool#88, and the create and the trash of an assignment of
+dartschool#89 as the live planner did.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

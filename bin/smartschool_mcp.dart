@@ -22,6 +22,7 @@ import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
@@ -36,6 +37,7 @@ import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_recipients_tool.dart';
 import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -114,6 +116,8 @@ Future<void> _serve(ServerOptions options) async {
           clearLessonTool(session),
           listLesfichesTool(session),
           planLesficheTool(session),
+          planAssignmentTool(session),
+          trashAssignmentTool(session),
         ],
         updates: updates,
       );
