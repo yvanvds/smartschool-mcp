@@ -27,11 +27,19 @@ String displaySubject(String subject) =>
 ///
 /// For example `id 123 | 2024-03-15 14:30 | from Jan Peeters | Oudercontact |
 /// unread, attachments, flag red`.
-String formatHeaderLine(ShortMessage message, MessageBox box) {
+///
+/// [unread] and [flag], when given, replace the message's own read state and
+/// colour flag: for a line that shows the message after a change.
+String formatHeaderLine(
+  ShortMessage message,
+  MessageBox box, {
+  bool? unread,
+  int? flag,
+}) {
   final markers = [
-    if (message.unread && box != MessageBox.sent) 'unread',
+    if ((unread ?? message.unread) && box != MessageBox.sent) 'unread',
     if (message.attachment > 0) 'attachments',
-    if (flagName(message.coloredFlag) case final flag?) 'flag $flag',
+    if (flagName(flag ?? message.coloredFlag) case final name?) 'flag $name',
   ];
   return [
     'id ${message.id}',

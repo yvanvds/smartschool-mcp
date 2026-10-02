@@ -191,7 +191,7 @@ what to restart and how to update in that app. Under Codex:
 
 - the ChatGPT form, or `[mcp_servers.smartschool.env]` in `config.toml`;
 - "restart ChatGPT (or Codex)";
-- download `smartschool-mcp.exe` and double-click it.
+- the download link of `smartschool-mcp.exe`, to double-click it.
 
 Settings are named by their variable first (`SMARTSCHOOL_MFA
 ("2FA-sleutel")`), as the form shows them. Any other client gets the Claude
@@ -214,7 +214,8 @@ Known limits in Codex (2026):
 - **Long text:** Codex cuts long tool output to the model's budget, about 10k
   tokens, well below `read_intradesk_file`'s 100,000 characters.
 - **Approval:** Codex asks approval for a tool marked destructive
-  (`reply_to_message`), unless it runs with *Full access*.
+  (`trash_messages`, `reply_to_message`, `send_message`), unless it runs
+  with *Full access*.
 - **`HOME`:** Codex does not pass `HOME` on. A user who has `HOME` set gets
   another cache folder under Codex than under Claude Desktop, so the server
   logs in once more there.
@@ -227,7 +228,8 @@ client name. It also installs again while that copy runs.
 
 - `smartschool_status`: whether the connection works, or what to fix, the
   download folder and whether it is writable, and whether a newer version
-  is available (see *Update check* below).
+  is available, with its download link and what is new (see *Update check*
+  below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool lists a box 50 messages at a time; the tool asks for the next
@@ -253,6 +255,33 @@ client name. It also installs again while that copy runs.
   archived, was already in the archive, or why not. It lists the inbox (and
   the archive, for ids not in the inbox) until it has found every id. Claude
   proposes candidates when asked for advice and archives when asked to.
+- `mark_messages`: marks up to 100 messages of the inbox or the archive
+  (ids from `list_messages`) as read or unread; the sent box has no read
+  state for the user. `read_message` leaves the read state alone: marking a
+  message as read is the user's choice. It lists the box until it has found
+  every id, changes the messages one at a time and reports per id the new
+  state Smartschool confirmed, that the message is not in the box, or that
+  Smartschool did not confirm the change. Claude proposes candidates when
+  asked for advice and marks them when asked to.
+- `flag_messages`: sets the colour flag (green, yellow, red or blue) of up
+  to 100 messages of the inbox, the sent box or the archive, or clears it
+  (`none`), one message at a time and reporting per id, like
+  `mark_messages`.
+- `trash_messages`: moves up to 100 messages of the inbox, the sent box or
+  the archive to Smartschool's trash, one message at a time. A move, not a
+  deletion: the user can restore a message from the trash in Smartschool
+  until the trash is emptied, but the server cannot take it out again. So
+  the tool is marked destructive (Claude Desktop asks for approval every
+  time), and Claude is told to show the list and wait for the user's
+  confirmation first. Each message is moved with the library's
+  `moveToTrashFrom`, which names its box (the archive with its box id),
+  never with `moveToTrash`, whose `quick delete` names no box and deletes a
+  copy in the trash for good. Smartschool answers a move the same whether
+  it moved the message or not, so each message is read back from its box
+  afterwards. The result says per id: moved, not in the box, or still in
+  the box after the move. A message the user sent to themselves has the
+  same id in the inbox and the sent box: only the copy in the box named is
+  moved.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -263,6 +292,26 @@ client name. It also installs again while that copy runs.
   the reply may have been sent and to check the sent box. The reply is sent
   with the message's own reply form, so Smartschool links it to the
   original.
+- `search_recipients`: the users and groups (such as a class) a new message
+  can go to, found by name with the search of Smartschool's compose form
+  (the library's `searchRecipientsForCompose`). Each is listed as
+  `send_message` takes it, its name with its kind and id in brackets, like
+  `Sven Lamber (user 146)` or `5GZ (group 298)`, then what tells namesakes
+  apart (a class, a co-account, a group's description). It changes nothing
+  in Smartschool: the compose form it searches on is left unused.
+- `send_message`: sends a new message (plain text or simple Markdown, as
+  `reply_to_message`) to recipients in To, CC and BCC, users or groups.
+  Claude is told to look every recipient up with `search_recipients`, show
+  the user the recipients, subject and text, and wait for the user's
+  confirmation first; the tool is marked destructive, so Claude Desktop
+  asks for approval every time. Each recipient is a name or a reference as
+  `search_recipients` lists it; the tool looks each one up again and sends
+  only when each names exactly one user or group (the name exactly,
+  ignoring case and extra spaces, and the kind and id of a reference). A
+  name that no one has exactly, or that several users or groups have (also
+  a user and a group), stops the send before anything is sent, with who the
+  search finds, for the user to choose: the tool never picks one. It sends
+  once, as `reply_to_message` does (`submitOnce`).
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so
@@ -288,10 +337,23 @@ in `message_box.dart`, the HTML-to-text converter `htmlToText` in
 `html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
 writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
 who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
-filters and date-range arguments in `message_filter.dart`, the output lines in
-`message_format.dart`, full-text matching and snippets (`SearchQuery`) in
-`message_search.dart` and the message text cache (`MessageTextCache`) in
-`message_cache.dart`.
+recipients of a new message (`searchRecipients`, `RecipientRequest`) in
+`recipient_search.dart`, the filters and date-range arguments in
+`message_filter.dart`, the output lines in `message_format.dart`, full-text
+matching and snippets (`SearchQuery`) in `message_search.dart` and the message
+text cache (`MessageTextCache`) in `message_cache.dart`.
+
+The tools that change messages named by id share their `message_ids`
+argument (`messageIdsSchema`, `messageIdsArgument`) and, for a change made
+one message at a time, the per-id loop and result (`changeEach`,
+`changesResult`) in `lib/src/tools/message_changes.dart`. A change that
+takes a message out of its box (`trash_messages`) passes `changeEach` a
+`started` map, so that a repeat of the call (after Smartschool refused the
+session) does not report a message moved before as not in the box. The tools
+that send a message (`reply_to_message`, `send_message`) share the submit
+that is never repeated (`submitOnce`) and how its outcome is reported
+(`notConfirmedResult`, `sendSummary`) in
+`lib/src/tools/message_sending.dart`.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
@@ -480,60 +542,79 @@ teacher which setting to fix. When a request finds the session expired,
 requests share that one login. When Smartschool still refuses the session,
 `run` runs the action once more, so an action must be safe to repeat.
 Sending is not, once Smartschool has handled the submit: `reply_to_message`
-turns a submit that Smartschool does not confirm
+and `send_message` turn a submit that Smartschool does not confirm
 (`SmartschoolSendUnconfirmedError`) into a result that is not retried. A
 step of the send that Smartschool refused the session for, the submit
-included, sent nothing, so `run` may repeat it (see `_send` in
-`lib/src/tools/reply_to_message_tool.dart`).
+included, sent nothing, so `run` may repeat it (see `submitOnce` in
+`lib/src/tools/message_sending.dart`).
 
 ### Update check
 
 At startup, in the background (startup never waits for it), the server asks
-GitHub for the latest release of this repository
-(`https://api.github.com/repos/yvanvds/smartschool-mcp/releases/latest`,
-unauthenticated; GitHub leaves out drafts and pre-releases) and compares its
-tag (`vX.Y.Z`) with the built-in version (`lib/src/version.dart`). A tag that
-is not a version is ignored. GitHub answers 404 while no release has been
+GitHub for the releases of this repository
+(`https://api.github.com/repos/yvanvds/smartschool-mcp/releases`,
+unauthenticated; the first page, with the 30 newest). GitHub leaves out
+drafts; the server ignores pre-releases and tags that are not a version
+(`vX.Y.Z`). It compares the highest version with the built-in one
+(`lib/src/version.dart`). An empty list means that no release has been
 published: nothing to report. A check waits at most 5 seconds; offline, rate
 limited or an answer it does not understand is only logged.
 
-It asks at most once a day. The time and result of the last successful check
-are kept in
+It asks at most once a day. The time and the releases of the last successful
+check (tag, release page, download links and what is new) are kept in
 
 ```
 %USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json
 ```
 
 (`%HOME%` instead of `%USERPROFILE%` when `HOME` is set), so a restart within
-24 hours does not ask again. It needs no Smartschool settings. A server that
-keeps running asks again after 24 hours, on a tool call.
+24 hours does not ask again. A file of an older format is ignored. It needs no
+Smartschool settings. A server that keeps running asks again after 24 hours,
+on a tool call.
 
 When a newer release exists, the first successful tool result after the
-check gets one extra text after its content: the new version, the release
-page and "download `smartschool-mcp.mcpb` and double-click it" (under Codex:
-download `smartschool-mcp.exe`, double-click it and restart ChatGPT), for the
-model to pass on. That happens once per server process (Claude Desktop starts
-one per session), and not at all after `smartschool_status` showed it. Error results
-never get it. `smartschool_status` always asks GitHub (while it checks the
-login, so it takes no longer) and shows the result on its `Updates:` line.
-The code is in `lib/src/update_check.dart`; the server adds the notice in
+check gets one extra text after its content, for the model to pass on:
+
+- the new version and the running one;
+- "Give the user this download link": the direct link to the file for the
+  app the server runs in (the release asset's `browser_download_url`):
+  `smartschool-mcp.mcpb` in Claude Desktop, `smartschool-mcp.exe` under
+  Codex. A release without that file gets the link to its release page
+  instead;
+- what to do with it: double-click it (under Codex also: restart ChatGPT);
+- the release page, as a second link;
+- what is new: the `## Nieuw in deze versie` section of the notes of every
+  release newer than the running one, newest first, with the request to
+  summarise it for the user in a few plain words. The notes are treated as
+  data: only that section, as plain text (links keep their text; images,
+  HTML and control characters go), at most 1,500 characters in all. Releases
+  without the section (from before `CHANGELOG.md`) add nothing.
+
+That happens once per server process (Claude Desktop starts one per session),
+and not at all after `smartschool_status` showed it. Error results never get
+it. `smartschool_status` always asks GitHub (while it checks the login, so it
+takes no longer) and shows the same on its `Updates:` lines; its description
+asks the model to give the download link and say what is new. The code is in
+`lib/src/update_check.dart`; the server adds the notice in
 `lib/src/server.dart`.
 
 For tests and development:
 
 - `SMARTSCHOOL_MCP_UPDATE_CHECK=off` turns the check off;
 - `SMARTSCHOOL_MCP_UPDATE_URL=<address>` asks that address instead of the
-  GitHub API (it must answer the same way).
+  GitHub API (it must answer the same way, with a list of releases).
 
-The tests use a local fake GitHub (`test/support/fake_github.dart`).
+The tests use a local fake GitHub (`test/support/fake_github.dart`), whose
+releases have notes as the release workflow writes them.
 `ServerProcess.start` in `test/support/exe.dart` turns the check off unless a
 test asks for it with its own fake, so no test and no CI run asks the real
 GitHub.
 
 A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
-full release (not a draft or pre-release), and carry the extension as
-`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe`: the notice
-names those files and links to the release page. The release workflow takes care of all three (see below).
+full release (not a draft or pre-release), carry the extension as
+`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe` (the notice
+links to those files), and have the `## Nieuw in deze versie` section in its
+notes. The release workflow takes care of all of it (see below).
 
 ### Extension and releases
 
@@ -582,23 +663,33 @@ Desktop does.
 
 The version is in three files: `pubspec.yaml`, `lib/src/version.dart` and
 `manifest.json`. `dart run tool/check_version.dart` fails when they differ,
-and with `--tag vX.Y.Z` also when the tag does; CI runs it, and
-`test/version_test.dart` checks the same.
+with `--tag vX.Y.Z` also when the tag does, and when `CHANGELOG.md` has no
+section for the version; CI runs it, and `test/version_test.dart` checks the
+same.
+
+`CHANGELOG.md` says what is new in each version, in Dutch and for colleagues:
+a section under `## X.Y.Z` with a few lines on what they notice, without
+technical details, links or headings of level 1 or 2. Colleagues on an older
+version see it in the update notice.
 
 To release:
 
-1. Set the new version in the three files; commit and merge.
+1. Set the new version in the three files and write its section in
+   `CHANGELOG.md`; commit and merge.
 2. Tag that commit `vX.Y.Z` and push the tag.
 
 The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
 checks the tag against the version, runs the tests, builds the extension,
 validates and packs it with `mcpb`, and publishes a full GitHub release with
 the extension attached as `smartschool-mcp.mcpb` and the server in it as
-`smartschool-mcp.exe` (always those names: the update notice names them).
-Its notes start with `.github/release-notes.md` (how to install, in Dutch,
-with links to both colleague guides), followed by the generated release
-notes. Both workflows pin the same `mcpb` version. The
-executable is not signed.
+`smartschool-mcp.exe` (always those names: the update notice links to
+them). `tool/release_notes.dart` writes its notes: the version's section of
+`CHANGELOG.md` under `## Nieuw in deze versie` (what the update notice
+shows), then `.github/release-notes.md` under `## Installeren of bijwerken`
+(how to install, in Dutch, with links to both colleague guides). The
+generated release notes follow. `test/release_notes_test.dart` checks that the
+update check reads exactly that section back. Both workflows pin the same
+`mcpb` version. The executable is not signed.
 
 ## License
 

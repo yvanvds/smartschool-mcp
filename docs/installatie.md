@@ -3,8 +3,11 @@
 Met de Smartschool-extensie werkt Claude Desktop met je Smartschool-account.
 Je vraagt het gewoon in een gesprek:
 
-- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, archiveren en
-  beantwoorden. Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
+  ongelezen markeren, een gekleurde vlag geven, archiveren, naar de
+  prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen. Een
+  bericht vertrekt, en een bericht gaat naar de prullenbak, pas nadat jij het
+  goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -194,12 +197,28 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 - "Welke berichten in mijn postvak mag ik archiveren?"
   Claude stelt dan berichten voor. Pas als je zegt "Archiveer ze", verplaatst
   het ze naar je archief in Smartschool. Daar vind je ze terug.
+- "Markeer de berichten van de directie van vorige week als gelezen."
+  Claude leest een bericht voor jou zonder het als gelezen te markeren. Dat
+  doet het pas als je het vraagt.
+- "Zet een rode vlag op de berichten waar ik nog op moet antwoorden."
+- "Gooi de nieuwsbrieven van vorige maand weg."
+  Claude toont eerst welke berichten naar de prullenbak gaan, en wacht op
+  jouw akkoord. Daarna vraagt Claude Desktop nog eens toestemming. De
+  berichten komen in de prullenbak van Smartschool: zolang je die niet
+  leegmaakt, kun je ze daar zelf terugzetten. Claude kan dat niet.
 - "Beantwoord het bericht van An over de uitstap: ik ga graag mee."
   Claude toont eerst de tekst en de ontvangers, en wacht op jouw akkoord.
   Daarna vraagt Claude Desktop nog eens toestemming om te versturen. Kies daar
   liefst niet om het altijd toe te staan, dan blijft Claude Desktop het elke
   keer vragen. Het antwoord vertrekt vanuit jouw account, als antwoord op het
   oorspronkelijke bericht.
+- "Stuur Sven Lamber een bericht: de toets van vrijdag gaat niet door."
+  Claude zoekt eerst wie Sven Lamber is en toont de ontvangers (met hun
+  klas), het onderwerp en de tekst, en wacht op jouw akkoord. Vindt het
+  meer dan één Sven Lamber, of niemand met die naam, dan vraagt Claude wie
+  je bedoelt: het kiest nooit zelf. Je kunt ook een groep kiezen, zoals een
+  klas: dan krijgen alle leden het bericht. Daarna vraagt Claude Desktop nog
+  eens toestemming om te versturen.
 - "Open de bijlage van het bericht van de directie."
 
 ### Intradesk
@@ -249,22 +268,27 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
 ## 6. Bijwerken naar een nieuwe versie
 
 Eén keer per dag kijkt de extensie op GitHub of er een nieuwe versie is. Is
-die er, dan meldt Claude dat in een antwoord, met het nieuwe versienummer en
-een link naar de releasepagina. Dat gebeurt één keer, niet bij elk antwoord.
-Ook "Werkt mijn Smartschool-verbinding?" toont altijd of er een nieuwere
-versie is.
+die er, dan meldt Claude dat in een antwoord, met het nieuwe versienummer, een
+downloadlink naar `smartschool-mcp.mcpb` en in een paar woorden wat er nieuw
+is. Sla je versies over, dan hoor je wat er nieuw is in elke versie die je
+overslaat. Dat gebeurt één keer, niet bij elk antwoord. Ook "Werkt mijn
+Smartschool-verbinding?" toont altijd of er een nieuwere versie is, met de
+downloadlink en wat er nieuw is.
 
 <!-- SCHERMAFBEELDING (#33): een antwoord van Claude met de melding dat er
 een nieuwe versie is. -->
 
 Zo werk je bij:
 
-1. Open de link uit het antwoord van Claude, of de
-   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest).
-2. Download `smartschool-mcp.mcpb` (onder **Assets**).
-3. Dubbelklik op het bestand. Claude Desktop installeert de nieuwe versie over
+1. Klik op de downloadlink uit het antwoord van Claude: die downloadt
+   `smartschool-mcp.mcpb` van de releasepagina (de link begint met
+   `https://github.com/yvanvds/smartschool-mcp/releases/`). Geen
+   downloadlink? Open dan de
+   [releasepagina](https://github.com/yvanvds/smartschool-mcp/releases/latest)
+   en download `smartschool-mcp.mcpb` (onder **Assets**).
+2. Dubbelklik op het bestand. Claude Desktop installeert de nieuwe versie over
    de oude; volg wat het op het scherm vraagt.
-4. Herstart Claude Desktop en vraag "Werkt mijn Smartschool-verbinding?".
+3. Herstart Claude Desktop en vraag "Werkt mijn Smartschool-verbinding?".
    Controleer dat de verbinding werkt en dat de nieuwe versie draait.
 
 **Je instellingen.** Vraagt Claude Desktop bij het bijwerken opnieuw om het
@@ -383,7 +407,7 @@ na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
 | Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
 | De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
 | De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |
-| Wanneer de extensie het laatst naar een nieuwe versie keek | `%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json` |
+| Wanneer de extensie het laatst naar een nieuwe versie keek, en wat ze vond | `%USERPROFILE%\.cache\smartschool\smartschool-mcp-update-check.json` |
 | De bijlagen en Intradesk-bestanden die Claude bewaarde | Je downloadmap, 7 dagen lang |
 
 `%USERPROFILE%` is je gebruikersmap, bijvoorbeeld `C:\Users\jan.peeters`.
@@ -436,9 +460,10 @@ in jouw naam in te loggen. Daarom:
 
 - Alleen met Smartschool, en één keer per dag met GitHub, om te vragen wat de
   nieuwste versie is. Aan GitHub stuurt ze niets over jou of je school.
-- De extensie handelt in jouw naam: een antwoord vertrekt vanuit jouw
-  account, en archiveren verplaatst jouw berichten. Claude vraagt je akkoord
-  voordat het iets verstuurt.
+- De extensie handelt in jouw naam: een antwoord of een nieuw bericht
+  vertrekt vanuit jouw account, en archiveren en weggooien verplaatsen jouw
+  berichten. Claude vraagt je akkoord voordat het iets verstuurt of naar de
+  prullenbak verplaatst.
 
 ## 9. Verwijderen
 

@@ -1,12 +1,12 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
-import '../log.dart';
 import '../messages/markdown_to_html.dart';
 import '../messages/message_box.dart';
 import '../messages/reply_recipients.dart';
 import '../session.dart';
 import 'arguments.dart';
+import 'message_sending.dart';
 import 'server_tool.dart';
 
 /// `reply_to_message`: sends a reply to a message, to its sender or to
@@ -96,54 +96,26 @@ Future<CallToolResult> _reply(
   final html = markdownToHtml(body);
 
   try {
-    final (:recipients, :subject) = await session.run(
+    final summary = await session.run(
       (client) => _send(client, box, id, replyAll: replyAll, html: html),
     );
     return CallToolResult(
-      content: [
-        TextContent(
-          text:
-              'Sent the reply to message $id.\n'
-              '${_summary(recipients, subject)}',
-        ),
-      ],
+      content: [TextContent(text: 'Sent the reply to message $id.\n$summary')],
     );
-  } on _NotConfirmed catch (error) {
-    return CallToolResult(
-      isError: true,
-      content: [
-        TextContent(
-          text:
-              'The reply to message $id may or may not have been sent: '
-              'sending started, but Smartschool did not confirm it. Do not '
-              'send it again: first check the sent box (list_messages with '
-              'box sent), or ask the user to check it in Smartschool.\n'
-              '${_summary(error.recipients, error.subject)}',
-        ),
-      ],
-    );
+  } on SendNotConfirmed catch (error) {
+    return notConfirmedResult('The reply to message $id', error);
   }
 }
 
-/// Sends the reply with [client] and returns to whom and with which subject.
+/// Sends the reply with [client] and returns to whom and with which subject
+/// ([sendSummary]).
 ///
-/// Runs inside [SmartschoolSession.run], which repeats it once when
-/// Smartschool rejects the session (a [SmartschoolSessionExpiredError]).
-/// That cannot send the reply twice: [MessagesService.sendReply] throws that
-/// error only when Smartschool refused the session for a step of the send,
-/// the submit included, before handling it, or when the step was not sent
-/// because the client logged in again since it loaded the reply form. Either
-/// way nothing was sent, and the repeat loads a new reply form.
-///
-/// Once the submit (the request that sends the reply) has gone out, the
-/// library only returns normally when Smartschool answers it with its "sent"
-/// page. Any other outcome is a [SmartschoolSendUnconfirmedError]: the reply
-/// may have reached Smartschool, so it becomes a [_NotConfirmed], which the
-/// session does not repeat, and the user must check the sent box.
-///
-/// Everything else that goes wrong is a [ToolError] or a login or connection
-/// problem, and nothing was sent.
-Future<({ReplyRecipients recipients, String subject})> _send(
+/// Sends it once, with [submitOnce], which says why repeating this (as
+/// [SmartschoolSession.run] does when Smartschool rejects the session)
+/// cannot send it twice, and turns a send that Smartschool does not confirm
+/// into a [SendNotConfirmed]. Everything else that goes wrong is a
+/// [ToolError] or a login or connection problem, and nothing was sent.
+Future<String> _send(
   SmartschoolClient client,
   MessageBox box,
   int id, {
@@ -194,8 +166,13 @@ Future<({ReplyRecipients recipients, String subject})> _send(
     }
     final subject = MessagesService.ensureReplySubject(message.subject);
 
-    try {
-      await messages.sendReply(
+    final summary = sendSummary(
+      to: recipients.toNames,
+      cc: recipients.ccNames,
+      subject: subject,
+    );
+    await submitOnce(
+      () => messages.sendReply(
         id,
         SendMessageParams(
           to: recipients.to,
@@ -205,45 +182,20 @@ Future<({ReplyRecipients recipients, String subject})> _send(
         ),
         boxType: box.boxType,
         all: replyAll,
-      );
-    } on SmartschoolSendUnconfirmedError catch (error) {
-      log(
-        'reply_to_message: Smartschool did not confirm the reply to message '
-        '$id, not retrying: ${_oneLine(error)}',
-      );
-      throw _NotConfirmed(recipients, subject);
-    } on SmartschoolComposeError catch (error) {
-      // The reply form did not open, or Smartschool did not take a
-      // recipient on or off it; either way the library stopped before the
-      // submit.
-      log('reply_to_message: reply form refused: ${_oneLine(error)}');
-      throw ToolError(
-        'Smartschool did not open its reply form for message $id, or did '
-        'not take the recipients of the reply on it, so nothing was sent. '
-        'The account may not be allowed to send messages, or to send to one '
-        'of the recipients; the details are in the server log.',
-      );
-    }
-    return (recipients: recipients, subject: subject);
+      ),
+      tool: 'reply_to_message',
+      what: 'the reply to message $id',
+      summary: summary,
+      // The reply form did not open, or Smartschool did not take a recipient
+      // on or off it.
+      composeRefused:
+          'Smartschool did not open its reply form for message $id, or did '
+          'not take the recipients of the reply on it, so nothing was sent. '
+          'The account may not be allowed to send messages, or to send to '
+          'one of the recipients; the details are in the server log.',
+    );
+    return summary;
   } finally {
     await messages.dispose();
   }
-}
-
-/// [error] on one line, for the log.
-String _oneLine(Object error) => '$error'.replaceAll(RegExp(r'\s+'), ' ');
-
-String _summary(ReplyRecipients recipients, String subject) => [
-  'To: ${recipients.toNames}',
-  if (recipients.cc.isNotEmpty) 'CC: ${recipients.ccNames}',
-  'Subject: $subject',
-].join('\n');
-
-/// The reply's submit went out, but Smartschool did not confirm that it
-/// sent the message: it may or may not have been sent.
-final class _NotConfirmed implements Exception {
-  const _NotConfirmed(this.recipients, this.subject);
-
-  final ReplyRecipients recipients;
-  final String subject;
 }

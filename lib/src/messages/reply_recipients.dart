@@ -12,13 +12,14 @@ final class ReplyRecipients {
   bool get isEmpty => to.isEmpty && cc.isEmpty;
 
   /// The names in [to], for tool output.
-  String get toNames => _names(to);
+  List<String> get toNames => _names(to);
 
   /// The names in [cc], for tool output.
-  String get ccNames => _names(cc);
+  List<String> get ccNames => _names(cc);
 
-  static String _names(List<MessageSearchUser> users) =>
-      users.map((u) => u.displayName.trim()).join(', ');
+  static List<String> _names(List<MessageSearchUser> users) => [
+    for (final user in users) user.displayName.trim(),
+  ];
 }
 
 /// The recipients of a reply to message [id] in [box], as Smartschool's own

@@ -20,9 +20,22 @@ enum MessageBox {
   /// The box's name in tool output.
   final String label;
 
+  /// The box in a sentence, like `the sent box`.
+  String get phrase => switch (this) {
+    inbox => 'the inbox',
+    sent => 'the sent box',
+    archive => 'the archive',
+  };
+
   /// The [BoxType] to pass to [MessagesService] calls for a message in this
   /// box.
   BoxType get boxType => this == sent ? BoxType.sent : BoxType.inbox;
+
+  /// The folder of [boxType] this box is, for the [MessagesService] calls
+  /// that name it (a `boxId`): the archive's box id, looked up once per
+  /// service; 0 for the inbox and the sent box themselves.
+  Future<int> folderId(MessagesService messages) async =>
+      this == archive ? await messages.getArchiveBoxId() : 0;
 
   /// The box named [value] (`inbox`, `sent` or `archive`); [inbox] when
   /// [value] is null.
@@ -37,13 +50,16 @@ enum MessageBox {
     throw ArgumentError.value(value, 'box', 'not one of inbox, sent, archive');
   }
 
-  /// The input schema of a tool's `box` argument.
-  static Schema schema({required String description}) =>
-      UntitledSingleSelectEnumSchema(
-        description: description,
-        values: [for (final box in values) box.name],
-        defaultValue: inbox.name,
-      );
+  /// The input schema of a tool's `box` argument: one of [boxes] (all boxes
+  /// by default), [inbox] when absent.
+  static Schema schema({
+    required String description,
+    List<MessageBox> boxes = values,
+  }) => UntitledSingleSelectEnumSchema(
+    description: description,
+    values: [for (final box in boxes) box.name],
+    defaultValue: inbox.name,
+  );
 
   /// The message headers in this box, newest first.
   ///
@@ -85,6 +101,26 @@ enum MessageBox {
     }
     return headers;
   });
+
+  /// The headers of the messages with [ids] in this box, by id.
+  ///
+  /// The box is listed newest first ([headers]) until all of [ids] are
+  /// among the headers, or to its end: an id the box does not hold is
+  /// missing from the map. The map holds the other headers listed as well.
+  Future<Map<int, ShortMessage>> find(
+    MessagesService messages,
+    Iterable<int> ids,
+  ) async {
+    final missing = ids.toSet();
+    final found = await headers(
+      messages,
+      stopAfter: (page) {
+        missing.removeAll([for (final header in page) header.id]);
+        return missing.isEmpty;
+      },
+    );
+    return {for (final header in found) header.id: header};
+  }
 
   /// Message [id] in this box, or null when the box has no such message.
   ///

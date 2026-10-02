@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.2.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten en Intradesk.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, archiveren en beantwoorden (een antwoord gaat pas weg na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -35,7 +35,7 @@
   "tools": [
     {
       "name": "smartschool_status",
-      "description": "Controleert of de verbinding met Smartschool werkt (of wat je moet aanpassen), toont de downloadmap en of er een nieuwere versie is."
+      "description": "Controleert of de verbinding met Smartschool werkt (of wat je moet aanpassen), toont de downloadmap en of er een nieuwere versie is, met de downloadlink en wat er nieuw is."
     },
     {
       "name": "list_messages",
@@ -58,8 +58,28 @@
       "description": "Verplaatst berichten uit je postvak naar het archief."
     },
     {
+      "name": "mark_messages",
+      "description": "Markeert berichten in je postvak of archief als gelezen of ongelezen."
+    },
+    {
+      "name": "flag_messages",
+      "description": "Geeft berichten een gekleurde vlag (groen, geel, rood of blauw) of haalt de vlag weg."
+    },
+    {
+      "name": "trash_messages",
+      "description": "Verplaatst berichten naar de prullenbak in Smartschool, pas na jouw bevestiging. Zolang je de prullenbak niet leegmaakt, kun je ze daar terugzetten."
+    },
+    {
       "name": "reply_to_message",
       "description": "Beantwoordt een bericht, aan de afzender of aan iedereen, pas na jouw bevestiging."
+    },
+    {
+      "name": "search_recipients",
+      "description": "Zoekt de personen en groepen (zoals een klas) aan wie je een bericht kunt sturen."
+    },
+    {
+      "name": "send_message",
+      "description": "Verstuurt een nieuw bericht aan personen of groepen, pas na jouw bevestiging van de ontvangers, het onderwerp en de tekst."
     },
     {
       "name": "search_intradesk",

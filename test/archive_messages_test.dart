@@ -6,6 +6,7 @@ import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/message_changes.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_smartschool.dart';
@@ -128,9 +129,9 @@ void main() {
       'description': isA<String>(),
       'items': {'type': 'integer', 'minimum': 1},
       'minItems': 1,
-      'maxItems': maxArchiveIds,
+      'maxItems': maxMessageIds,
     });
-    expect(maxArchiveIds, 100);
+    expect(maxMessageIds, 100);
   });
 
   test('moves inbox messages to the archive, where list_messages shows '

@@ -5,15 +5,42 @@ import 'dart:io';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:test/test.dart';
 
+import '../../tool/release_notes.dart';
+
 /// The release page GitHub gives for [tag].
 String releasePage(String tag) =>
     'https://github.com/yvanvds/smartschool-mcp/releases/tag/$tag';
 
+/// The direct download link GitHub gives for the file [asset] of the
+/// release [tag].
+String downloadLink(String tag, String asset) =>
+    'https://github.com/yvanvds/smartschool-mcp/releases/download/$tag/$asset';
+
+/// The notes of a release made by the release workflow, as GitHub keeps
+/// them: what `tool/release_notes.dart` writes for [whatIsNew] (a section of
+/// `CHANGELOG.md`), followed by GitHub's generated notes. Without
+/// [whatIsNew], the notes of a release from before `CHANGELOG.md`: the
+/// install instructions and the generated notes.
+String releaseBody(String tag, {String? whatIsNew}) {
+  final install = File(installNotesFile).readAsStringSync();
+  final generated =
+      "## What's Changed\n"
+      '* Fix the clipboard path for ChatGPT, and ask for a paid plan with '
+      'model training off by @yvanvds in '
+      'https://github.com/yvanvds/smartschool-mcp/pull/56\n\n'
+      '**Full Changelog**: '
+      'https://github.com/yvanvds/smartschool-mcp/compare/v0.1.0...$tag';
+  final written = whatIsNew == null
+      ? install
+      : releaseNotes(whatIsNew: whatIsNew, install: install);
+  return '${written.trim()}\n\n$generated';
+}
+
 /// A request [FakeGitHub] received.
 typedef GitHubRequest = ({String path, String? userAgent, String? accept});
 
-/// GitHub's "latest release" endpoint, faked on a local port, so that no
-/// test ever asks the real GitHub. Stopped after the test.
+/// GitHub's list of the releases of this server, faked on a local port, so
+/// that no test ever asks the real GitHub. Stopped after the test.
 class FakeGitHub {
   FakeGitHub._(this._server) {
     _server.listen(_answer);
@@ -30,52 +57,66 @@ class FakeGitHub {
   final HttpServer _server;
 
   /// The address to check, like [UpdateChecker.defaultEndpoint].
-  Uri get latestRelease => Uri.parse(
-    'http://127.0.0.1:${_server.port}'
-    '/repos/yvanvds/smartschool-mcp/releases/latest',
+  Uri get releases => Uri.parse(
+    'http://127.0.0.1:${_server.port}/repos/yvanvds/smartschool-mcp/releases',
   );
 
   /// Every request so far.
   final List<GitHubRequest> requests = [];
 
-  int _status = HttpStatus.notFound;
-  String _body = _notFound;
+  /// The releases, newest first, as GitHub lists them.
+  final List<Map<String, Object?>> _releases = [];
+
+  /// An answer that replaces the list, from [answer].
+  (int, String)? _override;
   Completer<void>? _held;
   final List<Completer<void>> _waiters = [];
 
-  static final _notFound = jsonEncode({
-    'message': 'Not Found',
-    'documentation_url':
-        'https://docs.github.com/rest/releases/releases#get-the-latest-release',
-    'status': '404',
-  });
+  /// Publishes the release [tag] (in front of the others, and instead of an
+  /// earlier one with that tag), as GitHub describes it: with [assets]
+  /// attached (both files by default) and [body] as its notes (by default
+  /// [releaseBody] for [whatIsNew]).
+  void publish(
+    String tag, {
+    String? whatIsNew,
+    String? body,
+    List<String> assets = const [
+      UpdateChecker.assetName,
+      UpdateChecker.exeAssetName,
+    ],
+    bool draft = false,
+    bool prerelease = false,
+  }) {
+    _override = null;
+    _releases
+      ..removeWhere((release) => release['tag_name'] == tag)
+      ..insert(0, {
+        'url':
+            'https://api.github.com/repos/yvanvds/smartschool-mcp/releases/'
+            '${_releases.length + 1}',
+        'html_url': releasePage(tag),
+        'id': _releases.length + 1,
+        'tag_name': tag,
+        'name': tag,
+        'draft': draft,
+        'prerelease': prerelease,
+        'assets': [
+          for (final asset in assets)
+            {
+              'name': asset,
+              'content_type': 'application/octet-stream',
+              'browser_download_url': downloadLink(tag, asset),
+            },
+        ],
+        'body': body ?? releaseBody(tag, whatIsNew: whatIsNew),
+      });
+  }
 
-  /// From now on the latest release is [tag], as GitHub describes it.
-  void publish(String tag) => answer(
-    HttpStatus.ok,
-    jsonEncode({
-      'url': 'https://api.github.com/repos/yvanvds/smartschool-mcp/releases/1',
-      'html_url': releasePage(tag),
-      'id': 1,
-      'tag_name': tag,
-      'name': tag,
-      'draft': false,
-      'prerelease': false,
-      'assets': [
-        {
-          'name': UpdateChecker.assetName,
-          'browser_download_url':
-              'https://github.com/yvanvds/smartschool-mcp/releases/download/'
-              '$tag/${UpdateChecker.assetName}',
-        },
-      ],
-      'body': 'Release notes',
-    }),
-  );
-
-  /// From now on there is no release: GitHub answers 404, as it does for a
-  /// repository without releases.
-  void noReleases() => answer(HttpStatus.notFound, _notFound);
+  /// From now on there is no release: GitHub answers with an empty list.
+  void noReleases() {
+    _override = null;
+    _releases.clear();
+  }
 
   /// From now on GitHub's rate limit is reached.
   void rateLimited() => answer(
@@ -83,11 +124,9 @@ class FakeGitHub {
     jsonEncode({'message': 'API rate limit exceeded for 127.0.0.1.'}),
   );
 
-  /// From now on every request gets [status] and [body].
-  void answer(int status, String body) {
-    _status = status;
-    _body = body;
-  }
+  /// From now on every request gets [status] and [body] (until [publish] or
+  /// [noReleases]).
+  void answer(int status, String body) => _override = (status, body);
 
   /// Holds every answer until [release] (or the end of the test).
   void hold() => _held ??= Completer<void>();
@@ -117,8 +156,7 @@ class FakeGitHub {
       waiter.complete();
     }
     _waiters.clear();
-    final status = _status;
-    final body = _body;
+    final (status, body) = _override ?? (HttpStatus.ok, jsonEncode(_releases));
     await _held?.future;
     try {
       request.response
@@ -142,5 +180,5 @@ Future<Uri> unreachableAddress() async {
   final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final port = socket.port;
   await socket.close();
-  return Uri.parse('http://127.0.0.1:$port/releases/latest');
+  return Uri.parse('http://127.0.0.1:$port/releases');
 }

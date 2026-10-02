@@ -109,7 +109,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(11));
+    expect(readmeTools, hasLength(16));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);
