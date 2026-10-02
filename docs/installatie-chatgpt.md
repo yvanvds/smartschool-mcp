@@ -3,8 +3,9 @@
 Met Smartschool voor ChatGPT werkt de ChatGPT-app op je Windows-pc met je
 Smartschool-account. Je vraagt het gewoon in een gesprek:
 
-- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, archiveren en
-  beantwoorden. Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
+  ongelezen markeren, een gekleurde vlag geven, archiveren en beantwoorden.
+  Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat

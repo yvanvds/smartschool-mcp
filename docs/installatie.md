@@ -3,8 +3,9 @@
 Met de Smartschool-extensie werkt Claude Desktop met je Smartschool-account.
 Je vraagt het gewoon in een gesprek:
 
-- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, archiveren en
-  beantwoorden. Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+- **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
+  ongelezen markeren, een gekleurde vlag geven, archiveren en beantwoorden.
+  Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -194,6 +195,10 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 - "Welke berichten in mijn postvak mag ik archiveren?"
   Claude stelt dan berichten voor. Pas als je zegt "Archiveer ze", verplaatst
   het ze naar je archief in Smartschool. Daar vind je ze terug.
+- "Markeer de berichten van de directie van vorige week als gelezen."
+  Claude leest een bericht voor jou zonder het als gelezen te markeren. Dat
+  doet het pas als je het vraagt.
+- "Zet een rode vlag op de berichten waar ik nog op moet antwoorden."
 - "Beantwoord het bericht van An over de uitstap: ik ga graag mee."
   Claude toont eerst de tekst en de ontvangers, en wacht op jouw akkoord.
   Daarna vraagt Claude Desktop nog eens toestemming om te versturen. Kies daar

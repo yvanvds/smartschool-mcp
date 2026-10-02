@@ -4,11 +4,8 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../messages/message_box.dart';
 import '../messages/message_format.dart';
 import '../session.dart';
-import 'arguments.dart';
+import 'message_changes.dart';
 import 'server_tool.dart';
-
-/// At most this many message ids per `archive_messages` call.
-const maxArchiveIds = 100;
 
 /// `archive_messages`: moves inbox messages to Smartschool's archive folder
 /// and says per id what happened.
@@ -21,7 +18,7 @@ ServerTool archiveMessagesTool(SmartschoolSession session) => ServerTool(
         'archive folder. Archiving can be undone: archived messages stay in '
         'the archive (list_messages with box archive shows them), and the '
         'user can move them back to the inbox in Smartschool. Pass the ids '
-        'of inbox messages from list_messages, at most $maxArchiveIds per '
+        'of inbox messages from list_messages, at most $maxMessageIds per '
         'call. When the user asks which messages they could archive ("Wat '
         'kan ik zeker archiveren?"), do not archive anything: use '
         'list_messages and read_message to propose a list and let the user '
@@ -30,13 +27,10 @@ ServerTool archiveMessagesTool(SmartschoolSession session) => ServerTool(
         'was already in the archive, or could not be archived and why.',
     inputSchema: Schema.object(
       properties: {
-        'message_ids': Schema.list(
+        'message_ids': messageIdsSchema(
           description:
               'The ids of the inbox messages to archive, from list_messages. '
-              'At most $maxArchiveIds.',
-          items: Schema.int(minimum: 1),
-          minItems: 1,
-          maxItems: maxArchiveIds,
+              'At most $maxMessageIds.',
         ),
       },
       required: ['message_ids'],
@@ -56,9 +50,7 @@ Future<CallToolResult> _archive(
   SmartschoolSession session,
   Map<String, Object?> arguments,
 ) async {
-  // The input schema guarantees a list of 1 to maxArchiveIds whole numbers.
-  // Duplicates (also 101 and 101.0) are dropped, keeping the order.
-  final ids = {...intListArgument(arguments, 'message_ids')}.toList();
+  final ids = messageIdsArgument(arguments);
   final results = await withMessages(
     session,
     (messages) => _archiveIds(messages, ids),
@@ -105,10 +97,10 @@ Future<List<_Result>> _archiveIds(
   MessagesService messages,
   List<int> ids,
 ) async {
-  final inbox = await _find(MessageBox.inbox, messages, ids);
+  final inbox = await MessageBox.inbox.find(messages, ids);
   final archive = ids.every(inbox.containsKey)
       ? const <int, ShortMessage>{}
-      : await _find(MessageBox.archive, messages, [
+      : await MessageBox.archive.find(messages, [
           for (final id in ids)
             if (!inbox.containsKey(id)) id,
         ]);
@@ -138,24 +130,6 @@ Future<List<_Result>> _archiveIds(
     (null, null) => (id: id, outcome: _Outcome.notInInbox, header: null),
   };
   return [for (final id in ids) result(id)];
-}
-
-/// The headers in [box] by id, listed newest first until all of [ids] are
-/// among them (or to the end of the box).
-Future<Map<int, ShortMessage>> _find(
-  MessageBox box,
-  MessagesService messages,
-  List<int> ids,
-) async {
-  final missing = ids.toSet();
-  final headers = await box.headers(
-    messages,
-    stopAfter: (page) {
-      missing.removeAll([for (final header in page) header.id]);
-      return missing.isEmpty;
-    },
-  );
-  return {for (final header in headers) header.id: header};
 }
 
 /// [results] as text: a summary, a list per outcome, and notes on what to

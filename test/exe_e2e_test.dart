@@ -45,6 +45,8 @@ void main() {
       'save_message_attachment',
       'search_messages',
       'archive_messages',
+      'mark_messages',
+      'flag_messages',
       'reply_to_message',
       'search_intradesk',
       'list_intradesk_folder',
@@ -98,6 +100,48 @@ void main() {
       'items': {'type': 'integer', 'minimum': 1},
       'minItems': 1,
       'maxItems': 100,
+    });
+    for (final name in ['mark_messages', 'flag_messages']) {
+      // Like archiving: a write that can be undone, so not destructive.
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': false,
+        'destructiveHint': false,
+        'idempotentHint': true,
+        'openWorldHint': true,
+      });
+      expect(
+        ((tools[name]!['inputSchema'] as Map)['properties']
+            as Map)['message_ids'],
+        {
+          'type': 'array',
+          'description': isA<String>(),
+          'items': {'type': 'integer', 'minimum': 1},
+          'minItems': 1,
+          'maxItems': 100,
+        },
+      );
+    }
+    final markSchema = tools['mark_messages']!['inputSchema'] as Map;
+    expect(markSchema['required'], ['message_ids', 'read']);
+    expect((markSchema['properties'] as Map)['box'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'default': 'inbox',
+      'enum': ['inbox', 'archive'],
+    });
+    final flagSchema = tools['flag_messages']!['inputSchema'] as Map;
+    expect(flagSchema['required'], ['message_ids', 'flag']);
+    expect((flagSchema['properties'] as Map)['flag'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'enum': ['none', 'green', 'yellow', 'red', 'blue'],
+    });
+    expect((flagSchema['properties'] as Map)['box'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'default': 'inbox',
+      'enum': ['inbox', 'sent', 'archive'],
     });
     final reply = tools['reply_to_message'] as Map;
     expect(reply['annotations'], {
@@ -168,7 +212,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(11));
+    expect(tools, hasLength(13));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -358,6 +402,30 @@ void main() {
         'message_ids': [123, 456],
       },
     );
+    final (markError, markText) = await server.callTool(
+      'mark_messages',
+      arguments: {
+        'message_ids': [123, 456],
+        'read': true,
+        'box': 'archive',
+      },
+    );
+    final (sentMarkError, sentMarkText) = await server.callTool(
+      'mark_messages',
+      arguments: {
+        'message_ids': [123],
+        'read': false,
+        'box': 'sent',
+      },
+    );
+    final (flagError, flagText) = await server.callTool(
+      'flag_messages',
+      arguments: {
+        'message_ids': [123],
+        'flag': 'red',
+        'box': 'sent',
+      },
+    );
     final (replyError, replyText) = await server.callTool(
       'reply_to_message',
       arguments: {'message_id': 123, 'body': 'Donderdag kan ik.'},
@@ -418,6 +486,8 @@ void main() {
       (readError, readText),
       (searchError, searchText),
       (archiveError, archiveText),
+      (markError, markText),
+      (flagError, flagText),
       (replyError, replyText),
       (intradeskError, intradeskText),
       (folderError, folderText),
@@ -436,6 +506,9 @@ void main() {
     expect(dateText, contains('"gisteren" is not'));
     expect(tooManyError, isTrue);
     expect(tooManyText, contains('List has 101 items'));
+    // The sent box has no read state for the user.
+    expect(sentMarkError, isTrue);
+    expect(sentMarkText, contains('"sent" is not one of the allowed values'));
     expect(emptyError, isTrue);
     expect(emptyText, contains('body is empty'));
     expect(emptyQueryError, isTrue);
@@ -469,6 +542,20 @@ void main() {
         'archive_messages',
         {
           'message_ids': [123.0, 456],
+        },
+      ),
+      (
+        'mark_messages',
+        {
+          'message_ids': [123.0, 456],
+          'read': true,
+        },
+      ),
+      (
+        'flag_messages',
+        {
+          'message_ids': [123.0],
+          'flag': 'none',
         },
       ),
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),

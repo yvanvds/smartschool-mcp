@@ -50,7 +50,9 @@ class FakeMessage {
   /// HTML.
   final String body;
   bool unread;
-  final int flag;
+
+  /// Smartschool's colour flag: 0 none, 1 green, 2 yellow, 3 red, 4 blue.
+  int flag;
   final List<String> to;
   final List<String> cc;
   final List<String> bcc;
@@ -107,8 +109,9 @@ enum SubmitAnswer {
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`), attachment
-/// downloads, the archive endpoint,
+/// (`message list`, `show message`, `attachment list`, and changing the
+/// read state and the flag: `mark message read`, `mark message unread`,
+/// `save msglabel`), attachment downloads, the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
 /// compose forms, adding recipients to a form and taking them off, and
 /// submitting it.
@@ -163,6 +166,16 @@ class FakeMailbox {
   /// Inbox messages the archive endpoint leaves where they are, leaving
   /// them out of its `success` list.
   final Set<int> refuseToArchive = {};
+
+  /// Messages whose read state or flag Smartschool does not change: it
+  /// answers `mark message read`, `mark message unread` and `save msglabel`
+  /// for them without a message, which the library returns as null. What
+  /// Smartschool answers when it changes nothing has not been seen.
+  final Set<int> refuseToChange = {};
+
+  /// Messages whose read state or flag Smartschool does not change, but it
+  /// answers with their state as it is, as if it had.
+  final Set<int> keepUnchanged = {};
 
   /// Messages the box lists but `show message` no longer finds (it answers
   /// with the placeholder), like a message deleted between the two
@@ -338,8 +351,66 @@ class FakeMailbox {
         limitList: params['limitList'] != 'false',
       ),
       'attachment list' => _attachments(id!, params['boxType']!),
+      'mark message read' => _change(
+        'status',
+        _find(id!, params['boxType']!),
+        (m) => m.unread = false,
+        (m) => m.unread ? 0 : 1,
+      ),
+      'mark message unread' => _change(
+        'status',
+        _box(
+          params['boxType']!,
+          params['boxID']!,
+        ).where((m) => m.id == id).firstOrNull,
+        (m) => m.unread = true,
+        (m) => m.unread ? 0 : 1,
+      ),
+      'save msglabel' => _change(
+        'label',
+        _find(id!, params['boxType']!),
+        (m) => m.flag = int.parse(params['msgLabel']!),
+        (m) => m.flag,
+      ),
       _ => throw UnsupportedError('fake mailbox: no action "$action"'),
     };
+  }
+
+  /// Changes the read state or the flag of [message] with [apply] and
+  /// answers with its new [command] (`status` or `label`), [value], like
+  /// the live answers; see [refuseToChange] and [keepUnchanged].
+  ///
+  /// `mark message unread` names the message's box (`boxID`, the folder of
+  /// the archive), so it finds only a message in that box. `mark message
+  /// read` and `save msglabel` name only the box type: they find a message
+  /// in the archive too, by its id. Whether Smartschool does that has not
+  /// been seen (yvanvds/dartschool#94).
+  String _change(
+    String command,
+    FakeMessage? message,
+    void Function(FakeMessage message) apply,
+    int Function(FakeMessage message) value,
+  ) {
+    var answer = '';
+    if (message != null && !refuseToChange.contains(message.id)) {
+      if (!keepUnchanged.contains(message.id)) apply(message);
+      answer =
+          '<message><id>${message.id}</id>'
+          '<$command>${value(message)}</$command></message>';
+    }
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+      <action>
+        <subsystem>message list</subsystem>
+        <command>$command</command>
+        <data>$answer</data>
+      </action>
+    </actions>
+  </response>
+</server>''';
   }
 
   /// Moves the inbox messages named in [body] (`msgIDs%5B%5D=1&...`) to the

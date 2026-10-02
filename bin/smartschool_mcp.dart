@@ -13,8 +13,10 @@ import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
@@ -81,6 +83,8 @@ Future<void> _serve(ServerOptions options) async {
           saveMessageAttachmentTool(session, downloads),
           searchMessagesTool(session, MessageTextCache.of(session)),
           archiveMessagesTool(session),
+          markMessagesTool(session),
+          flagMessagesTool(session),
           replyToMessageTool(session),
           searchIntradeskTool(session, intradeskIndex),
           listIntradeskFolderTool(session, intradeskIndex),

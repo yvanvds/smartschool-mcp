@@ -254,6 +254,18 @@ client name. It also installs again while that copy runs.
   archived, was already in the archive, or why not. It lists the inbox (and
   the archive, for ids not in the inbox) until it has found every id. Claude
   proposes candidates when asked for advice and archives when asked to.
+- `mark_messages`: marks up to 100 messages of the inbox or the archive
+  (ids from `list_messages`) as read or unread; the sent box has no read
+  state for the user. `read_message` leaves the read state alone: marking a
+  message as read is the user's choice. It lists the box until it has found
+  every id, changes the messages one at a time and reports per id the new
+  state Smartschool confirmed, that the message is not in the box, or that
+  Smartschool did not confirm the change. Claude proposes candidates when
+  asked for advice and marks them when asked to.
+- `flag_messages`: sets the colour flag (green, yellow, red or blue) of up
+  to 100 messages of the inbox, the sent box or the archive, or clears it
+  (`none`), one message at a time and reporting per id, like
+  `mark_messages`.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -293,6 +305,11 @@ filters and date-range arguments in `message_filter.dart`, the output lines in
 `message_format.dart`, full-text matching and snippets (`SearchQuery`) in
 `message_search.dart` and the message text cache (`MessageTextCache`) in
 `message_cache.dart`.
+
+The tools that change messages named by id share their `message_ids`
+argument (`messageIdsSchema`, `messageIdsArgument`) and, for a change made
+one message at a time, the per-id loop and result (`changeEach`,
+`changesResult`) in `lib/src/tools/message_changes.dart`.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
