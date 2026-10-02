@@ -47,6 +47,7 @@ void main() {
       'archive_messages',
       'mark_messages',
       'flag_messages',
+      'trash_messages',
       'reply_to_message',
       'search_intradesk',
       'list_intradesk_folder',
@@ -143,6 +144,35 @@ void main() {
       'default': 'inbox',
       'enum': ['inbox', 'sent', 'archive'],
     });
+    // Unlike archiving: the server cannot take a message out of the trash,
+    // and the trash can be emptied. So Claude Desktop asks for approval.
+    final trash = tools['trash_messages'] as Map;
+    expect(trash['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': true,
+      'idempotentHint': false,
+      'openWorldHint': true,
+    });
+    final trashSchema = trash['inputSchema'] as Map;
+    expect(trashSchema['required'], ['message_ids']);
+    expect((trashSchema['properties'] as Map)['message_ids'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'integer', 'minimum': 1},
+      'minItems': 1,
+      'maxItems': 100,
+    });
+    expect((trashSchema['properties'] as Map)['box'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'default': 'inbox',
+      'enum': ['inbox', 'sent', 'archive'],
+    });
+    expect(
+      trash['description'],
+      contains('after the user has explicitly confirmed that list'),
+    );
     final reply = tools['reply_to_message'] as Map;
     expect(reply['annotations'], {
       'title': isA<String>(),
@@ -212,7 +242,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(13));
+    expect(tools, hasLength(14));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -426,6 +456,20 @@ void main() {
         'box': 'sent',
       },
     );
+    final (trashError, trashText) = await server.callTool(
+      'trash_messages',
+      arguments: {
+        'message_ids': [123, 456],
+        'box': 'archive',
+      },
+    );
+    final (trashBoxError, trashBoxText) = await server.callTool(
+      'trash_messages',
+      arguments: {
+        'message_ids': [123],
+        'box': 'trash',
+      },
+    );
     final (replyError, replyText) = await server.callTool(
       'reply_to_message',
       arguments: {'message_id': 123, 'body': 'Donderdag kan ik.'},
@@ -488,6 +532,7 @@ void main() {
       (archiveError, archiveText),
       (markError, markText),
       (flagError, flagText),
+      (trashError, trashText),
       (replyError, replyText),
       (intradeskError, intradeskText),
       (folderError, folderText),
@@ -509,6 +554,9 @@ void main() {
     // The sent box has no read state for the user.
     expect(sentMarkError, isTrue);
     expect(sentMarkText, contains('"sent" is not one of the allowed values'));
+    // The trash is not a box to move messages out of.
+    expect(trashBoxError, isTrue);
+    expect(trashBoxText, contains('"trash" is not one of the allowed values'));
     expect(emptyError, isTrue);
     expect(emptyText, contains('body is empty'));
     expect(emptyQueryError, isTrue);
@@ -556,6 +604,13 @@ void main() {
         {
           'message_ids': [123.0],
           'flag': 'none',
+        },
+      ),
+      (
+        'trash_messages',
+        {
+          'message_ids': [123.0, 456],
+          'box': 'sent',
         },
       ),
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),

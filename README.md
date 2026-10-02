@@ -214,7 +214,7 @@ Known limits in Codex (2026):
 - **Long text:** Codex cuts long tool output to the model's budget, about 10k
   tokens, well below `read_intradesk_file`'s 100,000 characters.
 - **Approval:** Codex asks approval for a tool marked destructive
-  (`reply_to_message`), unless it runs with *Full access*.
+  (`trash_messages`, `reply_to_message`), unless it runs with *Full access*.
 - **`HOME`:** Codex does not pass `HOME` on. A user who has `HOME` set gets
   another cache folder under Codex than under Claude Desktop, so the server
   logs in once more there.
@@ -266,6 +266,21 @@ client name. It also installs again while that copy runs.
   to 100 messages of the inbox, the sent box or the archive, or clears it
   (`none`), one message at a time and reporting per id, like
   `mark_messages`.
+- `trash_messages`: moves up to 100 messages of the inbox, the sent box or
+  the archive to Smartschool's trash, one message at a time. A move, not a
+  deletion: the user can restore a message from the trash in Smartschool
+  until the trash is emptied, but the server cannot take it out again. So
+  the tool is marked destructive (Claude Desktop asks for approval every
+  time), and Claude is told to show the list and wait for the user's
+  confirmation first. Each message is moved with the library's
+  `moveToTrashFrom`, which names its box (the archive with its box id),
+  never with `moveToTrash`, whose `quick delete` names no box and deletes a
+  copy in the trash for good. Smartschool answers a move the same whether
+  it moved the message or not, so each message is read back from its box
+  afterwards. The result says per id: moved, not in the box, or still in
+  the box after the move. A message the user sent to themselves has the
+  same id in the inbox and the sent box: only the copy in the box named is
+  moved.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -309,7 +324,10 @@ filters and date-range arguments in `message_filter.dart`, the output lines in
 The tools that change messages named by id share their `message_ids`
 argument (`messageIdsSchema`, `messageIdsArgument`) and, for a change made
 one message at a time, the per-id loop and result (`changeEach`,
-`changesResult`) in `lib/src/tools/message_changes.dart`.
+`changesResult`) in `lib/src/tools/message_changes.dart`. A change that
+takes a message out of its box (`trash_messages`) passes `changeEach` a
+`started` map, so that a repeat of the call (after Smartschool refused the
+session) does not report a message moved before as not in the box.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion

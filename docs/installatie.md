@@ -4,8 +4,9 @@ Met de Smartschool-extensie werkt Claude Desktop met je Smartschool-account.
 Je vraagt het gewoon in een gesprek:
 
 - **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
-  ongelezen markeren, een gekleurde vlag geven, archiveren en beantwoorden.
-  Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+  ongelezen markeren, een gekleurde vlag geven, archiveren, naar de
+  prullenbak verplaatsen en beantwoorden. Een antwoord vertrekt, en een
+  bericht gaat naar de prullenbak, pas nadat jij het goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -199,6 +200,11 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   Claude leest een bericht voor jou zonder het als gelezen te markeren. Dat
   doet het pas als je het vraagt.
 - "Zet een rode vlag op de berichten waar ik nog op moet antwoorden."
+- "Gooi de nieuwsbrieven van vorige maand weg."
+  Claude toont eerst welke berichten naar de prullenbak gaan, en wacht op
+  jouw akkoord. Daarna vraagt Claude Desktop nog eens toestemming. De
+  berichten komen in de prullenbak van Smartschool: zolang je die niet
+  leegmaakt, kun je ze daar zelf terugzetten. Claude kan dat niet.
 - "Beantwoord het bericht van An over de uitstap: ik ga graag mee."
   Claude toont eerst de tekst en de ontvangers, en wacht op jouw akkoord.
   Daarna vraagt Claude Desktop nog eens toestemming om te versturen. Kies daar
@@ -447,8 +453,9 @@ in jouw naam in te loggen. Daarom:
 - Alleen met Smartschool, en één keer per dag met GitHub, om te vragen wat de
   nieuwste versie is. Aan GitHub stuurt ze niets over jou of je school.
 - De extensie handelt in jouw naam: een antwoord vertrekt vanuit jouw
-  account, en archiveren verplaatst jouw berichten. Claude vraagt je akkoord
-  voordat het iets verstuurt.
+  account, en archiveren en weggooien verplaatsen jouw berichten. Claude
+  vraagt je akkoord voordat het iets verstuurt of naar de prullenbak
+  verplaatst.
 
 ## 9. Verwijderen
 

@@ -4,8 +4,9 @@ Met Smartschool voor ChatGPT werkt de ChatGPT-app op je Windows-pc met je
 Smartschool-account. Je vraagt het gewoon in een gesprek:
 
 - **Berichten:** bekijken, lezen, doorzoeken, samenvatten, als gelezen of
-  ongelezen markeren, een gekleurde vlag geven, archiveren en beantwoorden.
-  Een antwoord vertrekt pas nadat jij het goedgekeurd hebt.
+  ongelezen markeren, een gekleurde vlag geven, archiveren, naar de
+  prullenbak verplaatsen en beantwoorden. Een antwoord vertrekt, en een
+  bericht gaat naar de prullenbak, pas nadat jij het goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -212,9 +213,10 @@ Hetzelfde als in Claude Desktop: zie
 Claude Desktop. Wat daar over Claude staat, geldt hier voor ChatGPT. Een paar
 verschillen:
 
-- **Antwoorden versturen.** ChatGPT toont eerst de tekst en de ontvangers, en
-  wacht op jouw akkoord. Daarna vraagt de app nog eens toestemming om te
-  versturen. Kies daar niet om het altijd toe te staan. Zet ChatGPT ook niet
+- **Antwoorden versturen en berichten weggooien.** ChatGPT toont eerst de
+  tekst en de ontvangers, of de berichten die naar de prullenbak gaan, en
+  wacht op jouw akkoord. Daarna vraagt de app nog eens toestemming. Kies
+  daar niet om het altijd toe te staan. Zet ChatGPT ook niet
   op **volledige toegang** (*Full access*): dan vraagt de app nergens meer
   toestemming voor.
 - **Afbeeldingen.** Een afbeelding van Intradesk (`.png`, `.jpg`) kan ChatGPT

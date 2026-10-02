@@ -31,6 +31,12 @@ enum MessageBox {
   /// box.
   BoxType get boxType => this == sent ? BoxType.sent : BoxType.inbox;
 
+  /// The folder of [boxType] this box is, for the [MessagesService] calls
+  /// that name it (a `boxId`): the archive's box id, looked up once per
+  /// service; 0 for the inbox and the sent box themselves.
+  Future<int> folderId(MessagesService messages) async =>
+      this == archive ? await messages.getArchiveBoxId() : 0;
+
   /// The box named [value] (`inbox`, `sent` or `archive`); [inbox] when
   /// [value] is null.
   ///

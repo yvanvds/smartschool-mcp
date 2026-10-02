@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.2.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten en Intradesk.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren en beantwoorden (een antwoord gaat pas weg na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen en beantwoorden (een antwoord gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -64,6 +64,10 @@
     {
       "name": "flag_messages",
       "description": "Geeft berichten een gekleurde vlag (groen, geel, rood of blauw) of haalt de vlag weg."
+    },
+    {
+      "name": "trash_messages",
+      "description": "Verplaatst berichten naar de prullenbak in Smartschool, pas na jouw bevestiging. Zolang je de prullenbak niet leegmaakt, kun je ze daar terugzetten."
     },
     {
       "name": "reply_to_message",

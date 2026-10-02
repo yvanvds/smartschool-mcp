@@ -109,9 +109,10 @@ enum SubmitAnswer {
 }
 
 /// The Messages module of a fake Smartschool: the XML dispatcher
-/// (`message list`, `show message`, `attachment list`, and changing the
-/// read state and the flag: `mark message read`, `mark message unread`,
-/// `save msglabel`), attachment downloads, the archive endpoint,
+/// (`message list`, `show message`, `attachment list`, changing the read
+/// state and the flag: `mark message read`, `mark message unread`,
+/// `save msglabel`, and moving a message to the trash: `quickmove
+/// messages`), attachment downloads, the archive endpoint,
 /// the module page the archive's box id is read from, and sending: the
 /// compose forms, adding recipients to a form and taking them off, and
 /// submitting it.
@@ -160,6 +161,11 @@ class FakeMailbox {
   final List<FakeMessage> sent = [];
   final List<FakeMessage> archive = [];
 
+  /// The messages moved to the trash, in the order they were moved. A
+  /// message the [owner] sent to themselves can be in it twice, with the
+  /// same id: its inbox copy and its sent-box copy.
+  final List<FakeMessage> trash = [];
+
   /// The archive folder's box id, shown on the Messages module page.
   int archiveBoxId = 305;
 
@@ -181,6 +187,11 @@ class FakeMailbox {
   /// with the placeholder), like a message deleted between the two
   /// requests.
   final Set<int> vanished = {};
+
+  /// Messages a `quickmove messages` to the trash leaves where they are. It
+  /// answers as for a message it moved, as the live platform answers every
+  /// move (yvanvds/dartschool#60).
+  final Set<int> refuseToTrash = {};
 
   /// Every dispatcher call, as `action param=value ...` (params sorted),
   /// every archive request, as `archive msgIDs=1,2`, and every message sent,
@@ -372,8 +383,37 @@ class FakeMailbox {
         (m) => m.flag = int.parse(params['msgLabel']!),
         (m) => m.flag,
       ),
+      'quickmove messages' => _moveToTrash(id!, params),
       _ => throw UnsupportedError('fake mailbox: no action "$action"'),
     };
+  }
+
+  /// Moves message [id] out of the box that [params] name (`boxType` and
+  /// `boxID`: the archive's folder, for a message in the archive) to the
+  /// trash, as `quickmove messages` with `toBoxType` `trash` and `toBoxID`
+  /// `0` does, and leaves a copy in another box where it is: the sent-box
+  /// copy of a message the [owner] sent to themselves, for a move out of the
+  /// inbox (yvanvds/dartschool#60).
+  ///
+  /// Answers like the live platform, with a `silent` action whether it moved
+  /// a message or not (the dartschool fixture `quickmove messages.xml`); see
+  /// [refuseToTrash]. A moved message is no longer found by `show message`
+  /// with the box type it was moved out of: what Smartschool answers then
+  /// has not been seen (yvanvds/dartschool#96), so the fake answers with the
+  /// placeholder, as for a message in another box (yvanvds/dartschool#16).
+  String _moveToTrash(int id, Map<String, String> params) {
+    if (params['toBoxType'] != 'trash' || params['toBoxID'] != '0') {
+      throw UnsupportedError('fake mailbox: quickmove other than to the trash');
+    }
+    final box = _box(params['boxType']!, params['boxID']!);
+    final index = box.indexWhere((m) => m.id == id);
+    if (index >= 0 && !refuseToTrash.contains(id)) {
+      trash.add(box.removeAt(index));
+    }
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<server><response><status>ok</status><actions><action>'
+        '<subsystem>message list</subsystem><command>silent</command>'
+        '<data><message /></data></action></actions></response></server>';
   }
 
   /// Changes the read state or the flag of [message] with [apply] and

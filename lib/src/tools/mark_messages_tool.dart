@@ -80,9 +80,7 @@ Future<CallToolResult> _mark(
           : await messages.markUnread(
               id,
               boxType: box.boxType,
-              boxId: box == MessageBox.archive
-                  ? await messages.getArchiveBoxId()
-                  : 0,
+              boxId: await box.folderId(messages),
             );
       return change != null &&
           change.id == id &&
