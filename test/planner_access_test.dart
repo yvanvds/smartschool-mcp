@@ -3,13 +3,16 @@
 /// tool errors, and how elements are written.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/planner/planner_access.dart';
 import 'package:smartschool_mcp/src/planner/planner_format.dart';
+import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
 import 'package:test/test.dart';
 
-import 'support/fake_planner.dart';
+import 'support/fake_smartschool.dart';
 
 const _uuid = 'e0000000-0000-4000-8000-000000000002';
 
@@ -40,6 +43,29 @@ PlannedElement _element({
   organiserUsers: organisers,
   assignmentType: assignmentType,
 );
+
+/// A planner that only reads the school's assignment types, each time with
+/// the next of [answers]: types, or an error to throw.
+class _TypesPlanner implements PlannerService {
+  _TypesPlanner(this.answers);
+
+  final List<Object> answers;
+  int reads = 0;
+
+  /// Completed by the test to let the pending read finish.
+  final gate = Completer<void>();
+
+  @override
+  Future<List<PlannerAssignmentType>> getAssignmentTypes() async {
+    final answer = answers[reads++];
+    await gate.future;
+    if (answer is List<PlannerAssignmentType>) return answer;
+    throw answer;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 void main() {
   group('PlannedElementRef', () {
@@ -161,6 +187,121 @@ void main() {
           ),
         );
       }
+    });
+  });
+
+  group('classPlannersArgument', () {
+    List<PlannerCalendar> classes(Object? value) =>
+        classPlannersArgument(value, name: 'classes', max: 3);
+
+    test('takes class planner ids, once each, in the order given', () {
+      expect(
+        classes(['group/4069_4256', ' GROUP/4069_4258 ', 'group/4069_4256']),
+        [
+          PlannerCalendar.group('4069_4256'),
+          PlannerCalendar.group('4069_4258'),
+        ],
+      );
+      expect(classes('group/4069_4256'), [PlannerCalendar.group('4069_4256')]);
+    });
+
+    test('refuses an item that is not a class planner id', () {
+      for (final value in [
+        'me',
+        '',
+        '6WEWI1',
+        '4069_4256',
+        'user/4069_218_0',
+        'location/4069_$_uuid',
+        7,
+        null,
+      ]) {
+        expect(
+          () => classes(['group/4069_4256', value]),
+          throwsA(
+            _toolError(
+              'each item of classes must be the planner id of a class as '
+              'search_planners shows it, like group/4069_4256; '
+              '${value is String ? '"$value"' : '$value'} is not.',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('refuses no classes, and more than max', () {
+      for (final value in [null, <Object?>[]]) {
+        expect(
+          () => classes(value),
+          throwsA(_toolError(startsWith('classes is empty: pass the planner'))),
+        );
+      }
+      expect(
+        () => classes([
+          for (var i = 1; i <= 4; i++) 'group/4069_$i',
+          'group/4069_1',
+        ]),
+        throwsA(
+          _toolError(
+            'classes holds 4 classes, and at most 3 fit in one call: ask for '
+            'the others in another call.',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('AssignmentTypes', () {
+    const ko = PlannerAssignmentType(
+      id: 'a',
+      name: 'Kleine Overhoring',
+      abbreviation: 'KO',
+    );
+
+    test('is one per session', () {
+      final session = SmartschoolSession(fakeExtensionSettings());
+      final other = SmartschoolSession(fakeExtensionSettings());
+      expect(AssignmentTypes.of(session), same(AssignmentTypes.of(session)));
+      expect(
+        AssignmentTypes.of(session),
+        isNot(same(AssignmentTypes.of(other))),
+      );
+    });
+
+    test('reads the types once, also for reads at the same time', () async {
+      final types = AssignmentTypes.of(
+        SmartschoolSession(fakeExtensionSettings()),
+      );
+      final planner = _TypesPlanner([
+        [ko],
+      ]);
+
+      final reads = [types.read(planner), types.read(planner)];
+      planner.gate.complete();
+      expect(await Future.wait(reads), [
+        [ko],
+        [ko],
+      ]);
+      expect(await types.read(planner), [ko]);
+      expect(planner.reads, 1);
+    });
+
+    test('reads again after a read that failed', () async {
+      final types = AssignmentTypes.of(
+        SmartschoolSession(fakeExtensionSettings()),
+      );
+      final planner = _TypesPlanner([
+        SmartschoolPlannerError('no types', statusCode: 403),
+        [ko],
+      ])..gate.complete();
+
+      await expectLater(
+        types.read(planner),
+        throwsA(isA<SmartschoolPlannerError>()),
+      );
+      expect(await types.read(planner), [ko]);
+      expect(await types.read(planner), [ko]);
+      expect(planner.reads, 2);
     });
   });
 
@@ -355,6 +496,41 @@ void main() {
       );
       expect(formatPlannerDay(summer), formatPlannerDay(local));
     });
+  });
+
+  test('formatPlannerPeriod gives whole days as the day, and a time when it '
+      'is not the start or the end of the day', () {
+    expect(
+      formatPlannerPeriod(
+        DateTime(2026, 10, 5),
+        DateTime(2026, 10, 9, 23, 59, 59, 999),
+      ),
+      'from Monday 2026-10-05 to Friday 2026-10-09',
+    );
+    expect(
+      formatPlannerPeriod(DateTime(2026, 10, 5, 8), DateTime(2026, 10, 5, 12)),
+      'from Monday 2026-10-05 08:00 to Monday 2026-10-05 12:00',
+    );
+  });
+
+  test('formatAssignmentType gives the abbreviation and the name, or the one '
+      'a type has', () {
+    for (final (abbreviation, name, text) in [
+      ('KO', 'Kleine Overhoring', 'KO Kleine Overhoring'),
+      ('', 'Kleine Overhoring', 'Kleine Overhoring'),
+      ('KO', '', 'KO'),
+    ]) {
+      expect(
+        formatAssignmentType(
+          PlannerAssignmentType(
+            id: 'a',
+            name: name,
+            abbreviation: abbreviation,
+          ),
+        ),
+        text,
+      );
+    }
   });
 
   group('formatElementKind', () {

@@ -58,6 +58,7 @@ void main() {
       'search_planners',
       'list_planner',
       'read_planned_element',
+      'list_class_assignments',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -83,6 +84,7 @@ void main() {
       'search_planners',
       'list_planner',
       'read_planned_element',
+      'list_class_assignments',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -304,6 +306,19 @@ void main() {
     final elementSchema = tools['read_planned_element']!['inputSchema'] as Map;
     expect(elementSchema['required'], ['id']);
     expect((elementSchema['properties'] as Map).keys, ['id']);
+    final assignmentsSchema =
+        tools['list_class_assignments']!['inputSchema'] as Map;
+    expect(assignmentsSchema['required'], ['classes']);
+    expect((assignmentsSchema['properties'] as Map).keys, [
+      'classes',
+      'from',
+      'until',
+    ]);
+    expect((assignmentsSchema['properties'] as Map)['classes'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string'},
+    });
 
     await server.stop();
     expect(await server.stderr, contains('serving MCP on stdio'));
@@ -318,7 +333,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(19));
+    expect(tools, hasLength(20));
     for (final tool in tools.cast<Map<String, Object?>>()) {
       // The whole definition: its title, description and the descriptions
       // of its arguments.
@@ -683,8 +698,8 @@ void main() {
   });
 
   test('the planner tools without settings: an error result that names the '
-      'missing settings; an invalid planner, element id, date or type: an '
-      'error that says what to fix, before any login (#51)', () async {
+      'missing settings; an invalid planner, element id, class, date or type: '
+      'an error that says what to fix, before any login (#51, #52)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -706,6 +721,20 @@ void main() {
       (
         'read_planned_element',
         {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256', 'group/4069_4258'],
+        },
+      ),
+      (
+        'list_class_assignments',
+        {
+          'classes': ['group/4069_4256'],
+          'from': '2026-10-05',
+          'until': '2026-10-30',
+        },
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
@@ -740,6 +769,31 @@ void main() {
             {'id': '225c0b54-0000-4000-8000-000000000000'},
             'id must be the id of a planner element',
           ),
+          (
+            'list_class_assignments',
+            {
+              'classes': [
+                for (var i = 0; i < 11; i++) 'group/4069_${4256 + i}',
+              ],
+            },
+            'classes holds 11 classes, and at most 10 fit in one call',
+          ),
+          (
+            'list_class_assignments',
+            {
+              'classes': ['6WEWI1'],
+            },
+            'each item of classes must be the planner id of a class',
+          ),
+          (
+            'list_class_assignments',
+            {
+              'classes': ['group/4069_4256'],
+              'until': '30 oktober',
+            },
+            '"30 oktober" is not',
+          ),
+          ('list_class_assignments', {'classes': 'group/4069_4256'}, 'classes'),
         ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
       expect(isError, isTrue, reason: '$tool $arguments');

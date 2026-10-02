@@ -6,8 +6,9 @@ import '../session.dart';
 import '../tools/server_tool.dart';
 
 // Reaching Smartschool's planner for the planner tools: the session runner,
-// the planner and element ids the tools print and take, the period
-// arguments, and the planner's own errors as ToolErrors.
+// the planner and element ids the tools print and take, the classes and
+// period arguments, the school's assignment types, and the planner's own
+// errors as ToolErrors.
 
 /// Runs [action] with a [PlannerService] on the session's logged-in client.
 ///
@@ -136,6 +137,93 @@ final class PlannerRef {
 /// `user/4069_218_0`, `group/4069_4256`, `location/4069_<id>`.
 String formatPlannerId(PlannerCalendar calendar) =>
     '${calendar.type.wireName}/${calendar.id}';
+
+/// [value], the list argument [name] of a tool, as the planners of 1 to
+/// [max] classes: planner ids as `search_planners` prints them, like
+/// `group/4069_4256`. Without duplicates, in the order given.
+///
+/// Throws a [ToolError] that says what to fix for an empty list, more than
+/// [max] classes, or an item that is not the planner id of a class (`me`, a
+/// person's or a room's planner, a class name), so that it never goes into a
+/// request.
+List<PlannerCalendar> classPlannersArgument(
+  Object? value, {
+  required String name,
+  required int max,
+}) {
+  final classes = <PlannerCalendar>[];
+  final items = switch (value) {
+    final List<Object?> items => items,
+    null => const <Object?>[],
+    _ => [value],
+  };
+  for (final item in items) {
+    final calendar = _classPlanner(item);
+    if (calendar == null) {
+      throw ToolError(
+        'each item of $name must be the planner id of a class as '
+        'search_planners shows it, like group/4069_4256; '
+        '${item is String ? '"$item"' : '$item'} is not.',
+      );
+    }
+    if (!classes.contains(calendar)) classes.add(calendar);
+  }
+  if (classes.isEmpty) {
+    throw ToolError(
+      '$name is empty: pass the planner ids of the classes, as '
+      'search_planners shows them (like group/4069_4256).',
+    );
+  }
+  if (classes.length > max) {
+    throw ToolError(
+      '$name holds ${classes.length} classes, and at most $max fit in one '
+      'call: ask for the others in another call.',
+    );
+  }
+  return classes;
+}
+
+/// The class planner [item] names, or null when it names none.
+PlannerCalendar? _classPlanner(Object? item) {
+  // An empty text would be "me".
+  if (item is! String || item.trim().isEmpty) return null;
+  try {
+    final calendar = PlannerRef.parse(item).calendar;
+    return calendar?.type == PlannerCalendarType.group ? calendar : null;
+  } on ToolError {
+    return null;
+  }
+}
+
+/// The school's assignment types (such as `KO Kleine Overhoring`), read once
+/// per session: the planner tools name them, and the planning of an
+/// assignment takes one.
+final class AssignmentTypes {
+  AssignmentTypes._();
+
+  static final _ofSession = Expando<AssignmentTypes>();
+
+  /// The assignment types of the school [session] logs in to, shared by
+  /// every tool on that session.
+  factory AssignmentTypes.of(SmartschoolSession session) =>
+      _ofSession[session] ??= AssignmentTypes._();
+
+  Future<List<PlannerAssignmentType>>? _types;
+
+  /// The school's types ([PlannerService.getAssignmentTypes]), in the order
+  /// the planner gives them: read with [planner] on the first call, and
+  /// from memory after that. Calls at the same time share one read; a read
+  /// that failed is tried again on the next call.
+  Future<List<PlannerAssignmentType>> read(PlannerService planner) async {
+    final pending = _types ??= planner.getAssignmentTypes();
+    try {
+      return await pending;
+    } catch (_) {
+      if (identical(_types, pending)) _types = null;
+      rethrow;
+    }
+  }
+}
 
 /// An element of the planner as the tools name it: its type, platform and
 /// id, which the library needs to read it, as one compound id

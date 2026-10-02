@@ -11,8 +11,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
-  lokalen: lessen, toetsen en taken, en lege lesuren. ChatGPT leest de
-  planner alleen: het verandert er niets in.
+  lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
+  toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
+  kiezen. ChatGPT leest de planner alleen: het verandert er niets in.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 

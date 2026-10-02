@@ -197,8 +197,7 @@ String formatPlannerList({
   final who = planner.isMe
       ? 'your own planner (me)'
       : 'planner ${formatPlannerId(calendar)}${name == null ? '' : ' ($name)'}';
-  final period =
-      'from ${_moment(from, end: false)} to ${_moment(until, end: true)}';
+  final period = formatPlannerPeriod(from, until);
   final only = kinds == null
       ? ''
       : ' (only ${[for (final kind in kinds) kind.plural].join(', ')})';
@@ -232,15 +231,4 @@ String formatPlannerList({
           'fewer, list a shorter period, or only some types (such as '
           'assignments).',
   ].join('\n');
-}
-
-/// [time] as the start ([end] false) or end of a period: the day when it is
-/// the start or the end of that day, else the day and the time.
-String _moment(DateTime time, {required bool end}) {
-  final wholeDay = end
-      ? time.hour == 23 && time.minute == 59
-      : time.hour == 0 && time.minute == 0;
-  return wholeDay
-      ? formatPlannerDay(time)
-      : '${formatPlannerDay(time)} ${formatPlannerClock(time)}';
 }

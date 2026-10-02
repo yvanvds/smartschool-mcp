@@ -14,6 +14,7 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
@@ -102,6 +103,7 @@ Future<void> _serve(ServerOptions options) async {
           searchPlannersTool(session),
           listPlannerTool(session),
           readPlannedElementTool(session),
+          listClassAssignmentsTool(session),
         ],
         updates: updates,
       );

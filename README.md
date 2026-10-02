@@ -358,6 +358,21 @@ client name. It also installs again while that copy runs.
   colleagues who can see the element read it too (dartschool#84). The
   labels, attachments and weblinks are read from the detail's raw JSON
   until the library types them (yvanvds/dartschool#98, #70).
+- `list_class_assignments`: the assignments (tests and tasks) of 1 to 10
+  classes (`classes`, planner ids such as `group/4069_4256`) in a period
+  (`from` and `until`, today to 4 weeks ahead by default), of everyone who
+  plans them, read in one request (the library's `getAssignmentsOfGroups`,
+  the planner's workload view). Per day, in date order, one line per
+  assignment as `list_planner` writes it; a weekday without assignments
+  reads `no assignments`, so free days show at a glance, and a Saturday or
+  Sunday is listed only when something falls on it. When the school set a
+  workload limit for a class (`getWorkloadSchedule`, a limit of 0 or more),
+  the answer gives it with the planner's own figure for the days it is not
+  0, such as `6A1: limit 2 per day (soft); 2026-10-06 is at 2`; the figures
+  are not interpreted (at the school seen live every class had `Geen
+  limiet`, and every weight was 0). It also lists the school's assignment
+  types (`getAssignmentTypes`, read once per session). The tool only reads:
+  choosing the moment is left to the user, with Claude.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -401,13 +416,17 @@ whose details go to the log only, and a request the library refused before
 sending it); the planner ids (`PlannerRef`, `me` or `user/…`, `group/…`,
 `location/…`, and `formatPlannerId`); the compound element id
 `<plannedElementType>/<platformId>/<id>` (`PlannedElementRef`, which also
-reads an element's detail); and the `from` and `until` arguments with a
-default period (`plannerPeriodArguments`). In `planner_format.dart`: dates
-and times in the time of this PC, the kind and time of an element, one line
-per element (`formatElementLine`), elements per day (`elementsByDay`) and an
-element's detail (`formatElementDetail`). The tests run against a fake
-planner (`test/support/fake_planner.dart`), built from dartschool's
-anonymised captures of the live planner.
+reads an element's detail); the `classes` argument, 1 to a maximum of
+class planner ids (`classPlannersArgument`); the `from` and `until`
+arguments with a default period (`plannerPeriodArguments`); and the
+school's assignment types, read once per session (`AssignmentTypes.of`). In
+`planner_format.dart`: dates and times in the time of this PC, a period
+(`formatPlannerPeriod`), the kind and time of an element, an assignment
+type (`formatAssignmentType`), one line per element (`formatElementLine`),
+elements per day (`elementsByDay`) and an element's detail
+(`formatElementDetail`). The tests run against a fake planner
+(`test/support/fake_planner.dart`), built from dartschool's anonymised
+captures of the live planner and its workload view.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

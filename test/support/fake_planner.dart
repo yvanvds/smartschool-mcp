@@ -10,6 +10,10 @@ const fakePlannerMe = '12_345_0';
 
 const _api = '/planner/api/v1';
 
+/// Where the school's assignment types are read: the lesson-content API.
+const fakeAssignmentTypesPath =
+    '/lesson-content/api/v1/assignments/applicable-assignment-types';
+
 /// The moment [year]-[month]-[day] [hour]:[minute]:[second] in the time of
 /// this PC, written as the planner writes a date and time: ISO 8601 with the
 /// offset (`2026-10-05T10:20:00+02:00` in Belgium in October,
@@ -121,25 +125,51 @@ class FakePlannerRoom {
   };
 }
 
-/// An assignment type, such as `KO Kleine Overhoring`.
+/// An assignment type, such as `KO Kleine Overhoring`: the six types of
+/// dartschool's capture of a school's types
+/// (`test/planner_workload_test.dart` there), in [school].
 class FakeAssignmentType {
   const FakeAssignmentType(this.id, this.name, this.abbreviation);
 
+  static const go = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000002',
+    'Grote Overhoring',
+    'GO',
+  );
+  static const gt = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000003',
+    'Grote Taak',
+    'GT',
+  );
   static const ko = FakeAssignmentType(
     'a0000000-0000-4000-8000-000000000001',
     'Kleine Overhoring',
     'KO',
   );
-  static const gt = FakeAssignmentType(
-    'a0000000-0000-4000-8000-000000000002',
-    'Grote Taak',
-    'GT',
+  static const kt = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000004',
+    'Kleine Taak',
+    'KT',
   );
+  static const mb = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000005',
+    'Meebrengen',
+    'MB',
+  );
+  static const v = FakeAssignmentType(
+    'a0000000-0000-4000-8000-000000000006',
+    'Voorbereiding',
+    'V',
+  );
+
+  /// The school's types, in the order the planner gave them.
+  static const school = [go, gt, ko, kt, mb, v];
 
   final String id;
   final String name;
   final String abbreviation;
 
+  /// The type as a planned element names it.
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
@@ -147,6 +177,52 @@ class FakeAssignmentType {
     'isVisible': true,
     'defaultTiming': 'deadline',
     'weight': 0,
+  };
+
+  /// The type as the list of the school's types and a workload setting name
+  /// it: with its platform.
+  Map<String, Object?> schoolJson() => {
+    'id': id,
+    'platformId': 4069,
+    'name': name,
+    'abbreviation': abbreviation,
+    'isVisible': true,
+    'defaultTiming': 'deadline',
+    'weight': 0,
+  };
+}
+
+/// The workload setting of a class: the limit the school set for it, in the
+/// shape of dartschool's capture of the workload schedule.
+class FakeWorkloadSetting {
+  const FakeWorkloadSetting(
+    this.id,
+    this.name, {
+    required this.limit,
+    this.period = 'day',
+    this.type = 'soft',
+  });
+
+  /// The setting of every class at the school seen live: no limit (`-1`).
+  static const noLimit = FakeWorkloadSetting(
+    'b0000000-0000-4000-8000-000000000001',
+    'Geen limiet',
+    limit: -1,
+  );
+
+  final String id;
+  final String name;
+  final num limit;
+  final String period;
+  final String type;
+
+  Map<String, Object?> toJson(List<FakeAssignmentType> allowed) => {
+    'id': id,
+    'platformId': 4069,
+    'color': 'aqua-500',
+    'name': name,
+    'limit': {'value': limit, 'period': period, 'type': type},
+    'allowedAssignmentTypes': [for (final type in allowed) type.schoolJson()],
   };
 }
 
@@ -385,7 +461,8 @@ class FakePlannerHit {
 }
 
 /// The planner module of a fake Smartschool: the elements of the calendars
-/// of users, classes and rooms, the detail of each element, and the search.
+/// of users, classes and rooms, the detail of each element, the search, and
+/// the workload view of classes with the school's assignment types.
 ///
 /// It serves:
 /// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
@@ -396,7 +473,19 @@ class FakePlannerHit {
 /// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
 ///   detail, or the planner's `404` for an element it does not have;
 /// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
-///   name or title holds the search string, ignoring case.
+///   name or title holds the search string, ignoring case;
+/// - `POST /planner/api/v1/workload/planned-elements` with `from` and `to`
+///   and the `groups`: the assignments of those classes that overlap the
+///   period, once each, in the order they were added (not by date, like
+///   the planner's);
+/// - `POST /planner/api/v1/workload/schedule` with `from` and `to` and the
+///   `groups`: for every day of the period (in the time of this PC), the
+///   workload of each class: its [workloadWeights] (0 by default) and its
+///   [workloadSettings] ([FakeWorkloadSetting.noLimit] by default);
+/// - `GET` [fakeAssignmentTypesPath]: the [assignmentTypes].
+///
+/// The workload calls answer `400` for a class the fake does not know (one
+/// of no element or calendar), as the calendars do.
 ///
 /// Every planner request is recorded in [requests]. [failing] answers a
 /// path with another status instead.
@@ -410,6 +499,21 @@ class FakePlanner {
 
   /// What the search finds.
   final List<FakePlannerHit> hits = [];
+
+  /// The classes the fake knows, by id: those of the elements and of the
+  /// class calendars.
+  final Map<String, FakePlannerGroup> classes = {};
+
+  /// The school's assignment types.
+  final List<FakeAssignmentType> assignmentTypes = [];
+
+  /// The workload setting of a class, by class id; the others have
+  /// [FakeWorkloadSetting.noLimit].
+  final Map<String, FakeWorkloadSetting> workloadSettings = {};
+
+  /// The planner's workload figure (`weight`) of a class on a day, by class
+  /// id and day (`2026-10-05`); 0 when not set.
+  final Map<(String, String), num> workloadWeights = {};
 
   /// The planner requests, in order.
   final List<
@@ -425,6 +529,9 @@ class FakePlanner {
   /// makes its detail readable.
   void add(FakePlannedElement element, {required List<String> calendars}) {
     elements[element.ref] = element;
+    for (final group in element.groups) {
+      classes.putIfAbsent(group.id, () => group);
+    }
     for (final calendar in calendars) {
       this.calendars.putIfAbsent(calendar, () => []).add(element);
     }
@@ -434,6 +541,12 @@ class FakePlanner {
   void addCalendar(String calendar) =>
       calendars.putIfAbsent(calendar, () => []);
 
+  /// Makes class [group] and its calendar known, without elements.
+  void addClass(FakePlannerGroup group) {
+    classes.putIfAbsent(group.id, () => group);
+    addCalendar('group/${group.id}');
+  }
+
   /// The `from`, `to` and `types` of the calendar requests, in order.
   List<Map<String, String>> get calendarQueries => [
     for (final request in requests)
@@ -442,7 +555,9 @@ class FakePlanner {
 
   ResponseBody? respond(RequestOptions options) {
     final path = options.uri.path;
-    if (!path.startsWith('$_api/')) return null;
+    if (!path.startsWith('$_api/') && path != fakeAssignmentTypesPath) {
+      return null;
+    }
     requests.add((
       method: options.method,
       path: path,
@@ -455,10 +570,26 @@ class FakePlanner {
         status: status,
       );
     }
+    if (path == fakeAssignmentTypesPath) {
+      if (options.method != 'GET') return null;
+      return _json(
+        jsonEncode([for (final type in assignmentTypes) type.schoolJson()]),
+      );
+    }
     final route = path.substring(_api.length + 1).split('/');
-    if (options.method == 'POST' &&
-        route.join('/') == 'quick-search/planner/search') {
-      return _search(options.data);
+    if (options.method == 'POST') {
+      return switch (route.join('/')) {
+        'quick-search/planner/search' => _search(options.data),
+        'workload/planned-elements' => _workloadAssignments(
+          options.uri.queryParameters,
+          options.data,
+        ),
+        'workload/schedule' => _workloadSchedule(
+          options.uri.queryParameters,
+          options.data,
+        ),
+        _ => null,
+      };
     }
     if (options.method != 'GET') return null;
     if (route case ['planned-elements', final kind, final id]) {
@@ -480,14 +611,71 @@ class FakePlanner {
     return null;
   }
 
+  /// The classes of a workload request, or null when the fake does not know
+  /// one of them.
+  List<FakePlannerGroup>? _workloadClasses(Object? data) {
+    final groups = <FakePlannerGroup>[];
+    for (final id in (data as Map)['groups'] as List) {
+      final group = classes[id];
+      if (group == null) return null;
+      groups.add(group);
+    }
+    return groups;
+  }
+
+  ResponseBody _badRequest() => _json(
+    '{"status":400,"title":"Bad Request","detail":"","type":""}',
+    status: 400,
+  );
+
+  ResponseBody _workloadAssignments(Map<String, String> query, Object? data) {
+    final groups = _workloadClasses(data);
+    if (groups == null) return _badRequest();
+    final ids = {for (final group in groups) group.id};
+    final from = DateTime.parse(query['from']!);
+    final to = DateTime.parse(query['to']!);
+    return _json(
+      jsonEncode([
+        for (final element in elements.values)
+          if (element._isAssignment &&
+              element.overlaps(from, to) &&
+              element.groups.any((group) => ids.contains(group.id)))
+            element.listJson(),
+      ]),
+    );
+  }
+
+  ResponseBody _workloadSchedule(Map<String, String> query, Object? data) {
+    final groups = _workloadClasses(data);
+    if (groups == null) return _badRequest();
+    final from = DateTime.parse(query['from']!).toLocal();
+    final to = DateTime.parse(query['to']!).toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final schedule = <String, Object?>{};
+    for (
+      var day = DateTime(from.year, from.month, from.day);
+      !day.isAfter(to);
+      day = DateTime(day.year, day.month, day.day + 1)
+    ) {
+      final date = '${day.year}-${two(day.month)}-${two(day.day)}';
+      schedule[date] = [
+        for (final group in groups)
+          {
+            'group': group.toJson(),
+            'weight': workloadWeights[(group.id, date)] ?? 0,
+            'concurrentWeight': 0,
+            'workloadSetting':
+                (workloadSettings[group.id] ?? FakeWorkloadSetting.noLimit)
+                    .toJson(assignmentTypes),
+          },
+      ];
+    }
+    return _json(jsonEncode({'schedule': schedule}));
+  }
+
   ResponseBody _calendar(String calendar, Map<String, String> query) {
     final listed = calendars[calendar];
-    if (listed == null) {
-      return _json(
-        '{"status":400,"title":"Bad Request","detail":"","type":""}',
-        status: 400,
-      );
-    }
+    if (listed == null) return _badRequest();
     final from = DateTime.parse(query['from']!);
     final to = DateTime.parse(query['to']!);
     final types = query['types']?.split(',').toSet();
@@ -724,5 +912,110 @@ extension FakePlannerCaptures on FakePlanner {
       FakePlannerHit.room(fakeRoom101),
       FakePlannerHit.other('4069_77', 'partner', 'Bibliotheek Springfield'),
     ]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The workload view of dartschool's captures
+// ---------------------------------------------------------------------------
+
+const fake6C1 = FakePlannerGroup('4069_2004', '6C1');
+const fake6C2 = FakePlannerGroup('4069_2005', '6C2');
+const fake6D1 = FakePlannerGroup('4069_2006', '6D1');
+const fake6D2 = FakePlannerGroup('4069_2007', '6D2');
+
+/// A colleague who plans two assignments in the same hour.
+const fakeAn = FakePlannerUser('4069_1005_0', 'An Claes', 'Claes An');
+
+const fakeRoom104 = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000104',
+  '104',
+);
+const fakeRoom105 = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000105',
+  '105',
+);
+
+const _chemie = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000006',
+  'chemie',
+  ['CHEMI'],
+);
+const _economie = FakePlannerCourse(
+  'c0000000-0000-4000-8000-000000000007',
+  'economie',
+  ['ECONO'],
+);
+
+/// The assignments of dartschool's capture of the workload view of class
+/// 6A1 in the week of 2026-10-05 (`test/planner_workload_test.dart` there),
+/// besides [fakeAssignment] (its KO on Tuesday): on Monday a GO of six
+/// classes, and an MB and a KO of one colleague in the same hour.
+final fakeChemistryTest = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000012',
+  type: 'planned-assignments',
+  name: 'Toets: atoombouw',
+  from: plannerTime(2026, 10, 5, 12, 50),
+  to: plannerTime(2026, 10, 5, 13, 40),
+  deadline: true,
+  organisers: [fakeWim],
+  groups: [fake6A1, fake6A2, fake6D2, fake6D1, fake6C2, fake6C1],
+  courses: [_chemie],
+  rooms: [fakeRoom104],
+  assignmentType: FakeAssignmentType.go,
+);
+final fakeBringCalculator = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000013',
+  type: 'planned-assignments',
+  name: 'Rekenmachine meebrengen',
+  from: plannerTime(2026, 10, 5, 9, 20),
+  to: plannerTime(2026, 10, 5, 10, 10),
+  deadline: true,
+  organisers: [fakeAn],
+  groups: [fake6A1, fake6A2],
+  courses: [_economie],
+  rooms: [fakeRoom105],
+  assignmentType: FakeAssignmentType.mb,
+);
+final fakeBudgetTest = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-000000000014',
+  type: 'planned-assignments',
+  name: 'Test: begroting',
+  from: plannerTime(2026, 10, 5, 9, 20),
+  to: plannerTime(2026, 10, 5, 10, 10),
+  deadline: true,
+  organisers: [fakeAn],
+  groups: [fake6A1, fake6A2],
+  courses: [_economie],
+  rooms: [fakeRoom105],
+  assignmentType: FakeAssignmentType.ko,
+);
+
+/// The workload view of the captures, served by
+/// [FakePlannerWorkloadCaptures.loadWorkloadCaptures].
+extension FakePlannerWorkloadCaptures on FakePlanner {
+  /// Serves, on top of [FakePlannerCaptures.loadCaptures], dartschool's
+  /// captures of the workload view: the school's six assignment types, and
+  /// the assignments of 6A1 in the week of 2026-10-05 besides
+  /// [fakeAssignment] ([fakeChemistryTest], [fakeBringCalculator],
+  /// [fakeBudgetTest]), in the calendars of their classes, organisers and
+  /// rooms. Every class has the setting `Geen limiet` and weight 0, as at
+  /// the school seen live.
+  void loadWorkloadCaptures() {
+    assignmentTypes.addAll(FakeAssignmentType.school);
+    for (final element in [
+      fakeChemistryTest,
+      fakeBringCalculator,
+      fakeBudgetTest,
+    ]) {
+      add(
+        element,
+        calendars: {
+          for (final group in element.groups) 'group/${group.id}',
+          for (final user in element.organisers) 'user/${user.id}',
+          for (final room in element.rooms) room.planner,
+        }.toList(),
+      );
+    }
   }
 }

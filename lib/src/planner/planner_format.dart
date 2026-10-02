@@ -48,6 +48,24 @@ DateTime plannerDayOf(DateTime time) {
   return DateTime(local.year, local.month, local.day);
 }
 
+/// The period from [from] to [until] as a tool names it: `from Monday
+/// 2026-10-05 to Friday 2026-10-09`, with the time of an end that is not the
+/// start ([from]) or the end ([until]) of its day: `from Monday 2026-10-05
+/// 08:00 to Monday 2026-10-05 12:00`.
+String formatPlannerPeriod(DateTime from, DateTime until) =>
+    'from ${_moment(from, end: false)} to ${_moment(until, end: true)}';
+
+/// [time] as the start ([end] false) or end of a period: the day when it is
+/// the start or the end of that day, else the day and the time.
+String _moment(DateTime time, {required bool end}) {
+  final wholeDay = end
+      ? time.hour == 23 && time.minute == 59
+      : time.hour == 0 && time.minute == 0;
+  return wholeDay
+      ? formatPlannerDay(time)
+      : '${formatPlannerDay(time)} ${formatPlannerClock(time)}';
+}
+
 /// [elements] in time order: by start, then end, then name and id, so that
 /// the order does not depend on the planner's.
 List<PlannedElement> sortedByTime(Iterable<PlannedElement> elements) =>
@@ -100,14 +118,18 @@ String formatElementKind(PlannedElement element) => switch (element.type) {
   PlannedElementType.lesson => 'lesson',
   PlannedElementType.assignment => [
     'assignment',
-    if (element.assignmentType case final type?) ...[
-      if (type.abbreviation.isNotEmpty) type.abbreviation,
-      if (type.name.isNotEmpty) type.name,
-    ],
-  ].join(' '),
+    if (element.assignmentType case final type?) formatAssignmentType(type),
+  ].where((part) => part.isNotEmpty).join(' '),
   PlannedElementType.placeholder => 'empty lesson hour',
   _ => element.typeName,
 };
+
+/// [type], an assignment type, as the planner shows it: its abbreviation and
+/// name, `KO Kleine Overhoring`, or the one it has.
+String formatAssignmentType(PlannerAssignmentType type) => [
+  if (type.abbreviation.isNotEmpty) type.abbreviation,
+  if (type.name.isNotEmpty) type.name,
+].join(' ');
 
 /// The name of [element], or null when it has none (an empty lesson hour).
 String? elementName(PlannedElement element) {

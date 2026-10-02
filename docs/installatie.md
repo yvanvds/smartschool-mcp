@@ -11,8 +11,9 @@ Je vraagt het gewoon in een gesprek:
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
   lezen.
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
-  lokalen: lessen, toetsen en taken, en lege lesuren. Claude leest de
-  planner alleen: het verandert er niets in.
+  lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
+  toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
+  kiezen. Claude leest de planner alleen: het verandert er niets in.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 
@@ -249,6 +250,12 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   Claude leest dan de info van die les. De info voor leerlingen zien je
   leerlingen. De privé-info zien je leerlingen niet, maar collega's die de les
   kunnen zien, lezen ze wel.
+- "Wanneer kan ik best een toets plannen in 6WEWI1?"
+  Claude bekijkt welke toetsen en taken de klas de komende vier weken al
+  heeft, van alle leerkrachten, en wanneer jij de klas hebt. Het stelt dan
+  een paar momenten voor, en jij kiest. Heeft je school in de planner een
+  grens gezet voor de werkbelasting van de klas, dan noemt Claude die ook.
+- "Welke toetsen heeft 5WW1 volgende week?"
 
 ### Bestanden bewaren
 
