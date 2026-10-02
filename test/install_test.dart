@@ -166,7 +166,8 @@ void main() {
       final warning = privacyWarning.join(' ');
       expect(warning, contains('gevoelige gegevens over leerlingen'));
       expect(warning, contains('betalend ChatGPT-abonnement'));
-      expect(warning, contains('(Improve the model for everyone) uit'));
+      expect(warning, contains('om het model te verbeteren'));
+      expect(warning, contains('Improve the model for everyone'));
     });
 
     test('an update says the settings in ChatGPT stay; a second run that '

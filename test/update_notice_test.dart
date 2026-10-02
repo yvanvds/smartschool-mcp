@@ -15,6 +15,7 @@ import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
+import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_github.dart';
@@ -152,7 +153,8 @@ void main() {
 
     final status = text(await call(connection, 'smartschool_status'));
     expect(status, startsWith('Smartschool connection: working\n'));
-    expect(status, endsWith('\nServer version: 0.1.0\n$statusLine'));
+    // The status shows the real version; the update check was told 0.1.0.
+    expect(status, endsWith('\nServer version: $packageVersion\n$statusLine'));
     expect(github.requests, hasLength(2));
   });
 
@@ -222,7 +224,7 @@ void main() {
 
       expect(text(messages), isNot(contains('Update available')));
       expect(status, startsWith('Smartschool connection: working\n'));
-      expect(status, endsWith('\nServer version: 0.1.0\n$line'));
+      expect(status, endsWith('\nServer version: $packageVersion\n$line'));
     });
   }
 

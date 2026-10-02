@@ -203,15 +203,11 @@ void main() {
     });
 
     test('asks for a paid plan and for model training to be off, with the '
-        'setting named as the installer names it (#50)', () {
+        'English name of the setting the installer gives (#50)', () {
+      const english = 'Improve the model for everyone';
       expect(chatGpt, contains('**Een betalend ChatGPT-abonnement:**'));
-      final setting = RegExp(
-        r'"(.+)" \((Improve the model for everyone)\)',
-      ).firstMatch(privacyWarning.join(' '))!;
-      expect(
-        chatGpt,
-        contains('**${setting.group(1)}** (*${setting.group(2)}*) uit.'),
-      );
+      expect(chatGpt, contains('(*$english*) uit.'));
+      expect(privacyWarning.join(' '), contains(english));
       expect(chatGpt, contains('### Eerst: OpenAI niet laten trainen'));
     });
 

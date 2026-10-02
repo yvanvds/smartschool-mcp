@@ -126,11 +126,17 @@ Future<void> deleteReplacedCopies(String directory) async {
 /// The lines of the instructions that ask for a paid plan and for model
 /// training to be off, before the server can read the teacher's messages;
 /// the colleague guide asks the same, in more detail.
+///
+/// They describe the setting and give its English name only: its Dutch name
+/// in the ChatGPT app is still to be confirmed (#50), and these lines are
+/// built into the released executable, while the guide can be corrected at
+/// any time.
 const privacyWarning = [
   'Belangrijk: ChatGPT stuurt wat het leest naar OpenAI, ook gevoelige',
   'gegevens over leerlingen. Gebruik dit daarom alleen met een betalend',
-  'ChatGPT-abonnement, en zet in ChatGPT eerst "Het model verbeteren voor',
-  'iedereen" (Improve the model for everyone) uit, bij het gegevensbeheer.',
+  'ChatGPT-abonnement, en zet eerst in de instellingen van ChatGPT uit dat',
+  'OpenAI je gesprekken gebruikt om het model te verbeteren (in het Engels:',
+  'Improve the model for everyone).',
 ];
 
 /// What to do after installing, in Dutch: [privacyWarning], how to add the

@@ -88,7 +88,8 @@ dat account beheert hoe het bij jullie ingesteld is.
 
 <!-- TE BEVESTIGEN (#50): waar staat deze instelling in de ChatGPT-app voor
 Windows, en hoe heten het menu en de schakelaar in het Nederlands? Pas de
-namen hierboven en in lib/src/install.dart aan. -->
+namen hierboven aan. Niet in de gratis versie: kijk na in een betalend
+account. (Het installatievenster noemt alleen de Engelse naam.) -->
 
 ### Het programma op je pc zetten
 
