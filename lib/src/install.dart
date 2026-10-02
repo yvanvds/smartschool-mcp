@@ -123,8 +123,18 @@ Future<void> deleteReplacedCopies(String directory) async {
   }
 }
 
-/// What to do after installing, in Dutch: how to add the server in ChatGPT
-/// with [path] as its command, and the settings to enter.
+/// The lines of the instructions that ask for a paid plan and for model
+/// training to be off, before the server can read the teacher's messages;
+/// the colleague guide asks the same, in more detail.
+const privacyWarning = [
+  'Belangrijk: ChatGPT stuurt wat het leest naar OpenAI, ook gevoelige',
+  'gegevens over leerlingen. Gebruik dit daarom alleen met een betalend',
+  'ChatGPT-abonnement, en zet in ChatGPT eerst "Het model verbeteren voor',
+  'iedereen" (Improve the model for everyone) uit, bij het gegevensbeheer.',
+];
+
+/// What to do after installing, in Dutch: [privacyWarning], how to add the
+/// server in ChatGPT with [path] as its command, and the settings to enter.
 String installInstructions(
   Installation installation, {
   required bool onClipboard,
@@ -141,6 +151,8 @@ String installInstructions(
     else
       'Smartschool is al geïnstalleerd in: $path',
     if (onClipboard) 'Dat pad staat ook op je klembord.',
+    '',
+    ...privacyWarning,
     '',
     if (installation.replaced) ...[
       'Je instellingen in ChatGPT blijven bewaard. Herstart ChatGPT om de',
