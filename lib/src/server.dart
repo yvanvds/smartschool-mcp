@@ -43,7 +43,7 @@ base class SmartschoolServer extends MCPServer with ToolsSupport {
          ),
          instructions:
              'Tools for working with Smartschool on behalf of the signed-in '
-             'teacher.',
+             'user, a teacher or a student.',
        ) {
     for (final tool in tools) {
       registerTool(tool.definition, (request) => _call(tool, request));

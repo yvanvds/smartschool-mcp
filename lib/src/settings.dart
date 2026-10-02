@@ -5,8 +5,12 @@ import 'package:yaml/yaml.dart';
 
 import 'client_app.dart';
 
-/// A setting of the server: the four values it needs to log in to
-/// Smartschool ([login]), and the optional download folder.
+/// A setting of the server: the four values it logs in to Smartschool with
+/// ([login]), and the optional download folder.
+///
+/// Of the four, the 2FA key is optional: only an account with two-factor
+/// authentication (2FA), such as a teacher's, needs it. Students sign in
+/// with only their password.
 ///
 /// [formTitle] is the field's title in the Claude Desktop extension's install
 /// form. The extension manifest (`manifest.json`, its `user_config` keyed by
@@ -17,7 +21,12 @@ enum Setting {
   mainUrl('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL', 'main_url'),
   username('Gebruikersnaam', 'SMARTSCHOOL_USERNAME', 'username'),
   password('Wachtwoord', 'SMARTSCHOOL_PASSWORD', 'password'),
-  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa'),
+
+  /// The TOTP secret of the authenticator app, for an account with 2FA; an
+  /// account without it leaves it empty. When Smartschool asks for a 2FA
+  /// code and it is empty, the login fails with
+  /// `ProblemKind.twoFactorKeyMissing`.
+  mfa('2FA-sleutel', 'SMARTSCHOOL_MFA', 'mfa', required: false),
 
   /// The folder `save_intradesk_file` and `save_message_attachment` save
   /// into; optional (see `DownloadFolder.resolve`). In the extension
@@ -28,6 +37,7 @@ enum Setting {
     'SMARTSCHOOL_DOWNLOAD_DIR',
     'download_dir',
     required: false,
+    forLogin: false,
   );
 
   const Setting(
@@ -35,6 +45,7 @@ enum Setting {
     this.envVar,
     this.fileKey, {
     this.required = true,
+    this.forLogin = true,
   });
 
   /// The title of the field in the extension's install form.
@@ -48,13 +59,18 @@ enum Setting {
   /// for the login settings).
   final String fileKey;
 
-  /// Whether the server needs it to log in.
+  /// Whether it must be filled in: the server does not log in without it
+  /// ([SmartschoolSettings.missing]).
   final bool required;
 
-  /// The settings the server needs to log in, in form order.
+  /// Whether the server logs in with it ([login]).
+  final bool forLogin;
+
+  /// The settings the server logs in with, in form order: the required
+  /// ones and the optional 2FA key.
   static final List<Setting> login = [
     for (final setting in values)
-      if (setting.required) setting,
+      if (setting.forLogin) setting,
   ];
 }
 
@@ -369,22 +385,34 @@ final class SmartschoolSettings {
   final String password;
 
   /// The 2FA key: the TOTP secret (Base32) of the authenticator app, as
-  /// typed, only trimmed.
+  /// typed, only trimmed; empty for an account without two-factor
+  /// authentication (2FA), such as a student's.
   ///
   /// The library checks it: it ignores white space and hyphens in it (a key
   /// copied in groups, `JBSW Y3DP EHPK 3PXP`), and refuses a value that
   /// cannot be a TOTP secret, such as the 6-digit code of the app, with a
   /// [SmartschoolInvalidTotpSecretError] when it logs in (see
-  /// `ProblemKind.twoFactorKeyInvalid`).
+  /// `ProblemKind.twoFactorKeyInvalid`). It takes an empty key as no key:
+  /// it logs in with only the password, and fails with a
+  /// [SmartschoolTwoFactorRequiredError] when Smartschool asks for a 2FA
+  /// code (see `ProblemKind.twoFactorKeyMissing`).
   final String mfa;
 
-  /// The login settings that are empty, in form order. All four are
-  /// required: MFA is mandatory for teachers.
-  List<Setting> get missing => [
+  /// The login settings ([Setting.login]) that are empty, in form order,
+  /// also the optional 2FA key.
+  List<Setting> get empty => [
     if (host.isEmpty) Setting.mainUrl,
     if (username.isEmpty) Setting.username,
     if (password.isEmpty) Setting.password,
     if (mfa.isEmpty) Setting.mfa,
+  ];
+
+  /// The required settings that are empty, in form order: the server does
+  /// not log in while there are any. The 2FA key is not one of them, as
+  /// only an account with 2FA needs it.
+  List<Setting> get missing => [
+    for (final setting in empty)
+      if (setting.required) setting,
   ];
 
   /// The credentials for the library. Only valid when [missing] is empty.

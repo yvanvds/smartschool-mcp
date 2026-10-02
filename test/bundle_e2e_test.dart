@@ -230,6 +230,65 @@ void main() {
     );
   });
 
+  test(
+    'installed with "2FA-sleutel" left empty, as a student without 2FA '
+    'does: Claude Desktop starts the server, which passes the key on '
+    'empty, does not report it missing and goes on to log in (#41)',
+    () async {
+      // Like the test above, the address is a host that cannot exist, so the
+      // server reaches no real school: that it reports this, and not a missing
+      // setting, shows that it tried to log in.
+      final home = await tempHome();
+      const password = 'not-a-real-password';
+      const form = {
+        'main_url': 'school.invalid',
+        'username': 'lena.peeters',
+        'password': password,
+      };
+      expect(fields()['mfa']!['required'], isFalse);
+      final config = claudeDesktopConfig(
+        manifest,
+        extensionPath: bundle.path,
+        userConfig: form,
+        home: home.path,
+      );
+      expect(config?.env['SMARTSCHOOL_MFA'], '');
+      final server = await startInstalled(form, home);
+      await server.initialize();
+
+      final (statusError, status) = await server.callTool('smartschool_status');
+
+      expect(statusError, isNot(true));
+      expect(
+        status,
+        startsWith(
+          'Smartschool connection: NOT working\n'
+          'Problem: Could not reach Smartschool at school.invalid.',
+        ),
+      );
+      expect(status, isNot(contains('Missing:')));
+      expect(
+        status,
+        contains(
+          '\nSettings: extension settings (Smartschool-adres: filled in, '
+          'Gebruikersnaam: filled in, Wachtwoord: filled in, 2FA-sleutel: '
+          'empty (only needed for an account with 2FA))\n',
+        ),
+      );
+
+      await server.stop();
+      final log = await server.stderr;
+      expect(
+        log,
+        contains('Smartschool: checking the session with school.invalid'),
+      );
+      expect(log, isNot(contains('settings incomplete')));
+      for (final text in [status, log]) {
+        expect(text, isNot(contains(password)));
+      }
+    },
+  );
+
   test('installed with a folder picked for "Downloadmap": '
       'smartschool_status shows it under that title, writable', () async {
     final home = await tempHome();

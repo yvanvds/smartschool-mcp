@@ -184,14 +184,23 @@ void main() {
       );
     });
 
-    test('downloadDir is an optional setting, not one to log in with', () {
+    test('downloadDir is an optional setting, not one to log in with; the '
+        '2FA key is an optional one to log in with (#41)', () {
       expect(Setting.downloadDir.required, isFalse);
+      expect(Setting.downloadDir.forLogin, isFalse);
       expect(Setting.login, [
         Setting.mainUrl,
         Setting.username,
         Setting.password,
         Setting.mfa,
       ]);
+      expect(
+        [
+          for (final setting in Setting.login)
+            if (!setting.required) setting,
+        ],
+        [Setting.mfa],
+      );
       expect(
         const ExtensionSettings().name(Setting.downloadDir),
         '"Downloadmap" (SMARTSCHOOL_DOWNLOAD_DIR)',

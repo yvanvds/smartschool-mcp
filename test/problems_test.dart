@@ -60,6 +60,31 @@ void main() {
       expect(classifyFailure(error), ProblemKind.accountVerification);
     });
 
+    test('a 2FA code asked for, but the 2FA key empty or not set: its own '
+        'kind, after the password (#41)', () async {
+      for (final key in ['', '  ', null]) {
+        final server = FakeSmartschool();
+        final error = await _loginError(server, FakeCredentials(mfa: key));
+        expect(error, isA<SmartschoolTwoFactorRequiredError>(), reason: '$key');
+        expect(server.requests, contains('POST /login'), reason: '$key');
+        expect(
+          classifyFailure(error),
+          ProblemKind.twoFactorKeyMissing,
+          reason: '$key',
+        );
+      }
+    });
+
+    test('account verification with the 2FA key empty: account '
+        'verification, as with a key (#41)', () async {
+      final error = await _loginError(
+        FakeSmartschool(secondStep: SecondStep.accountVerification),
+        FakeCredentials(mfa: ''),
+      );
+      expect(error, isA<SmartschoolAccountVerificationRequiredError>());
+      expect(classifyFailure(error), ProblemKind.accountVerification);
+    });
+
     test('an unreachable host', () async {
       final error = await _loginError(FakeSmartschool()..unreachable = true);
       expect(error, isA<SmartschoolConnectionError>());
@@ -183,12 +208,14 @@ void main() {
         classifyFailure(const SmartschoolInvalidCredentialsError(message)),
         ProblemKind.wrongPassword,
       );
-      for (final error in [
-        const SmartschoolTwoFactorRejectedError(message),
-        const SmartschoolTwoFactorRequiredError(message),
-      ]) {
-        expect(classifyFailure(error), ProblemKind.twoFactorRejected);
-      }
+      expect(
+        classifyFailure(const SmartschoolTwoFactorRejectedError(message)),
+        ProblemKind.twoFactorRejected,
+      );
+      expect(
+        classifyFailure(const SmartschoolTwoFactorRequiredError(message)),
+        ProblemKind.twoFactorKeyMissing,
+      );
       // Also wrapped, as a request on client.dio gets it.
       for (final error in [
         const SmartschoolInvalidTotpSecretError(message),
@@ -313,6 +340,7 @@ void main() {
       for (final kind in [
         ProblemKind.twoFactorKeyInvalid,
         ProblemKind.twoFactorRejected,
+        ProblemKind.twoFactorKeyMissing,
         ProblemKind.twoFactorUnsupported,
         ProblemKind.accountVerification,
       ]) {
@@ -382,6 +410,39 @@ void main() {
       );
     });
 
+    test('a missing 2FA key says that the account uses 2FA and which key to '
+        'fill in, not that Smartschool rejected a code (#41)', () {
+      final text = message(ProblemKind.twoFactorKeyMissing);
+      expect(
+        text,
+        allOf(
+          startsWith(
+            'This Smartschool account uses two-factor authentication (2FA)',
+          ),
+          contains('"2FA-sleutel" (SMARTSCHOOL_MFA) is empty'),
+          contains('the key Smartschool shows when you add an authenticator'),
+          contains('not the 6-digit code'),
+          contains('restart Claude Desktop'),
+        ),
+      );
+      expect(text, isNot(contains('rejected')));
+      expect(text, isNot(contains('clock')));
+      expect(
+        message(ProblemKind.twoFactorKeyMissing, fromFile),
+        contains(
+          'but mfa is empty. Fill it in in the credentials file '
+          '${(fromFile.source as CredentialsFile).path} with the key',
+        ),
+      );
+    });
+
+    test('no login message assumes a teacher: students sign in too '
+        '(#41)', () {
+      for (final kind in loginKinds) {
+        expect(message(kind), isNot(contains('teacher')), reason: kind.name);
+      }
+    });
+
     test('name the settings by their key in a credentials file', () {
       expect(
         message(ProblemKind.wrongPassword, fromFile),
@@ -396,9 +457,12 @@ void main() {
       );
     });
 
-    test('missing settings lists exactly the empty ones', () {
+    test('missing settings lists exactly the empty required ones, not an '
+        'empty 2FA key (#41)', () {
       final settings = SmartschoolSettings.read(
-        fakeExtensionSettings(FakeCredentials(password: '', mfa: '')),
+        fakeExtensionSettings(
+          FakeCredentials(username: '', password: '', mfa: ''),
+        ),
       );
 
       final text = message(ProblemKind.missingSettings, settings);
@@ -406,11 +470,11 @@ void main() {
       expect(
         text,
         contains(
-          'Missing: "Wachtwoord" (SMARTSCHOOL_PASSWORD), '
-          '"2FA-sleutel" (SMARTSCHOOL_MFA)',
+          'Missing: "Gebruikersnaam" (SMARTSCHOOL_USERNAME), '
+          '"Wachtwoord" (SMARTSCHOOL_PASSWORD). Fill them in',
         ),
       );
-      expect(text, isNot(contains('Gebruikersnaam')));
+      expect(text, isNot(contains('2FA')));
       expect(text, isNot(contains('Smartschool-adres')));
     });
 
@@ -432,6 +496,17 @@ void main() {
       expect(invalid.kind, ProblemKind.credentialsFileInvalid);
       expect(invalid.message, contains('could not be read'));
       expect(invalid.message, isNot(equals(missing.message)));
+      // The key mfa only for an account with 2FA (#41).
+      for (final problem in [missing, invalid]) {
+        expect(
+          problem.message,
+          contains(
+            'the keys main_url, username and password, and mfa (the 2FA '
+            'key) for an account with two-factor authentication',
+          ),
+          reason: problem.kind.name,
+        );
+      }
     });
   });
 }

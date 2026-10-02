@@ -24,7 +24,8 @@ Smartschool of OpenAI en er ook niet mee verbonden.
 ## Inhoud
 
 1. [Wat heb je nodig?](#1-wat-heb-je-nodig)
-2. [Je 2FA-sleutel opzoeken](#2-je-2fa-sleutel-opzoeken)
+2. [Je 2FA-sleutel opzoeken](#2-je-2fa-sleutel-opzoeken) (alleen met
+   tweestapsverificatie)
 3. [Installeren](#3-installeren)
 4. [Testen](#4-testen)
 5. [Wat kun je vragen?](#5-wat-kun-je-vragen)
@@ -49,9 +50,16 @@ Smartschool of OpenAI en er ook niet mee verbonden.
   wachtwoord.** Kun je alleen inloggen via Microsoft of Google, dan werkt het
   niet.
 - **Tweestapsverificatie met een authenticator-app** op je telefoon, zoals
-  Microsoft Authenticator of Google Authenticator.
+  Microsoft Authenticator of Google Authenticator, als je account
+  tweestapsverificatie gebruikt. Voor leerkrachten is dat zo. Log je in met
+  alleen je wachtwoord, zonder code uit een app, zoals de meeste leerlingen?
+  Dan heb je geen authenticator-app nodig.
 
 ## 2. Je 2FA-sleutel opzoeken
+
+**Alleen als je tweestapsverificatie gebruikt.** Vraagt Smartschool na je
+wachtwoord geen code uit een app, zoals bij de meeste leerlingen? Sla deze
+stap dan over en laat `SMARTSCHOOL_MFA` in stap 3 weg.
 
 Smartschool logt zelf voor je in, ook met de code van zes cijfers uit je
 authenticator-app. Daarvoor heeft het de **2FA-sleutel** nodig: de geheime
@@ -147,7 +155,7 @@ installatie. -->
    | `SMARTSCHOOL_MAIN_URL` | Het adres van je school op Smartschool, bijvoorbeeld `school.smartschool.be`. Je mag het ook uit de adresbalk van je browser kopiëren. |
    | `SMARTSCHOOL_USERNAME` | De gebruikersnaam waarmee je inlogt op Smartschool. |
    | `SMARTSCHOOL_PASSWORD` | Je wachtwoord voor Smartschool. |
-   | `SMARTSCHOOL_MFA` | Je 2FA-sleutel uit [stap 2](#2-je-2fa-sleutel-opzoeken). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. |
+   | `SMARTSCHOOL_MFA` | Alleen met tweestapsverificatie: je 2FA-sleutel uit [stap 2](#2-je-2fa-sleutel-opzoeken). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat deze regel dan weg. |
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.

@@ -99,6 +99,44 @@ void main() {
     }
   });
 
+  test('says that an account without 2FA, such as a student\'s, leaves the '
+      '2FA key empty, as the install form allows, and what happens when '
+      'Smartschool asks for a code anyway (#41)', () {
+    expect(Setting.mfa.required, isFalse);
+    expect(
+      text,
+      contains(
+        '**Alleen als je tweestapsverificatie gebruikt.** Vraagt Smartschool '
+        'na je wachtwoord geen code uit een app, zoals bij de meeste '
+        'leerlingen? Sla deze stap dan over en laat de **2FA-sleutel** in '
+        'stap 3 leeg.',
+      ),
+    );
+    expect(
+      text,
+      contains(
+        '| **2FA-sleutel** (alleen met tweestapsverificatie) | De sleutel uit '
+        'stap 2',
+      ),
+    );
+    expect(
+      text,
+      contains(
+        '### Smartschool vraagt een 2FA-code, maar de 2FA-sleutel is leeg',
+      ),
+    );
+    final chatGpt = _read(_chatGptGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+    expect(chatGpt, contains('laat `SMARTSCHOOL_MFA` in stap 3 weg.'));
+    expect(
+      chatGpt,
+      contains(
+        '| `SMARTSCHOOL_MFA` | Alleen met tweestapsverificatie: je '
+        '2FA-sleutel',
+      ),
+    );
+    expect(settingHints[Setting.mfa], startsWith('alleen met 2FA: '));
+  });
+
   test('gives the time and size limits of the server', () {
     expect(text, contains('${DownloadFolder.defaultRetention.inDays} dagen'));
     expect(text, contains('${maxIntradeskFileBytes ~/ (1024 * 1024)} MB'));

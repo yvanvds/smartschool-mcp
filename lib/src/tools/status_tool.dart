@@ -149,6 +149,8 @@ String _describeDownloadFolder(
 }
 
 /// Where the settings come from and which are filled in, without values.
+///
+/// An empty 2FA key is not missing: only an account with 2FA needs it.
 String _describeSettings(
   CredentialSource source,
   SmartschoolSettings? settings,
@@ -158,15 +160,23 @@ String _describeSettings(
     CredentialsFile(:final path) => '${source.label} $path',
   };
   if (settings == null) return origin;
-  final missing = settings.missing;
-  if (missing.isEmpty) return '$origin (all filled in)';
+  final empty = settings.empty;
+  if (empty.isEmpty) return '$origin (all filled in)';
   final states = [
     for (final setting in Setting.login)
       '${_shortName(source, setting)}: '
-          '${missing.contains(setting) ? 'missing' : 'filled in'}',
+          '${empty.contains(setting) ? _emptyState(setting) : 'filled in'}',
   ];
   return '$origin (${states.join(', ')})';
 }
+
+/// What `smartschool_status` says of [setting] when it is empty.
+String _emptyState(Setting setting) => setting.required
+    ? 'missing'
+    : switch (setting) {
+        Setting.mfa => 'empty (only needed for an account with 2FA)',
+        _ => 'empty',
+      };
 
 /// How [setting] is called where the teacher fills it in: its title in the
 /// install form, its variable in ChatGPT's form, its key in the credentials

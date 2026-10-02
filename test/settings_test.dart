@@ -41,16 +41,35 @@ void main() {
 
       expect(settings.host, fakeHost);
       expect(settings.username, 'jan.peeters');
-      expect(settings.missing, [Setting.password, Setting.mfa]);
+      expect(settings.empty, [Setting.password, Setting.mfa]);
+      expect(settings.missing, [Setting.password]);
     });
 
     test('with all four values filled in, nothing is missing', () {
       final settings = SmartschoolSettings.read(fakeExtensionSettings());
 
+      expect(settings.empty, isEmpty);
       expect(settings.missing, isEmpty);
       final credentials = settings.toCredentials();
       expect(credentials.mainUrl, fakeHost);
       expect(credentials.mfa, fakeTotpSecret);
+    });
+
+    test('the 2FA key is optional: empty, only spaces or not set, it is not '
+        'missing, and the library gets an empty key, which it takes as none '
+        '(#41)', () {
+      expect(Setting.mfa.required, isFalse);
+      expect(Setting.login, contains(Setting.mfa));
+      for (final key in ['', ' \t ', null]) {
+        final settings = SmartschoolSettings.read(
+          fakeExtensionSettings(FakeCredentials(mfa: key)),
+        );
+
+        expect(settings.mfa, '', reason: '"$key"');
+        expect(settings.empty, [Setting.mfa], reason: '"$key"');
+        expect(settings.missing, isEmpty, reason: '"$key"');
+        expect(settings.toCredentials().mfa, '', reason: '"$key"');
+      }
     });
 
     test('the 2FA key is passed on to the library as typed, only trimmed: '
@@ -163,6 +182,22 @@ void main() {
       final code = readWithKey('123456');
       expect(code.missing, isEmpty);
       expect(code.toCredentials().mfa, '123456');
+    });
+
+    test('without the key mfa, as for an account without 2FA: nothing is '
+        'missing (#41)', () {
+      final file = File('${dir.path}/student.yml')
+        ..writeAsStringSync(
+          'username: lena.peeters\n'
+          'password: $fakePassword\n'
+          'main_url: $fakeHost\n',
+        );
+
+      final settings = SmartschoolSettings.read(CredentialsFile(file.path));
+
+      expect(settings.mfa, '');
+      expect(settings.missing, isEmpty);
+      expect(settings.empty, [Setting.mfa]);
     });
 
     test('a relative path is resolved against the working directory', () {

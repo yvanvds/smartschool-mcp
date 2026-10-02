@@ -171,15 +171,23 @@ void main() {
 
     expect(isError, isNot(true));
     expect(text, startsWith('Smartschool connection: NOT working\n'));
+    // The 2FA key is optional: only an account with 2FA needs it (#41).
     expect(
       text,
       contains(
         'Missing: "Smartschool-adres" (SMARTSCHOOL_MAIN_URL), '
         '"Gebruikersnaam" (SMARTSCHOOL_USERNAME), '
-        '"Wachtwoord" (SMARTSCHOOL_PASSWORD), "2FA-sleutel" (SMARTSCHOOL_MFA).',
+        '"Wachtwoord" (SMARTSCHOOL_PASSWORD). Fill them in',
       ),
     );
-    expect(text, contains('Settings: extension settings'));
+    expect(
+      text,
+      contains(
+        '\nSettings: extension settings (Smartschool-adres: missing, '
+        'Gebruikersnaam: missing, Wachtwoord: missing, 2FA-sleutel: empty '
+        '(only needed for an account with 2FA))\n',
+      ),
+    );
     expect(
       text,
       contains(

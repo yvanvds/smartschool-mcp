@@ -23,6 +23,10 @@ const fakePassword = 'hunter2-not-real';
 
 /// What Smartschool asks for after a correct password.
 enum SecondStep {
+  /// Nothing: an account without 2FA, such as a student's. The password
+  /// alone logs in.
+  none,
+
   /// The 2FA page, with an authenticator app configured.
   twoFactor,
 
@@ -67,7 +71,8 @@ class FakeSmartschool implements HttpClientAdapter {
   String? _validSession;
   bool _passwordDone = false;
 
-  /// How many times a correct password and 2FA code were accepted.
+  /// How many logins completed: a correct password and 2FA code, or only a
+  /// correct password with [SecondStep.none].
   int logins = 0;
 
   /// Every request, as `METHOD path`.
@@ -146,6 +151,14 @@ class FakeSmartschool implements HttpClientAdapter {
     if (FakeMailbox.isSubmit(options)) mailbox.submits++;
 
     if (options.method == 'POST' && path == '/login') {
+      if (passwordAccepted && secondStep == SecondStep.none) {
+        return _html(
+          'Redirecting to /',
+          status: 302,
+          location: '/',
+          cookie: _logIn(),
+        );
+      }
       _passwordDone = passwordAccepted;
       final target = !passwordAccepted
           ? '/login'
@@ -167,14 +180,7 @@ class FakeSmartschool implements HttpClientAdapter {
       if (!twoFactorAccepted) {
         return _json('{"success":false,"error":"invalid code"}');
       }
-      logins++;
-      _validSession = 'session$logins';
-      _passwordDone = false;
-      _rejectsLeft = rejectsAfterLogin;
-      return _json(
-        '{"success":true,"redirectTo":"/"}',
-        cookie: 'PHPSESSID=$_validSession; path=/',
-      );
+      return _json('{"success":true,"redirectTo":"/"}', cookie: _logIn());
     }
 
     if (options.method == 'POST') {
@@ -212,15 +218,30 @@ class FakeSmartschool implements HttpClientAdapter {
   @override
   void close({bool force = false}) {}
 
-  ResponseBody _html(String body, {int status = 200, String? location}) =>
-      ResponseBody.fromString(
-        body,
-        status,
-        headers: {
-          Headers.contentTypeHeader: ['text/html'],
-          if (location != null) 'location': [location],
-        },
-      );
+  /// Completes a login: starts a new session and returns the cookie that
+  /// carries it.
+  String _logIn() {
+    logins++;
+    _validSession = 'session$logins';
+    _passwordDone = false;
+    _rejectsLeft = rejectsAfterLogin;
+    return 'PHPSESSID=$_validSession; path=/';
+  }
+
+  ResponseBody _html(
+    String body, {
+    int status = 200,
+    String? location,
+    String? cookie,
+  }) => ResponseBody.fromString(
+    body,
+    status,
+    headers: {
+      Headers.contentTypeHeader: ['text/html'],
+      if (location != null) 'location': [location],
+      if (cookie != null) HttpHeaders.setCookieHeader: [cookie],
+    },
+  );
 
   ResponseBody _json(String body, {String? cookie}) => ResponseBody.fromString(
     body,
