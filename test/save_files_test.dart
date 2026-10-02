@@ -788,6 +788,8 @@ void main() {
         'teacher can download it in Smartschool.',
       );
       expect(saved(), isEmpty);
+      await server.mailbox.attachmentStops.reached(2);
+      expect(server.mailbox.stoppedAttachmentDownloads, 2);
     });
 
     test('an attachment Smartschool does not send: an error, nothing '

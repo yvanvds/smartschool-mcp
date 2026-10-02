@@ -436,6 +436,52 @@ void main() {
     ]);
   });
 
+  test('a 2FA key the library refuses is reported as not valid, not as an '
+      'unexpected error: the password is not posted, later calls do not '
+      'contact Smartschool, and the log does not quote it', () async {
+    // SmartschoolSettings.mfaProblem refuses every such key before the
+    // library sees it (until yvanvds/smartschool-mcp#34), so the client is
+    // given one that the settings never pass on.
+    const code = '123456';
+    final create = fakeClientFactory(server, cache);
+    final session = SmartschoolSession(
+      fakeExtensionSettings(),
+      createClient: (credentials) {
+        clientsCreated++;
+        return create(
+          AppCredentials(
+            username: credentials.username,
+            password: credentials.password,
+            mainUrl: credentials.mainUrl,
+            mfa: code,
+          ),
+        );
+      },
+    );
+    addTearDown(session.close);
+    final key = _problem(ProblemKind.twoFactorKeyInvalid).having(
+      (p) => p.message,
+      'message',
+      contains('Check "2FA-sleutel" (SMARTSCHOOL_MFA) in the Smartschool'),
+    );
+
+    late int requests;
+    final log = await _logOf(() async {
+      await expectLater(session.run(_post), throwsA(key));
+      requests = server.requests.length;
+      await expectLater(session.run(_post), throwsA(key));
+    });
+
+    expect(server.requests, isNot(contains('POST /login')));
+    expect(server.requests, hasLength(requests));
+    expect(clientsCreated, 1);
+    expect(
+      log,
+      contains(startsWith('Smartschool problem (twoFactorKeyInvalid)')),
+    );
+    expect(log, everyElement(isNot(contains(code))));
+  });
+
   test('a 2FA key copied in groups, in lower case or with "=" padding: the '
       'library logs in with it', () async {
     // The keys SmartschoolSettings accepts must be keys the library can

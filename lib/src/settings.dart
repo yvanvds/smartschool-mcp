@@ -377,9 +377,12 @@ final class SmartschoolSettings {
   /// quotes the key); null when it can be one, or when it is empty (see
   /// [missing]).
   ///
-  /// Checked before logging in: the library would post the password first
-  /// and then fail on the key with a bare `FormatException`, on every
-  /// attempt (yvanvds/dartschool#79). See [isTotpSecret].
+  /// Checked before logging in: before 0.3.2 the library posted the password
+  /// first and then failed on the key with a bare `FormatException`, on
+  /// every attempt (yvanvds/dartschool#79). 0.3.2 checks the key itself,
+  /// before the password, with a [SmartschoolInvalidTotpSecretError] (see
+  /// `classifyFailure`); this check goes in yvanvds/smartschool-mcp#34. See
+  /// [isTotpSecret].
   String? get mfaProblem => mfa.isEmpty || isTotpSecret(mfa)
       ? null
       : _base32.hasMatch(mfa)
@@ -409,10 +412,10 @@ final class SmartschoolSettings {
   /// (`JBSW Y3DP EHPK 3PXP`), works: authenticator apps ignore the spaces
   /// too.
   ///
-  /// A workaround for yvanvds/dartschool#79: the library passes the key on
-  /// unchanged, and the otp package rejects white space. Remove it, with
-  /// [mfaProblem], once the library normalises and checks the key itself
-  /// (yvanvds/smartschool-mcp#34).
+  /// A workaround for yvanvds/dartschool#79: before 0.3.2 the library passed
+  /// the key on unchanged, and the otp package rejected white space. 0.3.2
+  /// ignores white space (and hyphens) itself: remove this, with
+  /// [mfaProblem], in yvanvds/smartschool-mcp#34.
   static String normalizeTotpSecret(String key) =>
       key.replaceAll(RegExp(r'\s'), '');
 

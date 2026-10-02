@@ -72,26 +72,21 @@ void main() {
       expect(classifyFailure(error), ProblemKind.sessionRejected);
     });
 
-    test('a 2FA key that is not Base32: still a bare FormatException, after '
-        'the password was posted (yvanvds/dartschool#79)', () async {
-      // Why SmartschoolSettings strips the white space from the key and
-      // checks it before logging in. When this fails, the library reports
-      // such a key its own way: map that in classifyFailure, and remove the
-      // workaround (yvanvds/smartschool-mcp#34).
-      for (final key in ['JBSW Y3DP EHPK 3PXP', '123456']) {
+    test('a 2FA key that is not a key: its own type, before the password is '
+        'posted (yvanvds/dartschool#79)', () async {
+      // The 6-digit code of the app, and a key with a "1". For now
+      // SmartschoolSettings.mfaProblem refuses such a key before logging in
+      // (yvanvds/smartschool-mcp#34).
+      for (final key in ['123456', 'JBSW Y3DP EHPK 3PX1']) {
         final server = FakeSmartschool();
         final error = await _loginError(server, FakeCredentials(mfa: key));
+        expect(error, isA<SmartschoolInvalidTotpSecretError>(), reason: key);
+        expect(server.requests, isNot(contains('POST /login')), reason: key);
         expect(
-          error,
-          isA<DioException>().having(
-            (e) => e.error,
-            'error',
-            isA<FormatException>(),
-          ),
+          classifyFailure(error),
+          ProblemKind.twoFactorKeyInvalid,
           reason: key,
         );
-        expect(server.requests, contains('POST /login'), reason: key);
-        expect(classifyFailure(error), isNull, reason: key);
       }
     });
   });
@@ -167,6 +162,16 @@ void main() {
         const SmartschoolTwoFactorRequiredError(message),
       ]) {
         expect(classifyFailure(error), ProblemKind.twoFactorRejected);
+      }
+      // Also wrapped, as a request on client.dio gets it.
+      for (final error in [
+        const SmartschoolInvalidTotpSecretError(message),
+        DioException(
+          requestOptions: RequestOptions(path: '/'),
+          error: const SmartschoolInvalidTotpSecretError(message),
+        ),
+      ]) {
+        expect(classifyFailure(error), ProblemKind.twoFactorKeyInvalid);
       }
       expect(
         classifyFailure(
