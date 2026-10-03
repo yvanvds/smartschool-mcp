@@ -151,6 +151,10 @@ String elementCourses(PlannedElement element) =>
 String elementClasses(PlannedElement element) =>
     _names(element.participantGroups, (group) => group.name);
 
+/// The people who organise [element], joined: `Piet Peeters`.
+String elementOrganisers(PlannedElement element) =>
+    _names(element.organiserUsers, (user) => user.name);
+
 /// The rooms of [element]: `room 101`, `rooms 101, 102`, or null for none.
 String? elementRooms(PlannedElement element) {
   final rooms = _names(element.locations, (location) => location.title);
@@ -244,11 +248,20 @@ String plannerInfoText(String html) {
 String formatElementDetail(PlannedElementDetail detail) {
   final placeholder = detail.type == PlannedElementType.placeholder;
   final assignment = detail.type == PlannedElementType.assignment;
-  final organisers = _names(detail.organiserUsers, (user) => user.name);
+  final organisers = elementOrganisers(detail);
   final people = _names(detail.participantUsers, (user) => user.name);
-  final labels = _rawNames(detail.raw['labels'], 'text');
-  final attachments = _rawNames(detail.raw['attachments'], 'name');
-  final weblinks = _weblinks(detail.raw['weblinks']);
+  final labels = _names(
+    detail.labels ?? const <PlannerLabel>[],
+    (label) => label.text,
+  );
+  final attachments = _names(
+    detail.attachments ?? const <PlannerAttachment>[],
+    (attachment) => attachment.name,
+  );
+  final weblinks = _names(
+    detail.weblinks ?? const <PlannerWeblink>[],
+    _weblink,
+  );
   String info(String html) {
     final text = plannerInfoText(html);
     return text.isEmpty ? '(none)' : text;
@@ -276,9 +289,9 @@ String formatElementDetail(PlannedElementDetail detail) {
         'Announced: ${announced ? 'yes' : 'no'}',
       if (detail.resolvedStatus case final status?) 'Status: $status',
     ],
-    if (labels.isNotEmpty) 'Labels: ${labels.join(', ')}',
-    if (attachments.isNotEmpty) 'Attachments: ${attachments.join(', ')}',
-    if (weblinks.isNotEmpty) 'Weblinks: ${weblinks.join(', ')}',
+    if (labels.isNotEmpty) 'Labels: $labels',
+    if (attachments.isNotEmpty) 'Attachments: $attachments',
+    if (weblinks.isNotEmpty) 'Weblinks: $weblinks',
     if (!placeholder) ...[
       '',
       'Public info (what pupils see):',
@@ -291,33 +304,11 @@ String formatElementDetail(PlannedElementDetail detail) {
   ].join('\n');
 }
 
-/// The [field] of each object in [items], a list in the detail's raw JSON
-/// that the library does not read (labels, attachments), leaving out what
-/// is not a non-empty text.
-///
-/// A workaround until `PlannedElementDetail` has typed labels, attachments
-/// and weblinks (yvanvds/dartschool#98); its removal is #70.
-List<String> _rawNames(Object? items, String field) => [
-  if (items is List)
-    for (final item in items)
-      if (item is Map && item[field] is String)
-        if ((item[field] as String).trim() case final text when text.isNotEmpty)
-          text,
-];
-
-/// The weblinks in the detail's raw JSON as `name (url)`.
-List<String> _weblinks(Object? items) => [
-  if (items is List)
-    for (final item in items)
-      if (item is Map)
-        if ((
-              item['name'] is String ? (item['name'] as String).trim() : '',
-              item['url'] is String ? (item['url'] as String).trim() : '',
-            )
-            case (final name, final url) when name.isNotEmpty || url.isNotEmpty)
-          name.isEmpty
-              ? url
-              : url.isEmpty
-              ? name
-              : '$name ($url)',
-];
+/// [weblink] as `name (url)`, or the one of the two it has; empty when it
+/// has neither.
+String _weblink(PlannerWeblink weblink) {
+  final name = weblink.name.trim();
+  final url = weblink.url.trim();
+  if (name.isEmpty || url.isEmpty) return '$name$url';
+  return '$name ($url)';
+}

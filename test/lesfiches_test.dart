@@ -1,7 +1,7 @@
 /// The lesfiche helpers of `list_lesfiches` and `plan_lesfiche`
 /// (`lib/src/planner/lesfiches.dart`, #54): the kinds, the lesfiche id
-/// argument, the period that names the courses, the filters, the order of
-/// the names, and one line per lesfiche.
+/// argument, the filters, the order of the names, and one line per lesfiche
+/// with its courses as the library names them (#87).
 library;
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
@@ -17,7 +17,7 @@ LessonContentItem _item({
   String name = 'Herhaling: lussen',
   bool isVisible = true,
   DateTime? changed,
-  List<String> courses = const [],
+  List<LessonContentCourse> courses = const [],
   List<String> labels = const [],
   PlannerAssignmentType? assignmentType,
 }) => LessonContentItem(
@@ -28,15 +28,18 @@ LessonContentItem _item({
   name: name,
   isVisible: isVisible,
   dateLastChanged: changed,
-  courses: [
-    for (final id in courses) LessonContentCourse(id: id, platformId: 4069),
-  ],
+  courses: courses,
   labels: [
     for (final (index, text) in labels.indexed)
       LessonContentLabel(id: '4069_$index', text: text),
   ],
   assignmentType: assignmentType,
 );
+
+/// A course of a lesfiche, as the library names it from the school's course
+/// list: [name] is null for a course the list does not name.
+LessonContentCourse _course(String id, [String? name]) =>
+    LessonContentCourse(id: id, platformId: 4069, name: name);
 
 Matcher _toolError(Object? message) =>
     isA<ToolError>().having((e) => e.message, 'message', message);
@@ -103,18 +106,6 @@ void main() {
     });
   });
 
-  test('lesficheCoursePeriod runs from 4 weeks before today to the end of '
-      'the day 4 weeks after it, across months and years', () {
-    expect(lesficheCoursePeriod(DateTime(2026, 10, 5, 9, 30)), (
-      from: DateTime(2026, 9, 7),
-      until: DateTime(2026, 11, 2, 23, 59, 59),
-    ));
-    expect(lesficheCoursePeriod(DateTime(2026, 12, 20)), (
-      from: DateTime(2026, 11, 22),
-      until: DateTime(2027, 1, 17, 23, 59, 59),
-    ));
-  });
-
   group('lesficheMatches', () {
     final item = _item(
       name: 'Herhaling: Lussen',
@@ -177,10 +168,11 @@ void main() {
           _item(
             isVisible: false,
             changed: DateTime(2026, 9, 7, 19, 51, 25),
-            courses: ['C0000000-0000-4000-8000-000000000005'],
+            courses: [
+              _course('c0000000-0000-4000-8000-000000000005', 'informatica'),
+            ],
             labels: ['JAAR 6', ' ', 'TRIMESTER 1'],
           ),
-          {'c0000000-0000-4000-8000-000000000005': 'informatica'},
         ),
         'lesson | Herhaling: lussen | labels JAAR 6, TRIMESTER 1 | '
         'informatica | hidden | changed 2026-09-07 | id $_id',
@@ -199,42 +191,70 @@ void main() {
               abbreviation: 'KT',
             ),
           ),
-          const {},
         ),
         startsWith('assignment KT Kleine Taak | Herhaling: lussen |'),
       );
       expect(
-        formatLesficheLine(_item(type: LessonContentType.assignment), const {}),
+        formatLesficheLine(_item(type: LessonContentType.assignment)),
         startsWith('assignment | '),
       );
       expect(
         formatLesficheLine(
           _item(type: LessonContentType.other, typeName: 'events', name: ''),
-          const {},
         ),
         'events | (no name) | no labels | no course | visible | id $_id',
       );
     });
 
-    test('counts the courses it cannot name, once each name', () {
+    test('names the courses as the library does, once each name, and '
+        'counts those it does not name', () {
       const informatica = 'c0000000-0000-4000-8000-000000000005';
       const chemie = 'c0000000-0000-4000-8000-000000000006';
       const wiskunde = 'c0000000-0000-4000-8000-000000000001';
-      final item = _item(courses: [informatica, chemie, wiskunde]);
       expect(
-        formatLesficheCourses(item, {informatica: 'informatica'}),
-        'informatica, 2 courses not in your planner',
+        formatLesficheCourses(
+          _item(
+            courses: [
+              _course(informatica, 'informatica'),
+              _course(chemie, 'chemie'),
+            ],
+          ),
+        ),
+        'informatica, chemie',
       );
+      final item = _item(
+        courses: [
+          _course(informatica, 'informatica'),
+          _course(chemie),
+          _course(wiskunde),
+        ],
+      );
+      expect(formatLesficheCourses(item), 'informatica, 2 unnamed courses');
       expect(
-        formatLesficheCourses(item, {
-          informatica: 'informatica',
-          chemie: 'informatica',
-        }),
-        'informatica, 1 course not in your planner',
+        formatLesficheCourses(
+          _item(
+            courses: [
+              _course(informatica, 'informatica'),
+              _course(chemie, 'informatica'),
+              _course(wiskunde),
+            ],
+          ),
+        ),
+        'informatica, 1 unnamed course',
       );
-      expect(formatLesficheCourses(item, null), '3 courses');
-      expect(formatLesficheCourses(_item(courses: [chemie]), null), '1 course');
-      expect(formatLesficheCourses(_item(), const {}), 'no course');
+      expect(formatLesficheCourses(item, withCourseNames: false), '3 courses');
+      expect(
+        formatLesficheCourses(
+          _item(courses: [_course(chemie, 'chemie')]),
+          withCourseNames: false,
+        ),
+        '1 course',
+      );
+      expect(formatLesficheCourses(_item()), 'no course');
+      expect(
+        formatLesficheCourses(_item(), withCourseNames: false),
+        'no course',
+      );
     });
   });
 }

@@ -8,9 +8,8 @@ import 'skore_access.dart';
 
 // Changing Skore, shared by the Skore tools that write (`add_skore_teacher`,
 // `replace_skore_teacher`; `share_skore_gradebook` and
-// `unshare_skore_gradebook` in `skore_shares.dart`): running a write, how a
-// change Skore refused or did not confirm is reported, and reading the
-// course a write is about.
+// `unshare_skore_gradebook` in `skore_shares.dart`): running a write, and how
+// a change Skore refused or did not confirm is reported.
 //
 // The library does the checks before each write (it reads the class and the
 // teachers again, and refuses a course that is not in the class or is a group
@@ -24,6 +23,13 @@ import 'skore_access.dart';
 // was not carried out, the repeat reads the class again (a teacher who is on
 // the course by then is refused), and an unconfirmed save is not a refused
 // session, so it is not repeated.
+//
+// A write returns the assignment it saved with what it read before the save
+// (`SkoreSavedAssignment`, dartschool#102): the course, and for a replace the
+// assignment as it was. The tools name the course and the teacher replaced
+// from it, without a read of their own. A save Skore did not confirm returns
+// nothing, and its error carries none of that (dartschool#120), so its result
+// names the course by id only (#90).
 
 /// What a Skore write tool adds to an error that came before anything was
 /// saved.
@@ -93,19 +99,3 @@ String skoreNotConfirmed({
       'Skore did not confirm it. Do not call $tool again for it: first '
       '$check. Then tell the user what you found.';
 }
-
-/// Course [courseId] of class [classId] as Skore lists it now
-/// ([SkoreService.getCourses]), or null when the class has no such course.
-///
-/// The writes return only the assignment they saved, so a write tool reads
-/// the course itself to name it (its label) and, for a replace, the teacher
-/// it replaces (a workaround until yvanvds/dartschool#102; its removal is
-/// #74). It refuses nothing itself: the library reads the class again and
-/// refuses a course that does not fit.
-Future<SkoreCourse?> readSkoreCourse(
-  SkoreService skore,
-  int classId,
-  int courseId,
-) async => (await skore.getCourses(
-  classId,
-)).where((c) => c.id == courseId && c.classId == classId).firstOrNull;

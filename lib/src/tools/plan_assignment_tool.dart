@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../log.dart';
 import '../planner/planner_access.dart';
 import '../planner/planner_format.dart';
 import '../planner/planner_writes.dart';
@@ -157,17 +158,28 @@ Future<CallToolResult> _plan(
         );
       }
       sent = (hour: slot, type: type, classes: classes);
-      return planner.planAssignment(
-        groupIds: [for (final group in classes) group.id],
-        course: course,
-        type: type,
-        name: name,
-        due: slot.period.from,
-        until: slot.period.to,
-        publicInfo: publicInfo,
-        privateInfo: privateInfo,
-        locations: slot.locations,
-      );
+      try {
+        return await planner.planAssignment(
+          groupIds: [for (final group in classes) group.id],
+          course: course,
+          type: type,
+          name: name,
+          due: slot.period.from,
+          until: slot.period.to,
+          publicInfo: publicInfo,
+          privateInfo: privateInfo,
+          locations: slot.locations,
+        );
+      } on SmartschoolPlannerWriteRefusedError catch (error) {
+        // The school's types changed since the session read them: say so
+        // with the types as they are now. Any other refusal is worded by
+        // plannerToolError.
+        if (error.reason != PlannerWriteRefusalReason.unknownAssignmentType) {
+          rethrow;
+        }
+        log('planner: $error');
+        throw _typeGone(typeName, type, await assignmentTypes.reread(planner));
+      }
     });
     final slot = sent!.hour;
     final classes = elementClasses(assignment);
@@ -210,6 +222,23 @@ Future<CallToolResult> _plan(
     );
   }
 }
+
+/// The error for [type], the school's assignment type that [typeName] named
+/// as the session read the types, which the library refused as no longer
+/// one of the school's: with [types], the school's types as they are now
+/// (as [assignmentTypeArgument] lists them), which the user chooses from.
+ToolError _typeGone(
+  String typeName,
+  PlannerAssignmentType type,
+  List<PlannerAssignmentType> types,
+) => ToolError(
+  '$plannerRefused: type "$typeName" named the assignment type '
+  '${formatAssignmentType(type)}, which is no longer one of the school\'s '
+  'assignment types: they changed since the server read them. '
+  '${schoolAssignmentTypes(types)} Ask the user which one to use instead, '
+  'and pass it by its abbreviation or its name; list_class_assignments '
+  'lists them too.',
+);
 
 /// Refuses [hour] unless it is in the user's own planner (the user is one of
 /// its organisers): a class planner also shows colleagues' hours, and an

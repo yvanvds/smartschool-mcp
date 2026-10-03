@@ -5,6 +5,7 @@ import '../opt_in.dart';
 import '../session.dart';
 import '../settings.dart';
 import '../tools/server_tool.dart';
+import 'skore_format.dart';
 
 // Reaching Smartschool's Skore module for the Skore tools: the session
 // runner, Skore's errors as ToolErrors, and the access check of
@@ -54,9 +55,11 @@ Future<T> withSkore<T>(
 /// - [SmartschoolSkoreAccessDeniedError]: Skore refused the request to the
 ///   account (HTTP 403), which lacks the rights for that part of Skore.
 /// - [SmartschoolSkoreMyGroupsError], from a write (`replaceTeacher`): the
-///   current teacher of the assignment works with "Mijn lesgroepen" for the
-///   course, so nothing was saved. Those groups are handled in Skore itself;
-///   the library never deletes them, and no tool may try another way.
+///   current teacher of the assignment, named as the library read them
+///   (dartschool#102; by id only when the error has no name), works with
+///   "Mijn lesgroepen" for the course, so nothing was saved. Those groups are
+///   handled in Skore itself; the library never deletes them, and no tool may
+///   try another way.
 /// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
 ///   save refused the change, so nothing was saved. Its message, which the
 ///   library writes from what it read and quotes nothing else of Skore's
@@ -88,13 +91,17 @@ ToolError? skoreToolError(
       :final classId,
       :final courseId,
       :final teacherId,
+      :final teacherName,
     ):
       log('skore: $error');
+      final teacher = teacherName == null
+          ? ' (teacher id $teacherId)'
+          : ', ${skoreName(teacherName)} (teacher id $teacherId),';
       return ToolError(
         'Skore did not save the change: the current teacher of the '
-        'assignment (teacher id $teacherId) works with "Mijn lesgroepen", '
-        'their own groups of pupils, for course id $courseId of class id '
-        '$classId. Those groups have to be handled in Skore itself first: '
+        'assignment$teacher works with "Mijn lesgroepen", their own groups '
+        'of pupils, for course id $courseId of class id $classId. Those '
+        'groups have to be handled in Skore itself first: '
         'tell the user, who can make this change in Skore, where Skore asks '
         'to delete the groups (which cannot be undone). The server never '
         'deletes them; do not try another way to change this assignment.',

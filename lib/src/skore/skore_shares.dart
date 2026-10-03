@@ -21,7 +21,10 @@ import 'skore_writes.dart';
 // again, and a repeat of a call by [SmartschoolSession.run] reads the
 // gradebook again first. After the save it reads the gradebooks again, and
 // throws a [SmartschoolSkoreSaveUnconfirmedError] unless they show exactly
-// what it saved: a teacher reported as done is certain.
+// what it saved: a teacher reported as done is certain. It returns the
+// gradebook after the call with what it read before and whether it saved
+// anything ([SkoreGradebookShareChange], dartschool#103), which the result
+// reports per teacher.
 
 /// At most this many teachers per call of `share_skore_gradebook` or
 /// `unshare_skore_gradebook`: more than teach one class.
@@ -61,11 +64,12 @@ Schema skoreShareTeachersSchema({required String description}) => Schema.list(
 
 /// What happened to one teacher of a change of a gradebook's shares.
 enum _Outcome {
-  /// Saved, and confirmed by reading the gradebook again.
+  /// Saved, and confirmed by reading the gradebook again
+  /// ([SkoreGradebookShareChange.saved]).
   changed,
 
   /// The teacher already had that access (to unshare: had none), so nothing
-  /// was saved.
+  /// was saved ([SkoreGradebookShareChange.saved] false).
   unchanged,
 
   /// Refused, failed or not confirmed: the change stopped here.
@@ -79,15 +83,18 @@ enum _Outcome {
 /// with [access], or, when [access] is null, no longer shares it with them;
 /// the result of [tool].
 ///
-/// First reads the owner's gradebooks and the teachers, to name the
-/// gradebook and the teachers in the result and to know what each teacher
-/// has before the change: the library returns only the gradebook after it
-/// (a workaround for yvanvds/dartschool#103; its removal is #74). Then makes
-/// the change for one teacher after the other, each in a session action of
-/// its own, and stops at the first that fails: a change Skore refused, a
-/// login or connection that failed, or a save Skore did not confirm. The
-/// result says per teacher what was done, and gives the gradebook after the
-/// change; it is an error when the change stopped.
+/// First reads the teachers, to name them in the result (the join #44 asked
+/// for: the library gives the teachers of a gradebook by id). Then makes the
+/// change for one teacher after the other, each in a session action of its
+/// own, and stops at the first that fails: a change Skore refused, a login
+/// or connection that failed, or a save Skore did not confirm. The result
+/// says per teacher what was done, from the library's result (whether it
+/// saved anything, and the access the teacher had before), and gives the
+/// gradebook after the change; it is an error when the change stopped. It
+/// names the gradebook from the first result, so by its id only when the
+/// change stopped at the first teacher: nothing was returned then (for a
+/// save Skore did not confirm, the error carries nothing of the gradebook
+/// either: yvanvds/dartschool#120, tracked in #90).
 Future<CallToolResult> changeSkoreShares(
   SmartschoolSession session, {
   required String tool,
@@ -96,18 +103,14 @@ Future<CallToolResult> changeSkoreShares(
   required List<int> teacherIds,
   required SkoreShareAccess? access,
 }) async {
-  final (gradebooks, teachers) = await withSkoreWrite(
-    session,
-    (skore) async =>
-        (await skore.getGradebookShares(ownerId), await skore.getTeachers()),
+  final names = skoreTeacherNames(
+    await withSkoreWrite(session, (skore) => skore.getTeachers()),
   );
-  final names = skoreTeacherNames(teachers);
-  var gradebook = gradebooks
-      .where((g) => g.gradebookId == gradebookId)
-      .firstOrNull;
-  final named = _gradebookName(gradebook, gradebookId, ownerId, names);
   String teacher(int id) => formatSkoreTeacherId(id, names);
 
+  // The gradebook after the last change, and named from the first.
+  SkoreGradebookShareChange? gradebook;
+  var named = _gradebookName(null, gradebookId, ownerId, names);
   final outcomes = <(int, _Outcome, SkoreShareAccess?)>[];
   int? stoppedAt;
   String? why;
@@ -117,9 +120,8 @@ Future<CallToolResult> changeSkoreShares(
       outcomes.add((teacherId, _Outcome.notTried, null));
       continue;
     }
-    final before = gradebook?.accessOf(teacherId);
     try {
-      gradebook = await withSkore(
+      final change = await withSkore(
         session,
         (skore) => access == null
             ? skore.unshareGradebook(
@@ -135,8 +137,15 @@ Future<CallToolResult> changeSkoreShares(
               ),
         reread: rereadSkoreGradebook,
       );
-      final outcome = before == access ? _Outcome.unchanged : _Outcome.changed;
-      outcomes.add((teacherId, outcome, before));
+      if (gradebook == null) {
+        named = _gradebookName(change, gradebookId, ownerId, names);
+      }
+      gradebook = change;
+      outcomes.add((
+        teacherId,
+        change.saved ? _Outcome.changed : _Outcome.unchanged,
+        change.accessBefore,
+      ));
       continue;
     } on ToolError catch (error) {
       why = error.message;
@@ -157,7 +166,7 @@ Future<CallToolResult> changeSkoreShares(
       );
     }
     stoppedAt = teacherId;
-    outcomes.add((teacherId, _Outcome.failed, before));
+    outcomes.add((teacherId, _Outcome.failed, null));
   }
 
   final accessText = access == null ? null : _accessText(access);
@@ -203,9 +212,9 @@ Future<CallToolResult> changeSkoreShares(
 }
 
 /// Gradebook [gradebookId] of teacher [ownerId] in a sentence, with the
-/// course and class of [gradebook] (null when the owner's gradebooks did
-/// not hold it): for example `gradebook 34826 ("Digitale vaardigheden",
-/// class 5WW1) of Willems, Wim (teacher id 1005)`.
+/// course and class of [gradebook] (null when the library returned none):
+/// for example `gradebook 34826 ("Digitale vaardigheden", class 5WW1) of
+/// Willems, Wim (teacher id 1005)`.
 String _gradebookName(
   SkoreGradebookShares? gradebook,
   int gradebookId,

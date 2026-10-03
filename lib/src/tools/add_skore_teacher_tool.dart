@@ -84,22 +84,21 @@ Future<CallToolResult> _add(
   final courseId = requiredIntArgument(arguments, 'course_id');
   final teacherId = requiredIntArgument(arguments, 'teacher_id');
 
-  SkoreCourse? course;
   try {
-    final assignment = await withSkoreWrite(session, (skore) async {
-      course = await readSkoreCourse(skore, classId, courseId);
-      return skore.addTeacher(
+    final assignment = await withSkoreWrite(
+      session,
+      (skore) => skore.addTeacher(
         classId: classId,
         courseId: courseId,
         teacherId: teacherId,
-      );
-    });
+      ),
+    );
     return CallToolResult(
       content: [
         TextContent(
           text: [
             'Assigned ${skoreName(assignment.teacherName)} to '
-                '${formatSkoreCourseName(course, courseId)} of class id '
+                '${formatSkoreCourseName(assignment.course)} of class id '
                 '$classId in Skore: a new assignment, which holds all pupils '
                 'of the class.',
             'Saved: ${formatSkoreAssignment(assignment)}. The assignment id '
@@ -109,11 +108,13 @@ Future<CallToolResult> _add(
       ],
     );
   } on SmartschoolSkoreSaveUnconfirmedError catch (error) {
+    // The course by id only: the error carries nothing of the course the
+    // library read (dartschool#120).
     return skoreWriteNotConfirmed(
       tool: 'add_skore_teacher',
       what:
-          'Assigning teacher id $teacherId to '
-          '${formatSkoreCourseName(course, courseId)} of class id $classId',
+          'Assigning teacher id $teacherId to course id $courseId of class id '
+          '$classId',
       check:
           'read the class with list_skore_courses (class_id $classId): when '
           'course id $courseId lists teacher id $teacherId, it was saved; '

@@ -30,9 +30,10 @@ ServerTool listClassPresencesTool(
         'list_presence_classes. Use it to check who was marked present or '
         'late, and always before set_pupils_late or set_pupils_present: it '
         'gives the pupil ids, and what their half-days hold now. Only the '
-        'half-days are shown, not the registrations per lesson. An empty '
-        'list means that the class has no pupils on that day, or that the '
-        'account may not see them. Only for an account with the right to '
+        'half-days are shown, not the registrations per lesson. When the '
+        'module lists no pupils, the tool gives its reason, such as a class '
+        'without pupils or a day in the future. Only for an account with the '
+        'right to '
         'record half-day presences, as an absence administrator has; without '
         'it, the tool says so. Reading changes nothing.',
     inputSchema: Schema.object(
@@ -89,8 +90,13 @@ String formatPresenceDay(PresenceDay read) {
             "the pupils' official class."
       : '';
   if (read.pupils.isEmpty) {
-    return 'The Presence module lists no pupils for $named on $when: the '
-        'class has no pupils on that day, or the account may not see them. '
+    // The module says why (yvanvds/dartschool#104): a class without pupils,
+    // a day in the future.
+    final why = switch (read.refusal) {
+      final reason? => ': ${formatModuleReason(reason)}',
+      null => ', and gives no reason.',
+    };
+    return 'The Presence module lists no pupils for $named on $when$why '
         '$record$grouping';
   }
   final count = read.pupils.length == 1

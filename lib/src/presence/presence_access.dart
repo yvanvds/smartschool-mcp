@@ -133,10 +133,17 @@ Future<AccessCheck> checkPresenceAccess(SmartschoolSession session) async {
 /// The classes of [config] the account may view: those the module allows,
 /// and the class active in its web client when that is not among them, as
 /// [PresenceConfig.classForGroup] finds them.
+///
+/// An active class whose `groupId` is below 1 is left out (#84): it is the
+/// placeholder class -2, "Uit Planner", that the module gives a teacher
+/// without a lesson at the moment, which is no class (seen live,
+/// yvanvds/dartschool#104). Workaround for yvanvds/dartschool#117, which
+/// would let the library tell it from a class; #85 tracks its removal.
 List<PresenceClassRef> presenceClasses(PresenceConfig config) => [
   ...config.allowedClasses,
   if (config.activeClass case final active?
-      when !config.allowedClasses.any((c) => c.groupId == active.groupId))
+      when active.groupId >= 1 &&
+          !config.allowedClasses.any((c) => c.groupId == active.groupId))
     active,
 ];
 
@@ -188,8 +195,21 @@ final class PresenceDay {
   /// without one.
   final PresenceCodes codes;
 
-  /// The pupils with their half-day cells for [day], in the module's order.
-  final List<PresencePupil> pupils;
+  /// The pupils with their half-day cells for [day], in the module's order,
+  /// with what the module said about the class on that day
+  /// (yvanvds/dartschool#104).
+  final PresenceClassPupils pupils;
+
+  /// Whether the module refuses to record presences for the class on [day]
+  /// (its `saveIsAllowed` is `false`), as it answers a class without pupils
+  /// or a day in the future: then it lists no pupils, and gives its reason
+  /// in [refusal].
+  bool get refused => pupils.saveIsAllowed == false;
+
+  /// The module's reason for listing no pupils, or for refusing to record
+  /// presences for the class on [day] (its `errorMessage`, in Dutch), or
+  /// null when it gave none.
+  String? get refusal => pupils.errorMessage;
 
   /// [day] as the module writes it, `yyyy-MM-dd`.
   String get date => PresenceService.formatDate(day);
@@ -201,7 +221,8 @@ final class PresenceDay {
 
 /// Reads class [classId] on [day] with [presence]: the module's
 /// configuration (which must list the class), the codes of the class's
-/// school structure, and the pupils with their half-days.
+/// school structure, and the pupils with their half-days, or the module's
+/// reason for listing none.
 ///
 /// Throws a [ToolError] when the configuration does not list the class.
 Future<PresenceDay> readPresenceDay(

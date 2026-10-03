@@ -34,6 +34,16 @@ const changeablePresences =
     '"${PresenceService.lateCodeName}" or '
     '"${PresenceService.lateWithoutReasonAliasName}"';
 
+/// The statuses the writes may change, by name, as the library's
+/// `onlyReplacing` takes them: it refuses a half-day that holds any other
+/// status, as it reads it right before the save (yvanvds/dartschool#105).
+const changeablePresenceNames = {
+  PresenceService.nothingRecorded,
+  PresenceService.presentCodeName,
+  PresenceService.lateCodeName,
+  PresenceService.lateWithoutReasonAliasName,
+};
+
 /// The presence codes of a school structure ([PresenceService.getAllCodes]),
 /// to name what a half-day holds and to tell its [PresenceKind]; empty for a
 /// class without a structure (a grouping class), whose half-days are named
@@ -122,6 +132,22 @@ String formatPresencePupil(PresencePupil pupil) =>
 /// such as `class 1A (class id 298)`.
 String formatPresenceClassName(PresenceClassRef presenceClass) =>
     'class ${_label(presenceClass.name)} (class id ${presenceClass.groupId})';
+
+/// What the Presence module said, [text] (in Dutch), quoted on one line and
+/// ending a sentence: for example `"Deze klas bevat geen leerlingen."`.
+String formatModuleReason(String text) {
+  final reason = _name(text);
+  return _endsSentence(reason) ? '"$reason"' : '"$reason".';
+}
+
+/// [text] on one line, ending a sentence: with a full stop added when it
+/// does not end with `.`, `!` or `?`.
+String formatSentence(String text) {
+  final sentence = _name(text);
+  return _endsSentence(sentence) ? sentence : '$sentence.';
+}
+
+bool _endsSentence(String text) => RegExp(r'[.!?]$').hasMatch(text);
 
 /// [text] with its first letter in upper case, to start a sentence with.
 String capitalized(String text) =>

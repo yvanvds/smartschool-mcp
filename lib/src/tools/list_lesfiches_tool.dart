@@ -4,7 +4,6 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../log.dart';
 import '../planner/lesfiches.dart';
 import '../planner/planner_access.dart';
-import '../planner/planner_format.dart';
 import '../session.dart';
 import 'server_tool.dart';
 
@@ -15,13 +14,7 @@ const maxLesficheLines = 200;
 /// `list_lesfiches`: the user's lesfiches in the Lesfiches module (lesson
 /// content), lessons by default, by name, filtered by label, name and kind:
 /// what `plan_lesfiche` plans into the user's lesson hours.
-///
-/// [now] gives today, for the period of the own planner that names the
-/// courses ([ownCourseNames]).
-ServerTool listLesfichesTool(
-  SmartschoolSession session, {
-  DateTime Function() now = DateTime.now,
-}) => ServerTool(
+ServerTool listLesfichesTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'list_lesfiches',
     title: 'List your Smartschool lesfiches',
@@ -36,11 +29,9 @@ ServerTool listLesfichesTool(
         'changed, and its id for plan_lesfiche. Sorted by name, with numbers '
         'in order (Les 2 before Les 10); when the user wants another order, '
         'order the list yourself. Filter with label (every label given must '
-        'be on the lesfiche) and query (words in the name). Courses are named '
-        'after the user\'s own planner of the 4 weeks before and after '
-        'today; a course without a lesson hour there is not named. Only '
-        'lesson lesfiches can be planned, with plan_lesfiche, hidden ones '
-        'too. To plan a series of lesfiches into the user\'s next lessons of '
+        'be on the lesfiche) and query (words in the name). Only lesson '
+        'lesfiches can be planned, with plan_lesfiche, hidden ones too. To '
+        'plan a series of lesfiches into the user\'s next lessons of '
         'a course and class: list the lesfiches with their labels, list the '
         'empty lesson hours with list_planner (planner me), and propose the '
         'user a mapping of lesfiches onto hours, in label and name order. '
@@ -74,15 +65,13 @@ ServerTool listLesfichesTool(
       openWorldHint: true,
     ),
   ),
-  handler: (request) => _list(session, request.arguments ?? const {}, now),
+  handler: (request) => _list(session, request.arguments ?? const {}),
 );
 
 Future<CallToolResult> _list(
   SmartschoolSession session,
   Map<String, Object?> arguments,
-  DateTime Function() now,
 ) async {
-  final today = now();
   final kind = LesficheKind.parse(arguments['type']);
   final labels = _labels(arguments['label']);
   final query = (arguments['query'] as String? ?? '').trim();
@@ -91,15 +80,14 @@ Future<CallToolResult> _list(
       if (word.isNotEmpty) word,
   ];
 
-  final (all, shown, courses) = await withPlannerClient(session, (
+  final (all, shown, courseError) = await withPlannerClient(session, (
     client,
   ) async {
-    // Without the library's course names (yvanvds/dartschool#101): one
-    // request, as before 0.3.3. The courses are named after the own planner
-    // until #70.
-    final all = await LessonContentService(
-      client,
-    ).getItems(withCourseNames: false);
+    final lessonContent = LessonContentService(client);
+    // Without the names first: getItems() loses the lesfiches when the
+    // course list fails (yvanvds/dartschool#118); _withCourseNames names
+    // the courses of those listed.
+    final all = await lessonContent.getItems(withCourseNames: false);
     final shown = sortedByName(
       all.where(
         (item) =>
@@ -107,11 +95,8 @@ Future<CallToolResult> _list(
             lesficheMatches(item, labels: labels.keys.toSet(), words: words),
       ),
     );
-    // The planner names the courses; nothing to name, nothing to read.
-    final courses = shown.any((item) => item.courses.isNotEmpty)
-        ? await _courseNames(PlannerService(client), today)
-        : (value: const <String, String>{}, error: null);
-    return (all, shown, courses);
+    final named = await _withCourseNames(lessonContent, shown);
+    return (all, named.items, named.error);
   });
 
   return CallToolResult(
@@ -123,9 +108,7 @@ Future<CallToolResult> _list(
           query: query,
           all: all,
           shown: shown,
-          courseNames: courses.value,
-          courseError: courses.error,
-          coursePeriod: lesficheCoursePeriod(today),
+          courseError: courseError,
         ),
       ),
     ],
@@ -144,19 +127,40 @@ Map<String, String> _labels(Object? value) {
   return labels;
 }
 
-/// The names of the user's courses ([ownCourseNames]), or the planner's
-/// error reading them failed with: the lesfiches are listed without them.
+/// [items], read without the names of their courses
+/// (`getItems(withCourseNames: false)` of [lessonContent]), with their
+/// courses named as `getItems()` names them: after the school's course list
+/// ([LessonContentService.getCourses], one request), by the library's own
+/// parsing of the lesfiches as the module gave them
+/// ([LessonContentService.parseItems] of [LessonContentItem.raw]). Without
+/// a course among [items], nothing is read.
 ///
-/// Only a [SmartschoolPlannerError] is caught, which the log gets: a refused
-/// session or a lost connection still goes to [SmartschoolSession.run].
-Future<({Map<String, String>? value, SmartschoolPlannerError? error})>
-_courseNames(PlannerService planner, DateTime now) async {
-  try {
-    return (value: await ownCourseNames(planner, now: now), error: null);
-  } on SmartschoolPlannerError catch (error) {
-    log('planner: $error');
-    return (value: null, error: error);
+/// A course list the library cannot use ([SmartschoolLessonContentError])
+/// leaves the names out: [items] as given, with the error, which the log
+/// gets. `getItems()` would throw it instead and lose the lesfiches, with
+/// an error that cannot be told from one of the lesfiches
+/// (yvanvds/dartschool#118): a workaround, whose removal is #88. A
+/// refused session or a lost connection still goes to
+/// [SmartschoolSession.run].
+Future<({List<LessonContentItem> items, SmartschoolLessonContentError? error})>
+_withCourseNames(
+  LessonContentService lessonContent,
+  List<LessonContentItem> items,
+) async {
+  if (items.every((item) => item.courses.isEmpty)) {
+    return (items: items, error: null);
   }
+  final List<PlannerCourse> courses;
+  try {
+    courses = await lessonContent.getCourses();
+  } on SmartschoolLessonContentError catch (error) {
+    log('lesfiches: $error');
+    return (items: items, error: error);
+  }
+  final named = LessonContentService.parseItems([
+    for (final item in items) item.raw,
+  ], courses: courses);
+  return (items: named, error: null);
 }
 
 /// What `list_lesfiches` answers: a header with what was asked for ([kind],
@@ -164,19 +168,18 @@ _courseNames(PlannerService planner, DateTime now) async {
 /// lesfiche of [shown] ([formatLesficheLine], at most [maxLesficheLines]),
 /// and notes on the courses and on what can be planned.
 ///
-/// [courseNames] names the courses ([ownCourseNames], read in
-/// [coursePeriod]); it is null when they could not be read ([courseError]).
-/// When nothing matches a filter on labels, the answer lists the labels the
-/// lesfiches of [kind] do have.
+/// The courses of [shown] are named by the library
+/// ([LessonContentCourse.name]), unless the school's course list could not
+/// be read ([courseError]): then only their number is given. When nothing
+/// matches a filter on labels, the answer lists the labels the lesfiches of
+/// [kind] do have.
 String formatLesfiches({
   required LesficheKind kind,
   required List<String> labels,
   required String query,
   required List<LessonContentItem> all,
   required List<LessonContentItem> shown,
-  required Map<String, String>? courseNames,
-  required SmartschoolPlannerError? courseError,
-  required ({DateTime from, DateTime until}) coursePeriod,
+  required SmartschoolLessonContentError? courseError,
 }) {
   if (all.isEmpty) {
     return 'You have no lesfiches in the Lesfiches module.';
@@ -196,29 +199,25 @@ String formatLesfiches({
     ].join('\n');
   }
   final listed = shown.take(maxLesficheLines).toList();
+  final withCourseNames = courseError == null;
   final unnamed =
-      courseNames != null &&
-      listed.any(
-        (item) => item.courses.any(
-          (course) => !courseNames.containsKey(course.id.toLowerCase()),
-        ),
-      );
+      withCourseNames &&
+      listed.any((item) => item.courses.any((course) => course.name == null));
   final count = kind.count(shown.length);
   return [
     '${what.isEmpty ? count : '$count $what'}, $of, by name:',
-    for (final item in listed) formatLesficheLine(item, courseNames),
+    for (final item in listed)
+      formatLesficheLine(item, withCourseNames: withCourseNames),
     if (shown.length > listed.length)
       'Note: only the first ${listed.length} of the ${shown.length} are '
           'shown: narrow the list with label or query.',
-    if (courseError case SmartschoolPlannerError(:final statusCode))
-      'Note: the names of the courses could not be read from your planner'
-          '${statusCode == null ? '' : ' (HTTP $statusCode)'}, so only the '
-          'number of courses is shown.',
+    if (courseError case SmartschoolLessonContentError(:final statusCode))
+      'Note: the names of the courses could not be read from the school\'s '
+          'course list${statusCode == null ? '' : ' (HTTP $statusCode)'}, so '
+          'only the number of courses is shown.',
     if (unnamed)
-      'Courses are named after your own planner from '
-          '${formatPlannerDate(coursePeriod.from)} to '
-          '${formatPlannerDate(coursePeriod.until)}; a course without a lesson '
-          'hour there shows as "$unnamedCourse".',
+      'A course that the school\'s course list does not name shows as '
+          '"unnamed course".',
     if (listed.any((item) => item.type != LessonContentType.lesson))
       'Only the lesson lesfiches can be planned, with plan_lesfiche.',
   ].join('\n');

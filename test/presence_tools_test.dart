@@ -27,9 +27,10 @@ const _save = 'POST $fakePresenceSavePath';
 /// The reads of a write before anything is sent.
 const _readFirst = [_getConfig, _getCodes, _getClass];
 
-/// The requests for one pupil whose half-day is saved: the server reads the
-/// class again, then the library reads it and saves.
-const _savePupil = [_getClass, _getClass, _save];
+/// The requests for one pupil whose half-day is saved: the library reads the
+/// class, checks the half-day against the statuses the server lets it
+/// replace (dartschool#105), and saves. The server reads nothing more.
+const _savePupil = [_getClass, _save];
 
 /// What the tools say to an account without the rights, after the reason.
 const _rights =
@@ -237,6 +238,41 @@ void main() {
         'account without $_rights. If so, $_fix.',
       );
     });
+
+    group('a teacher without a lesson at the moment: the placeholder "Uit '
+        'Planner" (class id -2) that the module gives as the active class is '
+        'no class, and is neither listed nor counted (#84)', () {
+      setUp(() => presence.noLesson = true);
+
+      test('with classes', () async {
+        final text = await ok('list_presence_classes');
+
+        expect(
+          text,
+          'The Presence module lists 3 classes for this account, in its '
+          'order; it may record presences for 2 of them.\n'
+          '1A | class id 298 | may record\n'
+          '1B | class id 312 | view only\n'
+          '2A | class id 1650 | may record | grouping class (no school '
+          'structure): record in the official class',
+        );
+      });
+
+      test(
+        'without classes: none, as for an account without the rights',
+        () async {
+          presence.classes.clear();
+
+          final text = await ok('list_presence_classes');
+
+          expect(
+            text,
+            'The Presence module lists no classes for this account, as for an '
+            'account without $_rights. If so, $_fix.',
+          );
+        },
+      );
+    });
   });
 
   group('list_class_presences', () {
@@ -282,8 +318,8 @@ void main() {
       expect(text, startsWith('Class 1A (class id 298), Monday 2026-06-01: '));
     });
 
-    test('a class the account may only view: no pupils, with the hedge that '
-        'it may not see them (dartschool#104)', () async {
+    test('a class the account may only view: its pupils, and that the writes '
+        'refuse it', () async {
       final text = await ok('list_class_presences', {
         'class_id': 312,
         'date': _day,
@@ -291,10 +327,33 @@ void main() {
 
       expect(
         text,
-        'The Presence module lists no pupils for class 1B (class id 312) on '
-        'Monday 2026-06-01: the class has no pupils on that day, or the '
-        'account may not see them. This account may only view this class: '
-        'set_pupils_late and set_pupils_present refuse it.',
+        'Class 1B (class id 312), Monday 2026-06-01: 1 pupil, in the '
+        "module's order. This account may only view this class: "
+        'set_pupils_late and set_pupils_present refuse it.\n'
+        '- Wouters, Lars (pupil id 1101) | morning: "Te laat" | afternoon: '
+        'nothing recorded',
+      );
+    });
+
+    test('no pupils: the reason the module gives, for a class without pupils '
+        'and for a day in the future (dartschool#104)', () async {
+      presence.classes.add(const FakePresenceClass(4882, '2F ECO '));
+
+      expect(
+        await ok('list_class_presences', {'class_id': 4882, 'date': _day}),
+        'The Presence module lists no pupils for class 2F ECO (class id 4882) '
+        'on Monday 2026-06-01: "Deze klas bevat geen leerlingen." This '
+        'account may record presences for this class.',
+      );
+      expect(
+        await ok('list_class_presences', {
+          'class_id': 298,
+          'date': '2026-06-02',
+        }),
+        'The Presence module lists no pupils for class 1A (class id 298) on '
+        'Tuesday 2026-06-02: "Het is niet mogelijk om in de toekomst '
+        'afwezigheden op te nemen." This account may record presences for '
+        'this class.',
       );
     });
 
@@ -342,7 +401,8 @@ void main() {
 
   group('set_pupils_late', () {
     test('marks several pupils late with a motivation, one after the other, '
-        'and reads the class again to say what is stored', () async {
+        'and says what is stored as the module answered the saves, without '
+        'reading the class again (dartschool#105)', () async {
       final text = await ok(
         'set_pupils_late',
         write([1001, 1002], more: {'motivation': 'bus lijn 5 te laat'}),
@@ -356,12 +416,7 @@ void main() {
         '- Janssens, Emma (pupil id 1002): set (was nothing recorded); now: '
         '"Te laat", motivation "bus lijn 5 te laat"',
       );
-      expect(presence.calls, [
-        ..._readFirst,
-        ..._savePupil,
-        ..._savePupil,
-        _getClass,
-      ]);
+      expect(presence.calls, [..._readFirst, ..._savePupil, ..._savePupil]);
       // An update of Peeters's half-day, a new one for Janssens.
       expect(presence.saves, [
         {
@@ -436,6 +491,7 @@ void main() {
         '"Te laat", motivation "bus te laat"',
       );
       expect(presence.saves, isEmpty);
+      expect(presence.calls, _readFirst, reason: 'nothing more is read');
 
       // With another motivation, the half-day changes.
       final changed = await ok(
@@ -509,6 +565,21 @@ void main() {
         'Nothing was changed in Smartschool.',
       );
       expect(presence.calls, [_getConfig]);
+    });
+
+    test('a class or day the module refuses, with its reason, after reading '
+        'the class (dartschool#104)', () async {
+      presence.classes.add(const FakePresenceClass(4882, '2F ECO '));
+
+      final text = await error('set_pupils_late', write([1001], classId: 4882));
+
+      expect(
+        text,
+        'The Presence module refuses to record presences for class 2F ECO '
+        '(class id 4882) on Monday 2026-06-01: "Deze klas bevat geen '
+        'leerlingen." Nothing was changed in Smartschool.',
+      );
+      expect(presence.calls, _readFirst);
     });
 
     test('a grouping class, and an unknown class', () async {
@@ -587,8 +658,30 @@ void main() {
   });
 
   group('the check afterwards', () {
-    test('a save answered as done but not carried out: NOT what was saved, '
-        'and an error', () async {
+    test('a save answered without the half-day as stored: the class is read '
+        'once more, and shows it', () async {
+      presence.save = PresenceSave.withoutRecords;
+
+      final text = await ok('set_pupils_late', write([1001, 1002]));
+
+      expect(
+        text,
+        'Set "Te laat" for $_morning:\n'
+        '- Peeters, Lotte (pupil id 1001): set (was "Aanwezig"); now: "Te '
+        'laat"\n'
+        '- Janssens, Emma (pupil id 1002): set (was nothing recorded); now: '
+        '"Te laat"',
+      );
+      expect(presence.calls, [
+        ..._readFirst,
+        ..._savePupil,
+        ..._savePupil,
+        _getClass,
+      ]);
+    });
+
+    test('a save answered as done but not carried out: the class is read '
+        'once more; NOT what was saved, and an error', () async {
       presence.save = PresenceSave.unapplied;
 
       final text = await error('set_pupils_late', write([1001]));
@@ -602,14 +695,15 @@ void main() {
         'what was saved": read the class with list_class_presences and tell '
         'the user what it shows.',
       );
-      expect(presence.calls.last, _getClass);
+      expect(presence.calls, [..._readFirst, ..._savePupil, _getClass]);
     });
 
-    test('a read afterwards that fails: the saves are not confirmed, and '
-        'Claude is told to read the class', () async {
-      // The 4th read of the class is the one after the save.
+    test('a read afterwards that fails: the saves it was needed for are not '
+        'confirmed, and Claude is told to read the class', () async {
+      presence.save = PresenceSave.withoutRecords;
+      // The 3rd read of the class is the one after the save.
       presence.onGetClass = (count) {
-        if (count == 4) presence.refused = true;
+        if (count == 3) presence.refused = true;
       };
 
       final text = await error('set_pupils_late', write([1001]));
@@ -619,19 +713,22 @@ void main() {
         'Set "Te laat" for $_morning:\n'
         '- Peeters, Lotte (pupil id 1001): set (was "Aanwezig") (not '
         'confirmed)\n'
-        'Reading the class again afterwards failed, so what the half-days '
-        "hold now is not confirmed: Smartschool's Presence module refused the "
-        'request, or could not find what it was asked for; usually the '
-        'account lacks $_rights. If so, $_fix. Otherwise try again in a '
-        'moment; the technical details are in the server log. Read the class '
-        'with list_class_presences and tell the user what it shows.',
+        'Reading the class again afterwards failed, so the result does not '
+        "show what every half-day holds now: Smartschool's Presence module "
+        'refused the request, or could not find what it was asked for; '
+        'usually the account lacks $_rights. If so, $_fix. Otherwise try '
+        'again in a moment; the technical details are in the server log. '
+        'Read the class with list_class_presences and tell the user what it '
+        'shows.',
       );
+      expect(presence.calls, [..._readFirst, ..._savePupil, _getClass]);
       expect(stored(1001), (fakePresenceTeLaat, null, null));
     });
   });
 
   group('a failure halfway stops the change, reported per pupil', () {
-    test('the module refuses the second save', () async {
+    test('the module refuses the second save: its reason, without what else '
+        'its answer holds (dartschool#109)', () async {
       presence.nextSaves.addAll([
         PresenceSave.confirmed,
         PresenceSave.rejected,
@@ -649,9 +746,9 @@ void main() {
         'nothing recorded\n'
         '- Claes, Mila (pupil id 1004): not tried; now: "Te laat", motivation '
         '"bus te laat"\n'
-        "Smartschool's Presence module refused the change for Janssens, Emma "
-        '(pupil id 1002), or a read right before it; the technical details '
-        'are in the server log.\n'
+        "Smartschool's Presence module refused to save the change for "
+        'Janssens, Emma (pupil id 1002): De afwezigheid kon niet worden '
+        'opgeslagen.\n'
         'The pupils listed after them were not tried.',
       );
       expect(presence.calls, [
@@ -709,11 +806,12 @@ void main() {
     });
 
     test('a half-day that changed to another status after the first read is '
-        'refused right before its save (dartschool#105)', () async {
-      // The 4th read of the class is the server's read right before the
-      // second pupil's save.
+        'refused by the library right before its save, and nothing is sent '
+        'for it (dartschool#105)', () async {
+      // The 3rd read of the class is the library's, right before the second
+      // pupil's save.
       presence.onGetClass = (count) {
-        if (count == 4) {
+        if (count == 3) {
           presence.halfDays[(1002, _day, 'am')] = FakeHalfDay(
             93001,
             codeId: fakePresenceDoktersattest,
@@ -735,9 +833,50 @@ void main() {
         'now holds "Doktersattest", which the server never overwrites. '
         'Nothing was saved for them.',
       );
+      // The library's read, without a save, then the read afterwards.
+      expect(presence.calls, [
+        ..._readFirst,
+        ..._savePupil,
+        _getClass,
+        _getClass,
+      ]);
       expect(presence.saves, hasLength(1));
       expect(stored(1002), (fakePresenceDoktersattest, null, null));
     });
+  });
+
+  test('a pupil no longer listed right before the save: the change stops, '
+      'and the class read afterwards shows it', () async {
+    // The 2nd read of the class is the library's, right before the first
+    // pupil's save.
+    presence.onGetClass = (count) {
+      if (count == 2) {
+        presence.classes[0] = const FakePresenceClass(
+          298,
+          '1A  ',
+          pupils: [fakeJanssens, fakeDupont, fakeClaes],
+        );
+      }
+    };
+
+    final text = await error('set_pupils_late', write([1001, 1002]));
+
+    // The library does not tell a pupil it cannot find from a refusal of
+    // the module (yvanvds/dartschool#116, tracked in #83).
+    expect(
+      text,
+      'Setting "Te laat" for $_morning stopped at Peeters, Lotte (pupil id '
+      '1001):\n'
+      '- Peeters, Lotte (pupil id 1001): not changed (see below); no longer '
+      'listed in the class\n'
+      '- Janssens, Emma (pupil id 1002): not tried; now: nothing recorded\n'
+      "Smartschool's Presence module refused the change for Peeters, Lotte "
+      '(pupil id 1001), or a read right before it; the technical details are '
+      'in the server log.\n'
+      'The pupils listed after them were not tried.',
+    );
+    expect(presence.calls, [..._readFirst, _getClass, _getClass]);
+    expect(presence.saves, isEmpty);
   });
 
   test('a session Smartschool refuses for the save: the library logs in '

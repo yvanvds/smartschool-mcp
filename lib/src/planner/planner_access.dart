@@ -4,6 +4,7 @@ import '../log.dart';
 import '../messages/message_filter.dart';
 import '../session.dart';
 import '../tools/server_tool.dart';
+import 'planner_format.dart';
 
 // Reaching Smartschool's planner for the planner tools: the session runner,
 // the planner and element ids the tools print and take, the classes and
@@ -52,8 +53,9 @@ Future<T> withPlannerClient<T>(
 /// - [SmartschoolPlannerWriteRefusedError]: a check of the library refused
 ///   a write before sending it (the element is not the user's own, the
 ///   planner does not allow the change, the lesson hour is no longer
-///   empty). Its message, which the library writes from what it checked,
-///   is the reason passed on.
+///   empty, ...). The tools say why in their own words, from its reason
+///   ([_refused]); the library's message, written for a developer, goes to
+///   the log only.
 /// - Any other [SmartschoolPlannerError]: an answer the server cannot use.
 ///   The library's message can quote the planner's answer, so it goes to
 ///   the log only.
@@ -82,13 +84,9 @@ ToolError? plannerToolError(Object error) {
         'List the planner again with list_planner and take the id from '
         'there.',
       );
-    case SmartschoolPlannerWriteRefusedError(:final message):
+    case SmartschoolPlannerWriteRefusedError():
       log('planner: $error');
-      return ToolError(
-        'The planner refused the change before it was sent: '
-        '${_refusal(message)} List the planner again with list_planner '
-        '(planner me) to see how it is now.',
-      );
+      return ToolError(_refused(error));
     case SmartschoolPlannerError(:final statusCode):
       log('planner: $error');
       return ToolError(
@@ -113,16 +111,126 @@ ToolError? plannerToolError(Object error) {
   return null;
 }
 
-/// The reason in [message], the message of a
-/// [SmartschoolPlannerWriteRefusedError]: without the name of the library's
-/// method in front (`planLesson: `) and its closing `Nothing was sent.`,
-/// which the tools say in their own words.
-String _refusal(String message) {
-  final reason = message
-      .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
-      .replaceFirst(RegExp(r'\s*Nothing was sent\.\s*$'), '')
-      .trim();
-  return reason.endsWith('.') ? reason : '$reason.';
+/// How the tools start to say that a check of the library refused a write
+/// before sending it (a [SmartschoolPlannerWriteRefusedError]), followed by
+/// why.
+const plannerRefused = 'The planner refused the change before it was sent';
+
+/// Why a check of the library refused a write before sending it ([error]),
+/// in the tools' own words: from the error's
+/// [SmartschoolPlannerWriteRefusedError.reason] (dartschool#100), naming the
+/// element the check read ([SmartschoolPlannerWriteRefusedError.element])
+/// with [formatElementSummary], with what to do next.
+///
+/// The switch has a case for every [PlannerWriteRefusalReason] and no
+/// default, so that a reason a later version of the library adds fails the
+/// build here rather than reaching Claude unworded. A refusal without a
+/// reason (an error made without one) only says that the details are in
+/// the server log.
+///
+/// `plan_assignment` words [PlannerWriteRefusalReason.unknownAssignmentType]
+/// itself, with the school's types as they are now, which the error does
+/// not carry.
+String _refused(SmartschoolPlannerWriteRefusedError error) {
+  const lead = plannerRefused;
+  const listAgain =
+      'List the planner again with list_planner (planner me) to see how it '
+      'is now.';
+  final element = error.element;
+  final the = element == null
+      ? 'the element'
+      : 'the ${formatElementSummary(element)}';
+  final flags = error.capabilityFlags;
+  return switch (error.reason) {
+    PlannerWriteRefusalReason.notOwn =>
+      '$lead: $the is not in your own planner: it is organised by '
+          '${_organisers(element)}. Only the elements of your own planner can '
+          'be changed, as list_planner (planner me) shows them.',
+    PlannerWriteRefusalReason.notAllowed =>
+      '$lead: the planner does not let you ${_capabilityVerbs(flags)} $the'
+          '${flags.isEmpty ? '' : ': ${_capabilities(flags)} not set'}.',
+    PlannerWriteRefusalReason.noLongerASlot =>
+      '$lead: the lesson hour is not empty any more: the planner has $the in '
+          'its place. $listAgain',
+    PlannerWriteRefusalReason.periodChanged =>
+      '$lead: the empty lesson hour moved since it was read: it is now $the. '
+          '$listAgain',
+    PlannerWriteRefusalReason.participantRoles =>
+      '$lead: $the has participant roles or group filters, which this server '
+          'does not know how to keep when it fills a lesson hour. Fill this '
+          'hour in Smartschool itself.',
+    PlannerWriteRefusalReason.trashable =>
+      '$lead: $the is not a lesson in a lesson hour of the timetable, the '
+          'only kind of lesson that is cleared: the planner lets you '
+          '${_capabilityVerbs(flags, orElse: 'remove')} it instead'
+          '${flags.isEmpty ? '' : ' (${_capabilities(flags)} set)'}. Remove '
+          'it in Smartschool itself.',
+    PlannerWriteRefusalReason.unknownLessonContent =>
+      '$lead: you have no lesfiche with the id given (any more). List your '
+          'lesfiches with list_lesfiches and take the id of a lesson lesfiche '
+          'from there.',
+    PlannerWriteRefusalReason.notALessonLessonContent =>
+      '$lead: ${_lesficheKind(error.lessonContent)}, not a lesson lesfiche: '
+          'only a lesson lesfiche can be planned into a lesson hour. List the '
+          'lesson lesfiches with list_lesfiches and take the id of one from '
+          'there.',
+    PlannerWriteRefusalReason.unknownAssignmentType =>
+      '$lead: the assignment type is no longer one of the school\'s '
+          'assignment types: they changed since the server read them.',
+    PlannerWriteRefusalReason.linkedEvaluation =>
+      '$lead: $the is linked to a Skore evaluation, which has to be unlinked '
+          'in Smartschool first: only then can it be moved to the trash.',
+    null => '$lead. The technical details are in the server log.',
+  };
+}
+
+/// Who organises [element]: the names of its organising users, or
+/// `someone else` when it names none.
+String _organisers(PlannedElement? element) {
+  final names = element == null ? '' : elementOrganisers(element);
+  return names.isEmpty ? 'someone else' : names;
+}
+
+/// What the planner's capability flags allow, by the flag's name.
+const _capabilityVerb = {
+  'canUserReplace': 'fill',
+  'canUserEdit': 'change',
+  'canUserRename': 'rename',
+  'canUserChangePublicInfo': 'change the public info of',
+  'canUserChangePrivateInfo': 'change the private info of',
+  'canUserTrash': 'trash',
+  'canUserDelete': 'delete',
+};
+
+/// What [flags], capability flags of the planner, allow: `fill`, `trash or
+/// delete`; [orElse] when none of them is a flag the server knows.
+String _capabilityVerbs(List<String> flags, {String orElse = 'change'}) {
+  final verbs = [for (final flag in flags) ?_capabilityVerb[flag]];
+  if (verbs.isEmpty) return orElse;
+  return verbs.length == 1
+      ? verbs.single
+      : '${verbs.sublist(0, verbs.length - 1).join(', ')} or ${verbs.last}';
+}
+
+/// `its capability canUserReplace is`, `its capabilities canUserTrash and
+/// canUserDelete are`: the planner's names of [flags], for a sentence that
+/// says whether they are set.
+String _capabilities(List<String> flags) => flags.length == 1
+    ? 'its capability ${flags.single} is'
+    : 'its capabilities ${flags.sublist(0, flags.length - 1).join(', ')} '
+          'and ${flags.last} are';
+
+/// What kind of lesfiche [item] is, a lesfiche that is not a lesson one:
+/// `the lesfiche "Taak: een eigen spel" is an assignment lesfiche`.
+String _lesficheKind(LessonContentItem? item) {
+  if (item == null) return 'the lesfiche given is of another kind';
+  final name = item.name.trim();
+  final lesfiche = name.isEmpty
+      ? 'the lesfiche ${item.id}'
+      : 'the lesfiche "$name"';
+  return item.type == LessonContentType.assignment
+      ? '$lesfiche is an assignment lesfiche'
+      : '$lesfiche is of the kind "${item.typeName}"';
 }
 
 /// A planner as the planner tools name it: `me`, the user's own planner, or
@@ -270,6 +378,19 @@ final class AssignmentTypes {
       rethrow;
     }
   }
+
+  /// The school's types read again with [planner], for when they changed
+  /// since [read] read them: the library refused a type as not one of the
+  /// school's ([PlannerWriteRefusalReason.unknownAssignmentType]). Every
+  /// tool on the session then gets the types as they are now.
+  ///
+  /// The library read the types itself for that check, but its error does
+  /// not carry them (yvanvds/dartschool#119), so they are read once more: a
+  /// workaround, whose removal is tracked in #89.
+  Future<List<PlannerAssignmentType>> reread(PlannerService planner) {
+    _types = null;
+    return read(planner);
+  }
 }
 
 /// An element of the planner as the tools name it: its type, platform and
@@ -324,33 +445,10 @@ final class PlannedElementRef {
   /// does not know.
   PlannedElementType get type => PlannedElementType.fromWire(typeName);
 
-  /// Reads the element's detail.
-  ///
-  /// An element of a type the library does not know is read with
-  /// [PlannerService.getDetail], which takes an element: one with only the
-  /// type, platform and id that the request needs. A workaround until the
-  /// library reads an element by its type name (yvanvds/dartschool#99); its
-  /// removal is #70.
-  Future<PlannedElementDetail> read(PlannerService planner) {
-    final type = this.type;
-    if (type != PlannedElementType.other) {
-      return planner.getPlannedElement(
-        type: type,
-        platformId: platformId,
-        id: id,
-      );
-    }
-    final unknown = DateTime.fromMillisecondsSinceEpoch(0);
-    return planner.getDetail(
-      PlannedElement(
-        id: id,
-        platformId: platformId,
-        type: type,
-        typeName: typeName,
-        period: PlannerPeriod(from: unknown, to: unknown),
-      ),
-    );
-  }
+  /// Reads the element's detail, by its [typeName]: also an element of a
+  /// type the library does not know ([PlannedElementType.other]).
+  Future<PlannedElementDetail> read(PlannerService planner) => planner
+      .getPlannedElement(typeName: typeName, platformId: platformId, id: id);
 
   @override
   bool operator ==(Object other) =>

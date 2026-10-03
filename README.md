@@ -366,8 +366,10 @@ client name. It also installs again while that copy runs.
   and its weblinks, and for an assignment from when pupils see it, whether
   it was announced and its status. Private info is hidden from pupils, but
   colleagues who can see the element read it too (dartschool#84). The
-  labels, attachments and weblinks are read from the detail's raw JSON
-  until the library types them (yvanvds/dartschool#98, #70).
+  labels, attachments and weblinks are the library's typed lists
+  (dartschool#98), and every element is read by its type name, also one of
+  a type the library does not know (`getPlannedElement` with `typeName`,
+  dartschool#99).
 - `list_class_assignments`: the assignments (tests and tasks) of 1 to 10
   classes (`classes`, planner ids such as `group/4069_4256`) in a period
   (`from` and `until`, today to 4 weeks ahead by default), of everyone who
@@ -427,13 +429,15 @@ client name. It also installs again while that copy runs.
   before `Les 10`): kind (an assignment with its type), name, labels,
   courses, visible or hidden in the module, the day it was last changed
   (the module's dates have no offset: Smartschool time) and its id. The
-  module names a lesfiche's courses by id only (dartschool#101), so the
-  tool names them after the user's own planner of the 4 weeks before and
-  after today (`ownCourseNames`, one planner read per call, only when a
-  lesfiche listed has a course); a course without a lesson hour there is
-  "not in your planner", and when that read fails only the number of
-  courses is shown. A label filter that matches nothing lists the labels
-  there are. At most 200 lines, with a note to narrow the list. An answer
+  courses are named as the library names them (`LessonContentCourse.name`,
+  dartschool#101), after the school's course list (one request more, only
+  when a lesfiche listed has a course); a course the list does not name is
+  an "unnamed course". When the course list cannot be read, only the number
+  of courses is shown: `getItems()` would lose the lesfiches then
+  (dartschool#118), so the tool reads the lesfiches without the names and
+  names them itself with the library's parsing (a workaround, #88). A label
+  filter that matches nothing lists the labels there are. At most 200
+  lines, with a note to narrow the list. An answer
   of the module the server cannot use (`SmartschoolLessonContentError`) is
   "the Lesfiches module gave an answer the server could not use", with the
   details in the log only.
@@ -448,8 +452,9 @@ client name. It also installs again while that copy runs.
   and plans after the user's confirmation, one call per hour, in order;
   the result gives the lesson as saved and its new id. The library reads
   the lesfiches before it plans and refuses, before sending anything, an id
-  the user has no lesfiche with and an assignment lesfiche; the tool passes
-  that reason on. A hidden lesfiche is planned like any other.
+  the user has no lesfiche with and an assignment lesfiche; the tool says so
+  in its own words and points to `list_lesfiches`. A hidden lesfiche is
+  planned like any other.
 - `plan_assignment`: plans an assignment (a test, a task, something to
   bring along) in one of the user's own lesson hours (`hour`, an empty
   lesson hour or a lesson from `list_planner` with `me`) with the library's
@@ -470,7 +475,11 @@ client name. It also installs again while that copy runs.
   tests with `list_class_assignments` first, to show the user the classes,
   the date and hour, the type, the name and the info, and to wait for the
   user's confirmation. The library checks the type against the school's
-  types again and sends the create
+  types again; when the school no longer has it (the types changed since
+  the session read them), the server reads the types again, for every
+  tool on the session, and the error lists them (the library's refusal
+  does not carry them: a workaround for yvanvds/dartschool#119, whose
+  removal is tracked in #89). The library sends the create
   (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
   once. The result gives the assignment as saved, with its id. Its name and
   info change with `edit_planned_element`; its date, type and classes do
@@ -552,8 +561,9 @@ gradebooks (dartschool#74):
   whether the current teacher works with "Mijn lesgroepen" for the course;
   if so, nothing is saved (`SmartschoolSkoreMyGroupsError`), and Claude is
   told to leave those groups to the user in Skore: the library never deletes
-  them (`explodeMyGroups`), and the tool tries no other way. The result also
-  names the teacher replaced.
+  them (`explodeMyGroups`), and the tool tries no other way; the message
+  names that teacher, as the library read them. The result also names the
+  teacher replaced.
 - `share_skore_gradebook`: shares a gradebook (`owner_id`, `gradebook_id`)
   with one or more teachers (`teacher_ids`, 1 to 50) with `read` or `write`
   access (`access`), with `shareGradebook`, once per teacher, one after the
@@ -573,17 +583,23 @@ gradebooks (dartschool#74):
   theirs, and a teacher Skore no longer lists can still be taken off.
   Marked destructive and idempotent, with the same confirmation.
 
-For both writes on gradebooks, the tool first reads the owner's gradebooks
-and the teachers itself, to name them and to know what each teacher has
-before the change: the library returns only the gradebook after it (a
-workaround for yvanvds/dartschool#103; its removal is tracked in #74). It
-then stops at the first teacher that fails, and the result says per teacher
-whether the gradebook was shared (or unshared), was already shared that way
+For both writes on gradebooks, the tool first reads the teachers, to name
+them: a gradebook gives its owner, readers and writers by id only. It then
+changes the shares for one teacher after the other and stops at the first
+that fails. The result says per teacher whether the gradebook was shared (or
+unshared, with the access the teacher had), was already shared that way
 (nothing saved), or was not, or not tried, followed by why it stopped and
 the gradebook's readers and writers afterwards; it is an error when it
-stopped. Before each change the library reads the gradebooks (and, to share,
-the teachers) again and refuses the owner among the teachers, a gradebook
-that is not the owner's, and, to share, a teacher Skore does not list
+stopped. What each teacher had before, and whether a save was sent, come
+from the library's result (`SkoreGradebookShareChange`, dartschool#103),
+without a read of the tool's own. The tool names the gradebook (its course
+and class) from the first result, so by its id only when it stopped at the
+first teacher, and then gives no readers and writers either; for a save
+Skore did not confirm, the library's error carries nothing of the gradebook
+(yvanvds/dartschool#120, tracked in #90). Before each change the library
+reads the gradebooks (and, to share, the teachers) again and refuses the
+owner among the teachers, a gradebook that is not the owner's, and, to
+share, a teacher Skore does not list
 (`SmartschoolSkoreChangeRefusedError`); the tool passes the reason on, and
 tells Claude to read the gradebook again. The save (`saveShared`) holds the
 complete readers and writers of that one gradebook, the ids as numbers, so
@@ -611,11 +627,14 @@ again for it, as for a message whose send Smartschool did not confirm. A
 session that Smartschool refused for the save means the save was not carried
 out: the session repeats the call, which reads the class again, so a teacher
 who is on the course by then is refused rather than added twice. The writes
-return only the assignment, so the tools read the course themselves first, to
-name it and the teacher replaced (`readSkoreCourse`, a workaround for
-yvanvds/dartschool#102; its removal is tracked in #74). Removing an
-assignment, choosing its pupils and Skore's import of assignments are not
-offered.
+return the assignment with the course as the library read it before the
+save, and for a replace the assignment as it was (`SkoreSavedAssignment`,
+dartschool#102), so the tools name the course and the teacher replaced
+without a read of their own. A save that Skore does not confirm returns
+nothing, and the library's error carries none of that: its result names the
+course by id only, and for a replace not the teacher it had
+(yvanvds/dartschool#120, tracked in #90). Removing an assignment, choosing
+its pupils and Skore's import of assignments are not offered.
 
 Skore refusing a request to the account (HTTP 403,
 `SmartschoolSkoreAccessDeniedError`) is reported as an account without the
@@ -643,21 +662,24 @@ first two only read, the last two change the presences of pupils:
 
 - `list_presence_classes`: the classes the account may view in the module
   (`getConfig`: its allowed classes, and the active class when it is not
-  among them), one line per class with its name, class id (`groupID`), and
-  whether the account may record presences for it (`userCanRecord`: "may
-  record" or "view only"); a grouping class without a school structure is
-  marked, as presences are recorded in the pupils' official class.
+  among them; not the placeholder "Uit Planner", class id -2, that the
+  module gives as the active class of a teacher without a lesson at the
+  moment, #84, which #85 tracks until dartschool#117 is done), one line per
+  class with its name, class id (`groupID`), and whether the account may
+  record presences for it (`userCanRecord`: "may record" or "view only"); a
+  grouping class without a school structure is marked, as presences are
+  recorded in the pupils' official class.
 - `list_class_presences`: the pupils of one class (`class_id`) on one day
   (`date`, default today) with what their morning and afternoon hold
   (`getClassPupils`), named with the codes of the class's structure
   (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
   alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
   or "nothing recorded", with its motivation, and per pupil the pupil id the
-  writes take. Rows per lesson are left out (the library ignores them). The
-  module answers a class the account may not record for without pupils, and
-  the library drops its `saveIsAllowed` and `errorMessage`
-  (yvanvds/dartschool#104), so an empty list says "no pupils on that day, or
-  the account may not see them" (a hedge; its removal is tracked in #76).
+  writes take. Rows per lesson are left out (the library ignores them). When
+  the module lists no pupils, the tool gives the module's reason
+  (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
+  geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
+  de toekomst afwezigheden op te nemen." for a day in the future.
 - `set_pupils_late`: marks pupils (`pupil_ids`, 1 to 50) of a class late for
   the morning or the afternoon (`part`) of a day (`date`), with `setLate`:
   "Te laat", or with `without_valid_reason` "Te laat zonder geldige reden",
@@ -673,33 +695,42 @@ first two only read, the last two change the presences of pupils:
   `setPresent` and the same arguments without `without_valid_reason`: for
   example to undo a "Te laat" recorded by mistake.
 
-The library saves over whatever a half-day holds and returns nothing
-(yvanvds/dartschool#105), so both writes guard the record themselves
-(`changePresences` in `lib/src/presence/presence_writes.dart`; a workaround,
-its removal is tracked in #76). Before anything is sent they refuse, for the
-whole call: a date in the future, a class the account may only view (after
-reading only the configuration), a grouping class, a pupil who is not listed,
-and a pupil whose half-day holds anything but nothing, "Aanwezig", "Te laat"
-or "Te laat zonder geldige reden", such as an absence the secretariat
-recorded: the writes never overwrite another status. Right before each
-pupil's save they read the class again, in the same session action, and
-refuse a half-day that changed to another status meanwhile. They stop at the
-first pupil that fails (refused, a save the module refused, a login or
-connection failure), then read the class once more: the result says per
-pupil whether the status was set (and what the half-day held), the pupil
-already had it, or was not changed or not tried, and what the half-day holds
-now. It is an error when the change stopped, or when a half-day reported as
-set does not show the status afterwards ("NOT what was saved"). A save whose
-answer was lost is reported as maybe saved, and the class read afterwards
-shows whether it was. A session that Smartschool refused for a save means it
-was not carried out: the library logs in again and sends it once more, and a
-repeat of the session action reads the class again, so a half-day cannot be
-changed twice. A `SmartschoolPresenceError` (the module refused a request
-with an error page, or a class, code or pupil could not be found) is
-reported as "usually the account lacks the right", with how to get it or turn
-"Aanwezigheden" off; the library's message goes to the log only. Confirming
-presences (`userCanConfirm`), other codes and the registration per lesson are
-not offered; #77 is the live check.
+Both writes guard the record (`changePresences` in
+`lib/src/presence/presence_writes.dart`). Before anything is sent they read
+the class once and refuse, for the whole call: a date in the future, a class
+the account may only view (after reading only the configuration), a
+grouping class, a class or day the module refuses to record presences for
+(its `saveIsAllowed`, with its reason, yvanvds/dartschool#104), a pupil who
+is not listed, and a pupil whose half-day holds anything but nothing,
+"Aanwezig", "Te laat" or "Te laat zonder geldige reden", such as an absence
+the secretariat recorded: the writes never overwrite another status. A
+pupil who already has the status (and the motivation, when one is given) is
+left alone, as that read shows. For each other pupil, `setLate` and
+`setPresent` get those four statuses as their `onlyReplacing`
+(yvanvds/dartschool#105): the library reads the class right before the save
+and refuses a half-day that changed to another status meanwhile, without
+sending anything. They stop at the first pupil that fails (refused, a save
+the module refused, a login or connection failure). The result says per
+pupil whether the status was set (and what the half-day held right before),
+the pupil already had it, or was not changed or not tried, and what the
+half-day holds now: as the module answered the save, which the library
+returns. The class is read once more only when the change stopped, or when
+a save's answer does not show the status (it holds no record of the
+half-day, or another status). It is an error when the change stopped, or
+when a half-day reported as set does not show the status ("NOT what was
+saved"). A save whose answer was lost is reported as maybe saved, and the
+class read afterwards shows whether it was. A session that Smartschool
+refused for a save means it was not carried out: the library logs in again
+and sends it once more, and a repeat of the session action makes the
+library read the class again, so a half-day cannot be changed twice. A save
+the module refused is reported with the module's reason, which the library
+gives without the pupil's name (yvanvds/dartschool#109). Any other
+`SmartschoolPresenceError` (the module refused a request with an error
+page, or a class, code or pupil could not be found) is reported as "usually
+the account lacks the right", with how to get it or turn "Aanwezigheden"
+off; the library's message goes to the log only. Confirming presences
+(`userCanConfirm`), other codes and the registration per lesson are not
+offered; #77 is the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -748,7 +779,9 @@ needs the Lesfiches module; the planner ids (`PlannerRef`, `me` or `user/…`, `
 reads an element's detail); the `classes` argument, 1 to a maximum of
 class planner ids (`classPlannersArgument`); the `from` and `until`
 arguments with a default period (`plannerPeriodArguments`); and the
-school's assignment types, read once per session (`AssignmentTypes.of`). In
+school's assignment types, read once per session (`AssignmentTypes.of`),
+and again when the library refused a type the school no longer has
+(`reread`). In
 `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment
 type (`formatAssignmentType`), one line per element (`formatElementLine`),
@@ -763,19 +796,25 @@ lesson hour, the classes and the type of a new assignment
 (`lessonHourArgument`, `lessonHourClassesArgument`, `lessonHourClasses`,
 `assignmentTypeArgument`), `withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
 error), and the result of a write the planner did not confirm
-(`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
-refused a write (`SmartschoolPlannerWriteRefusedError`). In
+(`plannerWriteNotConfirmed`). `plannerToolError` says why the library
+refused a write (`SmartschoolPlannerWriteRefusedError`) in the tools' own
+words, from its reason (`PlannerWriteRefusalReason`, dartschool#100): the
+element by its kind, name, day, time, classes and course, who organises a
+colleague's element, which capability the planner does not set, and what
+to do next (`list_planner`, `list_lesfiches`, or Smartschool itself). The
+library's message, written for a developer, goes to the log only. Its
+switch has no default, so a reason a later version of the library adds
+fails the build. In
 `lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
-`lesfiche` argument (`lesficheArgument`), the course names from the own
-planner (`ownCourseNames`, a workaround for dartschool#101), the filters
-(`lesficheMatches`), the order of the names (`compareLesficheNames`) and one
-line per lesfiche (`formatLesficheLine`). The tests run against a fake
-planner (`test/support/fake_planner.dart`), built from dartschool's
-anonymised captures of the live planner, its workload view and the
-Lesfiches list, which carries out the writes of dartschool#87 (fill,
-rename, change of the info, clear), the plan of a lesfiche of
-dartschool#88, and the create and the trash of an assignment of
-dartschool#89 as the live planner did.
+`lesfiche` argument (`lesficheArgument`), the filters (`lesficheMatches`),
+the order of the names (`compareLesficheNames`) and one line per lesfiche
+with its courses as the library names them (`formatLesficheLine`). The
+tests run against a fake planner (`test/support/fake_planner.dart`), built
+from dartschool's anonymised captures of the live planner, its workload view
+and the Lesfiches list, with the school's course list, which carries out the
+writes of dartschool#87 (fill, rename, change of the info, clear), the plan
+of a lesfiche of dartschool#88, and the create and the trash of an
+assignment of dartschool#89 as the live planner did.
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a
@@ -787,8 +826,8 @@ change (with what to read again: the class, or for a gradebook
 `rereadSkoreGradebook`), and says what to do about "Mijn lesgroepen". In
 `skore_writes.dart`, for the tools that change Skore: `withSkoreWrite`,
 which runs a write and adds to its `ToolError` that nothing was changed,
-`skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result of a
-save Skore did not confirm, and `readSkoreCourse`. In `skore_shares.dart`:
+and `skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result
+of a save Skore did not confirm. In `skore_shares.dart`:
 `changeSkoreShares`, which shares a gradebook with teachers or unshares it,
 one teacher after the other, and the arguments' schemas. In
 `skore_format.dart`: one line per class, course row, assignment, teacher and
@@ -798,7 +837,8 @@ switch (`skoreOptIn`). The tests run against a fake Skore
 (`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
 reads, in the shape of dartschool's anonymised captures, with fake names;
 it can refuse an account without the rights with HTTP 403 or with a page
-instead of data. It carries out the save of an assignment (`saveOwner`) and
+instead of data, for every request or only for some services
+(`refusedPaths`). It carries out the save of an assignment (`saveOwner`) and
 answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
 teacher's gradebooks, one per assignment, with their shares (`getCourses`
 of the gradebooks service), and carries out the save of their shares
@@ -827,10 +867,15 @@ dartschool's trimmed captures, with fake names: three classes (one the
 account may only view, one grouping class), the codes of a structure
 ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
 half-days of each kind and a registration per lesson. It carries out a save
-on the half-days as the live module did in dartschool#2, can refuse it,
-answer it with an error page, lose its answer or answer it without carrying
-it out (`nextSaves`), and answers a class the account may only view without
-pupils, as the module does.
+on the half-days as the live module did in dartschool#2 and answers it as
+the module's web client reads the answer (the records as stored), can answer
+it without the records, refuse it with the module's error objects, answer it
+with an error page, lose its answer or answer it without carrying it out
+(`nextSaves`). It answers `getClass` as the module did live
+(dartschool#104): every class it knows with its pupils, also one the account
+may only view, and a class without pupils, a class ID it does not know and
+a day after `today` without pupils, with `saveIsAllowed: false` and the
+module's reason.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

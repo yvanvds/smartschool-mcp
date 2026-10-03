@@ -1,15 +1,14 @@
 /// `list_lesfiches` and `plan_lesfiche` (#54), called over MCP on the real
 /// server, session and library, against a fake Smartschool whose Lesfiches
-/// module serves dartschool's anonymised capture of the live list (#88), and
-/// whose planner serves dartschool's captures and plans a lesfiche into an
-/// empty lesson hour with the request of dartschool#88, as the live planner
-/// did (`test/support/fake_planner.dart`).
+/// module serves dartschool's anonymised capture of the live list (#88),
+/// whose course list names the courses of the lesfiches (dartschool#101,
+/// #87), and whose planner serves dartschool's captures and plans a lesfiche
+/// into an empty lesson hour with the request of dartschool#88, as the live
+/// planner did (`test/support/fake_planner.dart`).
 library;
 
 import 'package:dart_mcp/client.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_smartschool/flutter_smartschool.dart'
-    show PlannerService;
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
@@ -22,9 +21,6 @@ import 'support/fake_smartschool.dart';
 import 'support/mcp.dart';
 
 const _api = '/planner/api/v1';
-
-/// The own planner, whose courses name those of the lesfiches.
-const _ownPlannerPath = '$_api/planned-elements/user/$fakePlannerMe';
 
 /// The path of the plan of a lesfiche into the empty lesson hour [slot]:
 /// the route of a blank lesson without `/blanco` (dartschool#88).
@@ -119,7 +115,7 @@ void main() {
         listPlannerTool(session, now: now),
         readPlannedElementTool(session),
         clearLessonTool(session),
-        listLesfichesTool(session, now: now),
+        listLesfichesTool(session),
         planLesficheTool(session),
       ],
     );
@@ -141,6 +137,17 @@ void main() {
   List<String> plannerRequests() => [
     for (final request in planner.requests) '${request.method} ${request.path}',
   ];
+
+  /// What a call of list_lesfiches with [arguments] sends to the fake
+  /// Smartschool once the session is open, as `METHOD path`. The session
+  /// check reads the school's course list too, so a first call opens the
+  /// session.
+  Future<List<String>> listRequests(Map<String, Object?> arguments) async {
+    await ok('list_lesfiches', arguments);
+    server.requests.clear();
+    await ok('list_lesfiches', arguments);
+    return [...server.requests];
+  }
 
   /// The bodies of the requests to [path] that reached the planner.
   List<Object?> bodiesTo(String path) => [
@@ -240,32 +247,52 @@ void main() {
 
   group('list_lesfiches', () {
     test('lists the lesson lesfiches by name: kind, name, labels, courses '
-        'named after the own planner, visible or hidden, last changed and '
-        'id', () async {
+        'named after the school\'s course list, visible or hidden, last '
+        'changed and id', () async {
       expect(
         await ok('list_lesfiches', {}),
         '2 lesson lesfiches, of the 3 lesfiches in the Lesfiches module, by '
         'name:\n'
-        'lesson | Functies | no labels | informatica, 1 course not in your '
-        'planner | visible | changed 2025-09-12 | id '
-        '${fakeLesficheFuncties.id}\n'
+        'lesson | Functies | no labels | informatica, chemie | visible | '
+        'changed 2025-09-12 | id ${fakeLesficheFuncties.id}\n'
         'lesson | Herhaling: lussen | labels JAAR 6, TRIMESTER 1 | '
         'informatica | hidden | changed 2026-09-07 | id '
-        '${fakeLesficheLussen.id}\n'
-        'Courses are named after your own planner from 2026-09-07 to '
-        '2026-11-02; a course without a lesson hour there shows as "course '
-        'not in your planner".',
+        '${fakeLesficheLussen.id}',
       );
-      // The list, and the own planner 4 weeks around today; nothing else.
-      expect(plannerRequests(), [
+      // The list, and the course list that names its courses; not the
+      // planner, and nothing else.
+      expect(await listRequests({}), [
         'GET $fakeLesfichesPath',
-        'GET $_ownPlannerPath',
+        'GET $fakeCourseListPath',
       ]);
-      expect(planner.calendarQueries.single, {
-        'from': PlannerService.formatDateTime(DateTime(2026, 9, 7)),
-        'to': PlannerService.formatDateTime(DateTime(2026, 11, 2, 23, 59, 59)),
-      });
+      expect(planner.calendarQueries, isEmpty);
       expect(planner.writes, isEmpty);
+    });
+
+    test('a course that the course list does not name is counted, with a '
+        'note', () async {
+      const fysica = FakePlannerCourse(
+        'c0000000-0000-4000-8000-000000000099',
+        'fysica',
+      );
+      planner.lesfiches.add(
+        const FakeLesfiche(
+          id: 'b0000000-0000-4000-8000-000000000031',
+          name: 'Krachten',
+          courses: [fakeInformatica, fysica],
+        ),
+      );
+
+      expect(
+        await ok('list_lesfiches', {'query': 'krachten'}),
+        '1 lesson lesfiche whose name holds "krachten", of the 4 lesfiches in '
+        'the Lesfiches module, by name:\n'
+        'lesson | Krachten | no labels | informatica, 1 unnamed course | '
+        'visible | changed 2025-09-12 | id '
+        'b0000000-0000-4000-8000-000000000031\n'
+        'A course that the school\'s course list does not name shows as '
+        '"unnamed course".',
+      );
     });
 
     test('lists the assignment lesfiches with their type, or every '
@@ -347,8 +374,13 @@ void main() {
         'the Lesfiches module).\n'
         'The labels of your lesson lesfiches: JAAR 6, TRIMESTER 1.',
       );
-      // Nothing to name: the planner is not read.
-      expect(plannerRequests(), ['GET $fakeLesfichesPath']);
+      // Nothing to name: the course list is not read.
+      expect(
+        await listRequests({
+          'label': ['JAAR'],
+        }),
+        ['GET $fakeLesfichesPath'],
+      );
     });
 
     test('keeps the lesfiches whose name holds every word of query, in any '
@@ -392,18 +424,38 @@ void main() {
       );
     });
 
-    test('when the own planner cannot be read, lists the lesfiches with '
-        'how many courses they have', () async {
-      planner.failing[_ownPlannerPath] = 500;
+    test('when the school\'s course list cannot be read, lists the '
+        'lesfiches with how many courses they have, and says why', () async {
+      // The session check reads the course list too: a first call opens the
+      // session, then the list fails.
+      await ok('list_lesfiches', {});
+      planner.failing[fakeCourseListPath] = 500;
 
+      expect(
+        await ok('list_lesfiches', {'type': 'all'}),
+        '3 lesfiches, of the 3 lesfiches in the Lesfiches module, by name:\n'
+        'lesson | Functies | no labels | 2 courses | visible | changed '
+        '2025-09-12 | id ${fakeLesficheFuncties.id}\n'
+        'lesson | Herhaling: lussen | labels JAAR 6, TRIMESTER 1 | 1 course | '
+        'hidden | changed 2026-09-07 | id ${fakeLesficheLussen.id}\n'
+        'assignment KT Kleine Taak | Taak: een eigen spel | labels Lussen | '
+        '1 course | visible | changed 2025-09-05 | id ${fakeLesficheGame.id}\n'
+        'Note: the names of the courses could not be read from the school\'s '
+        'course list (HTTP 500), so only the number of courses is shown.\n'
+        'Only the lesson lesfiches can be planned, with plan_lesfiche.',
+      );
+
+      // A course list in a shape the library does not know (a course
+      // without its id): no status to give.
+      planner.failing.remove(fakeCourseListPath);
+      planner.courseList.add(const FakePlannerCourse('', 'fysica'));
       expect(
         await ok('list_lesfiches', {}),
         allOf(
           contains('| Functies | no labels | 2 courses | visible |'),
-          contains('| labels JAAR 6, TRIMESTER 1 | 1 course | hidden |'),
           endsWith(
-            'Note: the names of the courses could not be read from your '
-            'planner (HTTP 500), so only the number of courses is shown.',
+            'Note: the names of the courses could not be read from the '
+            'school\'s course list, so only the number of courses is shown.',
           ),
         ),
       );
@@ -425,7 +477,8 @@ void main() {
         'lesson | Vrij | no labels | no course | visible | changed '
         '2025-09-12 | id b0000000-0000-4000-8000-000000000021',
       );
-      expect(plannerRequests(), ['GET $fakeLesfichesPath']);
+      // No course to name: the course list is not read.
+      expect(await listRequests({}), ['GET $fakeLesfichesPath']);
 
       planner.lesfiches.clear();
       expect(
@@ -574,16 +627,13 @@ void main() {
           'hour': fakeOwnSlot.ref,
           'lesfiche': fakeLesficheGame.id,
         }),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains(
-            'lesfiche ${fakeLesficheGame.id} "Taak: een eigen spel" is an '
-            'assignment lesfiche (assignments), not a lesson one (lessons): '
-            'planning it would not make a lesson.',
-          ),
-          endsWith('Nothing was changed in the planner.'),
-          isNot(contains('planLessonContent')),
-        ),
+        // In the tool's words, from the reason of the refusal
+        // (dartschool#100), pointing to list_lesfiches.
+        'The planner refused the change before it was sent: the lesfiche '
+        '"Taak: een eigen spel" is an assignment lesfiche, not a lesson '
+        'lesfiche: only a lesson lesfiche can be planned into a lesson hour. '
+        'List the lesson lesfiches with list_lesfiches and take the id of one '
+        'from there. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
       expect(planner.elements, contains(fakeOwnSlot.ref));
@@ -597,11 +647,10 @@ void main() {
           'hour': fakeOwnSlot.ref,
           'lesfiche': unknown,
         }),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('there is no lesfiche $unknown among your 3 lesfiches'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: you have no '
+        'lesfiche with the id given (any more). List your lesfiches with '
+        'list_lesfiches and take the id of a lesson lesfiche from there. '
+        'Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
     });

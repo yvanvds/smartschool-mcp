@@ -71,10 +71,12 @@ Future<CallToolResult> _mark(
     session,
     (messages) => changeEach(messages, box, ids, (id) async {
       // Marking unread names the folder of a message in the archive, as the
-      // library asks; marking read cannot (yvanvds/dartschool#94).
-      // Smartschool answers with the message's id and read state, 1 read or
-      // 0 unread. The library reads an answer without a state as 0 as well
-      // (yvanvds/dartschool#95); one without the message's id is caught.
+      // library asks; marking read cannot. The library documents that
+      // Smartschool finds a message in the archive by its id alone, seen
+      // live (yvanvds/dartschool#94). Smartschool answers with the message's
+      // id and read state, 1 read or 0 unread. The library returns null for
+      // an answer without a usable id or state (yvanvds/dartschool#95); the
+      // check compares the id and the state with those asked.
       final change = read
           ? await messages.markRead(id, boxType: box.boxType)
           : await messages.markUnread(
