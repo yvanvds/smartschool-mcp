@@ -12,28 +12,31 @@ import 'presence_format.dart';
 // Recording half-day presences, for `set_pupils_late` and
 // `set_pupils_present` (#47), on the library's `setLate` and `setPresent`.
 //
-// A half-day is an official record, so the server guards every change
-// itself; the library saves over whatever the half-day holds and returns
-// nothing (yvanvds/dartschool#105, a workaround; its removal is #76):
+// A half-day is an official record, so every change is guarded:
 //
-// - Before anything is sent: a date in the future, a class the account may
-//   not record presences for (`userCanRecord`), a grouping class without a
-//   school structure, and a pupil who is not listed or whose half-day holds
-//   another status than nothing, "Aanwezig", "Te laat" or "Te laat zonder
-//   geldige reden" are refused, for the whole call.
-// - Before each pupil's save, in the same session action: the class is read
-//   again, and a half-day that changed to another status meanwhile is
-//   refused ([_stillChangeable]). A pupil who already has the status (and
-//   the motivation) is left alone: nothing is saved for them.
+// - Before anything is sent, the server reads the class once and refuses,
+//   for the whole call: a date in the future, a class the account may not
+//   record presences for (`userCanRecord`), a grouping class without a
+//   school structure, a class or day the module refuses to record presences
+//   for (its `saveIsAllowed` and reason, yvanvds/dartschool#104), and a
+//   pupil who is not listed or whose half-day holds another status than
+//   nothing, "Aanwezig", "Te laat" or "Te laat zonder geldige reden". A pupil
+//   who already has the status (and the motivation) is left alone: nothing
+//   is saved for them.
 // - The pupils are changed one after the other, and the change stops at the
-//   first that fails.
-// - After the saves, the class is read once more, and the result says per
-//   pupil what the half-day holds now.
+//   first that fails. The library reads the class right before each save
+//   and refuses a half-day that holds another status than those
+//   ([changeablePresenceNames] as its `onlyReplacing`, dartschool#105): one
+//   that changed meanwhile is not overwritten.
+// - The result says per pupil what the half-day holds now, as the module
+//   answered the save (the library returns it, dartschool#105). The class is
+//   read once more only when the change stopped, or when a save's answer
+//   does not show the status.
 //
 // Repeating a session action, as [SmartschoolSession.run] does when
-// Smartschool refused the session, reads the class again and saves the same
-// status again: it cannot change a half-day twice, nor overwrite another
-// status.
+// Smartschool refused the session, makes the library read the class again
+// and save the same status again: it cannot change a half-day twice, nor
+// overwrite another status.
 
 /// At most this many pupils per call: more than a class has.
 const maxPresencePupils = 50;
@@ -71,6 +74,12 @@ enum PresenceTarget {
     lateWithoutReason => codes.lateWithoutReason != null,
     present => codes.present != null,
   };
+
+  /// Whether [cell] holds the status, named with [codes], and [motivation]
+  /// when one is given (null: any motivation).
+  bool heldBy(PresenceHalfDay? cell, PresenceCodes codes, String? motivation) =>
+      codes.kindOf(cell) == kind &&
+      (motivation == null || motivation == cell?.motivation.trim());
 }
 
 /// The `pupil_ids` argument of the write tools.
@@ -122,10 +131,23 @@ sealed class _Step {
 
 /// Saved.
 final class _Changed extends _Step {
-  const _Changed(this.before);
+  const _Changed(this.saved, {required this.readBefore});
 
-  /// What the half-day held when the server read it right before the save.
-  final PresenceHalfDay? before;
+  /// The half-day as the module answered the save, with what it held right
+  /// before ([PresenceSavedHalfDay.before]); null when the answer held no
+  /// record of it.
+  final PresenceSavedHalfDay? saved;
+
+  /// What the half-day held when the server read the class before anything
+  /// was sent.
+  final PresenceHalfDay? readBefore;
+
+  /// What the half-day held right before the save, as the library read it;
+  /// [readBefore] when the save's answer held no record.
+  PresenceHalfDay? get before => switch (saved) {
+    final saved? => saved.before,
+    null => readBefore,
+  };
 }
 
 /// The pupil already had the status (and the motivation): nothing saved.
@@ -163,10 +185,9 @@ final class _NotTried extends _Step {
 /// Refuses the whole call, before anything is sent, with a [ToolError] that
 /// says nothing was changed: see the comment at the top of this file. Then
 /// changes one pupil after the other, each in a session action of its own,
-/// stops at the first that fails, reads the class again, and says per pupil
-/// what was done and what the half-day holds now. The result is an error
-/// when the change stopped, or when the class read afterwards does not show
-/// what was saved.
+/// stops at the first that fails, and says per pupil what was done and what
+/// the half-day holds now. The result is an error when the change stopped,
+/// or when Smartschool does not show what was saved.
 Future<CallToolResult> changePresences(
   SmartschoolSession session, {
   required String tool,
@@ -203,6 +224,11 @@ Future<CallToolResult> changePresences(
       steps[pupilId] = const _NotTried();
       continue;
     }
+    final readBefore = _cell(read.pupil(pupilId)!, part, read.date);
+    if (target.heldBy(readBefore, read.codes, motivation)) {
+      steps[pupilId] = const _Unchanged();
+      continue;
+    }
     final step = await _changeOne(
       session,
       services,
@@ -212,25 +238,38 @@ Future<CallToolResult> changePresences(
       part: part,
       target: target,
       motivation: motivation,
+      readBefore: readBefore,
+      codes: read.codes,
       name: formatPresencePupil(read.pupil(pupilId)!),
     );
     steps[pupilId] = step;
     if (step is _Refused || step is _Failed) stoppedAt = pupilId;
   }
 
-  // What the half-days hold now: the library does not read a save back.
+  // The class is read once more only when the save answers do not tell
+  // what every half-day holds now: one holds no record of the half-day, or
+  // another status.
+  final confirmed = steps.values.every(
+    (step) => switch (step) {
+      _Changed(:final saved?) => target.heldBy(saved, read.codes, motivation),
+      _Changed() => false,
+      _ => true,
+    },
+  );
   PresenceDay? after;
   String? afterProblem;
-  try {
-    after = await withPresence(
-      session,
-      (presence) => readPresenceDay(presence, classId, day),
-      services: services,
-    );
-  } on ToolError catch (error) {
-    afterProblem = error.message;
-  } on SmartschoolProblem catch (problem) {
-    afterProblem = problem.message;
+  if (stoppedAt != null || !confirmed) {
+    try {
+      after = await withPresence(
+        session,
+        (presence) => readPresenceDay(presence, classId, day),
+        services: services,
+      );
+    } on ToolError catch (error) {
+      afterProblem = error.message;
+    } on SmartschoolProblem catch (problem) {
+      afterProblem = problem.message;
+    }
   }
 
   return _result(
@@ -291,6 +330,18 @@ void _refuseBeforeSending(
   PresenceTarget target,
 ) {
   final named = formatPresenceClassName(read.presenceClass);
+  if (read.refused) {
+    // The module's own refusal of the class on that day
+    // (yvanvds/dartschool#104), such as a class without pupils.
+    final why = switch (read.refusal) {
+      final reason? => ': ${formatModuleReason(reason)}',
+      null => ', and gives no reason.',
+    };
+    throw ToolError(
+      'The Presence module refuses to record presences for $named on '
+      '${formatPlannerDay(read.day)}$why $nothingChangedInPresences',
+    );
+  }
   if (!target.among(read.codes)) {
     throw ToolError(
       'The presence codes of $named have no "${target.status}", so $tool '
@@ -334,9 +385,11 @@ PresenceHalfDay? _cell(PresencePupil pupil, DayPart part, String date) =>
     pupil.halfDayFor(part, date: date);
 
 /// Sets [target] for pupil [pupilId] ([name], for the messages) in a session
-/// action of its own: reads the class again, refuses a half-day that changed
-/// meanwhile ([_stillChangeable]), leaves a pupil who already has the status
-/// alone, and saves.
+/// action of its own, with the library's `setLate` or `setPresent`, which
+/// read the class right before the save and refuse a half-day that holds
+/// another status than [changeablePresenceNames], such as one that changed
+/// since the read before anything was sent ([readBefore]). [codes] name
+/// what it holds.
 Future<_Step> _changeOne(
   SmartschoolSession session,
   PresenceServices services, {
@@ -346,48 +399,45 @@ Future<_Step> _changeOne(
   required DayPart part,
   required PresenceTarget target,
   required String? motivation,
+  required PresenceHalfDay? readBefore,
+  required PresenceCodes codes,
   required String name,
 }) async {
   try {
-    return await runPresence(session, (presence) async {
-      final now = await readPresenceDay(presence, classId, day);
-      final pupil = now.pupil(pupilId);
-      if (_stillChangeable(now, pupil, part, name) case final reason?) {
-        return _Refused(reason);
-      }
-      final before = _cell(pupil!, part, now.date);
-      if (now.codes.kindOf(before) == target.kind &&
-          (motivation == null || motivation == before?.motivation.trim())) {
-        return const _Unchanged();
-      }
-      switch (target) {
-        case PresenceTarget.present:
-          await presence.setPresent(
-            userId: pupilId,
-            classGroupId: classId,
-            date: day,
-            part: part,
-            motivation: motivation ?? '',
-          );
-        case PresenceTarget.late || PresenceTarget.lateWithoutReason:
-          await presence.setLate(
-            userId: pupilId,
-            classGroupId: classId,
-            date: day,
-            part: part,
-            withoutValidReason: target == PresenceTarget.lateWithoutReason,
-            motivation: motivation ?? '',
-          );
-      }
-      return _Changed(before);
-    }, services: services);
+    final saved = await runPresence(
+      session,
+      (presence) => switch (target) {
+        PresenceTarget.present => presence.setPresent(
+          userId: pupilId,
+          classGroupId: classId,
+          date: day,
+          part: part,
+          motivation: motivation ?? '',
+          onlyReplacing: changeablePresenceNames,
+        ),
+        PresenceTarget.late ||
+        PresenceTarget.lateWithoutReason => presence.setLate(
+          userId: pupilId,
+          classGroupId: classId,
+          date: day,
+          part: part,
+          withoutValidReason: target == PresenceTarget.lateWithoutReason,
+          motivation: motivation ?? '',
+          onlyReplacing: changeablePresenceNames,
+        ),
+      },
+      services: services,
+    );
+    return _Changed(saved, readBefore: readBefore);
+  } on SmartschoolPresenceChangeRefusedError catch (refused) {
+    return _Refused(
+      'The ${formatDayPart(part)} of $name changed meanwhile: it now holds '
+      '${codes.describe(refused.halfDay)}, which the server never '
+      'overwrites.',
+    );
   } on SmartschoolPresenceError catch (error) {
     log('presence: $error');
-    return _Failed(
-      "Smartschool's Presence module refused the change for $name, or a "
-      'read right before it; the technical details are in the server log.',
-      maybeSaved: false,
-    );
+    return _Failed(_refusedSave(error, name), maybeSaved: false);
   } on ToolError catch (error) {
     return _Failed(error.message, maybeSaved: false);
   } on SmartschoolProblem catch (problem) {
@@ -399,31 +449,33 @@ Future<_Step> _changeOne(
   }
 }
 
-/// Why the half-day [part] of [pupil] ([name]), as read right before its
-/// save in [now], may no longer be changed: the pupil is no longer listed,
-/// or the half-day changed to another status since the read before anything
-/// was sent. Null when it may be changed.
+/// Why the change for [name] failed with [error]: the module's reason when
+/// it refused the save (the library gives it without the pupil's name,
+/// yvanvds/dartschool#109), else a refusal of the save or of the library's
+/// read right before it, whose details go to the log only.
 ///
-/// The library saves over whatever the half-day holds
-/// (yvanvds/dartschool#105, a workaround; its removal is #76).
-String? _stillChangeable(
-  PresenceDay now,
-  PresencePupil? pupil,
-  DayPart part,
-  String name,
-) {
-  if (pupil == null) {
-    return '$name is no longer listed in the class on that day.';
+/// The reason is not quoted: for an error without a reason of the module's
+/// (or in a shape it does not recognise), the library gives a text of its
+/// own instead, such as [PresenceSaveError.noReason].
+String _refusedSave(SmartschoolPresenceError error, String name) {
+  final reasons = {
+    for (final saveError in error.saveErrors) formatSentence(saveError.message),
+  };
+  if (reasons.isEmpty) {
+    return "Smartschool's Presence module refused the change for $name, or a "
+        'read right before it; the technical details are in the server log.';
   }
-  final cell = _cell(pupil, part, now.date);
-  if (now.codes.kindOf(cell).changeable) return null;
-  return 'The ${formatDayPart(part)} of $name changed meanwhile: it now '
-      'holds ${now.codes.describe(cell)}, which the server never overwrites.';
+  return "Smartschool's Presence module refused to save the change for "
+      '$name: ${reasons.join(' ')}';
 }
 
 /// The result of a write: a heading, a line per pupil with what was done
-/// and what the half-day holds now ([after], null when [afterProblem] kept
-/// it from being read), and why the write stopped.
+/// and what the half-day holds now, and why the write stopped.
+///
+/// What it holds now comes from [after], the class read again, when it was
+/// read; else from the save's answer for a pupil whose half-day was saved,
+/// and from [read], the read before anything was sent, for a pupil left
+/// alone. [afterProblem] says why [after] could not be read.
 CallToolResult _result({
   required PresenceDay read,
   required PresenceDay? after,
@@ -449,8 +501,25 @@ CallToolResult _result({
   var unconfirmed = false;
   final lines = <String>[];
   for (final MapEntry(key: pupilId, value: step) in steps.entries) {
-    final pupilNow = after?.pupil(pupilId);
-    final cell = pupilNow == null ? null : _cell(pupilNow, part, after!.date);
+    // What the half-day holds now, when it is known: `listed` is false for
+    // a pupil the class read again no longer lists.
+    final ({bool listed, PresenceHalfDay? cell})? now;
+    if (after != null) {
+      final pupilNow = after.pupil(pupilId);
+      now = (
+        listed: pupilNow != null,
+        cell: pupilNow == null ? null : _cell(pupilNow, part, after.date),
+      );
+    } else {
+      now = switch (step) {
+        _Changed(:final saved?) => (listed: true, cell: saved),
+        _Unchanged() => (
+          listed: true,
+          cell: _cell(read.pupil(pupilId)!, part, read.date),
+        ),
+        _ => null,
+      };
+    }
     final done = switch (step) {
       _Changed(:final before) => 'set (was ${read.codes.describe(before)})',
       _Unchanged() => 'already had it; nothing saved',
@@ -459,24 +528,22 @@ CallToolResult _result({
       _Failed() => 'not changed (see below)',
       _NotTried() => 'not tried',
     };
-    final now = switch ((after, pupilNow)) {
-      (null, _) => '',
-      (_?, null) => '; no longer listed in the class',
-      (final after?, _?) => '; now: ${after.codes.describe(cell)}',
+    final holds = switch (now) {
+      null => '',
+      (listed: false, cell: _) => '; no longer listed in the class',
+      (listed: true, :final cell) => '; now: ${read.codes.describe(cell)}',
     };
     final saved = step is _Changed || (step is _Failed && step.maybeSaved);
-    final asSaved =
-        pupilNow != null &&
-        after!.codes.kindOf(cell) == target.kind &&
-        (motivation == null || motivation == cell?.motivation.trim());
     final String mark;
-    if (step is _Changed && after != null && !asSaved) {
+    if (step is _Changed &&
+        now != null &&
+        !(now.listed && target.heldBy(now.cell, read.codes, motivation))) {
       unconfirmed = true;
       mark = ' (NOT what was saved)';
     } else {
-      mark = saved && after == null ? ' (not confirmed)' : '';
+      mark = saved && now == null ? ' (not confirmed)' : '';
     }
-    lines.add('- ${name(pupilId)}: $done$now$mark');
+    lines.add('- ${name(pupilId)}: $done$holds$mark');
   }
 
   final heading = switch (stoppedAt) {
@@ -494,12 +561,12 @@ CallToolResult _result({
     _ => null,
   };
   final untried = steps.values.whereType<_NotTried>().isNotEmpty;
-  final afterNote = switch ((after, afterProblem)) {
-    (null, final problem?) when changed || stoppedAt != null =>
-      'Reading the class again afterwards failed, so what the half-days hold '
-          'now is not confirmed: $problem Read the class with '
+  final afterNote = switch (afterProblem) {
+    final problem? =>
+      'Reading the class again afterwards failed, so the result does not '
+          'show what every half-day holds now: $problem Read the class with '
           'list_class_presences and tell the user what it shows.',
-    _ => null,
+    null => null,
   };
   return CallToolResult(
     isError: stoppedAt != null || unconfirmed || afterNote != null,

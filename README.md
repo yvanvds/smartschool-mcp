@@ -653,11 +653,11 @@ first two only read, the last two change the presences of pupils:
   (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
   alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
   or "nothing recorded", with its motivation, and per pupil the pupil id the
-  writes take. Rows per lesson are left out (the library ignores them). The
-  module answers a class the account may not record for without pupils, and
-  the library drops its `saveIsAllowed` and `errorMessage`
-  (yvanvds/dartschool#104), so an empty list says "no pupils on that day, or
-  the account may not see them" (a hedge; its removal is tracked in #76).
+  writes take. Rows per lesson are left out (the library ignores them). When
+  the module lists no pupils, the tool gives the module's reason
+  (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
+  geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
+  de toekomst afwezigheden op te nemen." for a day in the future.
 - `set_pupils_late`: marks pupils (`pupil_ids`, 1 to 50) of a class late for
   the morning or the afternoon (`part`) of a day (`date`), with `setLate`:
   "Te laat", or with `without_valid_reason` "Te laat zonder geldige reden",
@@ -673,33 +673,42 @@ first two only read, the last two change the presences of pupils:
   `setPresent` and the same arguments without `without_valid_reason`: for
   example to undo a "Te laat" recorded by mistake.
 
-The library saves over whatever a half-day holds and returns nothing
-(yvanvds/dartschool#105), so both writes guard the record themselves
-(`changePresences` in `lib/src/presence/presence_writes.dart`; a workaround,
-its removal is tracked in #76). Before anything is sent they refuse, for the
-whole call: a date in the future, a class the account may only view (after
-reading only the configuration), a grouping class, a pupil who is not listed,
-and a pupil whose half-day holds anything but nothing, "Aanwezig", "Te laat"
-or "Te laat zonder geldige reden", such as an absence the secretariat
-recorded: the writes never overwrite another status. Right before each
-pupil's save they read the class again, in the same session action, and
-refuse a half-day that changed to another status meanwhile. They stop at the
-first pupil that fails (refused, a save the module refused, a login or
-connection failure), then read the class once more: the result says per
-pupil whether the status was set (and what the half-day held), the pupil
-already had it, or was not changed or not tried, and what the half-day holds
-now. It is an error when the change stopped, or when a half-day reported as
-set does not show the status afterwards ("NOT what was saved"). A save whose
-answer was lost is reported as maybe saved, and the class read afterwards
-shows whether it was. A session that Smartschool refused for a save means it
-was not carried out: the library logs in again and sends it once more, and a
-repeat of the session action reads the class again, so a half-day cannot be
-changed twice. A `SmartschoolPresenceError` (the module refused a request
-with an error page, or a class, code or pupil could not be found) is
-reported as "usually the account lacks the right", with how to get it or turn
-"Aanwezigheden" off; the library's message goes to the log only. Confirming
-presences (`userCanConfirm`), other codes and the registration per lesson are
-not offered; #77 is the live check.
+Both writes guard the record (`changePresences` in
+`lib/src/presence/presence_writes.dart`). Before anything is sent they read
+the class once and refuse, for the whole call: a date in the future, a class
+the account may only view (after reading only the configuration), a
+grouping class, a class or day the module refuses to record presences for
+(its `saveIsAllowed`, with its reason, yvanvds/dartschool#104), a pupil who
+is not listed, and a pupil whose half-day holds anything but nothing,
+"Aanwezig", "Te laat" or "Te laat zonder geldige reden", such as an absence
+the secretariat recorded: the writes never overwrite another status. A
+pupil who already has the status (and the motivation, when one is given) is
+left alone, as that read shows. For each other pupil, `setLate` and
+`setPresent` get those four statuses as their `onlyReplacing`
+(yvanvds/dartschool#105): the library reads the class right before the save
+and refuses a half-day that changed to another status meanwhile, without
+sending anything. They stop at the first pupil that fails (refused, a save
+the module refused, a login or connection failure). The result says per
+pupil whether the status was set (and what the half-day held right before),
+the pupil already had it, or was not changed or not tried, and what the
+half-day holds now: as the module answered the save, which the library
+returns. The class is read once more only when the change stopped, or when
+a save's answer does not show the status (it holds no record of the
+half-day, or another status). It is an error when the change stopped, or
+when a half-day reported as set does not show the status ("NOT what was
+saved"). A save whose answer was lost is reported as maybe saved, and the
+class read afterwards shows whether it was. A session that Smartschool
+refused for a save means it was not carried out: the library logs in again
+and sends it once more, and a repeat of the session action makes the
+library read the class again, so a half-day cannot be changed twice. A save
+the module refused is reported with the module's reason, which the library
+gives without the pupil's name (yvanvds/dartschool#109). Any other
+`SmartschoolPresenceError` (the module refused a request with an error
+page, or a class, code or pupil could not be found) is reported as "usually
+the account lacks the right", with how to get it or turn "Aanwezigheden"
+off; the library's message goes to the log only. Confirming presences
+(`userCanConfirm`), other codes and the registration per lesson are not
+offered; #77 is the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
@@ -827,10 +836,15 @@ dartschool's trimmed captures, with fake names: three classes (one the
 account may only view, one grouping class), the codes of a structure
 ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
 half-days of each kind and a registration per lesson. It carries out a save
-on the half-days as the live module did in dartschool#2, can refuse it,
-answer it with an error page, lose its answer or answer it without carrying
-it out (`nextSaves`), and answers a class the account may only view without
-pupils, as the module does.
+on the half-days as the live module did in dartschool#2 and answers it as
+the module's web client reads the answer (the records as stored), can answer
+it without the records, refuse it with the module's error objects, answer it
+with an error page, lose its answer or answer it without carrying it out
+(`nextSaves`). It answers `getClass` as the module did live
+(dartschool#104): every class it knows with its pupils, also one the account
+may only view, and a class without pupils, a class ID it does not know and
+a day after `today` without pupils, with `saveIsAllowed: false` and the
+module's reason.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

@@ -35,13 +35,15 @@ ServerTool setPupilsPresentTool(
         "It refuses the whole call, before anything is saved, when a pupil's "
         'half-day holds anything else (such as an absence the secretariat '
         'recorded, which is changed in Smartschool itself), when a pupil is '
-        'not listed in the class, for a day in the future, and for a class '
-        'the account may not record presences for; the result says why. It '
+        'not listed in the class, for a day in the future, for a class the '
+        'account may not record presences for, and for a class or day the '
+        'Presence module refuses (with its reason); the result says why. It '
         'marks the pupils one after the other and stops at the first that '
-        'fails. Afterwards it reads the class again: the result says per '
-        'pupil whether the status was set, the pupil already had it (nothing '
-        'saved), or was not changed or not tried, and what the half-day holds '
-        'now. Pass that on to the user. Only for an account with the right to '
+        "fails, also when a pupil's half-day changed to another status "
+        'meanwhile. The result says per pupil whether the status was set, '
+        'the pupil already had it (nothing saved), or was not changed or not '
+        'tried, and what the half-day holds now, as Smartschool answered the '
+        'save. Pass that on to the user. Only for an account with the right to '
         'record half-day presences, as an absence administrator has.',
     inputSchema: Schema.object(
       properties: {

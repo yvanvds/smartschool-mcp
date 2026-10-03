@@ -5,12 +5,17 @@ import 'package:dio/dio.dart';
 // A fake of Smartschool's Presence module (Aanwezigheden): the endpoints the
 // library's `PresenceService` reads and writes, answered in the shape of
 // dartschool's trimmed captures of the live module
-// (`test/presence_service_flow_test.dart` and
-// `test/presence_service_errors_test.dart` there), with fake names, and the
+// (`test/presence_service_flow_test.dart`,
+// `test/presence_service_errors_test.dart` and
+// `test/presence_class_pupils_test.dart` there), with fake names, and the
 // save of a half-day (`savePupilsPresences`), carried out on the half-days as
 // the live module did in dartschool#2: the cell named by its `presenceID`
 // (a new one when it is null) gets the code or the alias sent, and its
-// motivation.
+// motivation. The save is answered as the module's web client reads its
+// answer (dartschool#105, #109; `test/presence_set_status_test.dart`
+// there): the pupils sent with their records as stored, and a refused save
+// with an error object per record, with the module's reason and the pupil's
+// name.
 
 /// The module's configuration: the classes the account may view.
 const fakePresenceConfigPath = '/Presence/Main/getConfig';
@@ -35,13 +40,31 @@ const fakePresenceTeLaat = 497;
 const fakePresenceZonderReden = 14;
 const fakePresenceDoktersattest = 479;
 
+/// What the module answers `getClass` for a class without pupils, and for a
+/// class ID it does not know (seen live, dartschool#104).
+const fakePresenceNoPupils = 'Deze klas bevat geen leerlingen.';
+
+/// What the module answers `getClass` for a day after today (seen live,
+/// dartschool#104).
+const fakePresenceFutureDay =
+    'Het is niet mogelijk om in de toekomst afwezigheden op te nemen.';
+
+/// The reason the fake gives for a save it refuses ([PresenceSave.rejected]).
+const fakePresenceSaveRefused = 'De afwezigheid kon niet worden opgeslagen.';
+
 /// How the fake answers a save, for the tests of a save that fails.
 enum PresenceSave {
-  /// Carried out, and answered as the live module did: the saved records
-  /// with an empty `errors`.
+  /// Carried out, and answered with the pupils sent and their records as
+  /// stored, with an empty `errors`.
   confirmed,
 
-  /// Not carried out: answered with errors, as the module refuses a save.
+  /// Carried out, and answered with an empty `errors` but without the
+  /// records, so the library cannot return the half-day as stored.
+  withoutRecords,
+
+  /// Not carried out: answered with an error per record sent, with the
+  /// module's reason ([fakePresenceSaveRefused]) and the record with the
+  /// pupil's name, as the module refuses a save (dartschool#109).
   rejected,
 
   /// Not carried out: answered with HTTP 500 and Smartschool's error page.
@@ -50,8 +73,9 @@ enum PresenceSave {
   /// Carried out, but the connection drops before the answer arrives.
   answerLost,
 
-  /// Answered as confirmed, but not carried out, so the class read
-  /// afterwards does not show it.
+  /// Answered with an empty `errors`, but not carried out: the records in
+  /// the answer are as they were, and the class read afterwards does not
+  /// show the change either.
   unapplied,
 }
 
@@ -132,12 +156,21 @@ const fake2A = FakePresenceClass(
 ///
 /// Every Presence request is recorded in [requests]. With [refused] set,
 /// every request is answered with Smartschool's error page (HTTP 500), as
-/// the module answers a request it cannot handle. A class the account may
-/// not record for is answered as the live module does: without pupils,
-/// with `saveIsAllowed: false` and an `errorMessage`.
+/// the module answers a request it cannot handle. `getClass` is answered as
+/// the live module did (dartschool#104): a class with pupils on a day up to
+/// [today] with its pupils, `saveIsAllowed: true` and an empty
+/// `errorMessage` (also a class the account may only view: the live module
+/// listed every class it was asked for); a class without pupils, a class ID
+/// it does not know (without the class's fields) and a day after [today]
+/// without pupils, with `saveIsAllowed: false` and the module's reason.
 class FakePresence {
   /// The classes of the configuration, in the module's order.
   final List<FakePresenceClass> classes = [];
+
+  /// The day it is in the module (`yyyy-MM-dd`): `getClass` for a later day
+  /// is refused as the live module refuses a day in the future. Null: no day
+  /// is refused.
+  String? today;
 
   /// The half-days, by pupil, day (`yyyy-MM-dd`) and part (`am`, `pm`).
   final Map<(int, String, String), FakeHalfDay> halfDays = {};
@@ -187,12 +220,13 @@ class FakePresence {
   ];
 
   /// The school of the captures, trimmed and with fake names: 1A, 1B (view
-  /// only) and 2A (a grouping class). On [day] (`yyyy-MM-dd`), in 1A:
-  /// Peeters is present in the morning and the afternoon and has a
-  /// registration per lesson; Janssens has nothing recorded; Dupont has a
-  /// doctor's note in the morning; Claes is late in the morning, with a
+  /// only) and 2A (a grouping class), on [day] (`yyyy-MM-dd`), which is
+  /// [today]. In 1A: Peeters is present in the morning and the afternoon and
+  /// has a registration per lesson; Janssens has nothing recorded; Dupont
+  /// has a doctor's note in the morning; Claes is late in the morning, with a
   /// motivation, and late without a valid reason in the afternoon.
   void loadSchool(String day) {
+    today = day;
     classes.addAll(const [fake1A, fake1B, fake2A]);
     halfDays[(fakePeeters.userId, day, 'am')] = FakeHalfDay(
       90001,
@@ -289,9 +323,9 @@ class FakePresence {
   }
 
   /// The pupils of a class with their presences on one day, as the module
-  /// answers `getClass` for a single day with pupils and presences. A class
-  /// the account may not record for (or does not know) gets no pupils, as
-  /// in the live module.
+  /// answers `getClass` for a single day with pupils and presences (see
+  /// [FakePresence]): the class's fields first, as the live module answers
+  /// a class it knows.
   ResponseBody _getClass(Map<String, String> form) {
     final presenceClass = _class(int.tryParse(form['classID'] ?? ''));
     final day = form['startDate'];
@@ -302,22 +336,31 @@ class FakePresence {
         form['includePresences'] != '1') {
       return _html(_errorPage, status: 500);
     }
-    if (presenceClass == null || !presenceClass.userCanRecord) {
-      return _json(
-        jsonEncode({
-          'pupils': const [],
-          'saveIsAllowed': false,
-          'errorMessage':
-              'Je hebt geen rechten om de aanwezigheden van deze klas te '
-              'registreren.',
-        }),
-      );
+    Map<String, Object?> refused(String reason) => {
+      'errorMessage': reason,
+      'pupils': const [],
+      'saveIsAllowed': false,
+    };
+    if (presenceClass == null) {
+      return _json(jsonEncode(refused(fakePresenceNoPupils)));
+    }
+    final fields = {
+      'groupID': presenceClass.groupId,
+      'name': presenceClass.name,
+      'isOfficial': presenceClass.structId == null ? 0 : 1,
+      'userCanRecord': presenceClass.userCanRecord,
+      'structID': presenceClass.structId ?? '',
+    };
+    if (today case final today? when day.compareTo(today) > 0) {
+      return _json(jsonEncode({...fields, ...refused(fakePresenceFutureDay)}));
+    }
+    if (presenceClass.pupils.isEmpty) {
+      return _json(jsonEncode({...fields, ...refused(fakePresenceNoPupils)}));
     }
     return _json(
       jsonEncode({
-        'groupID': presenceClass.groupId,
-        'structID': presenceClass.structId ?? '',
-        'saveIsAllowed': true,
+        ...fields,
+        'errorMessage': '',
         'pupils': [
           for (final pupil in presenceClass.pupils)
             {
@@ -327,17 +370,7 @@ class FakePresence {
               'presence': [
                 for (final part in ['am', 'pm'])
                   if (halfDay(pupil.userId, day, part) case final cell?)
-                    {
-                      'presenceID': cell.presenceId,
-                      'presenceDate': day,
-                      'studentID': pupil.userId,
-                      'hourID': null,
-                      'partOfDay': part,
-                      'codeID': cell.codeId,
-                      'aliasID': cell.aliasId,
-                      'motivation': cell.motivation,
-                      'deleteStatus': 0,
-                    },
+                    _record(pupil.userId, day, part, cell),
                 if (lessonRows.contains((pupil.userId, day)))
                   {
                     'presenceID': 90099,
@@ -353,12 +386,35 @@ class FakePresence {
               ],
             },
         ],
+        'saveIsAllowed': true,
       }),
     );
   }
 
-  /// Carries out a save as the next save says, and answers it as the live
-  /// module did: the saved records, with an empty `errors`.
+  /// The half-day [cell] of pupil [userId] on [day], [part] (`am`, `pm`), as
+  /// the module gives a record in `getClass` and in the answer to a save.
+  Map<String, Object?> _record(
+    int userId,
+    String day,
+    String part,
+    FakeHalfDay cell,
+  ) => {
+    'presenceID': cell.presenceId,
+    'presenceDate': day,
+    'studentID': userId,
+    'hourID': null,
+    'partOfDay': part,
+    'codeID': cell.codeId,
+    'aliasID': cell.aliasId,
+    'motivation': cell.motivation,
+    'deleteStatus': 0,
+  };
+
+  /// Carries out a save as the next save says, and answers it as the
+  /// module's web client reads the answer (dartschool#105, #109): the pupils
+  /// sent, each with its records as stored, and an empty `errors`; a refused
+  /// save with an error per record sent, with the module's reason and the
+  /// record with the pupil's name.
   ///
   /// The library reads the class before it saves, so a save the fake cannot
   /// carry out (a pupil not in a class the account may record for, another
@@ -370,34 +426,36 @@ class FakePresence {
     if (outcome == PresenceSave.errorPage) {
       return _html(_errorPage, status: 500);
     }
-    if (outcome == PresenceSave.rejected) {
-      return _json(
-        jsonEncode({
-          'hasErrors': true,
-          'errors': ['De aanwezigheid kon niet bewaard worden.'],
-        }),
-      );
-    }
     final changes = _changes(form['pupils']);
     if (changes == null) {
       return _json('{"error":"the fake cannot save this"}', status: 400);
     }
-    final saved = <Map<String, Object?>>[];
+    final sent = (jsonDecode(form['pupils']!) as List)
+        .cast<Map<String, Object?>>();
+    if (outcome == PresenceSave.rejected) {
+      return _json(
+        jsonEncode({
+          'hasErrors': true,
+          'errors': [
+            for (final pupil in sent)
+              for (final presence in pupil['presence']! as List)
+                {
+                  'message': fakePresenceSaveRefused,
+                  'presence': {
+                    ...(presence as Map).cast<String, Object?>(),
+                    'pupil': _pupilName(pupil['userID']),
+                  },
+                },
+          ],
+        }),
+      );
+    }
     for (final (key, codeId, aliasId, motivation) in changes) {
       if (outcome == PresenceSave.unapplied) continue;
-      final cell = halfDays[key] ??= FakeHalfDay(_nextPresenceId++);
-      cell
+      halfDays[key] = (halfDays[key] ?? FakeHalfDay(_nextPresenceId++))
         ..codeId = codeId
         ..aliasId = aliasId
         ..motivation = motivation.isEmpty ? null : motivation;
-      saved.add({
-        'presenceID': cell.presenceId,
-        'presenceDate': key.$2,
-        'studentID': key.$1,
-        'partOfDay': key.$3,
-        'codeID': codeId,
-        'aliasID': aliasId,
-      });
     }
     if (outcome == PresenceSave.answerLost) {
       throw DioException.connectionError(
@@ -406,9 +464,31 @@ class FakePresence {
       );
     }
     return _json(
-      jsonEncode({'hasErrors': false, 'errors': const [], 'presences': saved}),
+      jsonEncode({
+        'hasErrors': false,
+        'errors': const [],
+        if (outcome != PresenceSave.withoutRecords)
+          'pupils': [
+            for (final pupil in sent)
+              {
+                'userID': pupil['userID'],
+                'movementID': pupil['movementID'],
+                'presence': [
+                  for (final (key, _, _, _) in changes)
+                    if (key.$1 == pupil['userID'])
+                      if (halfDays[key] case final cell?)
+                        _record(key.$1, key.$2, key.$3, cell),
+                ],
+              },
+          ],
+      }),
     );
   }
+
+  /// The name of pupil [userId], as the module gives it with a record.
+  String? _pupilName(Object? userId) => [
+    for (final presenceClass in classes) ...presenceClass.pupils,
+  ].where((pupil) => pupil.userId == userId).firstOrNull?.name;
 
   /// The half-days a save's `pupils` payload changes, with the code, alias
   /// and motivation each gets, or null when the fake cannot carry it out
