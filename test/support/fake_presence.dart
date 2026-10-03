@@ -180,6 +180,12 @@ class FakePresence {
   /// it.
   final Set<(int, String)> lessonRows = {};
 
+  /// Whether the account has no lesson at the moment, as a teacher between
+  /// lessons: `getConfig` then gives as the active class the placeholder
+  /// class -2, "Uit Planner", which is no class (seen live, dartschool#104
+  /// and #117), instead of the first of [classes].
+  bool noLesson = false;
+
   /// When set, every request is answered with the error page.
   bool refused = false;
 
@@ -313,7 +319,11 @@ class FakePresence {
       'hasErrors': false,
       'errors': const [],
       'state': {
-        'activeClass': classes.isEmpty ? null : ref(classes.first),
+        'activeClass': noLesson
+            ? _noLessonClass
+            : classes.isEmpty
+            ? null
+            : ref(classes.first),
         'schoolyear': '2025-11-05',
       },
       'main': {
@@ -536,6 +546,19 @@ class FakePresence {
     }
     return changes;
   }
+
+  /// The active class of the configuration for an account without a lesson
+  /// at the moment ([noLesson]), as in dartschool's capture
+  /// (`test/presence_class_pupils_test.dart` there).
+  static const _noLessonClass = {
+    'adminNumber': null,
+    'groupID': -2,
+    'instituteNumber': 0,
+    'name': 'Uit Planner',
+    'structID': null,
+    'studierichting': '',
+    'userCanConfirm': false,
+  };
 
   /// The codes of [fakePresenceStruct], as `getAllCodes` answers them.
   static const _codes = [

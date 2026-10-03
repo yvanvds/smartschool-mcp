@@ -673,6 +673,39 @@ void main() {
       );
     });
 
+    group('on, for a teacher without a lesson at the moment: the placeholder '
+        '"Uit Planner" (class id -2) that the module gives as the active '
+        'class is not counted (#84)', () {
+      setUp(() => server.presence.noLesson = true);
+
+      test('with classes: access', () async {
+        final (_, text) = await status(presence: SwitchState.on);
+
+        expect(
+          text,
+          contains(
+            '\nAanwezigheden: on; access: yes (the Presence module lets it '
+            'record presences for 2 of the 3 classes it lists)\n',
+          ),
+        );
+      });
+
+      test('without classes: no access, as the module lists none', () async {
+        server.presence.classes.clear();
+
+        final (_, text) = await status(presence: SwitchState.on);
+
+        expect(
+          text,
+          contains(
+            '\nAanwezigheden: on; access: NO. The Presence module lists no '
+            'classes for this account, as for an account without $rights. If '
+            'so, $fix.\n',
+          ),
+        );
+      });
+    });
+
     test('on, refused by the module with an error page: no access, without '
         'quoting the page', () async {
       server.presence.refused = true;

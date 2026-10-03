@@ -238,6 +238,41 @@ void main() {
         'account without $_rights. If so, $_fix.',
       );
     });
+
+    group('a teacher without a lesson at the moment: the placeholder "Uit '
+        'Planner" (class id -2) that the module gives as the active class is '
+        'no class, and is neither listed nor counted (#84)', () {
+      setUp(() => presence.noLesson = true);
+
+      test('with classes', () async {
+        final text = await ok('list_presence_classes');
+
+        expect(
+          text,
+          'The Presence module lists 3 classes for this account, in its '
+          'order; it may record presences for 2 of them.\n'
+          '1A | class id 298 | may record\n'
+          '1B | class id 312 | view only\n'
+          '2A | class id 1650 | may record | grouping class (no school '
+          'structure): record in the official class',
+        );
+      });
+
+      test(
+        'without classes: none, as for an account without the rights',
+        () async {
+          presence.classes.clear();
+
+          final text = await ok('list_presence_classes');
+
+          expect(
+            text,
+            'The Presence module lists no classes for this account, as for an '
+            'account without $_rights. If so, $_fix.',
+          );
+        },
+      );
+    });
   });
 
   group('list_class_presences', () {

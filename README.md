@@ -643,10 +643,13 @@ first two only read, the last two change the presences of pupils:
 
 - `list_presence_classes`: the classes the account may view in the module
   (`getConfig`: its allowed classes, and the active class when it is not
-  among them), one line per class with its name, class id (`groupID`), and
-  whether the account may record presences for it (`userCanRecord`: "may
-  record" or "view only"); a grouping class without a school structure is
-  marked, as presences are recorded in the pupils' official class.
+  among them; not the placeholder "Uit Planner", class id -2, that the
+  module gives as the active class of a teacher without a lesson at the
+  moment, #84, which #85 tracks until dartschool#117 is done), one line per
+  class with its name, class id (`groupID`), and whether the account may
+  record presences for it (`userCanRecord`: "may record" or "view only"); a
+  grouping class without a school structure is marked, as presences are
+  recorded in the pupils' official class.
 - `list_class_presences`: the pupils of one class (`class_id`) on one day
   (`date`, default today) with what their morning and afternoon hold
   (`getClassPupils`), named with the codes of the class's structure
