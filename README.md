@@ -366,8 +366,10 @@ client name. It also installs again while that copy runs.
   and its weblinks, and for an assignment from when pupils see it, whether
   it was announced and its status. Private info is hidden from pupils, but
   colleagues who can see the element read it too (dartschool#84). The
-  labels, attachments and weblinks are read from the detail's raw JSON
-  until the library types them (yvanvds/dartschool#98, #70).
+  labels, attachments and weblinks are the library's typed lists
+  (dartschool#98), and every element is read by its type name, also one of
+  a type the library does not know (`getPlannedElement` with `typeName`,
+  dartschool#99).
 - `list_class_assignments`: the assignments (tests and tasks) of 1 to 10
   classes (`classes`, planner ids such as `group/4069_4256`) in a period
   (`from` and `until`, today to 4 weeks ahead by default), of everyone who

@@ -116,7 +116,8 @@ ToolError? plannerToolError(Object error) {
 /// The reason in [message], the message of a
 /// [SmartschoolPlannerWriteRefusedError]: without the name of the library's
 /// method in front (`planLesson: `) and its closing `Nothing was sent.`,
-/// which the tools say in their own words.
+/// which the tools say in their own words. To be replaced by the error's
+/// `reason` (yvanvds/dartschool#100): #86.
 String _refusal(String message) {
   final reason = message
       .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
@@ -324,33 +325,10 @@ final class PlannedElementRef {
   /// does not know.
   PlannedElementType get type => PlannedElementType.fromWire(typeName);
 
-  /// Reads the element's detail.
-  ///
-  /// An element of a type the library does not know is read with
-  /// [PlannerService.getDetail], which takes an element: one with only the
-  /// type, platform and id that the request needs. A workaround until the
-  /// library reads an element by its type name (yvanvds/dartschool#99); its
-  /// removal is #70.
-  Future<PlannedElementDetail> read(PlannerService planner) {
-    final type = this.type;
-    if (type != PlannedElementType.other) {
-      return planner.getPlannedElement(
-        type: type,
-        platformId: platformId,
-        id: id,
-      );
-    }
-    final unknown = DateTime.fromMillisecondsSinceEpoch(0);
-    return planner.getDetail(
-      PlannedElement(
-        id: id,
-        platformId: platformId,
-        type: type,
-        typeName: typeName,
-        period: PlannerPeriod(from: unknown, to: unknown),
-      ),
-    );
-  }
+  /// Reads the element's detail, by its [typeName]: also an element of a
+  /// type the library does not know ([PlannedElementType.other]).
+  Future<PlannedElementDetail> read(PlannerService planner) => planner
+      .getPlannedElement(typeName: typeName, platformId: platformId, id: id);
 
   @override
   bool operator ==(Object other) =>

@@ -96,7 +96,7 @@ const lesficheCourseDays = 28;
 /// The Lesfiches module names the courses of a lesfiche by id only
 /// ([LessonContentCourse]), the same id as a planner element's
 /// [PlannerCourse] (yvanvds/dartschool#101). A workaround until the library
-/// names them; its removal is #70. A course without an element in the
+/// names them; its removal is #87. A course without an element in the
 /// period is not in the map.
 Future<Map<String, String>> ownCourseNames(
   PlannerService planner, {

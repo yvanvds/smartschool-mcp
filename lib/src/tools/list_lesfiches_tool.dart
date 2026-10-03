@@ -96,7 +96,7 @@ Future<CallToolResult> _list(
   ) async {
     // Without the library's course names (yvanvds/dartschool#101): one
     // request, as before 0.3.3. The courses are named after the own planner
-    // until #70.
+    // until #87.
     final all = await LessonContentService(
       client,
     ).getItems(withCourseNames: false);

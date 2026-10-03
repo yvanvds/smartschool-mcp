@@ -467,9 +467,17 @@ class FakePlannedElement {
           'id': '4069_d0000000-0000-4000-8000-00000000000$index',
         },
     ],
+    // The shape dartschool saw live for yvanvds/dartschool#98: the file
+    // name is `fileName`, not `name`.
     'attachments': [
       for (final (index, name) in attachments.indexed)
-        {'id': 'f0000000-0000-4000-8000-00000000003$index', 'name': name},
+        {
+          'id': 'f0000000-0000-4000-8000-00000000003$index',
+          'fileName': name,
+          'fileSize': 48213,
+          'mimeType': 'application/pdf',
+          'visibility': {'option': 'always', 'daysAfterEnd': null},
+        },
     ],
     'weblinks': [
       for (final (index, (name, url)) in weblinks.indexed)

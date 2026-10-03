@@ -715,12 +715,11 @@ void main() {
     PlannedElementDetail detail(Map<String, Object?> changes) =>
         PlannedElementDetail.fromJson({...fakeLesson.detailJson(), ...changes});
 
-    // Since flutter_smartschool 0.3.3 the library parses these lists itself
-    // (yvanvds/dartschool#98) and refuses an item without its id, or a list
-    // that is not one: only the shapes it accepts reach formatElementDetail.
-    // Its typed lists replace the raw reading in #70.
-    test('reads labels, attachments and weblinks, leaving out what has no '
-        'text', () {
+    // The library parses these lists (yvanvds/dartschool#98), and refuses an
+    // item without its id, or a list that is not one, with an error of its
+    // own: only the shapes it accepts reach formatElementDetail.
+    test('names the labels, attachments (by their fileName) and weblinks, '
+        'leaving out what has no text', () {
       final text = formatElementDetail(
         detail({
           'labels': [
@@ -729,21 +728,42 @@ void main() {
             {'id': 3, 'color': 'aqua'},
           ],
           'attachments': [
-            {'id': 1},
+            {
+              'id': 1,
+              'fileName': ' rubriek.docx ',
+              'fileSize': 18342,
+              'mimeType': 'application/msword',
+              'visibility': {'option': 'always', 'daysAfterEnd': null},
+            },
+            {'id': 2, 'name': 'not the planner\'s field'},
+            {'id': 3, 'fileName': ''},
           ],
           'weblinks': [
-            {'id': 1, 'name': '', 'url': 'https://example.com/a'},
+            {'id': 1, 'name': '', 'url': ' https://example.com/a '},
             {'id': 2, 'name': 'Zonder adres'},
             {'id': 3, 'name': '', 'url': ''},
           ],
         }),
       );
       expect(text, contains('\nLabels: JAAR 6\n'));
-      expect(text, isNot(contains('Attachments')));
+      expect(text, contains('\nAttachments: rubriek.docx\n'));
       expect(
         text,
         contains('\nWeblinks: https://example.com/a, Zonder adres\n'),
       );
+    });
+
+    test('has no lines for lists the planner leaves out, or that are '
+        'empty', () {
+      for (final lists in [
+        {'labels': null, 'attachments': null, 'weblinks': null},
+        {'labels': [], 'attachments': [], 'weblinks': []},
+      ]) {
+        final text = formatElementDetail(detail(lists));
+        expect(text, isNot(contains('Labels')));
+        expect(text, isNot(contains('Attachments')));
+        expect(text, isNot(contains('Weblinks')));
+      }
     });
 
     test('cuts off a very long info text, with a note', () {
