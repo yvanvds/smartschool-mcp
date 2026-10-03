@@ -102,27 +102,46 @@ String? _text(String? value) {
 }
 
 /// The users and then the groups that the search of Smartschool's compose
-/// form ([MessagesService.searchRecipientsForCompose]) finds for [query], in
-/// Smartschool's order, each once.
+/// form finds for [query], in Smartschool's order, each once:
+/// [searchRecipientsAll] with one query, which makes the requests of the
+/// library's [MessagesService.searchRecipientsForCompose] (one compose form
+/// and one search).
+Future<List<Recipient>> searchRecipients(
+  MessagesService messages,
+  String query,
+) async => (await searchRecipientsAll(messages, [query]))[query]!;
+
+/// For each of [queries], the users and then the groups that the search of
+/// Smartschool's compose form finds for it, in Smartschool's order, each
+/// once, keyed by the query, in the order given. A query given twice is
+/// searched once.
 ///
-/// Only loads a compose form and searches: nothing is sent, and the form is
-/// left unused, as when the user closes it in Smartschool.
+/// Searches them all on one compose form
+/// ([MessagesService.searchRecipientsForComposeAll], yvanvds/dartschool#107),
+/// one search per query, where a [searchRecipients] per query loads a form
+/// for each. Only loads a compose form and searches: nothing is sent, and
+/// the form is left unused, as when the user closes it in Smartschool.
 ///
 /// Throws a [ToolError] when Smartschool does not open its compose form (a
 /// [SmartschoolComposeError]), for instance for an account that may not send
 /// messages.
 ///
-/// When the session expires between loading the form and searching, the
-/// library logs in again and sends the search with the old form's token
-/// (yvanvds/dartschool#97); what Smartschool answers then has not been seen.
-Future<List<Recipient>> searchRecipients(
+/// A search goes out only in the session of the compose form whose token it
+/// sends (yvanvds/dartschool#97): when Smartschool refuses the session for
+/// it, or the client logged in again since the form was loaded, the library
+/// loads a new form, logging in first when Smartschool refuses the session
+/// for that, and goes on with the searches on it. It does so once: when a
+/// search on the new form cannot go out in its session either, it throws a
+/// [SmartschoolSessionExpiredError], and no search went out with the token
+/// of another session.
+Future<Map<String, List<Recipient>>> searchRecipientsAll(
   MessagesService messages,
-  String query,
+  Iterable<String> queries,
 ) async {
-  final List<MessageSearchUser> users;
-  final List<MessageSearchGroup> groups;
+  final Map<String, (List<MessageSearchUser>, List<MessageSearchGroup>)>
+  results;
   try {
-    (users, groups) = await messages.searchRecipientsForCompose(query);
+    results = await messages.searchRecipientsForComposeAll(queries);
   } on SmartschoolComposeError catch (error) {
     log('recipient search: compose form refused: $error');
     throw const ToolError(
@@ -131,14 +150,13 @@ Future<List<Recipient>> searchRecipients(
       'send messages; the details are in the server log.',
     );
   }
-  final seen = <Object>{};
-  return [
-    for (final recipient in <Recipient>[
-      for (final user in users) UserRecipient(user),
-      for (final group in groups) GroupRecipient(group),
-    ])
-      if (seen.add(recipient._key)) recipient,
-  ];
+  return {
+    for (final MapEntry(key: query, value: (users, groups)) in results.entries)
+      query: withoutRepeats(<Recipient>[
+        for (final user in users) UserRecipient(user),
+        for (final group in groups) GroupRecipient(group),
+      ]),
+  };
 }
 
 /// How many users and groups [recipients] holds, like `2 users` or `1 user

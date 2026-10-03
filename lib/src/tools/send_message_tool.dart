@@ -180,13 +180,13 @@ List<RecipientRequest> _requests(Map<String, Object?> arguments, _Field field) {
 /// Looks up the recipients of [requests], sends the message with [client]
 /// and returns to whom and with which subject ([sendSummary]).
 ///
-/// Every recipient is looked up (each name searched once) before anything is
-/// sent. When one does not name exactly one user or group, or one is in two
-/// fields, it throws a [ToolError] and sends nothing. The message is sent
-/// once, with [submitOnce], which says why repeating this (as
-/// [SmartschoolSession.run] does when Smartschool rejects the session)
-/// cannot send it twice, and turns a send that Smartschool does not confirm
-/// into a [SendNotConfirmed].
+/// Every recipient is looked up (each name searched once, all on one compose
+/// form) before anything is sent. When one does not name exactly one user
+/// or group, or one is in two fields, it throws a [ToolError] and sends
+/// nothing. The message is sent once, with [submitOnce], which says why
+/// repeating this (as [SmartschoolSession.run] does when Smartschool rejects
+/// the session) cannot send it twice, and turns a send that Smartschool does
+/// not confirm into a [SendNotConfirmed].
 Future<String> _send(
   SmartschoolClient client,
   Map<_Field, List<RecipientRequest>> requests, {
@@ -244,6 +244,9 @@ Future<String> _send(
 
 /// The recipient each of [requests] names, by field, each once.
 ///
+/// Every name is searched once (in its first spelling, ignoring case and
+/// extra spaces), all on one compose form ([searchRecipientsAll]).
+///
 /// Throws a [ToolError] that lists every request that names no user or
 /// group, or several, with who the search does find, or that names a
 /// recipient in two fields.
@@ -251,14 +254,18 @@ Future<Map<_Field, List<Recipient>>> _lookUp(
   MessagesService messages,
   Map<_Field, List<RecipientRequest>> requests,
 ) async {
-  final searches = <String, List<Recipient>>{};
+  // The spelling searched for each name, by its normalName: the first.
+  final names = <String, String>{};
+  for (final request in requests.values.expand((requests) => requests)) {
+    names.putIfAbsent(normalName(request.name), () => request.name);
+  }
+  final searches = await searchRecipientsAll(messages, names.values);
   final unclear = <String>[];
   final found = <_Field, List<Recipient>>{};
   for (final MapEntry(key: field, value: fieldRequests) in requests.entries) {
     final recipients = <Recipient>[];
     for (final request in fieldRequests) {
-      final results = searches[normalName(request.name)] ??=
-          await searchRecipients(messages, request.name);
+      final results = searches[names[normalName(request.name)]]!;
       switch (request.matches(results)) {
         case [final recipient]:
           recipients.add(recipient);
