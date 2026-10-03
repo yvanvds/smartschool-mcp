@@ -8,7 +8,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:smartschool_mcp/src/opt_in.dart';
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
+import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
@@ -53,8 +57,18 @@ void main() {
         'password': 'string',
         'mfa': 'string',
         'download_dir': 'directory',
+        'skore': 'boolean',
+        'presence': 'boolean',
       },
     );
+    // A switch, and only a switch, is a boolean field (#42).
+    for (final setting in Setting.values) {
+      expect(
+        fields[setting.fileKey]!['type'] == 'boolean',
+        setting.isSwitch,
+        reason: setting.name,
+      );
+    }
     expect(
       [
         for (final MapEntry(:key, :value) in fields.entries)
@@ -80,14 +94,62 @@ void main() {
     );
   });
 
-  test('gives an optional field an empty default, without variables: '
-      'Claude Desktop passes an unset field as "\${user_config.KEY}" and does '
-      'not replace \${HOME} in a default', () {
+  test('gives an optional field a default without variables, empty for '
+      'text and off for a switch: Claude Desktop passes an unset field as '
+      '"\${user_config.KEY}" and does not replace \${HOME} in a '
+      'default', () {
     for (final MapEntry(:key, :value) in fields.entries) {
       if (value['required'] == true) {
         expect(value, isNot(contains('default')), reason: key);
+      } else if (value['type'] == 'boolean') {
+        expect(value['default'], isFalse, reason: key);
       } else {
         expect(value['default'], '', reason: key);
+      }
+    }
+  });
+
+  test('describes a switch by the rights its tools need, and each of its '
+      'tools as one that needs it on (#42, #47)', () {
+    final skore = fields[Setting.skore.fileKey]!;
+    expect(
+      skore['description'],
+      allOf(
+        contains('Rapporten > Modellen en Puntenboeken'),
+        contains('laat het dan uit'),
+      ),
+    );
+    final presence = fields[Setting.presence.fileKey]!;
+    expect(
+      presence['description'],
+      allOf(
+        contains('halve-dagaanwezigheden van klassen registreert'),
+        contains('afwezigheidsbeheerder'),
+        contains('laat het dan uit'),
+      ),
+    );
+    final session = SmartschoolSession(const ExtensionSettings());
+    final optIns = <OptInTools>[
+      skoreOptIn(session, SwitchState.on),
+      presenceOptIn(session, SwitchState.on),
+    ];
+    expect(
+      {for (final optIn in optIns) optIn.setting},
+      Setting.switches.toSet(),
+      reason: 'a group of tools for every switch',
+    );
+    final descriptions = {
+      for (final tool in manifest['tools'] as List)
+        (tool as Map)['name']: tool['description'] as String,
+    };
+    for (final optIn in optIns) {
+      for (final tool in optIn.tools) {
+        final name = tool.definition.name;
+        expect(
+          descriptions[name],
+          startsWith('Alleen met ${optIn.setting.formTitle} aan: '),
+          reason: name,
+        );
       }
     }
   });
@@ -109,7 +171,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(27));
+    expect(readmeTools, hasLength(39));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

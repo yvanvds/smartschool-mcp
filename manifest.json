@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.2.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten, Intradesk en planner.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen.\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging).\n- **Aanwezigheden (alleen met Aanwezigheden aan):** voor wie in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: de klassen bekijken, en per klas en dag wat er voor elke leerling 's morgens en 's middags geregistreerd is. Leerlingen als te laat markeren (ook zonder geldige reden), of weer als aanwezig, bijvoorbeeld een groep van een bus die te laat was (telkens pas na jouw bevestiging). Een andere registratie, zoals een afwezigheid, overschrijft de extensie nooit.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -28,7 +28,9 @@
         "SMARTSCHOOL_USERNAME": "${user_config.username}",
         "SMARTSCHOOL_PASSWORD": "${user_config.password}",
         "SMARTSCHOOL_MFA": "${user_config.mfa}",
-        "SMARTSCHOOL_DOWNLOAD_DIR": "${user_config.download_dir}"
+        "SMARTSCHOOL_DOWNLOAD_DIR": "${user_config.download_dir}",
+        "SMARTSCHOOL_SKORE": "${user_config.skore}",
+        "SMARTSCHOOL_PRESENCE": "${user_config.presence}"
       }
     }
   },
@@ -140,6 +142,54 @@
     {
       "name": "trash_assignment",
       "description": "Verplaatst een eigen toets of taak naar de prullenbak van de planner, waar je ze 30 dagen kunt terugzetten. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_skore_classes",
+      "description": "Alleen met Skore-beheer aan: toont de klassen in Skore, met hun groep en rapportmodel."
+    },
+    {
+      "name": "list_skore_courses",
+      "description": "Alleen met Skore-beheer aan: toont de vakken van een klas in Skore, met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten)."
+    },
+    {
+      "name": "list_skore_teachers",
+      "description": "Alleen met Skore-beheer aan: toont de leerkrachten die je in Skore aan een vak kunt koppelen."
+    },
+    {
+      "name": "list_skore_gradebook_shares",
+      "description": "Alleen met Skore-beheer aan: toont de puntenboeken van een leerkracht in Skore, met de leerkrachten met wie elk gedeeld is."
+    },
+    {
+      "name": "add_skore_teacher",
+      "description": "Alleen met Skore-beheer aan: koppelt een leerkracht aan een vak van een klas in Skore, als nieuwe lesopdracht. Pas na jouw bevestiging."
+    },
+    {
+      "name": "replace_skore_teacher",
+      "description": "Alleen met Skore-beheer aan: geeft een lesopdracht in Skore een andere leerkracht; de lesopdracht en haar puntenboek blijven. Pas na jouw bevestiging."
+    },
+    {
+      "name": "share_skore_gradebook",
+      "description": "Alleen met Skore-beheer aan: deelt een puntenboek in Skore met een of meer leerkrachten, om te lezen of ook te wijzigen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "unshare_skore_gradebook",
+      "description": "Alleen met Skore-beheer aan: stopt het delen van een puntenboek in Skore met een of meer leerkrachten. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_presence_classes",
+      "description": "Alleen met Aanwezigheden aan: toont de klassen in de module Aanwezigheden, en of je er aanwezigheden voor mag registreren."
+    },
+    {
+      "name": "list_class_presences",
+      "description": "Alleen met Aanwezigheden aan: toont de leerlingen van een klas met wat er op een dag 's morgens en 's middags voor hen geregistreerd is."
+    },
+    {
+      "name": "set_pupils_late",
+      "description": "Alleen met Aanwezigheden aan: markeert een of meer leerlingen van een klas als te laat voor een halve dag (ook zonder geldige reden). Een andere registratie overschrijft het nooit. Pas na jouw bevestiging."
+    },
+    {
+      "name": "set_pupils_present",
+      "description": "Alleen met Aanwezigheden aan: markeert een of meer leerlingen van een klas weer als aanwezig voor een halve dag, bijvoorbeeld na een te laat dat een vergissing was. Een andere registratie overschrijft het nooit. Pas na jouw bevestiging."
     }
   ],
   "keywords": [
@@ -148,7 +198,9 @@
     "onderwijs",
     "berichten",
     "intradesk",
-    "planner"
+    "planner",
+    "skore",
+    "aanwezigheden"
   ],
   "license": "GPL-3.0",
   "privacy_policies": [
@@ -194,6 +246,20 @@
       "description": "Map waarin Claude bestanden uit Smartschool (Intradesk-bestanden, bijlagen) bewaart om ze te openen. Kies bij voorkeur een (tijdelijke) map in je Cowork-project. Leeg: Downloads\\Smartschool in je gebruikersmap. De extensie verwijdert de bestanden die ze zelf bewaarde na 7 dagen en raakt andere bestanden nooit aan.",
       "required": false,
       "default": ""
+    },
+    "skore": {
+      "type": "boolean",
+      "title": "Skore-beheer",
+      "description": "Alleen als je in Skore de rechten hebt voor puntenbeheer: Rapporten > Modellen en Puntenboeken, zoals een Skore-beheerder. Dan kan Claude in Skore de klassen, de vakken met hun leerkrachten (de lesopdrachten) en de leerkrachten bekijken, en na jouw bevestiging leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen hebben die rechten niet: laat het dan uit.",
+      "required": false,
+      "default": false
+    },
+    "presence": {
+      "type": "boolean",
+      "title": "Aanwezigheden",
+      "description": "Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat. Dan kan Claude de aanwezigheden van een klas bekijken, en na jouw bevestiging leerlingen als te laat of weer als aanwezig markeren. De meeste leerkrachten en alle leerlingen hebben die rechten niet: laat het dan uit.",
+      "required": false,
+      "default": false
     }
   }
 }

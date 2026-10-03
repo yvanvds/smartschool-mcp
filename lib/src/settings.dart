@@ -6,7 +6,8 @@ import 'package:yaml/yaml.dart';
 import 'client_app.dart';
 
 /// A setting of the server: the four values it logs in to Smartschool with
-/// ([login]), and the optional download folder.
+/// ([login]), the optional download folder, and the opt-in switches
+/// ([switches]) that turn on tools only some accounts can use.
 ///
 /// Of the four, the 2FA key is optional: only an account with two-factor
 /// authentication (2FA), such as a teacher's, needs it. Students sign in
@@ -38,6 +39,31 @@ enum Setting {
     'download_dir',
     required: false,
     forLogin: false,
+  ),
+
+  /// The switch for the Skore tools (`lib/src/skore/`), for an account with
+  /// the rights for score management in Skore, as a Skore administrator
+  /// has. Off by default (#42).
+  skore(
+    'Skore-beheer',
+    'SMARTSCHOOL_SKORE',
+    'skore',
+    required: false,
+    forLogin: false,
+    isSwitch: true,
+  ),
+
+  /// The switch for the presence tools (`lib/src/presence/`), for an
+  /// account that records half-day presences for classes in Smartschool's
+  /// Presence module, as an absence administrator does. Off by default
+  /// (#47).
+  presence(
+    'Aanwezigheden',
+    'SMARTSCHOOL_PRESENCE',
+    'presence',
+    required: false,
+    forLogin: false,
+    isSwitch: true,
   );
 
   const Setting(
@@ -46,6 +72,7 @@ enum Setting {
     this.fileKey, {
     this.required = true,
     this.forLogin = true,
+    this.isSwitch = false,
   });
 
   /// The title of the field in the extension's install form.
@@ -66,12 +93,95 @@ enum Setting {
   /// Whether the server logs in with it ([login]).
   final bool forLogin;
 
+  /// Whether it is an opt-in switch: on or off, off by default, and only
+  /// when it is on does the server offer a group of tools that only some
+  /// accounts can use (`OptInTools` in `opt_in.dart`). In the extension
+  /// manifest a `boolean` field with the default `false`, which Claude
+  /// Desktop passes as `true` or `false`; read with [Switches.read].
+  final bool isSwitch;
+
   /// The settings the server logs in with, in form order: the required
   /// ones and the optional 2FA key.
   static final List<Setting> login = [
     for (final setting in values)
       if (setting.forLogin) setting,
   ];
+
+  /// The opt-in switches ([isSwitch]), in form order.
+  static final List<Setting> switches = [
+    for (final setting in values)
+      if (setting.isSwitch) setting,
+  ];
+}
+
+/// What an opt-in switch ([Setting.isSwitch]) is set to.
+enum SwitchState {
+  /// Turned on: `true` (also `1`, `yes`, `on`, and in Dutch `ja`, `aan`).
+  on,
+
+  /// Turned off: not set, empty, or `false` (also `0`, `no`, `off`, `nee`,
+  /// `uit`).
+  off,
+
+  /// Set to something that is neither on nor off: taken as off, and
+  /// `smartschool_status` says so.
+  unclear;
+
+  bool get isOn => this == on;
+
+  /// The state [value] sets: a value as typed or passed in an environment
+  /// variable (any case, spaces around it ignored), or as YAML reads it
+  /// from a credentials file (a `bool`, a number or a string); null is not
+  /// set, so [off].
+  static SwitchState parse(Object? value) {
+    if (value == null) return off;
+    final text = '$value'.trim().toLowerCase();
+    if (_on.contains(text)) return on;
+    if (text.isEmpty || _off.contains(text)) return off;
+    return unclear;
+  }
+
+  static const _on = {'true', '1', 'yes', 'on', 'ja', 'aan'};
+  static const _off = {'false', '0', 'no', 'off', 'nee', 'uit'};
+}
+
+/// The opt-in switches ([Setting.switches]) as set when the server starts:
+/// it decides then which tools it offers.
+final class Switches {
+  /// Switches in [states]; every other switch is off.
+  const Switches([this._states = const {}]);
+
+  /// The switches set for [source], with [environment] (this process's by
+  /// default): each switch's environment variable when it is set and not
+  /// empty, else (with a credentials file) the file's key, else off. The
+  /// environment variable comes first, as for the download folder, so a
+  /// developer can turn a switch on for a server started with
+  /// `--credentials` without changing the file.
+  factory Switches.read(
+    CredentialSource source, {
+    Map<String, String>? environment,
+  }) {
+    final variables = environment ?? Platform.environment;
+    return Switches({
+      for (final setting in Setting.switches)
+        setting: switch (variables[setting.envVar]) {
+          final value? when value.trim().isNotEmpty => SwitchState.parse(value),
+          _ => switch (source) {
+            CredentialsFile() => SwitchState.parse(source.value(setting)),
+            ExtensionSettings() => SwitchState.off,
+          },
+        },
+    });
+  }
+
+  final Map<Setting, SwitchState> _states;
+
+  /// What [setting], a switch, is set to.
+  SwitchState operator [](Setting setting) =>
+      _states[setting] ?? SwitchState.off;
+
+  /// Whether [setting], a switch, is on.
+  bool isOn(Setting setting) => this[setting].isOn;
 }
 
 /// Where the Smartschool settings come from.
@@ -318,12 +428,19 @@ final class CredentialsFile extends CredentialSource {
   /// The download folder in the file ([Setting.downloadDir]'s key), or null
   /// when it has none, or when the file cannot be read: [read] reports
   /// that.
-  String? downloadDirectory() {
+  String? downloadDirectory() => switch (value(Setting.downloadDir)) {
+    final String directory => directory,
+    _ => null,
+  };
+
+  /// The value of [setting]'s key in the file, as YAML reads it (a string,
+  /// a `bool`, a number), for a setting the library's [PathCredentials]
+  /// does not read, such as the download folder or a switch; null when the
+  /// file has no such key, or cannot be read: [read] reports that.
+  Object? value(Setting setting) {
     try {
       final yaml = loadYaml(File(path).readAsStringSync());
-      if (yaml is! YamlMap) return null;
-      final value = yaml[Setting.downloadDir.fileKey];
-      return value is String ? value : null;
+      return yaml is YamlMap ? yaml[setting.fileKey] : null;
     } catch (_) {
       // Never the message: a YAML error quotes the file, which holds the
       // password.

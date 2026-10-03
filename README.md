@@ -48,10 +48,15 @@ password: your-password
 mfa: YOUR-TOTP-BASE32-SECRET
 # Optional: where save_intradesk_file and save_message_attachment save.
 download_dir: C:\Users\you\Downloads\Smartschool
+# Optional: true offers the Skore tools (see Opt-in tools below).
+skore: false
+# Optional: true offers the presence tools (see Opt-in tools below).
+presence: false
 ```
 
 `SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
-*Saving files* below).
+*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`, and
+`SMARTSCHOOL_PRESENCE` before `presence`.
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -120,7 +125,9 @@ via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_USERNAME": "your.username",
         "SMARTSCHOOL_PASSWORD": "your-password",
         "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
-        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder"
+        "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder",
+        "SMARTSCHOOL_SKORE": "false",
+        "SMARTSCHOOL_PRESENCE": "false"
       }
     }
   }
@@ -134,7 +141,9 @@ the variable out). Spaces and hyphens in it are ignored; a value that is not
 Base32 (such as the app's 6-digit code) is reported without sending the
 password. When Smartschool asks for a 2FA code and the key is empty, the
 server says that the account uses 2FA and that the key must be filled in.
-`SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below). Restart
+`SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below), and so
+are `SMARTSCHOOL_SKORE` and `SMARTSCHOOL_PRESENCE`, which offer the Skore
+tools and the presence tools when `true` (see *Opt-in tools* below). Restart
 Claude Desktop after editing the file. The server's stderr ends up in Claude
 Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -171,7 +180,7 @@ of serving MCP (`lib/src/install.dart`):
   locally only with `SMARTSCHOOL_MCP_CLIPBOARD_TEST=on`, since they replace
   what is on the clipboard (they put back the text that was there);
 - it shows, in Dutch, what to fill in in ChatGPT: the name `smartschool`, the
-  command, no arguments and the five variables. Before those steps it warns
+  command, no arguments and the seven variables. Before those steps it warns
   that what ChatGPT reads goes to OpenAI, sensitive information about pupils
   included. So: a paid plan only, with *Improve the model for everyone* off
   (#50). It waits for Enter so the window stays open.
@@ -226,10 +235,11 @@ client name. It also installs again while that copy runs.
 
 ### Tools
 
-- `smartschool_status`: whether the connection works, or what to fix, the
-  download folder and whether it is writable, and whether a newer version
-  is available, with its download link and what is new (see *Update check*
-  below).
+- `smartschool_status`: whether the connection works, or what to fix,
+  whether each opt-in switch is on and, when it is, whether the account has
+  the rights for its tools (see *Opt-in tools* below), the download folder
+  and whether it is writable, and whether a newer version is available,
+  with its download link and what is new (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, newest
   first, filtered by words in subject or sender, unread, and date range.
   Smartschool lists a box 50 messages at a time; the tool asks for the next
@@ -486,6 +496,211 @@ clear, a create or a trash means the write was not carried out: the session
 repeats the call, which reads the element again (a lesson hour filled
 meanwhile is gone, so nothing is sent).
 
+The Skore tools are offered only when the switch "Skore-beheer" is on (see
+*Opt-in tools* below): they need the rights for score management in Skore
+(Rapporten > Modellen and Puntenboeken), as a Skore administrator has, and
+most teachers and all pupils lack them. The first four read Skore with the
+library's `SkoreService` (dartschool#70, dartschool#74) and change nothing;
+the last four assign teachers to courses (dartschool#71) and share
+gradebooks (dartschool#74):
+
+- `list_skore_classes`: the classes of Skore's report models
+  (`getClasses`), one line per class with its name, Skore class id, group
+  and report model, in Skore's order. `query` keeps the classes whose name
+  or group holds every word (ignoring case and accents, as
+  `search_messages`), since a school has many classes. The class id is
+  Skore's own, not a planner id.
+- `list_skore_courses`: the courses of one class (`class_id`, from
+  `list_skore_classes`) with the teachers assigned to each, Skore's
+  "lesopdrachten" (`getCourses`), in Skore's order and indented by depth.
+  Per row: its label, course id, code and depth, and then that it is a
+  group header (which cannot get a teacher), that it has no teacher, or
+  its teachers with their teacher id and assignment id (which is also the
+  gradebook's id). The first line counts the courses, those without a
+  teacher, and the group headers. Course codes are not unique within a
+  class (a course and its sub-course can share one), so the description
+  tells Claude to name a course by its id. An empty list means a class
+  without a course structure or an unknown id; the result says so.
+- `list_skore_teachers`: the teachers Skore lets assign to a course
+  (`getTeachers`), by name with their teacher id (the Smartschool user id),
+  in Skore's order; `query` as for `list_skore_classes`.
+- `list_skore_gradebook_shares`: the gradebooks of one teacher
+  (`teacher_id`, the owner; `getGradebookShares`), as Skore's "share
+  gradebooks" manager shows them (Puntenboeken), one line per gradebook in
+  Skore's order: its course, class and gradebook id, and its readers and
+  writers by name, joined with `getTeachers` (a teacher Skore no longer
+  lists shows by teacher id only). The gradebook id is the assignment id of
+  `list_skore_courses`, and the owner the teacher of that assignment. An
+  empty list means a teacher without gradebooks or an unknown id; the
+  result says so.
+- `add_skore_teacher`: assigns a teacher (`teacher_id`, from
+  `list_skore_teachers`) to a course (`course_id`) of a class (`class_id`),
+  with the library's `addTeacher`: a new assignment, which holds all pupils
+  of the class; the teachers already on the course keep theirs. Marked
+  destructive, not idempotent: Claude is told to read the class and look up
+  the teacher first, to show the user the class, the course's label, its
+  teachers now and the teacher to assign, and to wait for the user's
+  confirmation; that nothing needs to happen when the teacher is already on
+  the course; and to use `replace_skore_teacher`, not this tool, to give a
+  course another teacher. The result gives the assignment as saved: the
+  course's label, the class id, the teacher and the assignment id.
+- `replace_skore_teacher`: gives an assignment (`assignment_id`, from
+  `list_skore_courses`) of a course of a class another teacher
+  (`teacher_id`), with `replaceTeacher`: the assignment keeps its id, and
+  its gradebook stays. Marked destructive, not idempotent, with the same
+  confirmation. Before the save the library asks Skore (`getMyGroups`)
+  whether the current teacher works with "Mijn lesgroepen" for the course;
+  if so, nothing is saved (`SmartschoolSkoreMyGroupsError`), and Claude is
+  told to leave those groups to the user in Skore: the library never deletes
+  them (`explodeMyGroups`), and the tool tries no other way. The result also
+  names the teacher replaced.
+- `share_skore_gradebook`: shares a gradebook (`owner_id`, `gradebook_id`)
+  with one or more teachers (`teacher_ids`, 1 to 50) with `read` or `write`
+  access (`access`), with `shareGradebook`, once per teacher, one after the
+  other: sharing with all teachers of a class takes one confirmation, not
+  one per teacher. The teachers it is already shared with keep their
+  access; a teacher with the other access moves to the access given.
+  Marked destructive (sharing gives colleagues access to pupils' scores),
+  and idempotent: sharing again the same way saves nothing. Claude is told
+  the typical flow (the class, its courses, the assignment of the
+  titularis, then the other teachers of the class, all from
+  `list_skore_courses`), to read the gradebook with
+  `list_skore_gradebook_shares` first, and to show the user the gradebook
+  (course and class), the teachers and the access and wait for the user's
+  confirmation.
+- `unshare_skore_gradebook`: stops sharing a gradebook with one or more
+  teachers, with `unshareGradebook`, likewise; the other teachers keep
+  theirs, and a teacher Skore no longer lists can still be taken off.
+  Marked destructive and idempotent, with the same confirmation.
+
+For both writes on gradebooks, the tool first reads the owner's gradebooks
+and the teachers itself, to name them and to know what each teacher has
+before the change: the library returns only the gradebook after it (a
+workaround for yvanvds/dartschool#103; its removal is tracked in #74). It
+then stops at the first teacher that fails, and the result says per teacher
+whether the gradebook was shared (or unshared), was already shared that way
+(nothing saved), or was not, or not tried, followed by why it stopped and
+the gradebook's readers and writers afterwards; it is an error when it
+stopped. Before each change the library reads the gradebooks (and, to share,
+the teachers) again and refuses the owner among the teachers, a gradebook
+that is not the owner's, and, to share, a teacher Skore does not list
+(`SmartschoolSkoreChangeRefusedError`); the tool passes the reason on, and
+tells Claude to read the gradebook again. The save (`saveShared`) holds the
+complete readers and writers of that one gradebook, the ids as numbers, so
+sending it again does not change the outcome: the library sends it again
+after logging in again. It reads the gradebooks again after the save, so a
+teacher reported as done is certain; a save that Skore or that read does
+not confirm (`SmartschoolSkoreSaveUnconfirmedError`) is reported as maybe
+saved, with what to look for in `list_skore_gradebook_shares`, and Claude is
+told not to call the tool again for it. Sharing from a teacher's own
+account, without the rights (Skore's `/SkoreGradebook`), is not offered: the
+library does not support it.
+
+For both writes on assignments, the library reads the class (`getCourses`) and the teachers
+(`getTeachers`) again and refuses, before saving, a course that is not in the
+class or is a group header, an assignment that is not the course's, a
+teacher already on the course (for a replace, its current one too) and one
+Skore does not let assign (`SmartschoolSkoreChangeRefusedError`); the tool
+passes the reason on, says that nothing was changed, and tells Claude to read
+the class again. The save (`saveOwner`) is sent once, never again after
+logging in again. A save that Skore does not confirm
+(`SmartschoolSkoreSaveUnconfirmedError`: another answer, an error page, a
+connection lost after it went out) is reported as maybe saved, with what to
+look for in `list_skore_courses`, and Claude is told not to call the tool
+again for it, as for a message whose send Smartschool did not confirm. A
+session that Smartschool refused for the save means the save was not carried
+out: the session repeats the call, which reads the class again, so a teacher
+who is on the course by then is refused rather than added twice. The writes
+return only the assignment, so the tools read the course themselves first, to
+name it and the teacher replaced (`readSkoreCourse`, a workaround for
+yvanvds/dartschool#102; its removal is tracked in #74). Removing an
+assignment, choosing its pupils and Skore's import of assignments are not
+offered.
+
+Skore refusing a request to the account (HTTP 403,
+`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
+rights, with the part of Skore it was refused, what rights are needed, and
+to ask the school's Smartschool administrator for them or turn
+"Skore-beheer" off. What Skore really answers such an account has not been
+captured yet (yvanvds/dartschool#91): most likely a page instead of data,
+which the library reports as a plain `SmartschoolSkoreError`. Until then,
+any other `SmartschoolSkoreError` is reported as "Skore gave an answer the
+server could not use; usually the account lacks the rights", with the same
+advice; the library's message goes to the log only, as it can quote the
+page. From a write, each of these errors also says that nothing was changed
+in Skore. #74 tracks dropping that hedge once dartschool#91 is done, and #75
+the live check.
+
+The presence tools are offered only when the switch "Aanwezigheden" is on
+(see *Opt-in tools* below): they need the right to record half-day
+presences for classes in Smartschool's Presence module, as the absence
+administrators of a school (often the pupil secretariat) have; most teachers
+and all pupils lack it. The half-day registration (a morning and an
+afternoon per pupil per day, `DayPart`) is the one that counts for the
+government; the registration per lesson is a different one and is not
+offered. The tools use the library's `PresenceService` (dartschool#2); the
+first two only read, the last two change the presences of pupils:
+
+- `list_presence_classes`: the classes the account may view in the module
+  (`getConfig`: its allowed classes, and the active class when it is not
+  among them), one line per class with its name, class id (`groupID`), and
+  whether the account may record presences for it (`userCanRecord`: "may
+  record" or "view only"); a grouping class without a school structure is
+  marked, as presences are recorded in the pupils' official class.
+- `list_class_presences`: the pupils of one class (`class_id`) on one day
+  (`date`, default today) with what their morning and afternoon hold
+  (`getClassPupils`), named with the codes of the class's structure
+  (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
+  alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
+  or "nothing recorded", with its motivation, and per pupil the pupil id the
+  writes take. Rows per lesson are left out (the library ignores them). The
+  module answers a class the account may not record for without pupils, and
+  the library drops its `saveIsAllowed` and `errorMessage`
+  (yvanvds/dartschool#104), so an empty list says "no pupils on that day, or
+  the account may not see them" (a hedge; its removal is tracked in #76).
+- `set_pupils_late`: marks pupils (`pupil_ids`, 1 to 50) of a class late for
+  the morning or the afternoon (`part`) of a day (`date`), with `setLate`:
+  "Te laat", or with `without_valid_reason` "Te laat zonder geldige reden",
+  with an optional `motivation` (at most 500 characters), once per pupil, one
+  after the other: a group from a late bus takes one confirmation. Marked
+  destructive (a half-day is an official record about pupils) and
+  idempotent: a pupil who already has the status (and the motivation, when
+  one is given) is left alone, and nothing is saved for them. Claude is told
+  to read the class with `list_class_presences` first, to show the user the
+  class, the pupils by name, the half-day, the status and the motivation, and
+  to wait for the user's confirmation.
+- `set_pupils_present`: marks pupils present ("Aanwezig") likewise, with
+  `setPresent` and the same arguments without `without_valid_reason`: for
+  example to undo a "Te laat" recorded by mistake.
+
+The library saves over whatever a half-day holds and returns nothing
+(yvanvds/dartschool#105), so both writes guard the record themselves
+(`changePresences` in `lib/src/presence/presence_writes.dart`; a workaround,
+its removal is tracked in #76). Before anything is sent they refuse, for the
+whole call: a date in the future, a class the account may only view (after
+reading only the configuration), a grouping class, a pupil who is not listed,
+and a pupil whose half-day holds anything but nothing, "Aanwezig", "Te laat"
+or "Te laat zonder geldige reden", such as an absence the secretariat
+recorded: the writes never overwrite another status. Right before each
+pupil's save they read the class again, in the same session action, and
+refuse a half-day that changed to another status meanwhile. They stop at the
+first pupil that fails (refused, a save the module refused, a login or
+connection failure), then read the class once more: the result says per
+pupil whether the status was set (and what the half-day held), the pupil
+already had it, or was not changed or not tried, and what the half-day holds
+now. It is an error when the change stopped, or when a half-day reported as
+set does not show the status afterwards ("NOT what was saved"). A save whose
+answer was lost is reported as maybe saved, and the class read afterwards
+shows whether it was. A session that Smartschool refused for a save means it
+was not carried out: the library logs in again and sends it once more, and a
+repeat of the session action reads the class again, so a half-day cannot be
+changed twice. A `SmartschoolPresenceError` (the module refused a request
+with an error page, or a class, code or pupil could not be found) is
+reported as "usually the account lacks the right", with how to get it or turn
+"Aanwezigheden" off; the library's message goes to the log only. Confirming
+presences (`userCanConfirm`), other codes and the registration per lesson are
+not offered; #77 is the live check.
+
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
 in `message_box.dart`, the HTML-to-text converter `htmlToText` in
@@ -562,6 +777,61 @@ rename, change of the info, clear), the plan of a lesfiche of
 dartschool#88, and the create and the trash of an assignment of
 dartschool#89 as the live planner did.
 
+Skore helpers for later tools live in `lib/src/skore/`. In
+`skore_access.dart`: `withSkore`, which runs an action with a
+`SkoreService` on the session and turns Skore's errors into `ToolError`s
+(`skoreToolError`: no rights, or an answer the server cannot use, whose
+details go to the log only), and `checkSkoreAccess`, the access check of
+`smartschool_status`; `skoreToolError` also passes on why a check refused a
+change (with what to read again: the class, or for a gradebook
+`rereadSkoreGradebook`), and says what to do about "Mijn lesgroepen". In
+`skore_writes.dart`, for the tools that change Skore: `withSkoreWrite`,
+which runs a write and adds to its `ToolError` that nothing was changed,
+`skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result of a
+save Skore did not confirm, and `readSkoreCourse`. In `skore_shares.dart`:
+`changeSkoreShares`, which shares a gradebook with teachers or unshares it,
+one teacher after the other, and the arguments' schemas. In
+`skore_format.dart`: one line per class, course row, assignment, teacher and
+gradebook, a course or a teacher in a sentence, and the `query` filter
+(`skoreMatches`). In `skore_opt_in.dart`: the Skore tools behind their
+switch (`skoreOptIn`). The tests run against a fake Skore
+(`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
+reads, in the shape of dartschool's anonymised captures, with fake names;
+it can refuse an account without the rights with HTTP 403 or with a page
+instead of data. It carries out the save of an assignment (`saveOwner`) and
+answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
+teacher's gradebooks, one per assignment, with their shares (`getCourses`
+of the gradebooks service), and carries out the save of their shares
+(`saveShared`) as the live Skore did in dartschool#74. It can lose the
+answer to a save, answer it with an error page, or (`saveShared`) answer it
+as done without carrying it out, also for one save of several
+(`nextSaves`); it answers any other RPC method with HTTP 501.
+
+Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
+`withPresence`, which runs an action with a `PresenceService` on the session
+and turns the module's errors into `ToolError`s (`presenceToolError`, whose
+details go to the log only), and `runPresence`, which leaves them as they
+are; `PresenceServices`, one service per client for a tool call, so the
+configuration and the codes are read once per call; `readPresenceDay`, which
+reads a class on a day (`PresenceDay`: the class, its codes and its pupils);
+the `class_id` and `date` arguments (`presenceDay`); and
+`checkPresenceAccess`, the access check of `smartschool_status`. In
+`presence_format.dart`: what a half-day holds (`PresenceKind`, and
+`PresenceCodes`, which names a code or an alias and tells which statuses the
+writes may change) and the output lines. In `presence_writes.dart`:
+`changePresences`, the guarded change of the half-days of pupils one after
+the other, and the arguments of the writes. In `presence_opt_in.dart`: the
+presence tools behind their switch (`presenceOptIn`). The tests run against
+a fake Presence module (`test/support/fake_presence.dart`) in the shape of
+dartschool's trimmed captures, with fake names: three classes (one the
+account may only view, one grouping class), the codes of a structure
+("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
+half-days of each kind and a registration per lesson. It carries out a save
+on the half-days as the live module did in dartschool#2, can refuse it,
+answer it with an error page, lose its answer or answer it without carrying
+it out (`nextSaves`), and answers a class the account may only view without
+pupils, as the module does.
+
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
 `document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
@@ -572,6 +842,40 @@ through `flutter_smartschool`'s streamed download with a size limit
 (`IntradeskService.downloadFileStream`, `MessageAttachment.downloadStream`,
 both with `maxBytes`), which also gives the file name from the
 `Content-Disposition` header.
+
+### Opt-in tools
+
+Some tools only work for accounts with extra rights in Smartschool, such as
+the Skore tools and the presence tools. They sit behind an opt-in switch, a
+setting that is off by default (`Setting.isSwitch` in
+`lib/src/settings.dart`): "Skore-beheer" (`SMARTSCHOOL_SKORE`, `skore` in a
+credentials file) and "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`, `presence`).
+Each switch turns on its own group. The server only
+offers the group's tools when its switch is on (`OptInTools` in
+`lib/src/opt_in.dart`), so accounts without the rights never see tools they
+cannot use, and those tools take up no context in their conversations. The
+switches are read once, at startup (`Switches.read`): the environment
+variable when it is set and not empty, else the credentials file's key.
+`true`, `1`, `yes`, `on`, `ja` and `aan` (any case) turn a switch on; empty,
+`false`, `0`, `no`, `off`, `nee` and `uit` leave it off; anything else
+counts as off, and `smartschool_status` says so.
+
+`smartschool_status` has a line per switch: off, with how to turn it on and
+for whom; or on, with whether the account has the rights, checked with one
+cheap read once the connection works (`OptInTools.checkAccess`; for Skore,
+`getTeachers`, where an empty list of teachers counts as no access too; for
+the presences, `getConfig`, where access means that the account may record
+presences for at least one class).
+Registering the tools only once access is detected
+(`notifications/tools/list_changed`) was not chosen: the server logs in at
+the first tool call, so the tools would show up only later in the
+conversation, and it would cost Skore requests at every start.
+
+To add a group: a `Setting` with `isSwitch: true` (a `boolean` field with
+the default `false` in the manifest's `user_config`, its variable in
+`mcp_config.env`, a hint in the installer's `settingHints`, and a row in both
+colleague guides), an `OptInTools` with its tools, rights and access check,
+and the group in the entry point's `optIns`.
 
 ### Message text cache
 
@@ -838,11 +1142,14 @@ are marked `TE BEVESTIGEN (#40)`. Parts that wait for the manual
 install checks (#30) are marked `TE BEVESTIGEN (#30)` in HTML comments, and
 missing screenshots `SCHERMAFBEELDING (#33)`.
 
-"Downloadmap" is the only optional field, and its default is empty on
-purpose: Claude Desktop passes a field without a value or a default literally,
-as `${user_config.download_dir}` (modelcontextprotocol/mcpb#250), and does not
-replace `${HOME}` in a default (modelcontextprotocol/mcpb#251). Empty, the
-server uses its own default (see *Saving files*).
+Every optional field has a default on purpose: Claude Desktop passes a field
+without a value or a default literally, as `${user_config.download_dir}`
+(modelcontextprotocol/mcpb#250), and does not replace `${HOME}` in a default
+(modelcontextprotocol/mcpb#251). The default of "2FA-sleutel" and
+"Downloadmap" is empty; empty, the server uses its own download folder (see
+*Saving files*). "Skore-beheer", a switch, is a `boolean` field with the
+default `false`, which Claude Desktop passes as `true` or `false`
+(`getMcpConfigForManifest` in `@anthropic-ai/mcpb`).
 
 Build and pack the extension locally (`npx` needs Node):
 

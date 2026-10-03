@@ -3,6 +3,7 @@ import 'package:dart_mcp/server.dart';
 import '../client_app.dart';
 import '../downloads/download_folder.dart';
 import '../log.dart';
+import '../opt_in.dart';
 import '../problems.dart';
 import '../session.dart';
 import '../settings.dart';
@@ -17,12 +18,15 @@ import 'server_tool.dart';
 /// use and whether it is writable ([downloads] gives that folder, null when
 /// there is none; without [downloads], the status says nothing about
 /// downloads). [client] is the app the server runs in, for how to update
-/// (Claude Desktop without it).
+/// (Claude Desktop without it). For each group of [optIns], whether its
+/// switch is on and, when it is and the connection works, whether the
+/// account has the rights for its tools ([OptInTools.checkAccess]).
 ServerTool statusTool(
   SmartschoolSession session, {
   UpdateChecker? updates,
   DownloadFolder? Function()? downloads,
   ClientContext? client,
+  List<OptInTools> optIns = const [],
 }) => ServerTool(
   definition: Tool(
     name: 'smartschool_status',
@@ -30,9 +34,11 @@ ServerTool statusTool(
     description:
         'Checks whether the connection to Smartschool works: whether all '
         'settings are filled in, whether logging in succeeds, who is logged '
-        'in, the Smartschool address, the download folder files are saved in '
-        'and whether it is writable, the version of this server and whether '
-        'a newer version is available. Use it when the user asks whether '
+        'in, the Smartschool address, whether the optional tools that need '
+        'extra rights (Skore-beheer, Aanwezigheden) are turned on and whether the account '
+        'has those rights, the download folder files are saved in and '
+        'whether it is writable, the version of this server and whether a '
+        'newer version is available. Use it when the user asks whether '
         'their Smartschool connection works (for example "Werkt mijn '
         'Smartschool-verbinding?") or whether there is an update, or when '
         'another Smartschool tool reports a login problem. When the '
@@ -48,7 +54,7 @@ ServerTool statusTool(
       openWorldHint: true,
     ),
   ),
-  handler: (_) => _status(session, updates, downloads, client),
+  handler: (_) => _status(session, updates, downloads, client, optIns),
 );
 
 Future<CallToolResult> _status(
@@ -56,6 +62,7 @@ Future<CallToolResult> _status(
   UpdateChecker? updates,
   DownloadFolder? Function()? downloads,
   ClientContext? client,
+  List<OptInTools> optIns,
 ) async {
   // Asks GitHub and tries the download folder while the connection is
   // checked, so they add no time.
@@ -98,6 +105,8 @@ Future<CallToolResult> _status(
     'Settings: ${_describeSettings(source, settings)}',
     if (MisnamedSetting.describe(source.misnamed) case final misnamed?)
       'Wrong setting names: $misnamed',
+    for (final optIn in optIns)
+      await _describeOptIn(optIn, source, connected: problem == null),
     if (downloads != null)
       _describeDownloadFolder(folder, await folderCheck, session.source),
     'Server version: $packageVersion',
@@ -133,6 +142,48 @@ String _describeUpdate(
     'Updates: up to date (latest release: ${latest.version})',
   UpdateCheckFailed(:final reason) => 'Updates: could not check ($reason)',
 };
+
+/// The line of an opt-in group, such as `Skore-beheer: on; access: yes
+/// (...)`: whether its switch is on, and when it is, whether the account
+/// has the rights for its tools, checked only when the connection works
+/// ([connected]).
+Future<String> _describeOptIn(
+  OptInTools optIn,
+  CredentialSource source, {
+  required bool connected,
+}) async {
+  final setting = optIn.setting;
+  final title = setting.formTitle;
+  final name = source.name(setting);
+  final then = '${source.where}, then ${source.restart}';
+  switch (optIn.state) {
+    case SwitchState.off:
+      return '$title: off: its tools are not offered. For an account with '
+          '${optIn.rights}: turn on $name $then.';
+    case SwitchState.unclear:
+      return '$title: off, as $name is set to neither true nor false: its '
+          'tools are not offered. For an account with ${optIn.rights}: set '
+          'it to true $then.';
+    case SwitchState.on:
+      break;
+  }
+  if (!connected) {
+    return '$title: on; access not checked, as the connection does not '
+        'work.';
+  }
+  try {
+    final check = await optIn.checkAccess();
+    return check.granted
+        ? '$title: on; access: yes (${check.detail})'
+        : '$title: on; access: NO. ${check.detail}';
+  } on SmartschoolProblem catch (problem) {
+    return '$title: on; access could not be checked: ${problem.message}';
+  } catch (error, stackTrace) {
+    log('smartschool_status: checking $title failed: $error\n$stackTrace');
+    return '$title: on; access could not be checked: an unexpected error. '
+        'The technical details are in the server log.';
+  }
+}
 
 /// The `Download folder:` line: the folder, where its path comes from, and
 /// whether files can be saved in it, or how to choose another.
