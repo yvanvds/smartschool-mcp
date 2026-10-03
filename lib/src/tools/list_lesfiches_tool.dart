@@ -94,7 +94,12 @@ Future<CallToolResult> _list(
   final (all, shown, courses) = await withPlannerClient(session, (
     client,
   ) async {
-    final all = await LessonContentService(client).getItems();
+    // Without the library's course names (yvanvds/dartschool#101): one
+    // request, as before 0.3.3. The courses are named after the own planner
+    // until #70.
+    final all = await LessonContentService(
+      client,
+    ).getItems(withCourseNames: false);
     final shown = sortedByName(
       all.where(
         (item) =>

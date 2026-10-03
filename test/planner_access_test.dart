@@ -715,22 +715,26 @@ void main() {
     PlannedElementDetail detail(Map<String, Object?> changes) =>
         PlannedElementDetail.fromJson({...fakeLesson.detailJson(), ...changes});
 
-    test('reads labels, attachments and weblinks of any shape, leaving out '
-        'what has no text', () {
+    // Since flutter_smartschool 0.3.3 the library parses these lists itself
+    // (yvanvds/dartschool#98) and refuses an item without its id, or a list
+    // that is not one: only the shapes it accepts reach formatElementDetail.
+    // Its typed lists replace the raw reading in #70.
+    test('reads labels, attachments and weblinks, leaving out what has no '
+        'text', () {
       final text = formatElementDetail(
         detail({
           'labels': [
-            {'text': ' JAAR 6 '},
-            {'text': ''},
-            {'color': 'aqua'},
-            'TRIMESTER 1',
+            {'id': 1, 'text': ' JAAR 6 '},
+            {'id': 2, 'text': ''},
+            {'id': 3, 'color': 'aqua'},
           ],
-          'attachments': {'name': 'not a list'},
+          'attachments': [
+            {'id': 1},
+          ],
           'weblinks': [
-            {'name': '', 'url': 'https://example.com/a'},
-            {'name': 'Zonder adres'},
-            {'name': '', 'url': ''},
-            null,
+            {'id': 1, 'name': '', 'url': 'https://example.com/a'},
+            {'id': 2, 'name': 'Zonder adres'},
+            {'id': 3, 'name': '', 'url': ''},
           ],
         }),
       );
