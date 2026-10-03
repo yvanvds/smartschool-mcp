@@ -94,7 +94,8 @@ authentication (teachers); students without 2FA leave it empty.
 
   --credentials <path>  Read the settings from this credentials.yml instead
                         (keys: main_url, username, password, and optionally
-                        mfa, download_dir and skore). For development.
+                        mfa, download_dir, skore and presence). For
+                        development.
 
   --install             Install for ChatGPT and Codex instead of serving:
                         copy this executable to
@@ -111,7 +112,9 @@ saved there after 7 days and never touches other files.
 
 SMARTSCHOOL_SKORE=true (then skore: true in the credentials file) offers the
 Skore tools, for an account with the rights for score management in Skore.
-Off by default.
+SMARTSCHOOL_PRESENCE=true (then presence: true) offers the presence tools,
+for an account that records half-day presences, as an absence administrator
+does. Both are off by default.
 
 Once a day the server asks GitHub whether a newer release exists.
 SMARTSCHOOL_MCP_UPDATE_CHECK=off turns that off; SMARTSCHOOL_MCP_UPDATE_URL

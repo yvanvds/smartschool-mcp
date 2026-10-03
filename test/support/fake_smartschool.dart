@@ -11,11 +11,13 @@ import 'package:test/test.dart';
 import 'fake_intradesk.dart';
 import 'fake_messages.dart';
 import 'fake_planner.dart';
+import 'fake_presence.dart';
 import 'fake_skore.dart';
 
 export 'fake_intradesk.dart';
 export 'fake_messages.dart';
 export 'fake_planner.dart';
+export 'fake_presence.dart';
 export 'fake_skore.dart';
 
 const fakeHost = 'school.smartschool.be';
@@ -95,6 +97,10 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
   final FakeSkore skore = FakeSkore();
+
+  /// The Presence module, served to logged-in requests: empty until a test
+  /// fills it (`FakePresence.loadSchool`).
+  final FakePresence presence = FakePresence();
 
   /// How long every request takes, so that concurrent requests overlap.
   Duration latency = Duration.zero;
@@ -208,6 +214,7 @@ class FakeSmartschool implements HttpClientAdapter {
       return mailbox.respond(options) ??
           planner.respond(options) ??
           skore.respond(options) ??
+          presence.respond(options) ??
           _html('<ok/>');
     }
 

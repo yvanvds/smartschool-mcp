@@ -27,7 +27,9 @@ import 'support/fake_github.dart';
 /// teacher id (#42), assign them (#43), and share gradebooks with them
 /// (#44). Write "a teacher", "its teachers", "the teacher to assign", "the
 /// teacher of the assignment", "the owner among the teachers"; never "the
-/// teacher" as the one who uses the tool.
+/// teacher" as the one who uses the tool. The presence tools (#47) are for
+/// absence administrators and are about pupils: they must not say "teacher"
+/// at all.
 final _userAsTeacher = RegExp(
   r"\bthe (?:signed-in |logged-in |current )?teacher(?:'s)? "
   r'(?:is|was|can|could|has|had|wants|asks|asked|sees|looks|uses|types|'
@@ -516,18 +518,25 @@ void main() {
   test('no tool assumes the user is a teacher: students sign in too, so '
       'titles and descriptions speak of the user (#62). Only the Skore '
       'tools, with "Skore-beheer" on, speak of teachers, as their subject '
-      '(#42, #43, #44)', () async {
+      '(#42, #43, #44); the presence tools, with "Aanwezigheden" on, do not '
+      '(#47)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: {
         ...environmentWithoutSmartschool(),
         Setting.skore.envVar: 'true',
+        Setting.presence.envVar: 'true',
       },
     );
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(35));
+    expect(tools, hasLength(39));
+    expect(
+      [for (final tool in tools) (tool as Map)['name']],
+      containsAll(['list_presence_classes', 'set_pupils_late']),
+      reason: 'the presence tools are checked too',
+    );
     expect([
       for (final tool in tools.cast<Map<String, Object?>>())
         if (_teachersAsSubject.contains(tool['name'])) tool['name'],
@@ -794,6 +803,276 @@ void main() {
         await server.stderr,
         contains('Skore-beheer: on, 8 tools offered'),
       );
+    });
+  });
+
+  group('the opt-in switch "Aanwezigheden" (#47)', () {
+    const presenceReads = ['list_presence_classes', 'list_class_presences'];
+    const presenceWrites = ['set_pupils_late', 'set_pupils_present'];
+    const presenceTools = [...presenceReads, ...presenceWrites];
+
+    Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
+        ((await server.request('tools/list'))['tools'] as List)
+            .cast<Map<String, Object?>>();
+
+    test('off, as Claude Desktop passes an untouched switch ("false"), or '
+        'not set: no presence tool is offered, and smartschool_status says it '
+        'is off and how to turn it on', () async {
+      for (final environment in [
+        {...environmentWithoutSmartschool(), 'SMARTSCHOOL_PRESENCE': 'false'},
+        environmentWithoutSmartschool(),
+      ]) {
+        final server = await ServerProcess.start(
+          exePath,
+          environment: environment,
+        );
+        await server.initialize();
+
+        final tools = await listTools(server);
+        expect(tools, hasLength(27));
+        expect([
+          for (final tool in tools) tool['name'],
+        ], everyElement(isNot(isIn(presenceTools))));
+        final (_, status) = await server.callTool('smartschool_status');
+        expect(
+          status,
+          contains(
+            '\nAanwezigheden: off: its tools are not offered. For an account '
+            "with the right to record half-day presences for classes in "
+            "Smartschool's Presence module, as an absence administrator has: "
+            'turn on "Aanwezigheden" (SMARTSCHOOL_PRESENCE) in the '
+            'Smartschool extension settings in Claude Desktop (Settings → '
+            'Extensions), then restart Claude Desktop.\n',
+          ),
+        );
+        final (isError, text) = await server.callTool('set_pupils_late');
+        expect(isError, isTrue);
+        expect(text, contains('set_pupils_late'));
+
+        await server.stop();
+        expect(await server.stderr, contains('Aanwezigheden: off'));
+      }
+    });
+
+    test('on: the presence tools come last, the reads read-only and the '
+        'writes destructive and idempotent (Claude Desktop asks approval '
+        'before each), with their arguments; smartschool_status says it is '
+        'on; without settings they name the missing settings, before any '
+        'login', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          'SMARTSCHOOL_PRESENCE': 'true',
+        },
+      );
+      await server.initialize();
+
+      final tools = await listTools(server);
+      expect(tools, hasLength(31));
+      expect([for (final tool in tools.skip(27)) tool['name']], presenceTools);
+      final byName = {for (final tool in tools) tool['name']: tool};
+      for (final name in presenceReads) {
+        expect(byName[name]!['annotations'], {
+          'title': isA<String>(),
+          'readOnlyHint': true,
+          'idempotentHint': true,
+          'openWorldHint': true,
+        }, reason: name);
+      }
+      for (final name in presenceWrites) {
+        expect(byName[name]!['annotations'], {
+          'title': isA<String>(),
+          'readOnlyHint': false,
+          'destructiveHint': true,
+          'idempotentHint': true,
+          'openWorldHint': true,
+        }, reason: name);
+        expect(
+          byName[name]!['description'],
+          contains(
+            'only call this tool after the user has explicitly confirmed it',
+          ),
+          reason: name,
+        );
+      }
+      expect(
+        (byName['list_presence_classes']!['inputSchema'] as Map)['properties'],
+        anyOf(isNull, isEmpty),
+      );
+      final daySchema = byName['list_class_presences']!['inputSchema'] as Map;
+      expect(daySchema['required'], ['class_id']);
+      expect((daySchema['properties'] as Map).keys, ['class_id', 'date']);
+      for (final (name, properties) in [
+        (
+          'set_pupils_late',
+          [
+            'class_id',
+            'pupil_ids',
+            'date',
+            'part',
+            'without_valid_reason',
+            'motivation',
+          ],
+        ),
+        (
+          'set_pupils_present',
+          ['class_id', 'pupil_ids', 'date', 'part', 'motivation'],
+        ),
+      ]) {
+        final schema = byName[name]!['inputSchema'] as Map;
+        expect(schema['required'], [
+          'class_id',
+          'pupil_ids',
+          'date',
+          'part',
+        ], reason: name);
+        final props = schema['properties'] as Map;
+        expect(props.keys, properties, reason: name);
+        expect(props['class_id'], {
+          'type': 'integer',
+          'description': isA<String>(),
+          'minimum': 1,
+        }, reason: name);
+        expect(props['pupil_ids'], {
+          'type': 'array',
+          'description': isA<String>(),
+          'items': {'type': 'integer', 'minimum': 1},
+          'minItems': 1,
+          'maxItems': 50,
+        }, reason: name);
+        expect(props['part'], {
+          'type': 'string',
+          'description': isA<String>(),
+          'enum': ['morning', 'afternoon'],
+        }, reason: name);
+        expect(props['motivation'], {
+          'type': 'string',
+          'description': isA<String>(),
+          'maxLength': 500,
+        }, reason: name);
+      }
+
+      final (statusError, status) = await server.callTool('smartschool_status');
+      expect(statusError, isNot(true));
+      expect(
+        status,
+        contains(
+          '\nAanwezigheden: on; access not checked, as the connection does '
+          'not work.\n',
+        ),
+      );
+      for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+        ('list_presence_classes', {}),
+        ('list_class_presences', {'class_id': 298}),
+        (
+          'set_pupils_late',
+          {
+            'class_id': 298,
+            'pupil_ids': [1001, 1002],
+            'date': '2026-06-01',
+            'part': 'morning',
+            'without_valid_reason': true,
+            'motivation': 'bus',
+          },
+        ),
+        (
+          'set_pupils_present',
+          {
+            'class_id': 298,
+            'pupil_ids': [1001],
+            'date': '2026-06-01',
+            'part': 'afternoon',
+          },
+        ),
+      ]) {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+        );
+        expect(isError, isTrue, reason: tool);
+        expect(
+          text,
+          startsWith('Not all Smartschool settings are filled in. Missing: '),
+          reason: tool,
+        );
+        expect(text, isNot(contains('#0')), reason: 'no stack trace');
+      }
+
+      await server.stop();
+      expect(
+        await server.stderr,
+        contains('Aanwezigheden: on, 4 tools offered'),
+      );
+    });
+
+    test('a write for a day in the future is refused before any login, and '
+        'a date that is not a day too', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          'SMARTSCHOOL_PRESENCE': 'true',
+        },
+      );
+      await server.initialize();
+
+      final tomorrow = DateTime.now().add(const Duration(days: 2));
+      final day =
+          '${tomorrow.year}-${'${tomorrow.month}'.padLeft(2, '0')}-'
+          '${'${tomorrow.day}'.padLeft(2, '0')}';
+      final (futureError, future) = await server.callTool(
+        'set_pupils_late',
+        arguments: {
+          'class_id': 298,
+          'pupil_ids': [1001],
+          'date': day,
+          'part': 'morning',
+        },
+      );
+      expect(futureError, isTrue);
+      expect(future, contains('is in the future'));
+      expect(future, endsWith('Nothing was changed in Smartschool.'));
+      final (dateError, date) = await server.callTool(
+        'set_pupils_present',
+        arguments: {
+          'class_id': 298,
+          'pupil_ids': [1001],
+          'date': 'vanmorgen',
+          'part': 'morning',
+        },
+      );
+      expect(dateError, isTrue);
+      expect(date, startsWith('date must be a day like 2026-10-05'));
+
+      await server.stop();
+      // The session was never asked to log in.
+      expect(
+        await server.stderr,
+        isNot(contains('Smartschool settings incomplete')),
+      );
+    });
+
+    test('with "Skore-beheer" on too: the Skore tools, then the presence '
+        'tools', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          Setting.skore.envVar: 'true',
+          Setting.presence.envVar: 'true',
+        },
+      );
+      await server.initialize();
+
+      final tools = await listTools(server);
+      expect(tools, hasLength(39));
+      expect([for (final tool in tools.skip(35)) tool['name']], presenceTools);
+      expect([
+        for (final tool in tools.skip(27).take(8)) tool['name'],
+      ], _teachersAsSubject.toList());
+
+      await server.stop();
     });
   });
 

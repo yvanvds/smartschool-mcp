@@ -33,6 +33,8 @@ const settingHints = {
   Setting.downloadDir: 'niet verplicht: de map voor bewaarde bestanden',
   Setting.skore:
       'niet verplicht: true voor Skore-beheer, met de rechten ervoor',
+  Setting.presence:
+      'niet verplicht: true voor Aanwezigheden, met de rechten ervoor',
 };
 
 /// The folder the installer puts the server in:

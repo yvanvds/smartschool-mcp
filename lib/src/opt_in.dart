@@ -4,7 +4,8 @@ import 'tools/server_tool.dart';
 /// A group of tools that only accounts with certain rights in Smartschool
 /// can use, behind an opt-in switch ([setting], a [Setting.isSwitch]): the
 /// Skore tools behind "Skore-beheer" (`skoreOptIn` in
-/// `skore/skore_opt_in.dart`).
+/// `skore/skore_opt_in.dart`), and the presence tools behind
+/// "Aanwezigheden" (`presenceOptIn` in `presence/presence_opt_in.dart`).
 ///
 /// The server offers [tools] only when the switch is on ([offered]), so an
 /// account without the rights never sees tools it cannot use, and they take

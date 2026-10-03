@@ -7,6 +7,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
@@ -19,6 +20,16 @@ import 'support/exe.dart';
 /// "Skore-beheer" on (#42).
 final _skoreTools = [
   for (final tool in skoreOptIn(
+    SmartschoolSession(const ExtensionSettings()),
+    SwitchState.on,
+  ).tools)
+    tool.definition.name,
+];
+
+/// The tools of the manifest that the server offers only with the switch
+/// "Aanwezigheden" on (#47).
+final _presenceTools = [
+  for (final tool in presenceOptIn(
     SmartschoolSession(const ExtensionSettings()),
     SwitchState.on,
   ).tools)
@@ -139,11 +150,11 @@ void main() {
     expect(folder.listSync(), hasLength(2));
   });
 
-  test('installed with the required settings, and "Downloadmap" and '
-      '"Skore-beheer" left alone: the server reports the manifest\'s version '
-      'and its tools but the Skore tools, names the settings to fix by their '
-      'titles in the install form, and saves in the default download '
-      'folder', () async {
+  test('installed with the required settings, and "Downloadmap", '
+      '"Skore-beheer" and "Aanwezigheden" left alone: the server reports the '
+      'manifest\'s version and its tools but the Skore and presence tools, '
+      'names the settings to fix by their titles in the install form, and '
+      'saves in the default download folder', () async {
     final home = await tempHome();
     // Only spaces: Claude Desktop takes them as filled in, the server as
     // empty, so it reports them without logging in anywhere.
@@ -156,11 +167,14 @@ void main() {
     expect((init['serverInfo'] as Map)['version'], manifest['version']);
     final tools = (await server.request('tools/list'))['tools'] as List;
     expect(_skoreTools, hasLength(8));
+    expect(_presenceTools, hasLength(4));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       [
         for (final tool in manifest['tools'] as List)
-          if (!_skoreTools.contains((tool as Map)['name'])) tool['name'],
+          if (!_skoreTools.contains((tool as Map)['name']) &&
+              !_presenceTools.contains(tool['name']))
+            tool['name'],
       ],
     );
 
@@ -194,8 +208,9 @@ void main() {
   });
 
   test('installed with "Skore-beheer" ticked: Claude Desktop passes it as '
-      'true, and the server offers every tool of the manifest, the Skore '
-      'tools last, and says the switch is on (#42, #43, #44)', () async {
+      'true, and the server offers every tool of the manifest but the '
+      'presence tools, the Skore tools last, and says the switch is on (#42, '
+      '#43, #44)', () async {
     final home = await tempHome();
     final required = {
       for (final MapEntry(:key, :value) in fields().entries)
@@ -217,7 +232,10 @@ void main() {
     final tools = (await server.request('tools/list'))['tools'] as List;
     expect(
       [for (final tool in tools) (tool as Map)['name']],
-      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+      [
+        for (final tool in manifest['tools'] as List)
+          if (!_presenceTools.contains((tool as Map)['name'])) tool['name'],
+      ],
     );
     expect(
       [
@@ -235,6 +253,76 @@ void main() {
     );
 
     await server.stop();
+  });
+
+  test('installed with "Aanwezigheden" ticked: Claude Desktop passes it as '
+      'true, and the server offers the presence tools last, the writes '
+      'marked for approval, and says the switch is on; with "Skore-beheer" '
+      'ticked too, every tool of the manifest (#47)', () async {
+    final home = await tempHome();
+    final required = {
+      for (final MapEntry(:key, :value) in fields().entries)
+        if (value['required'] == true) key: ' ',
+    };
+    final untouched = claudeDesktopConfig(
+      manifest,
+      extensionPath: bundle.path,
+      userConfig: required,
+      home: home.path,
+    );
+    expect(untouched?.env[Setting.presence.envVar], 'false');
+
+    final server = await startInstalled({
+      ...required,
+      Setting.presence.fileKey: 'true',
+    }, home);
+    await server.initialize();
+    final tools = ((await server.request('tools/list'))['tools'] as List)
+        .cast<Map<String, Object?>>();
+    expect(
+      [for (final tool in tools) tool['name']],
+      [
+        for (final tool in manifest['tools'] as List)
+          if (!_skoreTools.contains((tool as Map)['name'])) tool['name'],
+      ],
+    );
+    expect(
+      [for (final tool in tools) tool['name']].skip(tools.length - 4),
+      _presenceTools,
+    );
+    for (final tool in tools.skip(tools.length - 2)) {
+      expect(
+        tool['annotations'],
+        allOf(
+          containsPair('readOnlyHint', false),
+          containsPair('destructiveHint', true),
+        ),
+        reason: '${tool['name']}',
+      );
+    }
+    final (_, text) = await server.callTool('smartschool_status');
+    expect(text, contains('\nSkore-beheer: off: its tools are not offered. '));
+    expect(
+      text,
+      contains(
+        '\nAanwezigheden: on; access not checked, as the connection does not '
+        'work.\n',
+      ),
+    );
+    await server.stop();
+
+    final both = await startInstalled({
+      ...required,
+      Setting.skore.fileKey: 'true',
+      Setting.presence.fileKey: 'true',
+    }, home);
+    await both.initialize();
+    final all = (await both.request('tools/list'))['tools'] as List;
+    expect(
+      [for (final tool in all) (tool as Map)['name']],
+      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+    );
+    await both.stop();
   });
 
   test('installed with the 6-digit code of the app in "2FA-sleutel": the '

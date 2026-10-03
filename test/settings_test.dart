@@ -320,8 +320,8 @@ void main() {
         ),
         '"SMARTSCHOOL_WACHTWOORD" is set, but that is not the name of a '
         'setting: the names are SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, '
-        'SMARTSCHOOL_PASSWORD, SMARTSCHOOL_MFA, SMARTSCHOOL_DOWNLOAD_DIR and '
-        'SMARTSCHOOL_SKORE.',
+        'SMARTSCHOOL_PASSWORD, SMARTSCHOOL_MFA, SMARTSCHOOL_DOWNLOAD_DIR, '
+        'SMARTSCHOOL_SKORE and SMARTSCHOOL_PRESENCE.',
       );
     });
 
@@ -339,14 +339,21 @@ void main() {
   });
 
   group('opt-in switches (#42)', () {
-    test('"Skore-beheer" is an optional switch, not for logging in', () {
-      expect(Setting.switches, [Setting.skore]);
+    test('"Skore-beheer" and "Aanwezigheden" (#47) are optional switches, '
+        'not for logging in', () {
+      expect(Setting.switches, [Setting.skore, Setting.presence]);
       expect(Setting.skore.formTitle, 'Skore-beheer');
       expect(Setting.skore.envVar, 'SMARTSCHOOL_SKORE');
       expect(Setting.skore.fileKey, 'skore');
       expect(Setting.skore.required, isFalse);
       expect(Setting.skore.isSwitch, isTrue);
       expect(Setting.login, isNot(contains(Setting.skore)));
+      expect(Setting.presence.formTitle, 'Aanwezigheden');
+      expect(Setting.presence.envVar, 'SMARTSCHOOL_PRESENCE');
+      expect(Setting.presence.fileKey, 'presence');
+      expect(Setting.presence.required, isFalse);
+      expect(Setting.presence.isSwitch, isTrue);
+      expect(Setting.login, isNot(contains(Setting.presence)));
       expect([
         for (final setting in Setting.values)
           if (setting.isSwitch) setting,
@@ -416,6 +423,16 @@ void main() {
         SwitchState.unclear,
       );
       expect(const Switches()[Setting.skore], SwitchState.off);
+
+      // Each switch from its own variable.
+      final presenceOnly = read({'SMARTSCHOOL_PRESENCE': 'ja'});
+      expect(presenceOnly[Setting.presence], SwitchState.on);
+      expect(presenceOnly[Setting.skore], SwitchState.off);
+      expect(
+        read({'SMARTSCHOOL_SKORE': 'true'})[Setting.presence],
+        SwitchState.off,
+      );
+      expect(const Switches()[Setting.presence], SwitchState.off);
     });
 
     group('a credentials file', () {
@@ -453,6 +470,13 @@ void main() {
           )[Setting.skore],
           SwitchState.off,
         );
+        // Each switch from its own key (#47).
+        final both = Switches.read(
+          file('skore: false\npresence: true\n'),
+          environment: const {},
+        );
+        expect(both[Setting.skore], SwitchState.off);
+        expect(both[Setting.presence], SwitchState.on);
       });
 
       test('without the key, or unreadable: off', () {

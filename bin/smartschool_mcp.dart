@@ -9,6 +9,7 @@ import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/log.dart';
 import 'package:smartschool_mcp/src/messages/message_cache.dart';
 import 'package:smartschool_mcp/src/options.dart';
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -86,7 +87,10 @@ Future<void> _serve(ServerOptions options) async {
       // The tools only some accounts can use, each group behind a switch
       // that is read once, now: the server offers them only when it is on.
       final switches = Switches.read(source);
-      final optIns = [skoreOptIn(session, switches[Setting.skore])];
+      final optIns = [
+        skoreOptIn(session, switches[Setting.skore]),
+        presenceOptIn(session, switches[Setting.presence]),
+      ];
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),
         client: client,

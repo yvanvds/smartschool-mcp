@@ -35,7 +35,7 @@ ServerTool statusTool(
         'Checks whether the connection to Smartschool works: whether all '
         'settings are filled in, whether logging in succeeds, who is logged '
         'in, the Smartschool address, whether the optional tools that need '
-        'extra rights (Skore-beheer) are turned on and whether the account '
+        'extra rights (Skore-beheer, Aanwezigheden) are turned on and whether the account '
         'has those rights, the download folder files are saved in and '
         'whether it is writable, the version of this server and whether a '
         'newer version is available. Use it when the user asks whether '

@@ -51,6 +51,19 @@ enum Setting {
     required: false,
     forLogin: false,
     isSwitch: true,
+  ),
+
+  /// The switch for the presence tools (`lib/src/presence/`), for an
+  /// account that records half-day presences for classes in Smartschool's
+  /// Presence module, as an absence administrator does. Off by default
+  /// (#47).
+  presence(
+    'Aanwezigheden',
+    'SMARTSCHOOL_PRESENCE',
+    'presence',
+    required: false,
+    forLogin: false,
+    isSwitch: true,
   );
 
   const Setting(

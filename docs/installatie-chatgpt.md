@@ -154,7 +154,7 @@ installatie. -->
    | Type | **STDIO**, als ChatGPT het vraagt. |
    | **Opdracht om op te starten** | Het pad uit het venster: plak het met Ctrl+V. |
    | **Argumenten** | Niets. Laat dit leeg. |
-   | **Omgevingsvariabelen** | Drie tot zes regels, zie hieronder. |
+   | **Omgevingsvariabelen** | Drie tot zeven regels, zie hieronder. |
 
 4. Voeg bij **Omgevingsvariabelen** deze regels toe, met **Omgevingsvariabele
    toevoegen**. Typ bij **Sleutel** precies de naam uit de eerste kolom, in
@@ -168,6 +168,7 @@ installatie. -->
    | `SMARTSCHOOL_MFA` | Alleen met tweestapsverificatie: je 2FA-sleutel uit [stap 2](#2-je-2fa-sleutel-opzoeken). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat deze regel dan weg. |
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
    | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen laten deze regel weg. |
+   | `SMARTSCHOOL_PRESENCE` | Niet verplicht. Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: `true`. Dan kan ChatGPT per klas en dag zien wat er voor elke leerling 's morgens en 's middags geregistreerd is, en na jouw akkoord leerlingen als te laat of weer als aanwezig markeren. Een andere registratie, zoals een afwezigheid, overschrijft het nooit. De meeste leerkrachten en alle leerlingen laten deze regel weg. Meer uitleg staat bij [Aanwezigheden](installatie.md#aanwezigheden) in de gids voor Claude Desktop. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.
 5. Bewaar, en herstart ChatGPT (zie hieronder).
@@ -282,6 +283,7 @@ herstarten", en zoek de instelling bij de sleutel in deze tabel:
 | **2FA-sleutel** | `SMARTSCHOOL_MFA` |
 | **Downloadmap** | `SMARTSCHOOL_DOWNLOAD_DIR` |
 | **Skore-beheer** | `SMARTSCHOOL_SKORE` |
+| **Aanwezigheden** | `SMARTSCHOOL_PRESENCE` |
 
 ### Een sleutel is verkeerd getypt
 
@@ -344,7 +346,9 @@ Het programma zelf staat in
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
-  hun gezondheid, zorg of thuissituatie.
+  hun gezondheid, zorg of thuissituatie. Met `SMARTSCHOOL_PRESENCE` op `true`
+  gaan ook de aanwezigheden en afwezigheden van leerlingen naar ChatGPT, met
+  hun motivatie.
 - Gebruik daarom alleen een betalend abonnement, en laat OpenAI niet trainen
   met je gesprekken (zie
   [Eerst: OpenAI niet laten trainen met je gesprekken](#eerst-openai-niet-laten-trainen-met-je-gesprekken)).

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
@@ -25,13 +26,15 @@ void main() {
   /// [client], which [source] should share.
   ///
   /// With [skore], the Skore tools are an opt-in group whose switch,
-  /// "Skore-beheer", is set to it.
+  /// "Skore-beheer", is set to it; with [presence], likewise the presence
+  /// tools and "Aanwezigheden".
   Future<(CallToolResult, String)> status({
     CredentialSource? source,
     DownloadFolder? Function()? downloads,
     ClientContext? client,
     String clientName = 'test',
     SwitchState? skore,
+    SwitchState? presence,
   }) async {
     final session = SmartschoolSession(
       source ?? fakeExtensionSettings(),
@@ -44,7 +47,10 @@ void main() {
           session,
           downloads: downloads,
           client: client,
-          optIns: [if (skore != null) skoreOptIn(session, skore)],
+          optIns: [
+            if (skore != null) skoreOptIn(session, skore),
+            if (presence != null) presenceOptIn(session, presence),
+          ],
         ),
       ],
       client: client,
@@ -574,6 +580,134 @@ void main() {
           'Codex).\n',
         ),
       );
+    });
+  });
+
+  group('with the opt-in switch "Aanwezigheden" (#47)', () {
+    const rights =
+        "the right to record half-day presences for classes in Smartschool's "
+        'Presence module, as an absence administrator has';
+    const fix =
+        "ask the school's Smartschool administrator for them, or turn off "
+        '"Aanwezigheden" (SMARTSCHOOL_PRESENCE) in the Smartschool extension '
+        'settings in Claude Desktop (Settings → Extensions), then restart '
+        'Claude Desktop';
+
+    setUp(() => server.presence.loadSchool('2026-06-01'));
+
+    test('off: says so after the settings, and after Skore-beheer, how to '
+        'turn it on and for whom, and does not ask the module', () async {
+      final (result, text) = await status(
+        skore: SwitchState.off,
+        presence: SwitchState.off,
+      );
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: off: its tools are not offered. For an account with '
+          'the rights for score management in Skore (Rapporten > Modellen and '
+          'Puntenboeken), as a Skore administrator has: turn on '
+          '"Skore-beheer" (SMARTSCHOOL_SKORE) in the Smartschool extension '
+          'settings in Claude Desktop (Settings → Extensions), then restart '
+          'Claude Desktop.\n'
+          'Aanwezigheden: off: its tools are not offered. For an account with '
+          '$rights: turn on "Aanwezigheden" (SMARTSCHOOL_PRESENCE) in the '
+          'Smartschool extension settings in Claude Desktop (Settings → '
+          'Extensions), then restart Claude Desktop.\n'
+          'Server version: ',
+        ),
+      );
+      expect(server.presence.requests, isEmpty);
+      expect(server.skore.requests, isEmpty);
+    });
+
+    test('on, with the right for some classes: access, checked with one read '
+        'of the configuration', () async {
+      final (result, text) = await status(presence: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nSettings: extension settings (all filled in)\n'
+          'Aanwezigheden: on; access: yes (the Presence module lets it record '
+          'presences for 2 of the 3 classes it lists)\n'
+          'Server version: ',
+        ),
+      );
+      expect(server.presence.calls, ['POST $fakePresenceConfigPath']);
+    });
+
+    test('on, but the account may record presences for none of its classes: '
+        'no access, with the right it needs and what to do', () async {
+      server.presence.classes
+        ..clear()
+        ..add(fake1B);
+
+      final (_, text) = await status(presence: SwitchState.on);
+
+      expect(
+        text,
+        contains(
+          '\nAanwezigheden: on; access: NO. The Presence module lists 1 class '
+          'for this account, but it may record presences for none of them, as '
+          'for an account without $rights. If so, $fix.\n',
+        ),
+      );
+    });
+
+    test('on, but the module lists no classes: no access', () async {
+      server.presence.classes.clear();
+
+      final (_, text) = await status(presence: SwitchState.on);
+
+      expect(
+        text,
+        contains(
+          '\nAanwezigheden: on; access: NO. The Presence module lists no '
+          'classes for this account, as for an account without $rights. If '
+          'so, $fix.\n',
+        ),
+      );
+    });
+
+    test('on, refused by the module with an error page: no access, without '
+        'quoting the page', () async {
+      server.presence.refused = true;
+
+      final (result, text) = await status(presence: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          "\nAanwezigheden: on; access: NO. Smartschool's Presence module "
+          'refused the request, or could not find what it was asked for; '
+          'usually the account lacks $rights. If so, $fix. Otherwise try '
+          'again in a moment; the technical details are in the server log.\n',
+        ),
+      );
+      expect(text, isNot(contains('Oeps')));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('on, while the connection does not work: access not checked, and '
+        'the module not asked', () async {
+      final (_, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(password: '')),
+        presence: SwitchState.on,
+      );
+
+      expect(
+        text,
+        contains(
+          '\nAanwezigheden: on; access not checked, as the connection does '
+          'not work.\n',
+        ),
+      );
+      expect(server.requests, isEmpty);
     });
   });
 

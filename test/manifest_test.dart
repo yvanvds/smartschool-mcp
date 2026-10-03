@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:smartschool_mcp/src/opt_in.dart';
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
@@ -57,6 +58,7 @@ void main() {
         'mfa': 'string',
         'download_dir': 'directory',
         'skore': 'boolean',
+        'presence': 'boolean',
       },
     );
     // A switch, and only a switch, is a boolean field (#42).
@@ -108,7 +110,7 @@ void main() {
   });
 
   test('describes a switch by the rights its tools need, and each of its '
-      'tools as one that needs it on (#42)', () {
+      'tools as one that needs it on (#42, #47)', () {
     final skore = fields[Setting.skore.fileKey]!;
     expect(
       skore['description'],
@@ -117,8 +119,19 @@ void main() {
         contains('laat het dan uit'),
       ),
     );
+    final presence = fields[Setting.presence.fileKey]!;
+    expect(
+      presence['description'],
+      allOf(
+        contains('halve-dagaanwezigheden van klassen registreert'),
+        contains('afwezigheidsbeheerder'),
+        contains('laat het dan uit'),
+      ),
+    );
+    final session = SmartschoolSession(const ExtensionSettings());
     final optIns = <OptInTools>[
-      skoreOptIn(SmartschoolSession(const ExtensionSettings()), SwitchState.on),
+      skoreOptIn(session, SwitchState.on),
+      presenceOptIn(session, SwitchState.on),
     ];
     expect(
       {for (final optIn in optIns) optIn.setting},
@@ -158,7 +171,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(35));
+    expect(readmeTools, hasLength(39));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

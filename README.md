@@ -50,10 +50,13 @@ mfa: YOUR-TOTP-BASE32-SECRET
 download_dir: C:\Users\you\Downloads\Smartschool
 # Optional: true offers the Skore tools (see Opt-in tools below).
 skore: false
+# Optional: true offers the presence tools (see Opt-in tools below).
+presence: false
 ```
 
 `SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
-*Saving files* below), and `SMARTSCHOOL_SKORE` before `skore`.
+*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`, and
+`SMARTSCHOOL_PRESENCE` before `presence`.
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -123,7 +126,8 @@ via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_PASSWORD": "your-password",
         "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
         "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder",
-        "SMARTSCHOOL_SKORE": "false"
+        "SMARTSCHOOL_SKORE": "false",
+        "SMARTSCHOOL_PRESENCE": "false"
       }
     }
   }
@@ -138,8 +142,8 @@ Base32 (such as the app's 6-digit code) is reported without sending the
 password. When Smartschool asks for a 2FA code and the key is empty, the
 server says that the account uses 2FA and that the key must be filled in.
 `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below), and so
-is `SMARTSCHOOL_SKORE`, which offers the Skore tools when `true` (see
-*Opt-in tools* below). Restart
+are `SMARTSCHOOL_SKORE` and `SMARTSCHOOL_PRESENCE`, which offer the Skore
+tools and the presence tools when `true` (see *Opt-in tools* below). Restart
 Claude Desktop after editing the file. The server's stderr ends up in Claude
 Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -176,7 +180,7 @@ of serving MCP (`lib/src/install.dart`):
   locally only with `SMARTSCHOOL_MCP_CLIPBOARD_TEST=on`, since they replace
   what is on the clipboard (they put back the text that was there);
 - it shows, in Dutch, what to fill in in ChatGPT: the name `smartschool`, the
-  command, no arguments and the six variables. Before those steps it warns
+  command, no arguments and the seven variables. Before those steps it warns
   that what ChatGPT reads goes to OpenAI, sensitive information about pupils
   included. So: a paid plan only, with *Improve the model for everyone* off
   (#50). It waits for Enter so the window stays open.
@@ -627,6 +631,76 @@ page. From a write, each of these errors also says that nothing was changed
 in Skore. #74 tracks dropping that hedge once dartschool#91 is done, and #75
 the live check.
 
+The presence tools are offered only when the switch "Aanwezigheden" is on
+(see *Opt-in tools* below): they need the right to record half-day
+presences for classes in Smartschool's Presence module, as the absence
+administrators of a school (often the pupil secretariat) have; most teachers
+and all pupils lack it. The half-day registration (a morning and an
+afternoon per pupil per day, `DayPart`) is the one that counts for the
+government; the registration per lesson is a different one and is not
+offered. The tools use the library's `PresenceService` (dartschool#2); the
+first two only read, the last two change the presences of pupils:
+
+- `list_presence_classes`: the classes the account may view in the module
+  (`getConfig`: its allowed classes, and the active class when it is not
+  among them), one line per class with its name, class id (`groupID`), and
+  whether the account may record presences for it (`userCanRecord`: "may
+  record" or "view only"); a grouping class without a school structure is
+  marked, as presences are recorded in the pupils' official class.
+- `list_class_presences`: the pupils of one class (`class_id`) on one day
+  (`date`, default today) with what their morning and afternoon hold
+  (`getClassPupils`), named with the codes of the class's structure
+  (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
+  alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
+  or "nothing recorded", with its motivation, and per pupil the pupil id the
+  writes take. Rows per lesson are left out (the library ignores them). The
+  module answers a class the account may not record for without pupils, and
+  the library drops its `saveIsAllowed` and `errorMessage`
+  (yvanvds/dartschool#104), so an empty list says "no pupils on that day, or
+  the account may not see them" (a hedge; its removal is tracked in #76).
+- `set_pupils_late`: marks pupils (`pupil_ids`, 1 to 50) of a class late for
+  the morning or the afternoon (`part`) of a day (`date`), with `setLate`:
+  "Te laat", or with `without_valid_reason` "Te laat zonder geldige reden",
+  with an optional `motivation` (at most 500 characters), once per pupil, one
+  after the other: a group from a late bus takes one confirmation. Marked
+  destructive (a half-day is an official record about pupils) and
+  idempotent: a pupil who already has the status (and the motivation, when
+  one is given) is left alone, and nothing is saved for them. Claude is told
+  to read the class with `list_class_presences` first, to show the user the
+  class, the pupils by name, the half-day, the status and the motivation, and
+  to wait for the user's confirmation.
+- `set_pupils_present`: marks pupils present ("Aanwezig") likewise, with
+  `setPresent` and the same arguments without `without_valid_reason`: for
+  example to undo a "Te laat" recorded by mistake.
+
+The library saves over whatever a half-day holds and returns nothing
+(yvanvds/dartschool#105), so both writes guard the record themselves
+(`changePresences` in `lib/src/presence/presence_writes.dart`; a workaround,
+its removal is tracked in #76). Before anything is sent they refuse, for the
+whole call: a date in the future, a class the account may only view (after
+reading only the configuration), a grouping class, a pupil who is not listed,
+and a pupil whose half-day holds anything but nothing, "Aanwezig", "Te laat"
+or "Te laat zonder geldige reden", such as an absence the secretariat
+recorded: the writes never overwrite another status. Right before each
+pupil's save they read the class again, in the same session action, and
+refuse a half-day that changed to another status meanwhile. They stop at the
+first pupil that fails (refused, a save the module refused, a login or
+connection failure), then read the class once more: the result says per
+pupil whether the status was set (and what the half-day held), the pupil
+already had it, or was not changed or not tried, and what the half-day holds
+now. It is an error when the change stopped, or when a half-day reported as
+set does not show the status afterwards ("NOT what was saved"). A save whose
+answer was lost is reported as maybe saved, and the class read afterwards
+shows whether it was. A session that Smartschool refused for a save means it
+was not carried out: the library logs in again and sends it once more, and a
+repeat of the session action reads the class again, so a half-day cannot be
+changed twice. A `SmartschoolPresenceError` (the module refused a request
+with an error page, or a class, code or pupil could not be found) is
+reported as "usually the account lacks the right", with how to get it or turn
+"Aanwezigheden" off; the library's message goes to the log only. Confirming
+presences (`userCanConfirm`), other codes and the registration per lesson are
+not offered; #77 is the live check.
+
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive, their headers and one message) and `withMessages`
 in `message_box.dart`, the HTML-to-text converter `htmlToText` in
@@ -733,6 +807,31 @@ answer to a save, answer it with an error page, or (`saveShared`) answer it
 as done without carrying it out, also for one save of several
 (`nextSaves`); it answers any other RPC method with HTTP 501.
 
+Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
+`withPresence`, which runs an action with a `PresenceService` on the session
+and turns the module's errors into `ToolError`s (`presenceToolError`, whose
+details go to the log only), and `runPresence`, which leaves them as they
+are; `PresenceServices`, one service per client for a tool call, so the
+configuration and the codes are read once per call; `readPresenceDay`, which
+reads a class on a day (`PresenceDay`: the class, its codes and its pupils);
+the `class_id` and `date` arguments (`presenceDay`); and
+`checkPresenceAccess`, the access check of `smartschool_status`. In
+`presence_format.dart`: what a half-day holds (`PresenceKind`, and
+`PresenceCodes`, which names a code or an alias and tells which statuses the
+writes may change) and the output lines. In `presence_writes.dart`:
+`changePresences`, the guarded change of the half-days of pupils one after
+the other, and the arguments of the writes. In `presence_opt_in.dart`: the
+presence tools behind their switch (`presenceOptIn`). The tests run against
+a fake Presence module (`test/support/fake_presence.dart`) in the shape of
+dartschool's trimmed captures, with fake names: three classes (one the
+account may only view, one grouping class), the codes of a structure
+("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
+half-days of each kind and a registration per lesson. It carries out a save
+on the half-days as the live module did in dartschool#2, can refuse it,
+answer it with an error page, lose its answer or answer it without carrying
+it out (`nextSaves`), and answers a class the account may only view without
+pupils, as the module does.
+
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
 `document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
@@ -747,9 +846,11 @@ both with `maxBytes`), which also gives the file name from the
 ### Opt-in tools
 
 Some tools only work for accounts with extra rights in Smartschool, such as
-the Skore tools. They sit behind an opt-in switch, a setting that is off by
-default (`Setting.isSwitch` in `lib/src/settings.dart`): "Skore-beheer"
-(`SMARTSCHOOL_SKORE`, `skore` in a credentials file). The server only
+the Skore tools and the presence tools. They sit behind an opt-in switch, a
+setting that is off by default (`Setting.isSwitch` in
+`lib/src/settings.dart`): "Skore-beheer" (`SMARTSCHOOL_SKORE`, `skore` in a
+credentials file) and "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`, `presence`).
+Each switch turns on its own group. The server only
 offers the group's tools when its switch is on (`OptInTools` in
 `lib/src/opt_in.dart`), so accounts without the rights never see tools they
 cannot use, and those tools take up no context in their conversations. The
@@ -762,7 +863,9 @@ counts as off, and `smartschool_status` says so.
 `smartschool_status` has a line per switch: off, with how to turn it on and
 for whom; or on, with whether the account has the rights, checked with one
 cheap read once the connection works (`OptInTools.checkAccess`; for Skore,
-`getTeachers`, where an empty list of teachers counts as no access too).
+`getTeachers`, where an empty list of teachers counts as no access too; for
+the presences, `getConfig`, where access means that the account may record
+presences for at least one class).
 Registering the tools only once access is detected
 (`notifications/tools/list_changed`) was not chosen: the server logs in at
 the first tool call, so the tools would show up only later in the

@@ -26,6 +26,12 @@ Je vraagt het gewoon in een gesprek:
   leerkracht geven. Een puntenboek delen met andere leerkrachten, of dat
   delen stoppen. Telkens pas nadat jij het goedgekeurd hebt. Dat zet je aan
   met **Skore-beheer**.
+- **Aanwezigheden**, alleen voor wie de halve-dagaanwezigheden van klassen
+  registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat:
+  per klas en dag zien wat er voor elke leerling 's morgens en 's middags
+  geregistreerd is. Leerlingen als te laat markeren, of weer als aanwezig.
+  Telkens pas nadat jij het goedgekeurd hebt. Dat zet je aan met
+  **Aanwezigheden**.
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
 [installatiegids voor ChatGPT](installatie-chatgpt.md).
@@ -140,6 +146,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **2FA-sleutel** (alleen met tweestapsverificatie) | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat dit veld dan leeg. |
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
    | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore](#skore). De meeste leerkrachten en alle leerlingen laten het uit. |
+   | **Aanwezigheden** (niet verplicht) | Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: zet het aan. Zie [Aanwezigheden](#aanwezigheden). De meeste leerkrachten en alle leerlingen laten het uit. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
 
@@ -341,6 +348,38 @@ mis, dan stopt Claude daar en zegt het voor elke leerkracht wat er gebeurd
 is. Een lesopdracht verwijderen, de leerlingen van een lesopdracht kiezen of
 lesopdrachten importeren kan Claude niet: dat doe je zelf in Skore.
 
+### Aanwezigheden
+
+Alleen met **Aanwezigheden** aan, en alleen voor wie in Smartschool de
+halve-dagaanwezigheden van klassen mag registreren, zoals de
+afwezigheidsbeheerder of het leerlingensecretariaat. Het gaat om de
+registratie per voormiddag en namiddag, die voor de overheid telt, niet om
+de registratie per lesuur. De meeste leerkrachten en alle leerlingen hebben
+die rechten niet. Zet je **Aanwezigheden** aan zonder die rechten, dan zegt
+Claude dat je account ze niet heeft; vraag ze dan aan de
+Smartschool-beheerder van je school, of zet **Aanwezigheden** weer uit.
+
+- "Wie was er vanmorgen te laat in 1A?"
+- "Wat staat er vandaag geregistreerd voor 3B1?"
+- "De bus van lijn 5 was vanmorgen een kwartier te laat: zet Emma Janssens en
+  Lotte Peeters uit 1A op te laat, met als motivatie 'bus lijn 5'."
+  Claude zoekt de klas en de leerlingen op, toont wat het gaat registreren
+  (de klas, de leerlingen, de halve dag, te laat en de motivatie), en
+  registreert pas na jouw akkoord, voor alle leerlingen in één keer. Daarna
+  vraagt Claude Desktop nog eens toestemming.
+- "Zet Mila Claes vanmiddag op te laat zonder geldige reden."
+- "Lotte Peeters was toch op tijd: zet haar weer op aanwezig."
+
+Claude verandert alleen een halve dag waarop nog niets staat, of aanwezig of
+te laat (met of zonder geldige reden). Een andere registratie, zoals een
+afwezigheid die het secretariaat invulde, overschrijft Claude nooit: dan
+verandert het voor niemand iets en zegt het welke leerling het betreft. Een
+dag in de toekomst kan niet. Loopt het bij een leerling mis, dan stopt
+Claude daar en zegt het voor elke leerling wat er gebeurd is. Na het
+registreren leest Claude de klas opnieuw en zegt het wat er nu staat. Andere
+codes (zoals ziek of een attest), het bevestigen van aanwezigheden en de
+registratie per lesuur kan Claude niet: dat doe je zelf in Smartschool.
+
 ### Bestanden bewaren
 
 Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
@@ -375,8 +414,9 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   wachtwoord, OpenDocument-bestanden (`.odt`, `.ods`, ...) en bestanden groter
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
-- De extensie werkt alleen met berichten, Intradesk, de planner en, met
-  **Skore-beheer** aan, Skore. Andere onderdelen van Smartschool kent ze
+- De extensie werkt alleen met berichten, Intradesk, de planner, met
+  **Skore-beheer** aan Skore, en met **Aanwezigheden** aan de
+  halve-dagaanwezigheden. Andere onderdelen van Smartschool kent ze
   niet. In Skore leest ze de klassen, vakken, leerkrachten en gedeelde
   puntenboeken, koppelt ze leerkrachten aan vakken en deelt ze puntenboeken:
   een lesopdracht verwijderen kan ze niet. In de
@@ -529,7 +569,7 @@ na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
 
 | Wat | Waar |
 | --- | --- |
-| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel, downloadmap en Skore-beheer | In Claude Desktop, op deze pc |
+| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel, downloadmap, Skore-beheer en Aanwezigheden | In Claude Desktop, op deze pc |
 | Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
 | De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
 | De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |
@@ -577,6 +617,10 @@ in jouw naam in te loggen. Daarom:
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
   hun gezondheid, zorg of thuissituatie.
+- Met **Aanwezigheden** aan gaan ook de aanwezigheden en afwezigheden van
+  leerlingen naar Claude, met de motivatie die erbij staat. Ook dat zijn
+  gegevens over leerlingen, en een afwezigheid of haar motivatie kan iets
+  zeggen over hun gezondheid of thuissituatie.
 - Kijk in de privacy-instellingen van je Claude-account wat er met je
   gesprekken mag gebeuren.
 - Je wachtwoord en je 2FA-sleutel gaan nooit naar Claude: de extensie gebruikt
@@ -589,7 +633,8 @@ in jouw naam in te loggen. Daarom:
 - De extensie handelt in jouw naam: een antwoord of een nieuw bericht
   vertrekt vanuit jouw account, en archiveren en weggooien verplaatsen jouw
   berichten. Claude vraagt je akkoord voordat het iets verstuurt of naar de
-  prullenbak verplaatst.
+  prullenbak verplaatst. Met **Aanwezigheden** aan registreert ze te laat en
+  aanwezig op jouw naam, telkens pas na jouw akkoord.
 
 ## 9. Verwijderen
 
