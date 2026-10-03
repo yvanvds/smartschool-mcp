@@ -151,6 +151,10 @@ String elementCourses(PlannedElement element) =>
 String elementClasses(PlannedElement element) =>
     _names(element.participantGroups, (group) => group.name);
 
+/// The people who organise [element], joined: `Piet Peeters`.
+String elementOrganisers(PlannedElement element) =>
+    _names(element.organiserUsers, (user) => user.name);
+
 /// The rooms of [element]: `room 101`, `rooms 101, 102`, or null for none.
 String? elementRooms(PlannedElement element) {
   final rooms = _names(element.locations, (location) => location.title);
@@ -244,7 +248,7 @@ String plannerInfoText(String html) {
 String formatElementDetail(PlannedElementDetail detail) {
   final placeholder = detail.type == PlannedElementType.placeholder;
   final assignment = detail.type == PlannedElementType.assignment;
-  final organisers = _names(detail.organiserUsers, (user) => user.name);
+  final organisers = elementOrganisers(detail);
   final people = _names(detail.participantUsers, (user) => user.name);
   final labels = _names(
     detail.labels ?? const <PlannerLabel>[],

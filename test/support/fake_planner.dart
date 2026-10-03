@@ -270,6 +270,7 @@ class FakePlannedElement {
     this.isAnnounced,
     this.hasLinkedEvaluation = false,
     this.capabilities = const {},
+    this.userRoles = const [],
   });
 
   final String id;
@@ -310,6 +311,10 @@ class FakePlannedElement {
   /// Capabilities that differ from what the planner gives an element of
   /// this type ([capabilityJson]), such as `{'canUserReplace': false}`.
   final Map<String, bool> capabilities;
+
+  /// The participant roles (`participants.userRoles`), which the timetable
+  /// slots seen live never had (dartschool#87): any shape, made up.
+  final List<Object?> userRoles;
 
   /// The element id as the planner tools print it.
   String get ref => '$type/$platformId/$id';
@@ -387,6 +392,7 @@ class FakePlannedElement {
     isAnnounced: isAnnounced,
     hasLinkedEvaluation: hasLinkedEvaluation,
     capabilities: capabilities,
+    userRoles: userRoles,
   );
 
   /// A new element of [type] with the id [id] in this element's lesson
@@ -438,7 +444,7 @@ class FakePlannedElement {
     'participants': {
       'users': [for (final user in users) user.toJson()],
       'groups': [for (final group in groups) group.toJson()],
-      'userRoles': <Object?>[],
+      'userRoles': userRoles,
       'groupFilters': {'filters': <Object?>[], 'additionalUsers': <Object?>[]},
     },
     'plannedElementType': type,
@@ -835,6 +841,11 @@ class FakePlanner {
   /// before the answer arrives.
   final Set<String> lostAnswers = {};
 
+  /// Called with every planner request once it is recorded, before it is
+  /// answered: a test changes what the planner serves there, as a change
+  /// in Smartschool itself between two requests of a tool.
+  void Function(String method, String path)? beforeAnswer;
+
   /// How many elements the writes made, for their ids.
   int _made = 0;
 
@@ -970,6 +981,7 @@ class FakePlanner {
       query: options.uri.queryParameters,
       data: options.data,
     ));
+    beforeAnswer?.call(options.method, path);
     if (failing[path] case final status?) {
       return _json(
         '{"status":$status,"title":"Error","detail":"","type":""}',

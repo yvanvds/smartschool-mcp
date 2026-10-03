@@ -627,16 +627,13 @@ void main() {
           'hour': fakeOwnSlot.ref,
           'lesfiche': fakeLesficheGame.id,
         }),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains(
-            'lesfiche ${fakeLesficheGame.id} "Taak: een eigen spel" is an '
-            'assignment lesfiche (assignments), not a lesson one (lessons): '
-            'planning it would not make a lesson.',
-          ),
-          endsWith('Nothing was changed in the planner.'),
-          isNot(contains('planLessonContent')),
-        ),
+        // In the tool's words, from the reason of the refusal
+        // (dartschool#100), pointing to list_lesfiches.
+        'The planner refused the change before it was sent: the lesfiche '
+        '"Taak: een eigen spel" is an assignment lesfiche, not a lesson '
+        'lesfiche: only a lesson lesfiche can be planned into a lesson hour. '
+        'List the lesson lesfiches with list_lesfiches and take the id of one '
+        'from there. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
       expect(planner.elements, contains(fakeOwnSlot.ref));
@@ -650,11 +647,10 @@ void main() {
           'hour': fakeOwnSlot.ref,
           'lesfiche': unknown,
         }),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('there is no lesfiche $unknown among your 3 lesfiches'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: you have no '
+        'lesfiche with the id given (any more). List your lesfiches with '
+        'list_lesfiches and take the id of a lesson lesfiche from there. '
+        'Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
     });

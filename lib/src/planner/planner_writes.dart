@@ -215,10 +215,7 @@ PlannerAssignmentType assignmentTypeArgument(
   String normal(String text) =>
       text.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
   final wanted = value is String ? normal(value) : '';
-  final schoolTypes = types.isEmpty
-      ? 'The planner lists no assignment types for the school.'
-      : 'The school\'s assignment types are '
-            '${types.map(formatAssignmentType).join(', ')}.';
+  final schoolTypes = schoolAssignmentTypes(types);
   if (wanted.isNotEmpty) {
     for (final label in <String Function(PlannerAssignmentType type)>[
       (type) => type.abbreviation,
@@ -246,6 +243,14 @@ PlannerAssignmentType assignmentTypeArgument(
     '$schoolTypes',
   );
 }
+
+/// [types], the school's assignment types, in a sentence for an error about
+/// a type: `The school's assignment types are GO Grote Overhoring, KO Kleine
+/// Overhoring.`, or that the planner lists none.
+String schoolAssignmentTypes(List<PlannerAssignmentType> types) => types.isEmpty
+    ? 'The planner lists no assignment types for the school.'
+    : 'The school\'s assignment types are '
+          '${types.map(formatAssignmentType).join(', ')}.';
 
 /// `a`, `a and b`, `a, b and c`.
 String _and(List<String> items) => items.length < 2

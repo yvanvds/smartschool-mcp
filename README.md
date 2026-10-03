@@ -452,8 +452,9 @@ client name. It also installs again while that copy runs.
   and plans after the user's confirmation, one call per hour, in order;
   the result gives the lesson as saved and its new id. The library reads
   the lesfiches before it plans and refuses, before sending anything, an id
-  the user has no lesfiche with and an assignment lesfiche; the tool passes
-  that reason on. A hidden lesfiche is planned like any other.
+  the user has no lesfiche with and an assignment lesfiche; the tool says so
+  in its own words and points to `list_lesfiches`. A hidden lesfiche is
+  planned like any other.
 - `plan_assignment`: plans an assignment (a test, a task, something to
   bring along) in one of the user's own lesson hours (`hour`, an empty
   lesson hour or a lesson from `list_planner` with `me`) with the library's
@@ -474,7 +475,11 @@ client name. It also installs again while that copy runs.
   tests with `list_class_assignments` first, to show the user the classes,
   the date and hour, the type, the name and the info, and to wait for the
   user's confirmation. The library checks the type against the school's
-  types again and sends the create
+  types again; when the school no longer has it (the types changed since
+  the session read them), the server reads the types again, for every
+  tool on the session, and the error lists them (the library's refusal
+  does not carry them: a workaround for yvanvds/dartschool#119, whose
+  removal is tracked in #89). The library sends the create
   (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
   once. The result gives the assignment as saved, with its id. Its name and
   info change with `edit_planned_element`; its date, type and classes do
@@ -764,7 +769,9 @@ needs the Lesfiches module; the planner ids (`PlannerRef`, `me` or `user/…`, `
 reads an element's detail); the `classes` argument, 1 to a maximum of
 class planner ids (`classPlannersArgument`); the `from` and `until`
 arguments with a default period (`plannerPeriodArguments`); and the
-school's assignment types, read once per session (`AssignmentTypes.of`). In
+school's assignment types, read once per session (`AssignmentTypes.of`),
+and again when the library refused a type the school no longer has
+(`reread`). In
 `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment
 type (`formatAssignmentType`), one line per element (`formatElementLine`),
@@ -779,8 +786,15 @@ lesson hour, the classes and the type of a new assignment
 (`lessonHourArgument`, `lessonHourClassesArgument`, `lessonHourClasses`,
 `assignmentTypeArgument`), `withPlannerWrite` (`withPlanner`, with a note that nothing changed on an
 error), and the result of a write the planner did not confirm
-(`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
-refused a write (`SmartschoolPlannerWriteRefusedError`). In
+(`plannerWriteNotConfirmed`). `plannerToolError` says why the library
+refused a write (`SmartschoolPlannerWriteRefusedError`) in the tools' own
+words, from its reason (`PlannerWriteRefusalReason`, dartschool#100): the
+element by its kind, name, day, time, classes and course, who organises a
+colleague's element, which capability the planner does not set, and what
+to do next (`list_planner`, `list_lesfiches`, or Smartschool itself). The
+library's message, written for a developer, goes to the log only. Its
+switch has no default, so a reason a later version of the library adds
+fails the build. In
 `lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
 `lesfiche` argument (`lesficheArgument`), the filters (`lesficheMatches`),
 the order of the names (`compareLesficheNames`) and one line per lesfiche

@@ -303,6 +303,27 @@ void main() {
       expect(await types.read(planner), [ko]);
       expect(planner.reads, 2);
     });
+
+    test('reads the types again for reread, and gives those from then on: '
+        'the school\'s types changed', () async {
+      const go = PlannerAssignmentType(
+        id: 'b',
+        name: 'Grote Overhoring',
+        abbreviation: 'GO',
+      );
+      final types = AssignmentTypes.of(
+        SmartschoolSession(fakeExtensionSettings()),
+      );
+      final planner = _TypesPlanner([
+        [ko],
+        [go],
+      ])..gate.complete();
+
+      expect(await types.read(planner), [ko]);
+      expect(await types.reread(planner), [go]);
+      expect(await types.read(planner), [go]);
+      expect(planner.reads, 2);
+    });
   });
 
   group('plannerPeriodArguments', () {
@@ -421,33 +442,312 @@ void main() {
       );
     });
 
-    test('passes on why the library refused a write before sending it, '
-        'without its method name and its own "Nothing was sent"', () {
-      expect(
-        plannerToolError(
-          const SmartschoolPlannerWriteRefusedError(
-            'planLesson: the planner does not let you change '
-            'planned-placeholders $_uuid (canUserReplace not set). Nothing '
-            'was sent.',
+    group('words why the library refused a write before sending it from '
+        'its reason (dartschool#100), naming the element, without the '
+        'library\'s message', () {
+      const lead = 'The planner refused the change before it was sent';
+      const message =
+          'planLesson: planned-placeholders $_uuid (2026-11-20 13:00:00.000 '
+          '- 2026-11-20 13:50:00.000) secret words of the library. Nothing '
+          'was sent.';
+      const listAgain =
+          'List the planner again with list_planner (planner me) to see how '
+          'it is now.';
+      const piet = PlannerUser(id: '4069_1002_0', name: 'Piet Peeters');
+
+      /// An element of 6A1 and informatica on Friday 2026-11-20 at
+      /// [hour]:00 for 50 minutes, by [organisers].
+      PlannedElement element({
+        String type = 'planned-placeholders',
+        String? name,
+        int hour = 13,
+        List<PlannerUser> organisers = const [piet],
+        PlannerAssignmentType? assignmentType,
+      }) => PlannedElement(
+        id: _uuid,
+        platformId: 4069,
+        type: PlannedElementType.fromWire(type),
+        typeName: type,
+        name: name,
+        period: PlannerPeriod(
+          from: DateTime(2026, 11, 20, hour),
+          to: DateTime(2026, 11, 20, hour, 50),
+          deadline: type == 'planned-assignments',
+        ),
+        organiserUsers: organisers,
+        participantGroups: const [
+          PlannerGroup(id: '4069_2001', platformId: 4069, name: '6A1'),
+        ],
+        courses: const [
+          PlannerCourse(id: 'c1', platformId: 4069, name: 'informatica'),
+        ],
+        assignmentType: assignmentType,
+      );
+      const hour =
+          'empty lesson hour on Friday 2026-11-20 13:00–13:50 (6A1, '
+          'informatica)';
+
+      String? refused(
+        PlannerWriteRefusalReason? reason, {
+        PlannedElement? element,
+        List<String> flags = const [],
+        LessonContentItem? lessonContent,
+      }) => plannerToolError(
+        SmartschoolPlannerWriteRefusedError(
+          message,
+          reason: reason,
+          element: element,
+          capabilityFlags: flags,
+          lessonContent: lessonContent,
+        ),
+      )?.message;
+
+      test('every reason, without the library\'s message or its method', () {
+        for (final reason in [...PlannerWriteRefusalReason.values, null]) {
+          expect(
+            refused(reason, element: element()),
+            allOf(
+              startsWith(lead),
+              isNot(contains('secret words')),
+              isNot(contains('planLesson')),
+              isNot(contains('Nothing was sent')),
+              isNot(contains('13:00:00.000')),
+            ),
+            reason: '$reason',
+          );
+        }
+      });
+
+      test('notOwn: who organises a colleague\'s element', () {
+        expect(
+          refused(PlannerWriteRefusalReason.notOwn, element: element()),
+          '$lead: the $hour is not in your own planner: it is organised by '
+          'Piet Peeters. Only the elements of your own planner can be '
+          'changed, as list_planner (planner me) shows them.',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.notOwn,
+            element: element(organisers: const []),
           ),
-        ),
-        _toolError(
-          'The planner refused the change before it was sent: the planner '
-          'does not let you change planned-placeholders $_uuid '
-          '(canUserReplace not set). List the planner again with '
-          'list_planner (planner me) to see how it is now.',
-        ),
-      );
-      expect(
-        plannerToolError(
-          const SmartschoolPlannerWriteRefusedError('Some other reason'),
-        ),
-        _toolError(
-          'The planner refused the change before it was sent: Some other '
-          'reason. List the planner again with list_planner (planner me) to '
-          'see how it is now.',
-        ),
-      );
+          contains(
+            'is not in your own planner: it is organised by someone else.',
+          ),
+        );
+        expect(
+          refused(PlannerWriteRefusalReason.notOwn),
+          contains(
+            ': the element is not in your own planner: it is organised by '
+            'someone else.',
+          ),
+        );
+      });
+
+      test('notAllowed: what the planner does not let the user do, and the '
+          'capabilities that are not set', () {
+        expect(
+          refused(
+            PlannerWriteRefusalReason.notAllowed,
+            element: element(),
+            flags: const ['canUserReplace'],
+          ),
+          '$lead: the planner does not let you fill the $hour: its '
+          'capability canUserReplace is not set.',
+        );
+        final lesson = element(type: 'planned-lessons', name: 'Lussen');
+        for (final (flags, words) in [
+          (
+            const ['canUserEdit', 'canUserRename'],
+            'change or rename the lesson "Lussen" on Friday 2026-11-20 '
+                '13:00–13:50 (6A1, informatica): its capabilities canUserEdit '
+                'and canUserRename are not set.',
+          ),
+          (
+            const ['canUserChangePublicInfo'],
+            'change the public info of the lesson "Lussen"',
+          ),
+          (
+            const ['canUserChangePrivateInfo'],
+            'change the private info of the lesson "Lussen"',
+          ),
+          (
+            const ['canUserSing'],
+            'change the lesson "Lussen" on Friday 2026-11-20 13:00–13:50 '
+                '(6A1, informatica): its capability canUserSing is not set.',
+          ),
+        ]) {
+          expect(
+            refused(
+              PlannerWriteRefusalReason.notAllowed,
+              element: lesson,
+              flags: flags,
+            ),
+            contains('the planner does not let you $words'),
+            reason: '$flags',
+          );
+        }
+        expect(
+          refused(
+            PlannerWriteRefusalReason.notAllowed,
+            element: element(
+              type: 'planned-assignments',
+              name: 'Toets',
+              assignmentType: const PlannerAssignmentType(
+                id: 'a',
+                name: 'Kleine Overhoring',
+                abbreviation: 'KO',
+              ),
+            ),
+            flags: const ['canUserTrash'],
+          ),
+          '$lead: the planner does not let you trash the assignment KO Kleine '
+          'Overhoring "Toets" on Friday 2026-11-20 13:00 (deadline) (6A1, '
+          'informatica): its capability canUserTrash is not set.',
+        );
+        expect(
+          refused(PlannerWriteRefusalReason.notAllowed, element: element()),
+          '$lead: the planner does not let you change the $hour.',
+        );
+      });
+
+      test('a lesson hour that changed since it was read, or that the server '
+          'cannot fill', () {
+        expect(
+          refused(
+            PlannerWriteRefusalReason.noLongerASlot,
+            element: element(type: 'planned-lessons', name: 'Gepland'),
+          ),
+          '$lead: the lesson hour is not empty any more: the planner has the '
+          'lesson "Gepland" on Friday 2026-11-20 13:00–13:50 (6A1, '
+          'informatica) in its place. $listAgain',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.periodChanged,
+            element: element(hour: 14),
+          ),
+          '$lead: the empty lesson hour moved since it was read: it is now the '
+          'empty lesson hour on Friday 2026-11-20 14:00–14:50 (6A1, '
+          'informatica). $listAgain',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.participantRoles,
+            element: element(),
+          ),
+          '$lead: the $hour has participant roles or group filters, which '
+          'this server does not know how to keep when it fills a lesson hour. '
+          'Fill this hour in Smartschool itself.',
+        );
+      });
+
+      test('trashable: a lesson outside the timetable, which is not '
+          'cleared', () {
+        final lesson = element(type: 'planned-lessons', name: 'Inhaalles');
+        expect(
+          refused(
+            PlannerWriteRefusalReason.trashable,
+            element: lesson,
+            flags: const ['canUserTrash', 'canUserDelete'],
+          ),
+          '$lead: the lesson "Inhaalles" on Friday 2026-11-20 13:00–13:50 '
+          '(6A1, informatica) is not a lesson in a lesson hour of the '
+          'timetable, the only kind of lesson that is cleared: the planner '
+          'lets you trash or delete it instead (its capabilities canUserTrash '
+          'and canUserDelete are set). Remove it in Smartschool itself.',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.trashable,
+            element: lesson,
+            flags: const ['canUserDelete'],
+          ),
+          contains(
+            'lets you delete it instead (its capability canUserDelete is '
+            'set).',
+          ),
+        );
+      });
+
+      test('a lesfiche that is not the user\'s, or not a lesson one: points '
+          'to list_lesfiches, not list_planner', () {
+        LessonContentItem lesfiche(LessonContentType type, String typeName) =>
+            LessonContentItem(
+              id: 'b0000000-0000-4000-8000-000000000003',
+              platformId: 4069,
+              type: type,
+              typeName: typeName,
+              name: 'Taak: een eigen spel',
+              isVisible: true,
+            );
+
+        expect(
+          refused(PlannerWriteRefusalReason.unknownLessonContent),
+          '$lead: you have no lesfiche with the id given (any more). List '
+          'your lesfiches with list_lesfiches and take the id of a lesson '
+          'lesfiche from there.',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.notALessonLessonContent,
+            lessonContent: lesfiche(
+              LessonContentType.assignment,
+              'assignments',
+            ),
+          ),
+          '$lead: the lesfiche "Taak: een eigen spel" is an assignment '
+          'lesfiche, not a lesson lesfiche: only a lesson lesfiche can be '
+          'planned into a lesson hour. List the lesson lesfiches with '
+          'list_lesfiches and take the id of one from there.',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.notALessonLessonContent,
+            lessonContent: lesfiche(LessonContentType.other, 'quizzes'),
+          ),
+          contains(
+            ': the lesfiche "Taak: een eigen spel" is of the kind "quizzes", '
+            'not a lesson lesfiche: ',
+          ),
+        );
+        for (final reason in [
+          PlannerWriteRefusalReason.unknownLessonContent,
+          PlannerWriteRefusalReason.notALessonLessonContent,
+        ]) {
+          expect(refused(reason), isNot(contains('list_planner')));
+        }
+      });
+
+      test('an assignment: a type the school no longer has, and a linked '
+          'Skore evaluation', () {
+        expect(
+          refused(PlannerWriteRefusalReason.unknownAssignmentType),
+          '$lead: the assignment type is no longer one of the school\'s '
+          'assignment types: they changed since the server read them.',
+        );
+        expect(
+          refused(
+            PlannerWriteRefusalReason.linkedEvaluation,
+            element: element(
+              type: 'planned-assignments',
+              name: 'Toets',
+              organisers: const [],
+            ),
+          ),
+          '$lead: the assignment "Toets" on Friday 2026-11-20 13:00 '
+          '(deadline) (6A1, informatica) is linked to a Skore evaluation, '
+          'which has to be unlinked in Smartschool first: only then can it be '
+          'moved to the trash.',
+        );
+      });
+
+      test('without a reason (an error made without one): the details are '
+          'in the log', () {
+        expect(
+          refused(null, element: element()),
+          '$lead. The technical details are in the server log.',
+        );
+      });
     });
 
     test('passes on what the library refused before sending', () {

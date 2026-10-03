@@ -381,21 +381,15 @@ void main() {
 
     test('refuses a colleague\'s empty lesson hour without any write: the '
         'library reads it again and refuses it', () async {
+      // In the tools' words, from the reason of the refusal (dartschool#100):
+      // the hour by its day, time, classes and course, and who organises it.
       expect(
         await error('plan_lesson', {'hour': fakeSlot.ref, 'name': 'Lussen'}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains(
-            'is not in your own planner: it is organised by Piet '
-            'Peeters (4069_1002_0), not by $fakePlannerMe.',
-          ),
-          endsWith(
-            'List the planner again with list_planner (planner me) to see how '
-            'it is now. Nothing was changed in the planner.',
-          ),
-          isNot(contains('planLesson')),
-          isNot(contains('Nothing was sent')),
-        ),
+        'The planner refused the change before it was sent: the empty lesson '
+        'hour on Monday 2026-10-05 14:40–15:30 (6A1, 6B1, wiskunde) is not in '
+        'your own planner: it is organised by Piet Peeters. Only the '
+        'elements of your own planner can be changed, as list_planner '
+        '(planner me) shows them. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
       expect(planner.elements, contains(fakeSlot.ref));
@@ -417,13 +411,114 @@ void main() {
 
       expect(
         await error('plan_lesson', {'hour': locked.ref, 'name': 'Lussen'}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('(canUserReplace not set)'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: the planner does '
+        'not let you fill the empty lesson hour on Friday 2026-11-20 '
+        '13:00–13:50 (6A1, informatica): its capability canUserReplace is '
+        'not set. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
+    });
+
+    group('refuses an hour that changed in Smartschool between the tool\'s '
+        'read and the library\'s, or that the server cannot fill, without any '
+        'write', () {
+      /// Lets the planner answer the second read of [fakeOwnSlot] (the
+      /// library's, before its fill) with [changed]: as when the hour
+      /// changed in Smartschool itself right after the tool read it.
+      void changeAfterFirstRead(FakePlannedElement changed) {
+        var reads = 0;
+        planner.beforeAnswer = (method, path) {
+          if (method == 'GET' &&
+              path == '$_api/${fakeOwnSlot.ref}' &&
+              ++reads == 2) {
+            planner.elements[fakeOwnSlot.ref] = changed;
+          }
+        };
+      }
+
+      FakePlannedElement ownSlot({
+        String type = 'planned-placeholders',
+        String? name,
+        String? from,
+        String? to,
+        List<Object?> userRoles = const [],
+      }) => FakePlannedElement(
+        id: fakeOwnSlot.id,
+        type: type,
+        name: name,
+        from: from ?? plannerTime(2026, 11, 20, 11, 10),
+        to: to ?? plannerTime(2026, 11, 20, 12, 0),
+        organisers: [FakePlannerUser.me],
+        groups: [fake6A1, fake6A2],
+        courses: [fakeInformatica],
+        rooms: [fakeRoom101],
+        userRoles: userRoles,
+      );
+
+      test('the hour is no longer empty: the planner answers its id with a '
+          'lesson', () async {
+        changeAfterFirstRead(
+          ownSlot(type: 'planned-lessons', name: 'In Smartschool gepland'),
+        );
+        expect(
+          await error('plan_lesson', {
+            'hour': fakeOwnSlot.ref,
+            'name': 'Lussen',
+          }),
+          'The planner refused the change before it was sent: the lesson hour '
+          'is not empty any more: the planner has the lesson "In Smartschool '
+          'gepland" on Friday 2026-11-20 11:10–12:00 (6A1, 6A2, informatica) '
+          'in its place. List the planner again with list_planner (planner '
+          'me) to see how it is now. Nothing was changed in the planner.',
+        );
+        expect(planner.writes, isEmpty);
+      });
+
+      test('the hour moved', () async {
+        changeAfterFirstRead(
+          ownSlot(
+            from: plannerTime(2026, 11, 20, 13, 0),
+            to: plannerTime(2026, 11, 20, 13, 50),
+          ),
+        );
+        expect(
+          await error('plan_lesson', {
+            'hour': fakeOwnSlot.ref,
+            'name': 'Lussen',
+          }),
+          'The planner refused the change before it was sent: the empty '
+          'lesson hour moved since it was read: it is now the empty lesson '
+          'hour on Friday 2026-11-20 13:00–13:50 (6A1, 6A2, informatica). List '
+          'the planner again with list_planner (planner me) to see how it is '
+          'now. Nothing was changed in the planner.',
+        );
+        expect(planner.writes, isEmpty);
+      });
+
+      test('the hour has participant roles, which the server does not know '
+          'how to keep', () async {
+        // Made up: the timetable slots seen live never had any.
+        changeAfterFirstRead(
+          ownSlot(
+            userRoles: [
+              {'id': 'r1', 'name': 'Leerkracht'},
+            ],
+          ),
+        );
+        expect(
+          await error('plan_lesson', {
+            'hour': fakeOwnSlot.ref,
+            'name': 'Lussen',
+          }),
+          'The planner refused the change before it was sent: the empty '
+          'lesson hour on Friday 2026-11-20 11:10–12:00 (6A1, 6A2, '
+          'informatica) has participant roles or group filters, which this '
+          'server does not know how to keep when it fills a lesson hour. Fill '
+          'this hour in Smartschool itself. Nothing was changed in the '
+          'planner.',
+        );
+        expect(planner.writes, isEmpty);
+      });
     });
 
     test('an hour that is no longer empty: the planner has no such hour any '
@@ -714,9 +809,14 @@ void main() {
 
     test('refuses a colleague\'s lesson and assignment without any write: '
         'the library reads them again and refuses them', () async {
-      for (final (element, organiser) in [
-        (fakeLesson, 'Wim Willems (4069_1003_0)'),
-        (fakeAssignment, 'Piet Peeters (4069_1002_0)'),
+      for (final (element, summary, organiser) in [
+        (
+          fakeLesson,
+          'lesson "Erfelijkheid" on Friday 2026-10-09 14:40–15:30 (6A1, 6A2, '
+              'biologie)',
+          'Wim Willems',
+        ),
+        (fakeAssignment, 'assignment', 'Piet Peeters'),
       ]) {
         expect(
           await error('edit_planned_element', {
@@ -725,11 +825,16 @@ void main() {
             'private_info': 'Van mij',
           }),
           allOf(
-            startsWith('The planner refused the change before it was sent: '),
-            contains(
-              'is not in your own planner: it is organised by $organiser',
+            startsWith(
+              'The planner refused the change before it was sent: the '
+              '$summary',
             ),
-            endsWith('Nothing was changed in the planner.'),
+            endsWith(
+              ' is not in your own planner: it is organised by $organiser. '
+              'Only the elements of your own planner can be changed, as '
+              'list_planner (planner me) shows them. Nothing was changed in '
+              'the planner.',
+            ),
           ),
           reason: element.ref,
         );
@@ -821,7 +926,13 @@ void main() {
             'informatica), the name was saved. The private info was not '
             'changed: The planner refused the change before it was sent: ',
           ),
-          contains('(canUserChangePrivateInfo not set)'),
+          // The lesson as the library read it again, after the rename.
+          endsWith(
+            'the planner does not let you change the private info of the '
+            'lesson "Lussen: for en while" on Tuesday 2026-10-06 10:20–11:10 '
+            '(6A1, informatica): its capability canUserChangePrivateInfo is '
+            'not set.',
+          ),
           isNot(contains('Nothing was changed')),
         ),
       );
@@ -891,14 +1002,11 @@ void main() {
     test('refuses a colleague\'s lesson without any write', () async {
       expect(
         await error('clear_lesson', {'id': fakeLesson.ref}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains(
-            'is not in your own planner: it is organised by Wim '
-            'Willems (4069_1003_0)',
-          ),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: the lesson '
+        '"Erfelijkheid" on Friday 2026-10-09 14:40–15:30 (6A1, 6A2, biologie) '
+        'is not in your own planner: it is organised by Wim Willems. Only the '
+        'elements of your own planner can be changed, as list_planner '
+        '(planner me) shows them. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
       expect(planner.elements, contains(fakeLesson.ref));
@@ -920,11 +1028,12 @@ void main() {
 
       expect(
         await error('clear_lesson', {'id': outside.ref}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('(canUserTrash)'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: the lesson '
+        '"Inhaalles" on Wednesday 2026-10-07 16:00–17:00 (6A1) is not a '
+        'lesson in a lesson hour of the timetable, the only kind of lesson '
+        'that is cleared: the planner lets you trash or delete it instead '
+        '(its capabilities canUserTrash and canUserDelete are set). Remove it '
+        'in Smartschool itself. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
     });

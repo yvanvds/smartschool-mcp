@@ -644,20 +644,46 @@ void main() {
         });
         planner.assignmentTypes.remove(FakeAssignmentType.ko);
 
+        // In the tool's words, with the school's types as they are now,
+        // which the server reads again (the refusal does not carry them,
+        // yvanvds/dartschool#119).
         expect(
           await error('plan_assignment', {
             'hour': fakeOwnSlot.ref,
             'type': 'KO',
             'name': 'Test',
           }),
-          allOf(
-            startsWith('The planner refused the change before it was sent: '),
-            contains(
-              'assignment type ${FakeAssignmentType.ko.id} "Kleine Overhoring" '
-              'is not one of the school\'s 5 assignment types',
-            ),
-            endsWith('Nothing was changed in the planner.'),
-            isNot(contains('planAssignment')),
+          'The planner refused the change before it was sent: type "KO" '
+          'named the assignment type KO Kleine Overhoring, which is no longer '
+          'one of the school\'s assignment types: they changed since the '
+          'server read them. The school\'s assignment types are GO Grote '
+          'Overhoring, GT Grote Taak, KT Kleine Taak, MB Meebrengen, V '
+          'Voorbereiding. Ask the user which one to use instead, and pass it '
+          'by its abbreviation or its name; list_class_assignments lists them '
+          'too. Nothing was changed in the planner.',
+        );
+        expect(planner.writes, isEmpty);
+
+        // Every tool on the session has the types as they are now.
+        expect(
+          await ok('list_class_assignments', {
+            'classes': ['group/4069_2001'],
+          }),
+          contains(
+            'Assignment types of the school: GO Grote Overhoring, GT Grote '
+            'Taak, KT Kleine Taak, MB Meebrengen, V Voorbereiding.',
+          ),
+        );
+        expect(
+          await error('plan_assignment', {
+            'hour': fakeOwnSlot.ref,
+            'type': 'KO',
+            'name': 'Test',
+          }),
+          startsWith(
+            'type "KO" is not one of the school\'s assignment types: pass one '
+            'by its abbreviation or its name. The school\'s assignment types '
+            'are GO Grote Overhoring, GT Grote Taak, KT Kleine Taak, ',
           ),
         );
         expect(planner.writes, isEmpty);
@@ -813,15 +839,12 @@ void main() {
         'reads it again and refuses it', () async {
       expect(
         await error('trash_assignment', {'id': fakeAssignment.ref}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains(
-            'is not in your own planner: it is organised by Piet Peeters '
-            '(4069_1002_0), not by $fakePlannerMe.',
-          ),
-          endsWith('Nothing was changed in the planner.'),
-          isNot(contains('trashAssignment')),
-        ),
+        'The planner refused the change before it was sent: the assignment '
+        'KO Kleine Overhoring "Test: hoofdstuk 3" on Tuesday 2026-10-06 08:30 '
+        '(deadline) (6A1, Nederlands) is not in your own planner: it is '
+        'organised by Piet Peeters. Only the elements of your own planner can '
+        'be changed, as list_planner (planner me) shows them. Nothing was '
+        'changed in the planner.',
       );
       expect(planner.writes, isEmpty);
       expect(planner.elements, contains(fakeAssignment.ref));
@@ -841,21 +864,21 @@ void main() {
         planner.add(assignment, calendars: ['user/$fakePlannerMe']);
       }
 
+      const assignment =
+          'assignment KO Kleine Overhoring "Toets: lussen" on Friday '
+          '2026-11-20 11:10 (deadline) (6A1, informatica)';
       expect(
         await error('trash_assignment', {'id': evaluated.ref}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('has a linked Skore evaluation'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: the $assignment '
+        'is linked to a Skore evaluation, which has to be unlinked in '
+        'Smartschool first: only then can it be moved to the trash. Nothing '
+        'was changed in the planner.',
       );
       expect(
         await error('trash_assignment', {'id': locked.ref}),
-        allOf(
-          startsWith('The planner refused the change before it was sent: '),
-          contains('(canUserTrash not set)'),
-          endsWith('Nothing was changed in the planner.'),
-        ),
+        'The planner refused the change before it was sent: the planner does '
+        'not let you trash the $assignment: its capability canUserTrash is '
+        'not set. Nothing was changed in the planner.',
       );
       expect(planner.writes, isEmpty);
     });
