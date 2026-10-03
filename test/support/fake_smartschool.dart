@@ -127,14 +127,8 @@ class FakeSmartschool implements HttpClientAdapter {
   /// Like the live platform, only the first `PHPSESSID` in the `Cookie`
   /// header counts: a request that sends a refused session id before the
   /// new one is refused (yvanvds/dartschool#9).
-  bool _hasSession(RequestOptions options) {
-    final cookie = options.headers[HttpHeaders.cookieHeader];
-    if (_validSession == null || cookie is! String) return false;
-    final session = RegExp(
-      r'(?:^|;)\s*PHPSESSID=([^;]*)',
-    ).firstMatch(cookie)?.group(1);
-    return session == _validSession;
-  }
+  bool _hasSession(RequestOptions options) =>
+      _validSession != null && sessionOf(options) == _validSession;
 
   @override
   Future<ResponseBody> fetch(

@@ -373,6 +373,40 @@ void main() {
       expect(mailbox.submits, 1);
     });
 
+    test('the recipients of every field are looked up on one compose '
+        'form', () async {
+      expect(
+        await ok({
+          'to': ['Svenja Lamberts', 'An Claes'],
+          'cc': ['5GZ (group 298)'],
+          'bcc': ['Els Wouters (user 1008)'],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        'Sent the message.\n'
+        'To: Svenja Lamberts, An Claes\n'
+        'CC: 5GZ (group)\n'
+        'BCC: Els Wouters\n'
+        'Subject: Uitstap',
+      );
+      expect(searches(), [
+        'search val=Svenja Lamberts',
+        'search val=An Claes',
+        'search val=5GZ',
+        'search val=Els Wouters',
+      ]);
+      expect(
+        mailbox.composeForms,
+        2,
+        reason: 'one for the four searches and one for the send',
+      );
+      expect(sends(), [
+        'send to=Svenja Lamberts,An Claes cc=5GZ (group) bcc=Els Wouters '
+            'subject=Uitstap',
+      ]);
+      expect(server.logins, 1);
+    });
+
     test('a message to the user themself arrives in their inbox', () async {
       expect(
         await ok({
@@ -713,11 +747,12 @@ void main() {
     const sent =
         'send to=Sven Lamber #1146 cc=5GZ (group) bcc= subject=Uitstap';
 
-    test('before a recipient is searched: logs in again and sends '
-        'once', () async {
-      // The library retries the search in the new session with the old
-      // form's uniqueUsc, which this fake accepts; what Smartschool answers
-      // then has not been seen (yvanvds/dartschool#97).
+    test('before a recipient is searched: logs in again, searches on a new '
+        'compose form and sends once', () async {
+      // Smartschool refuses the session for the first search. The library
+      // does not send it again with the old form's uniqueUsc, which this
+      // fake refuses in another session: it loads a new form, logging in
+      // first, and searches every name on it (yvanvds/dartschool#97, #107).
       server.expireSessionBefore(
         (request) =>
             request.method == 'POST' &&
@@ -727,6 +762,15 @@ void main() {
 
       expect(await ok(message), startsWith('Sent the message.\n'));
       expect(server.logins, 2);
+      expect(searches(), [
+        'search val=Sven Lamber',
+        'search val=5GZ',
+      ], reason: 'each name searched once in the new session');
+      expect(
+        mailbox.composeForms,
+        3,
+        reason: 'the refused form, the new one and the one of the send',
+      );
       expect(sends(), [sent]);
       expect(mailbox.submits, 1);
     });

@@ -1,3 +1,4 @@
+import 'dart:io' show HttpHeaders;
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -309,8 +310,16 @@ class FakeMailbox {
   /// The groups registered on each open compose form, by its `uniqueUsc`:
   /// group ids by field, as in [_forms].
   final Map<String, Map<String, List<int>>> _formGroups = {};
+
+  /// The session (`PHPSESSID`) each compose form was loaded in, by its
+  /// `uniqueUsc`.
+  final Map<String, String?> _formSessions = {};
   int _formsOpened = 0;
   int _messagesSent = 0;
+
+  /// How many compose forms were loaded (new-message and reply forms), each
+  /// with a new `uniqueUsc`.
+  int get composeForms => _formsOpened;
 
   /// User ids by name, given out on first use.
   late final Map<String, int> _userIds = {owner: ownerId};
@@ -374,7 +383,10 @@ class FakeMailbox {
       return _response(_modulePage(), 'text/html');
     }
     if (options.method == 'GET' && _isCompose(options)) {
-      return _response(_composePage(query), 'text/html');
+      return _response(
+        _composePage(query, session: sessionOf(options)),
+        'text/html',
+      );
     }
     if (options.method == 'GET' && query['file'] == 'download') {
       return _downloadAttachment(int.parse(query['fileID']!), cancelled);
@@ -384,7 +396,10 @@ class FakeMailbox {
         query['file'] == 'searchUsers' &&
         query['function'] == null) {
       return _response(
-        _search((options.data as Map).cast<String, String>()),
+        _search(
+          (options.data as Map).cast<String, String>(),
+          session: sessionOf(options),
+        ),
         'text/xml',
       );
     }
@@ -782,9 +797,10 @@ ${[for (final (i, a) in attachments.indexed) '''
 
   /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
   /// all), with a new `uniqueUsc` and the recipients of a reply filled in
-  /// and registered with it.
-  String _composePage(Map<String, String> query) {
+  /// and registered with it, loaded in [session].
+  String _composePage(Map<String, String> query, {required String? session}) {
     final usc = 'usc${++_formsOpened}';
+    _formSessions[usc] = session;
     final id = int.tryParse(query['msgID'] ?? '');
     final sentBox = query['boxType'] == 'outbox';
     final message = id == null ? null : _find(id, query['boxType']!);
@@ -857,9 +873,21 @@ ${spans(bcc, '3')}
   /// Searches the [directory] for the words of `val`, on the compose form
   /// named by `uniqueUsc`, and answers like the live platform (the
   /// dartschool fixtures `search-user.xml` and `search-group.xml`).
-  String _search(Map<String, String> fields) {
-    if (!_forms.containsKey(fields['uniqueUsc'])) {
+  ///
+  /// Refuses a search in another [session] than the one the form was loaded
+  /// in: the `uniqueUsc` belongs to that session, and the library does not
+  /// send it in another (yvanvds/dartschool#97, #107). What Smartschool
+  /// answers to it has not been seen.
+  String _search(Map<String, String> fields, {required String? session}) {
+    final usc = fields['uniqueUsc'];
+    if (!_forms.containsKey(usc)) {
       throw UnsupportedError('fake mailbox: search on an unknown form');
+    }
+    if (_formSessions[usc] != session) {
+      throw UnsupportedError(
+        'fake mailbox: search in $session with the uniqueUsc $usc of a form '
+        'of ${_formSessions[usc]}',
+      );
     }
     final value = fields['val']!;
     actions.add('search val=$value');
@@ -1090,4 +1118,13 @@ $data
           Headers.contentTypeHeader: [contentType],
         },
       );
+}
+
+/// The session id a request carries: the first `PHPSESSID` in its `Cookie`
+/// header, the one that counts on the live platform (yvanvds/dartschool#9),
+/// or null without one.
+String? sessionOf(RequestOptions options) {
+  final cookie = options.headers[HttpHeaders.cookieHeader];
+  if (cookie is! String) return null;
+  return RegExp(r'(?:^|;)\s*PHPSESSID=([^;]*)').firstMatch(cookie)?.group(1);
 }
