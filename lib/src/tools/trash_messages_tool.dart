@@ -82,27 +82,37 @@ Future<CallToolResult> _trash(
   final box = MessageBox.parse(arguments['box']);
   // Kept across the runs of the action, which withMessages may repeat after
   // some messages were moved (see changeEach): the messages passed to the
-  // move, and those whose move went out. A move Smartschool refused did not
-  // take effect, so it is sent again.
+  // move, those whose move was tried, and those whose move went out. A move
+  // Smartschool refused did not take effect, so it is sent again.
   final started = <int, ShortMessage>{};
+  final tried = <int>{};
   final moved = <int>{};
   final results = await withMessages(
     session,
     (messages) => changeEach(messages, box, ids, started: started, (id) async {
       if (!moved.contains(id)) {
-        await messages.moveToTrashFrom(
+        // moveToTrashFrom checks its move with a `show message` right after
+        // it (yvanvds/dartschool#96), and throws also when only that check
+        // failed, after the move went out (yvanvds/dartschool#115). So a
+        // move tried before is sent again only when the box still holds
+        // the message.
+        if (!tried.add(id) &&
+            await box.message(messages, id, allRecipients: false) == null) {
+          moved.add(id);
+          return true;
+        }
+        final left = await messages.moveToTrashFrom(
           id,
           boxType: box.boxType,
           boxId: await box.folderId(messages),
         );
         moved.add(id);
+        if (left != null) return left;
       }
-      // Smartschool answers a move the same whether it moved the message or
-      // not (a `silent` action), and the library returns nothing. So check:
-      // the box no longer holds a message that was moved, and getMessage
-      // returns null for an id the box does not hold (yvanvds/dartschool#16).
-      // That it does so for a message just moved to the trash has not been
-      // seen live (yvanvds/dartschool#96; to revisit in #66).
+      // A move that went out in an earlier run, or whose check said neither
+      // (null): getMessage returns null for an id the box does not hold
+      // (yvanvds/dartschool#16), also for a message just moved to the trash
+      // (seen live, yvanvds/dartschool#96).
       return await box.message(messages, id, allRecipients: false) == null;
     }),
   );

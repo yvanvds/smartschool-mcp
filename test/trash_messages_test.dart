@@ -449,12 +449,15 @@ void main() {
       );
       expect(server.logins, 2);
       // The repeat lists the inbox no more: it checks the message moved
-      // before, and moves the one whose move was refused.
+      // before, and moves the one whose move was refused, after checking
+      // that the inbox still holds it: moveToTrashFrom throws the same when
+      // only its own check after the move failed (yvanvds/dartschool#115).
       expect(server.mailbox.actions, [
         _inboxListing,
         _move(101),
         _show(101),
         _show(101),
+        _show(103),
         _move(103),
         _show(103),
       ]);
