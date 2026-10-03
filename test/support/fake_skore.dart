@@ -244,11 +244,12 @@ const fakeSkore1B2 = FakeSkoreClass(2378, '1B2');
 /// A fake Skore, served by `FakeSmartschool` to logged-in requests.
 ///
 /// Every Skore request is recorded in [requests]. With [refusal] set, every
-/// request is refused as for an account without the rights. Of the RPC
-/// service `owners.php` it serves [fakeSkoreOwnersRpcMethods]: the read of
-/// the teachers, whether a teacher works with "Mijn lesgroepen" for a course
-/// ([myGroups]), and the save of an assignment, which it carries out on the
-/// classes as the live Skore did, or not, as [save] says. Of the gradebooks
+/// request (or every one to [refusedPaths]) is refused as for an account
+/// without the rights. Of the RPC service `owners.php` it serves
+/// [fakeSkoreOwnersRpcMethods]: the read of the teachers, whether a teacher
+/// works with "Mijn lesgroepen" for a course ([myGroups]), and the save of
+/// an assignment, which it carries out on the classes as the live Skore
+/// did, or not, as [save] says. Of the gradebooks
 /// service (#44) it serves [fakeSkoreGradebooksRpcMethods]: a teacher's
 /// gradebooks, one per assignment of theirs on the classes, with the
 /// teachers each is shared with ([shares]), and the save of those shares,
@@ -260,8 +261,15 @@ class FakeSkore {
   /// The teachers Skore lets assign, in Skore's order.
   final List<FakeSkoreTeacher> teachers = [];
 
-  /// When set, how every request is refused.
+  /// When set, how every request (or every one to [refusedPaths]) is
+  /// refused.
   SkoreRefusal? refusal;
+
+  /// With [refusal] set, the only paths it refuses; null for all. For an
+  /// account with the rights for one part of Skore but not the other, such
+  /// as report management but not gradebook management
+  /// ([fakeSkoreGradebooksRpcPath]).
+  Set<String>? refusedPaths;
 
   /// How the fake answers a save (`saveOwner`, `saveShared`), after
   /// [nextSaves].
@@ -451,7 +459,7 @@ class FakeSkore {
       rpc: form['rpc_method'],
       form: form,
     ));
-    if (refusal case final refusal?) {
+    if (refusal case final refusal? when refusedPaths?.contains(path) ?? true) {
       return _html(
         _noAccessPage,
         status: refusal == SkoreRefusal.forbidden ? 403 : 200,

@@ -49,13 +49,10 @@ String formatSkoreCourse(SkoreCourse course) {
   return '${'  ' * course.depth}- ${parts.join(' | ')}';
 }
 
-/// Course [courseId] in a sentence: the label of [course] in quotes, then its
-/// course id, such as `course "Project 1 (3e graad) [PROJE1]" (course id
-/// 1840)`; only `course id 1840` when [course] is null (not read).
-String formatSkoreCourseName(SkoreCourse? course, int courseId) =>
-    course == null
-    ? 'course id $courseId'
-    : 'course "${_courseLabel(course)}" (course id $courseId)';
+/// [course] in a sentence: its label in quotes, then its course id, such as
+/// `course "Project 1 (3e graad) [PROJE1]" (course id 1840)`.
+String formatSkoreCourseName(SkoreCourse course) =>
+    'course "${_courseLabel(course)}" (course id ${course.id})';
 
 /// The label of [course] as the tools show it: Skore's label, else its
 /// name.

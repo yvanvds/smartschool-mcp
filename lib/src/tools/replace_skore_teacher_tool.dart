@@ -95,56 +95,50 @@ Future<CallToolResult> _replace(
   final assignmentId = requiredIntArgument(arguments, 'assignment_id');
   final teacherId = requiredIntArgument(arguments, 'teacher_id');
 
-  SkoreCourse? course;
-  SkoreAssignment? before;
   try {
-    final assignment = await withSkoreWrite(session, (skore) async {
-      course = await readSkoreCourse(skore, classId, courseId);
-      before = course?.assignments
-          .where((a) => a.id == assignmentId)
-          .firstOrNull;
-      return skore.replaceTeacher(
+    final assignment = await withSkoreWrite(
+      session,
+      (skore) => skore.replaceTeacher(
         classId: classId,
         courseId: courseId,
         assignmentId: assignmentId,
         teacherId: teacherId,
-      );
-    });
+      ),
+    );
     return CallToolResult(
       content: [
         TextContent(
           text: [
             'Gave assignment $assignmentId on '
-                '${formatSkoreCourseName(course, courseId)} of class id '
+                '${formatSkoreCourseName(assignment.course)} of class id '
                 '$classId another teacher in Skore: '
-                '${skoreName(assignment.teacherName)}${_insteadOf(before)}. '
-                'The '
-                'assignment and its gradebook stay; only its teacher changed.',
+                '${skoreName(assignment.teacherName)}'
+                '${_insteadOf(assignment.replaced)}. The assignment and its '
+                'gradebook stay; only its teacher changed.',
             'Saved: ${formatSkoreAssignment(assignment)}.',
           ].join('\n'),
         ),
       ],
     );
   } on SmartschoolSkoreSaveUnconfirmedError catch (error) {
-    final had = before;
+    // The course by id only, and not the teacher the assignment had: the
+    // error carries nothing of what the library read (dartschool#120).
     return skoreWriteNotConfirmed(
       tool: 'replace_skore_teacher',
       what:
-          'Giving assignment $assignmentId on '
-          '${formatSkoreCourseName(course, courseId)} of class id $classId '
-          'teacher id $teacherId${_insteadOf(had)}',
+          'Giving assignment $assignmentId on course id $courseId of class id '
+          '$classId teacher id $teacherId',
       check:
           'read the class with list_skore_courses (class_id $classId): when '
           'assignment $assignmentId has teacher id $teacherId, it was saved; '
-          'when it still has '
-          '${had == null ? 'the teacher it had' : formatSkoreTeacherOf(had)}, '
-          'nothing was saved',
+          'when it still has the teacher it had, nothing was saved',
       error: error,
     );
   }
 }
 
-/// ` instead of Willems, Wim (teacher id 1005)`, the teacher [before] had
-/// as the tool read it; empty when it was not read.
-String _insteadOf(SkoreAssignment? before) =>
-    before == null ? '' : ' instead of ${formatSkoreTeacherOf(before)}';
+/// ` instead of Willems, Wim (teacher id 1005)`, the teacher of [replaced],
+/// the assignment as the library read it before the save; empty when it is
+/// null (never for a replace).
+String _insteadOf(SkoreAssignment? replaced) =>
+    replaced == null ? '' : ' instead of ${formatSkoreTeacherOf(replaced)}';

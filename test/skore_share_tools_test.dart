@@ -22,14 +22,20 @@ const _getCourses = 'POST $fakeSkoreGradebooksRpcPath getCourses';
 const _saveShared = 'POST $fakeSkoreGradebooksRpcPath saveShared';
 const _getTeachers = 'POST $fakeSkoreOwnersRpcPath getTeachers';
 
-/// The reads of a share or unshare before its first change: the owner's
-/// gradebooks and the teachers, to name them.
-const _toolReads = [_getCourses, _getTeachers];
+/// The read of a share or unshare before its first change: the teachers, to
+/// name them. What each teacher had before, and whether a save was sent,
+/// come from the library's result.
+const _toolReads = [_getTeachers];
 
-/// Gradebook 34826 of the fake school in a sentence.
+/// Gradebook 34826 of the fake school in a sentence, as named from the
+/// library's first result.
 const _digitale =
     'gradebook 34826 ("Digitale vaardigheden", class 5WW1) of Willems, Wim '
     '(teacher id 1005)';
+
+/// Gradebook 34826 by its id, as named when the change stopped at the first
+/// teacher: the library returned nothing to name it from.
+const _digitaleById = 'gradebook 34826 of Willems, Wim (teacher id 1005)';
 
 /// What the result says after a check refused the change for [teacher].
 String _refused(String reason, String teacher) =>
@@ -486,8 +492,8 @@ void main() {
         'Dupré, Céline (teacher id 1003) | writers: Maes, Mira (teacher id '
         '1006)',
       );
-      // The tool's reads, then per teacher the library's: the gradebooks
-      // and the teachers before the save, the gradebooks after it.
+      // The tool's read, then per teacher the library's: the gradebooks and
+      // the teachers before the save, the gradebooks after it.
       expect(skore.calls, [
         ..._toolReads,
         for (var i = 0; i < 3; i++) ...[
@@ -661,15 +667,14 @@ void main() {
         'call, and saves nothing', () async {
       final (isError, owner) = await share([1005], 'read');
       expect(isError, isTrue);
+      // Refused at the first teacher: the library returned no gradebook to
+      // name it from or to show.
       expect(
         owner,
-        'Sharing $_digitale in Skore with read access (they may read it) '
+        'Sharing $_digitaleById in Skore with read access (they may read it) '
         'stopped at Willems, Wim (teacher id 1005):\n'
         '- Willems, Wim (teacher id 1005): not shared (see below)\n'
-        '${_refused('teacher 1005 is the owner of the gradebook, who cannot be a reader or a writer of it.', 'Willems, Wim (teacher id 1005)')}\n'
-        'The gradebook now:\n'
-        '- Digitale vaardigheden | class 5WW1 | gradebook id 34826 | readers: '
-        'none | writers: Maes, Mira (teacher id 1006)',
+        '${_refused('teacher 1005 is the owner of the gradebook, who cannot be a reader or a writer of it.', 'Willems, Wim (teacher id 1005)')}',
       );
       // Refused before any request of the library.
       expect(skore.calls, _toolReads);
@@ -720,13 +725,15 @@ void main() {
 
     test('an account without the rights: says so, and that nothing was '
         'changed, without quoting the page', () async {
+      // The tool's read of the teachers comes first: Skore refuses it its
+      // report management.
       skore.refusal = SkoreRefusal.forbidden;
       final (_, forbidden) = await share([1001], 'read');
       expect(
         forbidden,
         'This account has no rights for score management in Skore: Skore '
-        'refused it its gradebook management (Puntenboeken). The Skore tools '
-        'need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
+        'refused it its report management (Rapporten > Modellen). The Skore '
+        'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
       );
 
       skore.refusal = SkoreRefusal.page;
@@ -740,7 +747,33 @@ void main() {
         'changed in Skore.',
       );
       expect(page, isNot(contains(fakeSkoreNoAccessName)));
-      expect(skore.calls, [_getCourses, _getCourses]);
+      expect(skore.calls, [
+        _getTeachers,
+        _getTeachers,
+      ], reason: 'each call refused at its first read');
+    });
+
+    test('an account with the rights for report management but not for '
+        'gradebook management: the library refuses the first teacher, so '
+        'the gradebook is named by its id, and nothing is saved', () async {
+      skore
+        ..refusal = SkoreRefusal.forbidden
+        ..refusedPaths = {fakeSkoreGradebooksRpcPath};
+      final (isError, text) = await share([1001, 1002], 'read');
+      expect(isError, isTrue);
+      expect(
+        text,
+        'Sharing $_digitaleById in Skore with read access (they may read it) '
+        'stopped at Janssens, Jan (teacher id 1001):\n'
+        '- Janssens, Jan (teacher id 1001): not shared (see below)\n'
+        '- Peeters, Piet (teacher id 1002): not tried\n'
+        'This account has no rights for score management in Skore: Skore '
+        'refused it its gradebook management (Puntenboeken). The Skore tools '
+        'need $_rightsAndFix: $_fix. Nothing was saved for Janssens, Jan '
+        '(teacher id 1001). The teachers listed after them were not tried.',
+      );
+      expect(skore.calls, [..._toolReads, _getCourses]);
+      expect(skore.shareSaves, isEmpty);
     });
 
     group('a save Skore does not confirm is reported as maybe saved, with '
@@ -786,13 +819,15 @@ void main() {
         expect(isError, isTrue);
         expect(
           text,
+          // The first teacher's save: no result to name the gradebook from
+          // (dartschool#120).
           startsWith(
-            'Sharing $_digitale in Skore with read access (they may read it) '
-            'stopped at Janssens, Jan (teacher id 1001):\n'
+            'Sharing $_digitaleById in Skore with read access (they may read '
+            'it) stopped at Janssens, Jan (teacher id 1001):\n'
             '- Janssens, Jan (teacher id 1001): may or may not have been '
             'shared (see below)\n'
-            'Sharing $_digitale with Janssens, Jan (teacher id 1001) with read '
-            'access may or may not have been saved',
+            'Sharing $_digitaleById with Janssens, Jan (teacher id 1001) with '
+            'read access may or may not have been saved',
           ),
         );
         expect(text, isNot(contains('The gradebook now')));
@@ -839,8 +874,10 @@ void main() {
         server.requests.where(
           (request) => request == 'POST $fakeSkoreGradebooksRpcPath',
         ),
-        hasLength(5),
-        reason: 'two reads, the refused save, the save and the read after it',
+        hasLength(4),
+        reason:
+            "the library's read, the refused save, the save and the read "
+            'after it',
       );
       expect(skore.shareSaves, [
         [
@@ -983,17 +1020,17 @@ void main() {
       expect(isError, isTrue);
       expect(
         text,
-        'Unsharing $_digitale in Skore stopped at Maes, Mira (teacher id '
+        'Unsharing $_digitaleById in Skore stopped at Maes, Mira (teacher id '
         '1006):\n'
         '- Maes, Mira (teacher id 1006): may or may not have been unshared '
         '(see below)\n'
-        'Unsharing $_digitale with Maes, Mira (teacher id 1006) may or may '
-        'not have been saved: the change was sent, but Skore did not confirm '
-        'it. Do not call unshare_skore_gradebook again for it: first read the '
-        'gradebooks with list_skore_gradebook_shares (teacher_id 1005): when '
-        'gradebook 34826 no longer lists teacher id 1006 among its readers or '
-        'writers, it was saved; when it still does, nothing was saved. Then '
-        'tell the user what you found.',
+        'Unsharing $_digitaleById with Maes, Mira (teacher id 1006) may or '
+        'may not have been saved: the change was sent, but Skore did not '
+        'confirm it. Do not call unshare_skore_gradebook again for it: first '
+        'read the gradebooks with list_skore_gradebook_shares (teacher_id '
+        '1005): when gradebook 34826 no longer lists teacher id 1006 among its '
+        'readers or writers, it was saved; when it still does, nothing was '
+        'saved. Then tell the user what you found.',
       );
       expect(skore.shareSaves, hasLength(1));
       expect(await sharesOf(34826), 'readers: none | writers: none');

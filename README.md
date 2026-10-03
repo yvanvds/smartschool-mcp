@@ -561,8 +561,9 @@ gradebooks (dartschool#74):
   whether the current teacher works with "Mijn lesgroepen" for the course;
   if so, nothing is saved (`SmartschoolSkoreMyGroupsError`), and Claude is
   told to leave those groups to the user in Skore: the library never deletes
-  them (`explodeMyGroups`), and the tool tries no other way. The result also
-  names the teacher replaced.
+  them (`explodeMyGroups`), and the tool tries no other way; the message
+  names that teacher, as the library read them. The result also names the
+  teacher replaced.
 - `share_skore_gradebook`: shares a gradebook (`owner_id`, `gradebook_id`)
   with one or more teachers (`teacher_ids`, 1 to 50) with `read` or `write`
   access (`access`), with `shareGradebook`, once per teacher, one after the
@@ -582,17 +583,23 @@ gradebooks (dartschool#74):
   theirs, and a teacher Skore no longer lists can still be taken off.
   Marked destructive and idempotent, with the same confirmation.
 
-For both writes on gradebooks, the tool first reads the owner's gradebooks
-and the teachers itself, to name them and to know what each teacher has
-before the change: the library returns only the gradebook after it (a
-workaround for yvanvds/dartschool#103; its removal is tracked in #74). It
-then stops at the first teacher that fails, and the result says per teacher
-whether the gradebook was shared (or unshared), was already shared that way
+For both writes on gradebooks, the tool first reads the teachers, to name
+them: a gradebook gives its owner, readers and writers by id only. It then
+changes the shares for one teacher after the other and stops at the first
+that fails. The result says per teacher whether the gradebook was shared (or
+unshared, with the access the teacher had), was already shared that way
 (nothing saved), or was not, or not tried, followed by why it stopped and
 the gradebook's readers and writers afterwards; it is an error when it
-stopped. Before each change the library reads the gradebooks (and, to share,
-the teachers) again and refuses the owner among the teachers, a gradebook
-that is not the owner's, and, to share, a teacher Skore does not list
+stopped. What each teacher had before, and whether a save was sent, come
+from the library's result (`SkoreGradebookShareChange`, dartschool#103),
+without a read of the tool's own. The tool names the gradebook (its course
+and class) from the first result, so by its id only when it stopped at the
+first teacher, and then gives no readers and writers either; for a save
+Skore did not confirm, the library's error carries nothing of the gradebook
+(yvanvds/dartschool#120, tracked in #90). Before each change the library
+reads the gradebooks (and, to share, the teachers) again and refuses the
+owner among the teachers, a gradebook that is not the owner's, and, to
+share, a teacher Skore does not list
 (`SmartschoolSkoreChangeRefusedError`); the tool passes the reason on, and
 tells Claude to read the gradebook again. The save (`saveShared`) holds the
 complete readers and writers of that one gradebook, the ids as numbers, so
@@ -620,11 +627,14 @@ again for it, as for a message whose send Smartschool did not confirm. A
 session that Smartschool refused for the save means the save was not carried
 out: the session repeats the call, which reads the class again, so a teacher
 who is on the course by then is refused rather than added twice. The writes
-return only the assignment, so the tools read the course themselves first, to
-name it and the teacher replaced (`readSkoreCourse`, a workaround for
-yvanvds/dartschool#102; its removal is tracked in #74). Removing an
-assignment, choosing its pupils and Skore's import of assignments are not
-offered.
+return the assignment with the course as the library read it before the
+save, and for a replace the assignment as it was (`SkoreSavedAssignment`,
+dartschool#102), so the tools name the course and the teacher replaced
+without a read of their own. A save that Skore does not confirm returns
+nothing, and the library's error carries none of that: its result names the
+course by id only, and for a replace not the teacher it had
+(yvanvds/dartschool#120, tracked in #90). Removing an assignment, choosing
+its pupils and Skore's import of assignments are not offered.
 
 Skore refusing a request to the account (HTTP 403,
 `SmartschoolSkoreAccessDeniedError`) is reported as an account without the
@@ -816,8 +826,8 @@ change (with what to read again: the class, or for a gradebook
 `rereadSkoreGradebook`), and says what to do about "Mijn lesgroepen". In
 `skore_writes.dart`, for the tools that change Skore: `withSkoreWrite`,
 which runs a write and adds to its `ToolError` that nothing was changed,
-`skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result of a
-save Skore did not confirm, and `readSkoreCourse`. In `skore_shares.dart`:
+and `skoreWriteNotConfirmed` (and its text, `skoreNotConfirmed`), the result
+of a save Skore did not confirm. In `skore_shares.dart`:
 `changeSkoreShares`, which shares a gradebook with teachers or unshares it,
 one teacher after the other, and the arguments' schemas. In
 `skore_format.dart`: one line per class, course row, assignment, teacher and
@@ -827,7 +837,8 @@ switch (`skoreOptIn`). The tests run against a fake Skore
 (`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
 reads, in the shape of dartschool's anonymised captures, with fake names;
 it can refuse an account without the rights with HTTP 403 or with a page
-instead of data. It carries out the save of an assignment (`saveOwner`) and
+instead of data, for every request or only for some services
+(`refusedPaths`). It carries out the save of an assignment (`saveOwner`) and
 answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
 teacher's gradebooks, one per assignment, with their shares (`getCourses`
 of the gradebooks service), and carries out the save of their shares

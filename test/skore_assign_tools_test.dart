@@ -8,8 +8,10 @@ import 'dart:convert';
 
 import 'package:dart_mcp/client.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_access.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:test/test.dart';
 
@@ -299,14 +301,10 @@ void main() {
         'Saved: Willems, Wim (teacher id 1005, assignment 35001). The '
         'assignment id is also the id of its gradebook.',
       );
-      // The tool's read of the course, then the library's checks: the class
-      // and the teachers. No getMyGroups: there is no current teacher.
-      expect(skore.calls, [
-        _page,
-        _page,
-        _rpc('getTeachers'),
-        _rpc('saveOwner'),
-      ]);
+      // The library's checks are the only reads: the class (the label in the
+      // result is the one they read) and the teachers. No getMyGroups: there
+      // is no current teacher.
+      expect(skore.calls, [_page, _rpc('getTeachers'), _rpc('saveOwner')]);
       expect(skore.requests.first.query, {'classID': '2516'});
       // saveOwner(classID, courseID, ownerID, userID), ownerID empty for a
       // new assignment, as Skore's web client sends it.
@@ -459,16 +457,16 @@ void main() {
             'course_id': 2142,
             'teacher_id': 1005,
           }),
-          'Assigning teacher id 1005 to course "Eye4Skills (2 uur) (3e graad) '
-          '[PROJE]" (course id 2142) of class id 2516 may or may not have '
-          'been saved: the change was sent, but Skore did not confirm it. Do '
-          'not call add_skore_teacher again for it: first read the class '
-          'with list_skore_courses (class_id 2516): when course id 2142 lists '
-          'teacher id 1005, it was saved; when it does not, nothing was '
-          'saved. Then tell the user what you found.',
+          // The course by id only: the library's error carries nothing of
+          // the course it read (dartschool#120).
+          'Assigning teacher id 1005 to course id 2142 of class id 2516 may '
+          'or may not have been saved: the change was sent, but Skore did '
+          'not confirm it. Do not call add_skore_teacher again for it: first '
+          'read the class with list_skore_courses (class_id 2516): when '
+          'course id 2142 lists teacher id 1005, it was saved; when it does '
+          'not, nothing was saved. Then tell the user what you found.',
         );
         expect(skore.calls, [
-          _page,
           _page,
           _rpc('getTeachers'),
           _rpc('saveOwner'),
@@ -488,10 +486,9 @@ void main() {
         expect(
           await add(2516, 2142, 1005),
           startsWith(
-            'Assigning teacher id 1005 to course "Eye4Skills (2 uur) (3e '
-            'graad) [PROJE]" (course id 2142) of class id 2516 may or may '
-            'not have been saved: the change was sent, but Skore did not '
-            'confirm it. Do not call add_skore_teacher again for it',
+            'Assigning teacher id 1005 to course id 2142 of class id 2516 may '
+            'or may not have been saved: the change was sent, but Skore did '
+            'not confirm it. Do not call add_skore_teacher again for it',
           ),
         );
         expect(skore.saves, hasLength(1));
@@ -516,9 +513,7 @@ void main() {
         // and the teachers again.
         expect(skore.calls, [
           _page,
-          _page,
           _rpc('getTeachers'),
-          _page,
           _page,
           _rpc('getTeachers'),
           _rpc('saveOwner'),
@@ -574,8 +569,9 @@ void main() {
         'assignment and its gradebook stay; only its teacher changed.\n'
         'Saved: Maes, Mira (teacher id 1006, assignment 34826).',
       );
+      // The library's checks are the only reads: the teacher replaced in the
+      // result is the one they read.
       expect(skore.calls, [
-        _page,
         _page,
         _rpc('getTeachers'),
         _rpc('getMyGroups'),
@@ -654,24 +650,41 @@ void main() {
           'assignment_id': 34826,
           'teacher_id': 1006,
         }),
+        // The current teacher named as the library read them.
         'Skore did not save the change: the current teacher of the '
-        'assignment (teacher id 1005) works with "Mijn lesgroepen", their '
-        'own groups of pupils, for course id 1588 of class id 2516. Those '
-        'groups have to be handled in Skore itself first: tell the user, who '
-        'can make this change in Skore, where Skore asks to delete the '
-        'groups (which cannot be undone). The server never deletes them; do '
-        'not try another way to change this assignment. Nothing was changed '
-        'in Skore.',
+        'assignment, Willems, Wim (teacher id 1005), works with "Mijn '
+        'lesgroepen", their own groups of pupils, for course id 1588 of class '
+        'id 2516. Those groups have to be handled in Skore itself first: tell '
+        'the user, who can make this change in Skore, where Skore asks to '
+        'delete the groups (which cannot be undone). The server never deletes '
+        'them; do not try another way to change this assignment. Nothing was '
+        'changed in Skore.',
       );
-      expect(skore.calls, [
-        _page,
-        _page,
-        _rpc('getTeachers'),
-        _rpc('getMyGroups'),
-      ]);
+      expect(skore.calls, [_page, _rpc('getTeachers'), _rpc('getMyGroups')]);
       expect(
         await teachersOf(2516, 1588),
         'teacher: Willems, Wim (teacher id 1005, assignment 34826)',
+      );
+    });
+
+    test('an error about "Mijn lesgroepen" without the name of the current '
+        'teacher, which the library always gives, names them by id', () {
+      final error = skoreToolError(
+        const SmartschoolSkoreMyGroupsError(
+          'replaceTeacher: the current teacher works with "Mijn lesgroepen".',
+          classId: 2516,
+          courseId: 1588,
+          teacherId: 1005,
+        ),
+        fakeExtensionSettings(),
+      );
+      expect(
+        error?.message,
+        startsWith(
+          'Skore did not save the change: the current teacher of the '
+          'assignment (teacher id 1005) works with "Mijn lesgroepen", their '
+          'own groups of pupils, for course id 1588 of class id 2516. ',
+        ),
       );
     });
 
@@ -687,15 +700,15 @@ void main() {
           'assignment_id': 34826,
           'teacher_id': 1006,
         }),
-        'Giving assignment 34826 on course "Digitale vaardigheden [Digitale '
-        'vaardigheden]" (course id 1588) of class id 2516 teacher id 1006 '
-        'instead of Willems, Wim (teacher id 1005) may or may not have been '
-        'saved: the change was sent, but Skore did not confirm it. Do not '
-        'call replace_skore_teacher again for it: first read the class with '
-        'list_skore_courses (class_id 2516): when assignment 34826 has '
-        'teacher id 1006, it was saved; when it still has Willems, Wim '
-        '(teacher id 1005), nothing was saved. Then tell the user what you '
-        'found.',
+        // The course by id only, and not the teacher it had: the library's
+        // error carries nothing of what it read (dartschool#120).
+        'Giving assignment 34826 on course id 1588 of class id 2516 teacher '
+        'id 1006 may or may not have been saved: the change was sent, but '
+        'Skore did not confirm it. Do not call replace_skore_teacher again '
+        'for it: first read the class with list_skore_courses (class_id '
+        '2516): when assignment 34826 has teacher id 1006, it was saved; when '
+        'it still has the teacher it had, nothing was saved. Then tell the '
+        'user what you found.',
       );
       expect(skore.saves, hasLength(1));
       expect(skore.calls.last, _rpc('saveOwner'), reason: 'not repeated');
