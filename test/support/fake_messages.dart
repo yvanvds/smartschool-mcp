@@ -473,9 +473,10 @@ class FakeMailbox {
   /// Answers like the live platform, with a `silent` action whether it moved
   /// a message or not (the dartschool fixture `quickmove messages.xml`); see
   /// [refuseToTrash]. A moved message is no longer found by `show message`
-  /// with the box type it was moved out of: what Smartschool answers then
-  /// has not been seen (yvanvds/dartschool#96), so the fake answers with the
-  /// placeholder, as for a message in another box (yvanvds/dartschool#16).
+  /// with the box type it was moved out of: Smartschool then answers with
+  /// the placeholder, as for a message in another box (yvanvds/dartschool#16),
+  /// seen live by dartschool's live suite (yvanvds/dartschool#96). The fake
+  /// answers the same.
   String _moveToTrash(int id, Map<String, String> params) {
     if (params['toBoxType'] != 'trash' || params['toBoxID'] != '0') {
       throw UnsupportedError('fake mailbox: quickmove other than to the trash');
@@ -498,8 +499,9 @@ class FakeMailbox {
   /// `mark message unread` names the message's box (`boxID`, the folder of
   /// the archive), so it finds only a message in that box. `mark message
   /// read` and `save msglabel` name only the box type: they find a message
-  /// in the archive too, by its id. Whether Smartschool does that has not
-  /// been seen (yvanvds/dartschool#94).
+  /// in the archive too, by its id. Smartschool does that, seen live by
+  /// dartschool's live suite (yvanvds/dartschool#94); the fake answers as
+  /// Smartschool did there, with the message's id and its new state.
   String _change(
     String command,
     FakeMessage? message,

@@ -76,10 +76,12 @@ Future<CallToolResult> _flag(
   final results = await withMessages(
     session,
     (messages) => changeEach(messages, box, ids, (id) async {
-      // The request cannot name the folder of a message in the archive
-      // (yvanvds/dartschool#94). Smartschool answers with the message's id
-      // and flag. The library reads an answer without a flag as 0, no flag
-      // (yvanvds/dartschool#95); one without the message's id is caught.
+      // The request cannot name the folder of a message in the archive. The
+      // library documents that Smartschool finds the message there by its id
+      // alone, seen live (yvanvds/dartschool#94). Smartschool answers with
+      // the message's id and flag. The library returns null for an answer
+      // without a usable id or flag (yvanvds/dartschool#95); the check
+      // compares the id and the flag with those asked.
       final change = await messages.setLabel(id, label, boxType: box.boxType);
       return change != null &&
           change.id == id &&
