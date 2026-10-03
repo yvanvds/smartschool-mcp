@@ -429,13 +429,15 @@ client name. It also installs again while that copy runs.
   before `Les 10`): kind (an assignment with its type), name, labels,
   courses, visible or hidden in the module, the day it was last changed
   (the module's dates have no offset: Smartschool time) and its id. The
-  module names a lesfiche's courses by id only (dartschool#101), so the
-  tool names them after the user's own planner of the 4 weeks before and
-  after today (`ownCourseNames`, one planner read per call, only when a
-  lesfiche listed has a course); a course without a lesson hour there is
-  "not in your planner", and when that read fails only the number of
-  courses is shown. A label filter that matches nothing lists the labels
-  there are. At most 200 lines, with a note to narrow the list. An answer
+  courses are named as the library names them (`LessonContentCourse.name`,
+  dartschool#101), after the school's course list (one request more, only
+  when a lesfiche listed has a course); a course the list does not name is
+  an "unnamed course". When the course list cannot be read, only the number
+  of courses is shown: `getItems()` would lose the lesfiches then
+  (dartschool#118), so the tool reads the lesfiches without the names and
+  names them itself with the library's parsing (a workaround, #88). A label
+  filter that matches nothing lists the labels there are. At most 200
+  lines, with a note to narrow the list. An answer
   of the module the server cannot use (`SmartschoolLessonContentError`) is
   "the Lesfiches module gave an answer the server could not use", with the
   details in the log only.
@@ -780,16 +782,15 @@ error), and the result of a write the planner did not confirm
 (`plannerWriteNotConfirmed`). `plannerToolError` passes on why the library
 refused a write (`SmartschoolPlannerWriteRefusedError`). In
 `lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
-`lesfiche` argument (`lesficheArgument`), the course names from the own
-planner (`ownCourseNames`, a workaround for dartschool#101), the filters
-(`lesficheMatches`), the order of the names (`compareLesficheNames`) and one
-line per lesfiche (`formatLesficheLine`). The tests run against a fake
-planner (`test/support/fake_planner.dart`), built from dartschool's
-anonymised captures of the live planner, its workload view and the
-Lesfiches list, which carries out the writes of dartschool#87 (fill,
-rename, change of the info, clear), the plan of a lesfiche of
-dartschool#88, and the create and the trash of an assignment of
-dartschool#89 as the live planner did.
+`lesfiche` argument (`lesficheArgument`), the filters (`lesficheMatches`),
+the order of the names (`compareLesficheNames`) and one line per lesfiche
+with its courses as the library names them (`formatLesficheLine`). The
+tests run against a fake planner (`test/support/fake_planner.dart`), built
+from dartschool's anonymised captures of the live planner, its workload view
+and the Lesfiches list, with the school's course list, which carries out the
+writes of dartschool#87 (fill, rename, change of the info, clear), the plan
+of a lesfiche of dartschool#88, and the create and the trash of an
+assignment of dartschool#89 as the live planner did.
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a

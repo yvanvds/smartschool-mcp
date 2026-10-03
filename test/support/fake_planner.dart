@@ -18,6 +18,12 @@ const fakeAssignmentTypesPath =
 /// the slash at the end, as the library asks for it.
 const fakeLesfichesPath = '/lesson-content/api/v1/lesson-content/';
 
+/// Where the school's course list is read: by the library's session check,
+/// which takes the platform id from its first course, and by the Lesfiches
+/// module's service, which names the courses of the lesfiches after it
+/// (dartschool#101).
+const fakeCourseListPath = '/course-list/api/v1/courses';
+
 /// The moment [year]-[month]-[day] [hour]:[minute]:[second] in the time of
 /// this PC, written as the planner writes a date and time: ISO 8601 with the
 /// offset (`2026-10-05T10:20:00+02:00` in Belgium in October,
@@ -711,7 +717,9 @@ class FakePlannerHit {
 ///   workload of each class: its [workloadWeights] (0 by default) and its
 ///   [workloadSettings] ([FakeWorkloadSetting.noLimit] by default);
 /// - `GET` [fakeAssignmentTypesPath]: the [assignmentTypes];
-/// - `GET` [fakeLesfichesPath]: the [lesfiches], in the order added.
+/// - `GET` [fakeLesfichesPath]: the [lesfiches], in the order added;
+/// - `GET` [fakeCourseListPath], through [courseListAnswer]: the
+///   [courseList].
 ///
 /// The workload calls answer `400` for a class the fake does not know (one
 /// of no element or calendar), as the calendars do.
@@ -798,6 +806,12 @@ class FakePlanner {
 
   /// The user's lesfiches in the Lesfiches module.
   final List<FakeLesfiche> lesfiches = [];
+
+  /// The school's course list: [fakeSchoolCourses] by default, every course
+  /// of the captures, as the live list holds all the school's courses
+  /// (dartschool#101). The session check reads the platform id from its
+  /// first course, so a test leaves that one in place.
+  final List<FakePlannerCourse> courseList = [...fakeSchoolCourses];
 
   /// The workload setting of a class, by class id; the others have
   /// [FakeWorkloadSetting.noLimit].
@@ -1198,6 +1212,27 @@ class FakePlanner {
     return groups;
   }
 
+  /// The answer to `GET` [fakeCourseListPath]: the [courseList], each
+  /// course in the shape of a planner course, as the live list gave them
+  /// (dartschool#101); or the status of [failing] for that path.
+  ///
+  /// The fake Smartschool answers every request to the path with it, also
+  /// the library's session check, which comes before anything else. So a
+  /// read of the course list is not in [requests] (the fake Smartschool's
+  /// own requests have it), and a test sets [failing] for the path only
+  /// once the session is open.
+  ResponseBody courseListAnswer() {
+    if (failing[fakeCourseListPath] case final status?) {
+      return _json(
+        '{"status":$status,"title":"Error","detail":"","type":""}',
+        status: status,
+      );
+    }
+    return _json(
+      jsonEncode([for (final course in courseList) course.toJson()]),
+    );
+  }
+
   ResponseBody _badRequest() => _json(
     '{"status":400,"title":"Bad Request","detail":"","type":""}',
     status: 400,
@@ -1521,6 +1556,18 @@ const _economie = FakePlannerCourse(
   'economie',
   ['ECONO'],
 );
+
+/// The school's courses: every course of the captures, in the school's
+/// course list ([FakePlanner.courseList]) by default.
+const fakeSchoolCourses = [
+  _wiskunde,
+  _biologie,
+  _nederlands,
+  _lo,
+  fakeInformatica,
+  _chemie,
+  _economie,
+];
 
 /// The assignments of dartschool's capture of the workload view of class
 /// 6A1 in the week of 2026-10-05 (`test/planner_workload_test.dart` there),

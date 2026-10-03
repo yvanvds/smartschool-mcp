@@ -69,53 +69,6 @@ String lesficheArgument(Object? value, {String name = 'lesfiche'}) {
   );
 }
 
-/// How many days around today `list_lesfiches` reads the user's own planner
-/// for the names of the courses ([ownCourseNames]): 4 weeks before and
-/// after.
-const lesficheCourseDays = 28;
-
-/// The period [ownCourseNames] reads around [now]: from the start of the day
-/// [lesficheCourseDays] days before it to the end of the day
-/// [lesficheCourseDays] days after it.
-({DateTime from, DateTime until}) lesficheCoursePeriod(DateTime now) => (
-  from: DateTime(now.year, now.month, now.day - lesficheCourseDays),
-  until: DateTime(
-    now.year,
-    now.month,
-    now.day + lesficheCourseDays,
-    23,
-    59,
-    59,
-  ),
-);
-
-/// The names of the user's courses by course id (in lower case), from the
-/// elements of the user's own planner in [lesficheCoursePeriod] around
-/// [now]: the courses of the lesson hours, lessons and assignments there.
-///
-/// The Lesfiches module names the courses of a lesfiche by id only
-/// ([LessonContentCourse]), the same id as a planner element's
-/// [PlannerCourse] (yvanvds/dartschool#101). A workaround until the library
-/// names them; its removal is #87. A course without an element in the
-/// period is not in the map.
-Future<Map<String, String>> ownCourseNames(
-  PlannerService planner, {
-  required DateTime now,
-}) async {
-  final (:from, :until) = lesficheCoursePeriod(now);
-  final elements = await planner.getPlannedElements(
-    await planner.ownCalendar(),
-    from: from,
-    to: until,
-  );
-  return {
-    for (final element in elements)
-      for (final course in element.courses)
-        if (course.name.trim() case final name when name.isNotEmpty)
-          course.id.toLowerCase(): name,
-  };
-}
-
 /// [text] for comparing labels: in lower case, with every run of white space
 /// as one space, without white space around it.
 String normalLabel(String text) =>
@@ -184,27 +137,26 @@ String formatLesficheKind(LessonContentItem item) => switch (item.type) {
   LessonContentType.other => item.typeName,
 };
 
-/// What a lesfiche line says of a course that [ownCourseNames] did not
-/// name.
-const unnamedCourse = 'course not in your planner';
-
-/// The courses of [item], named with [courseNames] ([ownCourseNames]):
-/// `informatica`, `informatica, 1 course not in your planner`, or `no
-/// course`. Without [courseNames] (they could not be read), only how many:
-/// `2 courses`.
+/// The courses of [item], by the names the library gave them
+/// ([LessonContentCourse.name], from the school's course list):
+/// `informatica`, `informatica, chemie`, `informatica, 1 unnamed course`
+/// (a course the course list does not name), or `no course`. A name is
+/// given once, also for two courses of that name. Without
+/// [withCourseNames] (the names could not be read), only how many: `2
+/// courses`.
 String formatLesficheCourses(
-  LessonContentItem item,
-  Map<String, String>? courseNames,
-) {
+  LessonContentItem item, {
+  bool withCourseNames = true,
+}) {
   final courses = item.courses;
   if (courses.isEmpty) return 'no course';
-  if (courseNames == null) {
+  if (!withCourseNames) {
     return '${courses.length} ${courses.length == 1 ? 'course' : 'courses'}';
   }
   final names = <String>[];
   var unnamed = 0;
   for (final course in courses) {
-    final name = courseNames[course.id.toLowerCase()];
+    final name = course.name;
     if (name == null) {
       unnamed++;
     } else if (!names.contains(name)) {
@@ -213,23 +165,23 @@ String formatLesficheCourses(
   }
   return [
     ...names,
-    if (unnamed == 1) '1 $unnamedCourse',
-    if (unnamed > 1) '$unnamed courses not in your planner',
+    if (unnamed == 1) '1 unnamed course',
+    if (unnamed > 1) '$unnamed unnamed courses',
   ].join(', ');
 }
 
 /// One line describing [item]: kind, name, labels, courses
-/// ([formatLesficheCourses]), visible or hidden in the module, the day it
-/// was last changed, and its id.
+/// ([formatLesficheCourses], by name unless not [withCourseNames]), visible
+/// or hidden in the module, the day it was last changed, and its id.
 ///
 /// For example `lesson | Herhaling: lussen | labels JAAR 6, TRIMESTER 1 |
 /// informatica | hidden | changed 2026-09-07 | id b0000000-…`. The day is
 /// as the module gives it: its dates have no offset, so they are Smartschool
 /// time, read as the time of this PC.
 String formatLesficheLine(
-  LessonContentItem item,
-  Map<String, String>? courseNames,
-) {
+  LessonContentItem item, {
+  bool withCourseNames = true,
+}) {
   final labels = [
     for (final label in item.labels)
       if (label.text.trim() case final text when text.isNotEmpty) text,
@@ -238,7 +190,7 @@ String formatLesficheLine(
     formatLesficheKind(item),
     if (item.name.isEmpty) '(no name)' else item.name,
     if (labels.isEmpty) 'no labels' else 'labels ${labels.join(', ')}',
-    formatLesficheCourses(item, courseNames),
+    formatLesficheCourses(item, withCourseNames: withCourseNames),
     if (item.isVisible) 'visible' else 'hidden',
     if (item.dateLastChanged case final changed?)
       'changed ${formatPlannerDate(changed)}',

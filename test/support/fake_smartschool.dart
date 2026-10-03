@@ -230,7 +230,7 @@ class FakeSmartschool implements HttpClientAdapter {
       return _followedTo('/login', _loginPage);
     }
     if (path == SmartschoolSession.sessionCheckPath) {
-      return _json('[{"platformId":7}]');
+      return planner.courseListAnswer();
     }
     return mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
