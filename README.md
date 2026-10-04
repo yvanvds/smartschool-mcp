@@ -352,8 +352,12 @@ client name. It also installs again while that copy runs.
 - `list_planner`: what is planned in a planner (`me`, the default, or a
   planner id) in a period (`from` and `until`, today to 7 days ahead by
   default), optionally only some kinds (`types`: lessons, assignments,
-  empty lesson hours, other; other holds meetings and lesson-free days
-  too). Per day, in date order, one line per element: the time
+  empty lesson hours, meetings, lesson-free days, other; other holds every
+  kind not named, such as excursions). The planner is asked only for
+  lessons, assignments and empty lesson hours; for any other kind every
+  type is read and the kinds asked for are kept (asking the planner for
+  meetings or lesson-free days was never tried live). Per day, in date
+  order, one line per element: the time
   (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the kind
   (lesson, an assignment with its type, such as `KO Kleine Overhoring`,
   empty lesson hour, meeting, lesson-free day, or the planner's type name

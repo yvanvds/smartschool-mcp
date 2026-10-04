@@ -13,37 +13,49 @@ const defaultPlannerDays = 7;
 /// fewer. A class planner holds about 45 elements a week.
 const maxPlannerLines = 200;
 
-/// The kinds of element `list_planner` can be limited to (its `types`).
+/// The kinds of element `list_planner` can be limited to (its `types`): one
+/// for each kind the planner tools name and count ([PlannedElementKind]).
 ///
-/// The header counts the elements by the finer [PlannedElementKind].
+/// The planner itself is asked only for lessons, assignments and empty
+/// lesson hours ([plannerType]). The other kinds are kept here from every
+/// type read: asking the planner for `planned-meetings` or
+/// `planned-lesson-free-days` was never tried live (#103).
 enum PlannerKind {
-  lessons('lessons', 'lessons', PlannedElementType.lesson),
-  assignments('assignments', 'assignments', PlannedElementType.assignment),
+  lessons('lessons', PlannedElementKind.lesson, askPlanner: true),
+  assignments('assignments', PlannedElementKind.assignment, askPlanner: true),
   emptyLessonHours(
     'empty_lesson_hours',
-    'empty lesson hours',
-    PlannedElementType.placeholder,
+    PlannedElementKind.emptyLessonHour,
+    askPlanner: true,
   ),
+  meetings('meetings', PlannedElementKind.meeting),
+  lessonFreeDays('lesson_free_days', PlannedElementKind.lessonFreeDay),
 
-  /// Every other type: meetings and lesson-free days too, and a type the
-  /// library does not know.
-  other('other', 'other', null);
+  /// Every type the tool does not name, also one the library does not know.
+  other('other', PlannedElementKind.other);
 
-  const PlannerKind(this.argument, this.plural, this.type);
+  const PlannerKind(this.argument, this.kind, {bool askPlanner = false})
+    : _askPlanner = askPlanner;
 
   /// The name in the `types` argument.
   final String argument;
 
-  final String plural;
+  /// The kind of element, as the tools name and count it.
+  final PlannedElementKind kind;
 
-  /// The element type, or null for [other].
-  final PlannedElementType? type;
+  final bool _askPlanner;
+
+  String get plural => kind.plural;
+
+  /// The type the planner is asked for, or null when the elements of this
+  /// kind are kept here from every type read.
+  PlannedElementType? get plannerType => _askPlanner ? kind.type : null;
 
   /// The kind of [element].
-  static PlannerKind of(PlannedElement element) => values.firstWhere(
-    (kind) => kind.type == element.type,
-    orElse: () => other,
-  );
+  static PlannerKind of(PlannedElement element) {
+    final kind = PlannedElementKind.of(element);
+    return values.firstWhere((value) => value.kind == kind);
+  }
 }
 
 /// `list_planner`: what is planned in a planner (the user's own, or that of
@@ -98,9 +110,10 @@ ServerTool listPlannerTool(
         'types': UntitledMultiSelectEnumSchema(
           description:
               'Only these kinds: lessons, assignments (tests, tasks), '
-              'empty_lesson_hours (hours of the timetable without a lesson) '
-              'and/or other (every other kind, meetings and lesson-free days '
-              'too). Default: all.',
+              'empty_lesson_hours (hours of the timetable without a lesson), '
+              'meetings (such as class councils), lesson_free_days (such as '
+              'holidays) and/or other (every kind not named here, such as '
+              'excursions). Default: all.',
           values: [for (final kind in PlannerKind.values) kind.argument],
           minItems: 1,
         ),
@@ -128,10 +141,11 @@ Future<CallToolResult> _list(
     now: now,
   );
   final kinds = _kinds(arguments['types']);
-  // The planner filters on the types it knows; other needs every type.
-  final types = kinds == null || kinds.contains(PlannerKind.other)
+  // The planner filters on lessons, assignments and empty lesson hours. Any
+  // other kind needs every type, and is kept here (formatPlannerList).
+  final types = kinds == null || kinds.any((kind) => kind.plannerType == null)
       ? null
-      : {for (final kind in kinds) kind.type!};
+      : {for (final kind in kinds) kind.plannerType!};
 
   final (calendar, elements) = await withPlanner(session, (service) async {
     final calendar = await planner.resolve(service);
@@ -192,7 +206,8 @@ const unnamedPlannerNote =
 /// [maxPlannerLines].
 ///
 /// [elements] are every element read, also those of other kinds than
-/// [kinds] (read for [PlannerKind.other]): any of them can name the planner
+/// [kinds] (every type is read for a kind the planner is not asked for,
+/// [PlannerKind.plannerType]): any of them can name the planner
 /// ([plannerName]). When nothing is planned in a planner other than the
 /// user's own and none of them names it, [unnamedPlannerNote] follows.
 ///
