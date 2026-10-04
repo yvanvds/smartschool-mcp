@@ -57,9 +57,7 @@ Future<CallToolResult> _list(
 /// Skore's order.
 String formatSkoreTeachers(List<SkoreTeacher> teachers, String query) {
   if (teachers.isEmpty) {
-    return 'Skore lists no teachers that can be assigned. An account '
-        'without the rights for score management in Skore may get such an '
-        'empty list.';
+    return 'Skore lists no teachers that can be assigned.';
   }
   final found = skoreMatches(teachers, query, (teacher) => [teacher.name]);
   final all =

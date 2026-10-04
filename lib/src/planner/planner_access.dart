@@ -379,17 +379,14 @@ final class AssignmentTypes {
     }
   }
 
-  /// The school's types read again with [planner], for when they changed
-  /// since [read] read them: the library refused a type as not one of the
-  /// school's ([PlannerWriteRefusalReason.unknownAssignmentType]). Every
-  /// tool on the session then gets the types as they are now.
-  ///
-  /// The library read the types itself for that check, but its error does
-  /// not carry them (yvanvds/dartschool#119), so they are read once more: a
-  /// workaround, whose removal is tracked in #89.
-  Future<List<PlannerAssignmentType>> reread(PlannerService planner) {
-    _types = null;
-    return read(planner);
+  /// Takes [types] as the school's types from now on, for every tool on the
+  /// session, without reading them: for when they changed since [read] read
+  /// them. The library refused a type as not one of the school's
+  /// ([PlannerWriteRefusalReason.unknownAssignmentType]), and its error
+  /// carries the types its check read
+  /// ([SmartschoolPlannerWriteRefusedError.assignmentTypes]).
+  void replace(List<PlannerAssignmentType> types) {
+    _types = Future.value(types);
   }
 }
 

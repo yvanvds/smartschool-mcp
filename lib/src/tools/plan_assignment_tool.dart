@@ -172,13 +172,15 @@ Future<CallToolResult> _plan(
         );
       } on SmartschoolPlannerWriteRefusedError catch (error) {
         // The school's types changed since the session read them: say so
-        // with the types as they are now. Any other refusal is worded by
+        // with the types as the library's check read them, which every tool
+        // on the session takes from now on. Any other refusal is worded by
         // plannerToolError.
         if (error.reason != PlannerWriteRefusalReason.unknownAssignmentType) {
           rethrow;
         }
         log('planner: $error');
-        throw _typeGone(typeName, type, await assignmentTypes.reread(planner));
+        assignmentTypes.replace(error.assignmentTypes);
+        throw _typeGone(typeName, type, error.assignmentTypes);
       }
     });
     final slot = sent!.hour;
@@ -225,8 +227,9 @@ Future<CallToolResult> _plan(
 
 /// The error for [type], the school's assignment type that [typeName] named
 /// as the session read the types, which the library refused as no longer
-/// one of the school's: with [types], the school's types as they are now
-/// (as [assignmentTypeArgument] lists them), which the user chooses from.
+/// one of the school's: with [types], the school's types as the library's
+/// check read them (as [assignmentTypeArgument] lists them), which the user
+/// chooses from.
 ToolError _typeGone(
   String typeName,
   PlannerAssignmentType type,

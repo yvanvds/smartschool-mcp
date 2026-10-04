@@ -91,10 +91,12 @@ enum _Outcome {
 /// says per teacher what was done, from the library's result (whether it
 /// saved anything, and the access the teacher had before), and gives the
 /// gradebook after the change; it is an error when the change stopped. It
-/// names the gradebook from the first result, so by its id only when the
-/// change stopped at the first teacher: nothing was returned then (for a
-/// save Skore did not confirm, the error carries nothing of the gradebook
-/// either: yvanvds/dartschool#120, tracked in #90).
+/// names the gradebook from the first result, or, when the save for the
+/// first teacher is not confirmed, from the error, which carries the
+/// gradebook as the library read it before the save (dartschool#120). So by
+/// its id only when the change stopped at the first teacher before a save
+/// (refused, or a login or connection that failed): nothing was returned
+/// then.
 Future<CallToolResult> changeSkoreShares(
   SmartschoolSession session, {
   required String tool,
@@ -108,7 +110,8 @@ Future<CallToolResult> changeSkoreShares(
   );
   String teacher(int id) => formatSkoreTeacherId(id, names);
 
-  // The gradebook after the last change, and named from the first.
+  // The gradebook after the last change, and named from the first result
+  // (or from the error of a first save Skore did not confirm).
   SkoreGradebookShareChange? gradebook;
   var named = _gradebookName(null, gradebookId, ownerId, names);
   final outcomes = <(int, _Outcome, SkoreShareAccess?)>[];
@@ -153,6 +156,10 @@ Future<CallToolResult> changeSkoreShares(
       why = problem.message;
     } on SmartschoolSkoreSaveUnconfirmedError catch (error) {
       unconfirmed = true;
+      if (gradebook == null &&
+          error is SmartschoolSkoreShareSaveUnconfirmedError) {
+        named = _gradebookName(error.before, gradebookId, ownerId, names);
+      }
       why = skoreNotConfirmed(
         tool: tool,
         what: access == null
@@ -212,7 +219,7 @@ Future<CallToolResult> changeSkoreShares(
 }
 
 /// Gradebook [gradebookId] of teacher [ownerId] in a sentence, with the
-/// course and class of [gradebook] (null when the library returned none):
+/// course and class of [gradebook] (null when the library gave none):
 /// for example `gradebook 34826 ("Digitale vaardigheden", class 5WW1) of
 /// Willems, Wim (teacher id 1005)`.
 String _gradebookName(

@@ -420,29 +420,37 @@ void main() {
 
     test('an account without the rights: says so, and that nothing was '
         'changed, without quoting the page', () async {
-      skore.refusal = SkoreRefusal.forbidden;
-      expect(
-        await error('add_skore_teacher', {
-          'class_id': 2516,
-          'course_id': 2142,
-          'teacher_id': 1005,
-        }),
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its report management (Rapporten > Modellen). The Skore '
-        'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
-      );
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its report management (Rapporten > Modellen). The Skore '
+          'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.';
 
-      skore.refusal = SkoreRefusal.page;
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final startPage = await add(2516, 2142, 1005);
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
+
+      skore.refusal = SkoreRefusal.forbidden;
+      final forbidden = await add(2516, 2142, 1005);
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
+      expect(skore.calls, [_page, _page], reason: 'the first read, refused');
+      expect(skore.saves, isEmpty);
+    });
+
+    test('an answer the server cannot use: says so, and that nothing was '
+        'changed, without quoting the page or blaming the rights', () async {
+      skore.unusable = true;
       final text = await add(2516, 2142, 1005);
       expect(
         text,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
+        'Skore gave an answer the server could not use. Try again in a '
         'moment; the technical details are in the server log. Nothing was '
         'changed in Skore.',
       );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
-      expect(skore.calls, [_page, _page], reason: 'the first read, refused');
+      expect(text, isNot(contains('Oeps')));
+      expect(skore.calls, [_page], reason: 'the first read');
     });
 
     group('a save Skore does not confirm is never sent again, and is not '
@@ -457,14 +465,15 @@ void main() {
             'course_id': 2142,
             'teacher_id': 1005,
           }),
-          // The course by id only: the library's error carries nothing of
-          // the course it read (dartschool#120).
-          'Assigning teacher id 1005 to course id 2142 of class id 2516 may '
-          'or may not have been saved: the change was sent, but Skore did '
-          'not confirm it. Do not call add_skore_teacher again for it: first '
-          'read the class with list_skore_courses (class_id 2516): when '
-          'course id 2142 lists teacher id 1005, it was saved; when it does '
-          'not, nothing was saved. Then tell the user what you found.',
+          // The course as the library read it before the save, from its
+          // error (dartschool#120).
+          'Assigning teacher id 1005 to course "Eye4Skills (2 uur) (3e graad) '
+          '[PROJE]" (course id 2142) of class id 2516 may or may not have '
+          'been saved: the change was sent, but Skore did not confirm it. Do '
+          'not call add_skore_teacher again for it: first read the class '
+          'with list_skore_courses (class_id 2516): when course id 2142 lists '
+          'teacher id 1005, it was saved; when it does not, nothing was '
+          'saved. Then tell the user what you found.',
         );
         expect(skore.calls, [
           _page,
@@ -486,9 +495,10 @@ void main() {
         expect(
           await add(2516, 2142, 1005),
           startsWith(
-            'Assigning teacher id 1005 to course id 2142 of class id 2516 may '
-            'or may not have been saved: the change was sent, but Skore did '
-            'not confirm it. Do not call add_skore_teacher again for it',
+            'Assigning teacher id 1005 to course "Eye4Skills (2 uur) (3e '
+            'graad) [PROJE]" (course id 2142) of class id 2516 may or may '
+            'not have been saved: the change was sent, but Skore did not '
+            'confirm it. Do not call add_skore_teacher again for it',
           ),
         );
         expect(skore.saves, hasLength(1));
@@ -705,15 +715,18 @@ void main() {
           'assignment_id': 34826,
           'teacher_id': 1006,
         }),
-        // The course by id only, and not the teacher it had: the library's
-        // error carries nothing of what it read (dartschool#120).
-        'Giving assignment 34826 on course id 1588 of class id 2516 teacher '
-        'id 1006 may or may not have been saved: the change was sent, but '
-        'Skore did not confirm it. Do not call replace_skore_teacher again '
-        'for it: first read the class with list_skore_courses (class_id '
-        '2516): when assignment 34826 has teacher id 1006, it was saved; when '
-        'it still has the teacher it had, nothing was saved. Then tell the '
-        'user what you found.',
+        // The course and the teacher the assignment had, as the library
+        // read them before the save, from its error (dartschool#120): the
+        // save went through, so a read now would name the new teacher.
+        'Giving assignment 34826 on course "Digitale vaardigheden [Digitale '
+        'vaardigheden]" (course id 1588) of class id 2516 teacher id 1006 '
+        'instead of Willems, Wim (teacher id 1005) may or may not have been '
+        'saved: the change was sent, but Skore did not confirm it. Do not '
+        'call replace_skore_teacher again for it: first read the class with '
+        'list_skore_courses (class_id 2516): when assignment 34826 has '
+        'teacher id 1006, it was saved; when it still has Willems, Wim '
+        '(teacher id 1005), nothing was saved. Then tell the user what you '
+        'found.',
       );
       expect(skore.saves, hasLength(1));
       expect(skore.calls.last, _rpc('saveOwner'), reason: 'not repeated');

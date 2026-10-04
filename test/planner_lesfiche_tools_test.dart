@@ -374,12 +374,13 @@ void main() {
         'the Lesfiches module).\n'
         'The labels of your lesson lesfiches: JAAR 6, TRIMESTER 1.',
       );
-      // Nothing to name: the course list is not read.
+      // Nothing listed to name, but the library reads the course list
+      // when any lesfiche has a course, also one that is not listed.
       expect(
         await listRequests({
           'label': ['JAAR'],
         }),
-        ['GET $fakeLesfichesPath'],
+        ['GET $fakeLesfichesPath', 'GET $fakeCourseListPath'],
       );
     });
 
@@ -458,6 +459,29 @@ void main() {
             'school\'s course list, so only the number of courses is shown.',
           ),
         ),
+      );
+    });
+
+    test('when the school\'s course list cannot be read and no lesfiche '
+        'listed has a course, no note on the courses', () async {
+      planner.lesfiches.add(
+        const FakeLesfiche(
+          id: 'b0000000-0000-4000-8000-000000000021',
+          name: 'Vrij',
+        ),
+      );
+      // The session check reads the course list too: a first call opens the
+      // session, then the list fails. The other lesfiches have a course, so
+      // the library reads it.
+      await ok('list_lesfiches', {});
+      planner.failing[fakeCourseListPath] = 500;
+
+      expect(
+        await ok('list_lesfiches', {'query': 'vrij'}),
+        '1 lesson lesfiche whose name holds "vrij", of the 4 lesfiches in the '
+        'Lesfiches module, by name:\n'
+        'lesson | Vrij | no labels | no course | visible | changed '
+        '2025-09-12 | id b0000000-0000-4000-8000-000000000021',
       );
     });
 

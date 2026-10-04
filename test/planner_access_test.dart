@@ -304,7 +304,7 @@ void main() {
       expect(planner.reads, 2);
     });
 
-    test('reads the types again for reread, and gives those from then on: '
+    test('gives the types replace takes from then on, without reading them: '
         'the school\'s types changed', () async {
       const go = PlannerAssignmentType(
         id: 'b',
@@ -316,13 +316,13 @@ void main() {
       );
       final planner = _TypesPlanner([
         [ko],
-        [go],
       ])..gate.complete();
 
       expect(await types.read(planner), [ko]);
-      expect(await types.reread(planner), [go]);
+      types.replace([go]);
       expect(await types.read(planner), [go]);
-      expect(planner.reads, 2);
+      expect(await types.read(planner), [go]);
+      expect(planner.reads, 1);
     });
   });
 

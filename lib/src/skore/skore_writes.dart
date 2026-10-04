@@ -26,10 +26,11 @@ import 'skore_access.dart';
 //
 // A write returns the assignment it saved with what it read before the save
 // (`SkoreSavedAssignment`, dartschool#102): the course, and for a replace the
-// assignment as it was. The tools name the course and the teacher replaced
-// from it, without a read of their own. A save Skore did not confirm returns
-// nothing, and its error carries none of that (dartschool#120), so its result
-// names the course by id only (#90).
+// assignment as it was. A save Skore did not confirm returns nothing, but its
+// error carries the same (`SmartschoolSkoreAssignmentSaveUnconfirmedError`,
+// dartschool#120). The tools name the course and the teacher replaced from
+// either, without a read of their own: a read after a save that may have gone
+// through cannot tell what was there before.
 
 /// What a Skore write tool adds to an error that came before anything was
 /// saved.
@@ -55,11 +56,11 @@ Future<T> withSkoreWrite<T>(
 }
 
 /// The result of a Skore write that went out without Skore confirming it
-/// ([error]): [what] (like `Assigning teacher id 1005 to course id 2142 of
-/// class id 2516`) may or may not have been saved. Claude must not call
-/// [tool] again for it, but first [check] (like `read the class with
-/// list_skore_courses …: when …, it was saved; when …, nothing was saved`)
-/// and tell the user.
+/// ([error]): [what] (like `Assigning teacher id 1005 to course "Eye4Skills
+/// (2 uur) (3e graad) [PROJE]" (course id 2142) of class id 2516`) may or may
+/// not have been saved. Claude must not call [tool] again for it, but first
+/// [check] (like `read the class with list_skore_courses …: when …, it was
+/// saved; when …, nothing was saved`) and tell the user.
 ///
 /// The library's message can quote Skore's answer, so it goes to the log
 /// only.

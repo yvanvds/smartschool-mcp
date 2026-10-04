@@ -108,13 +108,18 @@ Future<CallToolResult> _add(
       ],
     );
   } on SmartschoolSkoreSaveUnconfirmedError catch (error) {
-    // The course by id only: the error carries nothing of the course the
-    // library read (dartschool#120).
+    // The course as the library read it before the save, from its error
+    // (dartschool#120). Caught as the base type, so that a save Skore did not
+    // confirm is never reported as an unexpected error: by id for an error
+    // without it, which addTeacher does not throw.
+    final course = switch (error) {
+      SmartschoolSkoreAssignmentSaveUnconfirmedError(:final course) =>
+        formatSkoreCourseName(course),
+      _ => 'course id $courseId',
+    };
     return skoreWriteNotConfirmed(
       tool: 'add_skore_teacher',
-      what:
-          'Assigning teacher id $teacherId to course id $courseId of class id '
-          '$classId',
+      what: 'Assigning teacher id $teacherId to $course of class id $classId',
       check:
           'read the class with list_skore_courses (class_id $classId): when '
           'course id $courseId lists teacher id $teacherId, it was saved; '

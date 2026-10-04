@@ -467,8 +467,8 @@ void main() {
       expect(server.skore.requests, isEmpty);
     });
 
-    test('on, with the rights: access, checked with one read of the '
-        'teachers', () async {
+    test('on, with the rights: access to both parts of Skore, checked with '
+        'one read each: the teachers, and the own gradebooks', () async {
       final (result, text) = await status(skore: SwitchState.on);
 
       expect(result.isError, isNot(true));
@@ -476,56 +476,22 @@ void main() {
         text,
         contains(
           '\nSettings: extension settings (all filled in)\n'
-          'Skore-beheer: on; access: yes (Skore lists 6 teachers that can be '
-          'assigned)\n'
+          'Skore-beheer: on; access: yes (Skore lets it use both Rapporten > '
+          'Modellen and Puntenboeken)\n'
           'Server version: ',
         ),
       );
-      expect(server.skore.calls, ['POST $fakeSkoreOwnersRpcPath getTeachers']);
+      expect(server.skore.calls, [
+        'POST $fakeSkoreOwnersRpcPath getTeachers',
+        'POST $fakeSkoreGradebooksRpcPath getCourses',
+      ]);
+      expect(server.skore.paramsOf('getCourses'), [
+        [345],
+      ], reason: "the account's own user id, from its start page");
     });
 
-    test('on, refused by Skore (HTTP 403): no access, with the rights it '
-        'needs and what to do', () async {
-      server.skore.refusal = SkoreRefusal.forbidden;
-
-      final (result, text) = await status(skore: SwitchState.on);
-
-      expect(result.isError, isNot(true));
-      expect(text, startsWith('Smartschool connection: working\n'));
-      expect(
-        text,
-        contains(
-          '\nSkore-beheer: on; access: NO. This account has no rights for '
-          'score management in Skore: Skore refused it its report management '
-          '(Rapporten > Modellen). The Skore tools need $rights: $fix.\n',
-        ),
-      );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
-      expectNoSecretsOrTraces(text);
-    });
-
-    test('on, answered with a page instead of data: no access, as the '
-        'account usually lacks the rights (dartschool#91), without quoting '
-        'the page', () async {
-      server.skore.refusal = SkoreRefusal.page;
-
-      final (_, text) = await status(skore: SwitchState.on);
-
-      expect(
-        text,
-        contains(
-          '\nSkore-beheer: on; access: NO. Skore gave an answer the server '
-          'could not use; usually the account lacks $rights. If so, $fix. '
-          'Otherwise try again in a moment; the technical details are in the '
-          'server log.\n',
-        ),
-      );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
-      expectNoSecretsOrTraces(text);
-    });
-
-    test('on, but Skore lists no teachers: no access, as an account without '
-        'the rights may get an empty answer', () async {
+    test('on, but Skore lists no teachers: access, as Skore refuses an '
+        'account without the rights instead (dartschool#91)', () async {
       server.skore.teachers.clear();
 
       final (_, text) = await status(skore: SwitchState.on);
@@ -533,11 +499,96 @@ void main() {
       expect(
         text,
         contains(
-          '\nSkore-beheer: on; access: NO. Skore lists no teachers that can '
-          'be assigned, as it may for an account without $rights. If so, '
+          '\nSkore-beheer: on; access: yes (Skore lets it use both Rapporten '
+          '> Modellen and Puntenboeken)\n',
+        ),
+      );
+    });
+
+    const noRights =
+        '\nSkore-beheer: on; access: NO. This account has no rights for '
+        'score management in Skore: Skore refused it its report management '
+        '(Rapporten > Modellen) and its gradebook management (Puntenboeken). '
+        'The Skore tools need $rights: $fix.\n';
+
+    test('on, sent on to the start page, as Skore answered an account '
+        'without the rights live (dartschool#91): no access to either part, '
+        'with the rights it needs and what to do', () async {
+      server.skore.refusal = SkoreRefusal.startPage;
+
+      final (result, text) = await status(skore: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(text, startsWith('Smartschool connection: working\n'));
+      expect(text, contains(noRights));
+      expect(text, isNot(contains('authenticatedUser')));
+      expectNoSecretsOrTraces(text);
+      expect(server.skore.calls, [
+        'POST $fakeSkoreOwnersRpcPath getTeachers',
+        'POST $fakeSkoreGradebooksRpcPath getCourses',
+      ]);
+    });
+
+    test('on, refused by Skore with HTTP 403: the same, without quoting the '
+        'page', () async {
+      server.skore.refusal = SkoreRefusal.forbidden;
+
+      final (_, text) = await status(skore: SwitchState.on);
+
+      expect(text, contains(noRights));
+      expect(text, isNot(contains(fakeSkoreNoAccessName)));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('on, with only one of the two parts of Skore: no access, naming the '
+        'part it has and the part it lacks', () async {
+      server.skore
+        ..refusal = SkoreRefusal.startPage
+        ..refusedPaths = {fakeSkoreGradebooksRpcPath};
+
+      final (_, gradebooksRefused) = await status(skore: SwitchState.on);
+      expect(
+        gradebooksRefused,
+        contains(
+          '\nSkore-beheer: on; access: NO. This account has only part of the '
+          'rights for score management in Skore: Skore lets it use its report '
+          'management (Rapporten > Modellen), but refused it its gradebook '
+          'management (Puntenboeken). The Skore tools need $rights: $fix.\n',
+        ),
+      );
+
+      server.skore.refusedPaths = {fakeSkoreOwnersRpcPath};
+      final (_, reportsRefused) = await status(skore: SwitchState.on);
+      expect(
+        reportsRefused,
+        contains(
+          '\nSkore-beheer: on; access: NO. This account has only part of the '
+          'rights for score management in Skore: Skore lets it use its '
+          'gradebook management (Puntenboeken), but refused it its report '
+          'management (Rapporten > Modellen). The Skore tools need $rights: '
           '$fix.\n',
         ),
       );
+    });
+
+    test('on, answered with something the server cannot use: access could '
+        'not be checked, without taking it for missing rights or quoting the '
+        'page', () async {
+      server.skore.unusable = true;
+
+      final (result, text) = await status(skore: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nSkore-beheer: on; access could not be checked: Skore gave an '
+          'answer the server could not use. Try again in a moment; the '
+          'technical details are in the server log.\n',
+        ),
+      );
+      expect(text, isNot(contains('Oeps')));
+      expectNoSecretsOrTraces(text);
     });
 
     test('on, while the connection does not work: access not checked, and '

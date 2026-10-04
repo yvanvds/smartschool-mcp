@@ -62,8 +62,7 @@ Future<CallToolResult> _list(
 String formatSkoreClasses(List<SkoreClass> classes, String query) {
   if (classes.isEmpty) {
     return 'Skore lists no classes in its report models. A school without '
-        'report models in Skore has none; an account without the rights '
-        'for score management in Skore may also get an empty list.';
+        'report models in Skore has none.';
   }
   final found = skoreMatches(classes, query, (c) => [c.name, ?c.groupName]);
   final models = {for (final c in classes) c.modelId}.length;

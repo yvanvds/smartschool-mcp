@@ -80,24 +80,23 @@ Future<CallToolResult> _list(
       if (word.isNotEmpty) word,
   ];
 
-  final (all, shown, courseError) = await withPlannerClient(session, (
-    client,
-  ) async {
-    final lessonContent = LessonContentService(client);
-    // Without the names first: getItems() loses the lesfiches when the
-    // course list fails (yvanvds/dartschool#118); _withCourseNames names
-    // the courses of those listed.
-    final all = await lessonContent.getItems(withCourseNames: false);
-    final shown = sortedByName(
-      all.where(
-        (item) =>
-            kind.includes(item) &&
-            lesficheMatches(item, labels: labels.keys.toSet(), words: words),
-      ),
-    );
-    final named = await _withCourseNames(lessonContent, shown);
-    return (all, named.items, named.error);
+  final (all, courseError) = await withPlannerClient(session, (client) async {
+    try {
+      return (await LessonContentService(client).getItems(), null);
+    } on SmartschoolLessonContentCourseListError catch (error) {
+      // Only the course list that names the courses failed: its error
+      // carries the lesfiches as read, without the names.
+      log('lesfiches: $error');
+      return (error.items, error);
+    }
   });
+  final shown = sortedByName(
+    all.where(
+      (item) =>
+          kind.includes(item) &&
+          lesficheMatches(item, labels: labels.keys.toSet(), words: words),
+    ),
+  );
 
   return CallToolResult(
     content: [
@@ -127,42 +126,6 @@ Map<String, String> _labels(Object? value) {
   return labels;
 }
 
-/// [items], read without the names of their courses
-/// (`getItems(withCourseNames: false)` of [lessonContent]), with their
-/// courses named as `getItems()` names them: after the school's course list
-/// ([LessonContentService.getCourses], one request), by the library's own
-/// parsing of the lesfiches as the module gave them
-/// ([LessonContentService.parseItems] of [LessonContentItem.raw]). Without
-/// a course among [items], nothing is read.
-///
-/// A course list the library cannot use ([SmartschoolLessonContentError])
-/// leaves the names out: [items] as given, with the error, which the log
-/// gets. `getItems()` would throw it instead and lose the lesfiches, with
-/// an error that cannot be told from one of the lesfiches
-/// (yvanvds/dartschool#118): a workaround, whose removal is #88. A
-/// refused session or a lost connection still goes to
-/// [SmartschoolSession.run].
-Future<({List<LessonContentItem> items, SmartschoolLessonContentError? error})>
-_withCourseNames(
-  LessonContentService lessonContent,
-  List<LessonContentItem> items,
-) async {
-  if (items.every((item) => item.courses.isEmpty)) {
-    return (items: items, error: null);
-  }
-  final List<PlannerCourse> courses;
-  try {
-    courses = await lessonContent.getCourses();
-  } on SmartschoolLessonContentError catch (error) {
-    log('lesfiches: $error');
-    return (items: items, error: error);
-  }
-  final named = LessonContentService.parseItems([
-    for (final item in items) item.raw,
-  ], courses: courses);
-  return (items: named, error: null);
-}
-
 /// What `list_lesfiches` answers: a header with what was asked for ([kind],
 /// [labels], [query]) and how many of [all] lesfiches match, one line per
 /// lesfiche of [shown] ([formatLesficheLine], at most [maxLesficheLines]),
@@ -170,7 +133,9 @@ _withCourseNames(
 ///
 /// The courses of [shown] are named by the library
 /// ([LessonContentCourse.name]), unless the school's course list could not
-/// be read ([courseError]): then only their number is given. When nothing
+/// be read ([courseError]): then only their number is given, with a note
+/// when a lesfiche listed has a course. `getItems()` reads the course list
+/// when any lesfiche has a course, also one that is not listed. When nothing
 /// matches a filter on labels, the answer lists the labels the lesfiches of
 /// [kind] do have.
 String formatLesfiches({
@@ -211,7 +176,9 @@ String formatLesfiches({
     if (shown.length > listed.length)
       'Note: only the first ${listed.length} of the ${shown.length} are '
           'shown: narrow the list with label or query.',
-    if (courseError case SmartschoolLessonContentError(:final statusCode))
+    if (courseError case SmartschoolLessonContentError(
+      :final statusCode,
+    ) when listed.any((item) => item.courses.isNotEmpty))
       'Note: the names of the courses could not be read from the school\'s '
           'course list${statusCode == null ? '' : ' (HTTP $statusCode)'}, so '
           'only the number of courses is shown.',

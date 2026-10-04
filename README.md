@@ -445,12 +445,12 @@ client name. It also installs again while that copy runs.
   courses, visible or hidden in the module, the day it was last changed
   (the module's dates have no offset: Smartschool time) and its id. The
   courses are named as the library names them (`LessonContentCourse.name`,
-  dartschool#101), after the school's course list (one request more, only
-  when a lesfiche listed has a course); a course the list does not name is
-  an "unnamed course". When the course list cannot be read, only the number
-  of courses is shown: `getItems()` would lose the lesfiches then
-  (dartschool#118), so the tool reads the lesfiches without the names and
-  names them itself with the library's parsing (a workaround, #88). A label
+  dartschool#101), after the school's course list (one request more, when
+  any lesfiche has a course); a course the list does not name is an
+  "unnamed course". When the course list cannot be read, the library still
+  gives the lesfiches (`SmartschoolLessonContentCourseListError.items`,
+  dartschool#118), and only the number of courses is shown, with a note
+  when a lesfiche listed has a course. A label
   filter that matches nothing lists the labels there are. At most 200
   lines, with a note to narrow the list. An answer
   of the module the server cannot use (`SmartschoolLessonContentError`) is
@@ -491,14 +491,13 @@ client name. It also installs again while that copy runs.
   the date and hour, the type, the name and the info, and to wait for the
   user's confirmation. The library checks the type against the school's
   types again; when the school no longer has it (the types changed since
-  the session read them), the server reads the types again, for every
-  tool on the session, and the error lists them (the library's refusal
-  does not carry them: a workaround for yvanvds/dartschool#119, whose
-  removal is tracked in #89). The library sends the create
-  (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
-  once. The result gives the assignment as saved, with its id. Its name and
-  info change with `edit_planned_element`; its date, type and classes do
-  not change.
+  the session read them), the error lists the types that check read (the
+  library's refusal carries them, dartschool#119), and every tool on the
+  session takes them, without reading them again. The library sends the
+  create (`POST planned-assignments/blanco?waitForRefresh=true`, answered
+  `201`) once. The result gives the assignment as saved, with its id. Its
+  name and info change with `edit_planned_element`; its date, type and
+  classes do not change.
 - `trash_assignment`: moves an assignment of the user's own planner (`id`)
   to the planner's trash (`trashAssignment`, dartschool#89). Smartschool
   keeps it there for 30 days, and it can be restored in Smartschool itself;
@@ -614,10 +613,12 @@ the gradebook's readers and writers afterwards; it is an error when it
 stopped. What each teacher had before, and whether a save was sent, come
 from the library's result (`SkoreGradebookShareChange`, dartschool#103),
 without a read of the tool's own. The tool names the gradebook (its course
-and class) from the first result, so by its id only when it stopped at the
-first teacher, and then gives no readers and writers either; for a save
-Skore did not confirm, the library's error carries nothing of the gradebook
-(yvanvds/dartschool#120, tracked in #90). Before each change the library
+and class) from the first result; when the save for the first teacher is
+not confirmed, from the library's error, which carries the gradebook as it
+was read before the save (`SmartschoolSkoreShareSaveUnconfirmedError`,
+dartschool#120). So it names the gradebook by its id only when it stopped at
+the first teacher before a save, and then gives no readers and writers
+either. Before each change the library
 reads the gradebooks (and, to share, the teachers) again and refuses the
 owner among the teachers, a gradebook that is not the owner's, and, to
 share, a teacher Skore does not list
@@ -652,24 +653,27 @@ return the assignment with the course as the library read it before the
 save, and for a replace the assignment as it was (`SkoreSavedAssignment`,
 dartschool#102), so the tools name the course and the teacher replaced
 without a read of their own. A save that Skore does not confirm returns
-nothing, and the library's error carries none of that: its result names the
-course by id only, and for a replace not the teacher it had
-(yvanvds/dartschool#120, tracked in #90). Removing an assignment, choosing
-its pupils and Skore's import of assignments are not offered.
+nothing, but the library's error carries the same
+(`SmartschoolSkoreAssignmentSaveUnconfirmedError`, dartschool#120): its
+result names the course by its label, and for a replace the teacher the
+assignment had, as the library read them before the save (a read afterwards
+cannot tell what was there before a save that may have gone through).
+Removing an assignment, choosing its pupils and Skore's import of
+assignments are not offered.
 
-Skore refusing a request to the account (HTTP 403,
-`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
+Skore refusing a request to the account
+(`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
 rights, with the part of Skore it was refused, what rights are needed, and
 to ask the school's Smartschool administrator for them or turn
-"Skore-beheer" off. What Skore really answers such an account has not been
-captured yet (yvanvds/dartschool#91): most likely a page instead of data,
-which the library reports as a plain `SmartschoolSkoreError`. Until then,
-any other `SmartschoolSkoreError` is reported as "Skore gave an answer the
-server could not use; usually the account lacks the rights", with the same
-advice; the library's message goes to the log only, as it can quote the
-page. From a write, each of these errors also says that nothing was changed
-in Skore. #74 tracks dropping that hedge once dartschool#91 is done, and #75
-the live check.
+"Skore-beheer" off. Skore sends every request of a teacher without the
+rights on to Smartschool's start page (seen live, yvanvds/dartschool#91),
+never with an empty list, and the library reports that from every call as
+that error (as it does HTTP 403). Any other `SmartschoolSkoreError` is an
+answer the server could not use, and is reported as such, with "try again
+in a moment"; the library's message goes to the log only, as it can quote
+the page. From a write, each of these errors also says that nothing was
+changed in Skore. What Skore answers a pupil, and an account with only one
+of the two parts of the rights, was not captured.
 
 The presence tools are offered only when the switch "Aanwezigheden" is on
 (see *Opt-in tools* below): they need the right to record half-day
@@ -685,7 +689,8 @@ first two only read, the last two change the presences of pupils:
   (`getConfig`: its allowed classes, and the active class when it is not
   among them; not the placeholder "Uit Planner", class id -2, that the
   module gives as the active class of a teacher without a lesson at the
-  moment, #84, which #85 tracks until dartschool#117 is done), one line per
+  moment, #84, which the library keeps apart as `activePlaceholder`,
+  yvanvds/dartschool#117), one line per
   class with its name, class id (`groupID`), and whether the account may
   record presences for it (`userCanConfirm`: "may record" or "view only";
   not `userCanRecord`, which a teacher without the absence-administrator
@@ -740,8 +745,11 @@ left alone, as that read shows. For each other pupil, `setLate` and
 `setPresent` get those four statuses as their `onlyReplacing`
 (yvanvds/dartschool#105): the library reads the class right before the save
 and refuses a half-day that changed to another status meanwhile, without
-sending anything. They stop at the first pupil that fails (refused, a save
-the module refused, a login or connection failure). The result says per
+sending anything. It also refuses a pupil that read no longer lists, with
+its own error (yvanvds/dartschool#116): the result says the pupil is no
+longer listed in the class on that day, with the module's reason when it
+lists no pupils at all. They stop at the first pupil that fails (refused,
+a save the module refused, a login or connection failure). The result says per
 pupil whether the status was set (and what the half-day held right before),
 the pupil already had it, or was not changed or not tried, and what the
 half-day holds now: as the module answered the save, which the library
@@ -811,8 +819,8 @@ reads an element's detail); the `classes` argument, 1 to a maximum of
 class planner ids (`classPlannersArgument`); the `from` and `until`
 arguments with a default period (`plannerPeriodArguments`); and the
 school's assignment types, read once per session (`AssignmentTypes.of`),
-and again when the library refused a type the school no longer has
-(`reread`). In
+and replaced by those the library's check read when it refused a type the
+school no longer has (`replace`). In
 `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment
 type (`formatAssignmentType`), one line per element (`formatElementLine`),
@@ -867,10 +875,12 @@ gradebook, a course or a teacher in a sentence, and the `query` filter
 switch (`skoreOptIn`). The tests run against a fake Skore
 (`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
 reads, in the shape of dartschool's anonymised captures, with fake names;
-it can refuse an account without the rights with HTTP 403 or with a page
-instead of data, for every request or only for some services
-(`refusedPaths`). It carries out the save of an assignment (`saveOwner`) and
-answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
+it can refuse an account without the rights by sending the request on to
+the start page, as Skore did live (dartschool#91), or with HTTP 403, for
+every request or only for some services (`refusedPaths`), and answer with
+an error page instead of data (`unusable`). It carries out the save of an
+assignment (`saveOwner`) and answers `getMyGroups` as the live Skore did in
+dartschool#71; it gives a
 teacher's gradebooks, one per assignment, with their shares (`getCourses`
 of the gradebooks service), and carries out the save of their shares
 (`saveShared`) as the live Skore did in dartschool#74. It can lose the
@@ -938,11 +948,15 @@ variable when it is set and not empty, else the credentials file's key.
 counts as off, and `smartschool_status` says so.
 
 `smartschool_status` has a line per switch: off, with how to turn it on and
-for whom; or on, with whether the account has the rights, checked with one
+for whom; or on, with whether the account has the rights, checked with a
 cheap read once the connection works (`OptInTools.checkAccess`; for Skore,
-`getTeachers`, where an empty list of teachers counts as no access too; for
-the presences, `getConfig`, where access means that the account may record
-presences for at least one class).
+the library's `checkAccess`, which reads the teachers for report management
+and the account's own gradebooks for gradebook management: access means
+both parts, and the line names the part an account with only one lacks;
+for the presences, `getConfig`, where access means that the account may
+record presences for at least one class). An answer that cannot tell
+(for Skore, one the server could not use) is reported as access that could
+not be checked.
 Registering the tools only once access is detected
 (`notifications/tools/list_changed`) was not chosen: the server logs in at
 the first tool call, so the tools would show up only later in the

@@ -28,13 +28,14 @@ const _getTeachers = 'POST $fakeSkoreOwnersRpcPath getTeachers';
 const _toolReads = [_getTeachers];
 
 /// Gradebook 34826 of the fake school in a sentence, as named from the
-/// library's first result.
+/// library's first result, or from its error when the save for the first
+/// teacher is not confirmed.
 const _digitale =
     'gradebook 34826 ("Digitale vaardigheden", class 5WW1) of Willems, Wim '
     '(teacher id 1005)';
 
 /// Gradebook 34826 by its id, as named when the change stopped at the first
-/// teacher: the library returned nothing to name it from.
+/// teacher before a save: the library gave nothing to name it from.
 const _digitaleById = 'gradebook 34826 of Willems, Wim (teacher id 1005)';
 
 /// What the result says after a check refused the change for [teacher].
@@ -452,25 +453,39 @@ void main() {
 
     test('an account without the rights: says so, without quoting the '
         'page', () async {
-      skore.refusal = SkoreRefusal.forbidden;
-      expect(
-        await error('list_skore_gradebook_shares', {'teacher_id': 1005}),
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its gradebook management (Puntenboeken). The Skore tools '
-        'need $_rightsAndFix: $_fix.',
-      );
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its gradebook management (Puntenboeken). The Skore tools '
+          'need $_rightsAndFix: $_fix.';
+      // The read of the gradebooks comes first.
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final startPage = await error('list_skore_gradebook_shares', {
+        'teacher_id': 1005,
+      });
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
 
-      skore.refusal = SkoreRefusal.page;
+      skore.refusal = SkoreRefusal.forbidden;
+      final forbidden = await error('list_skore_gradebook_shares', {
+        'teacher_id': 1005,
+      });
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
+    });
+
+    test('an answer the server cannot use: says so, without quoting the page '
+        'or blaming the rights', () async {
+      skore.unusable = true;
       final text = await error('list_skore_gradebook_shares', {
         'teacher_id': 1005,
       });
       expect(
         text,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
+        'Skore gave an answer the server could not use. Try again in a '
         'moment; the technical details are in the server log.',
       );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
+      expect(text, isNot(contains('Oeps')));
     });
   });
 
@@ -727,37 +742,49 @@ void main() {
         'changed, without quoting the page', () async {
       // The tool's read of the teachers comes first: Skore refuses it its
       // report management.
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its report management (Rapporten > Modellen). The Skore '
+          'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.';
+
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final (startPageIsError, startPage) = await share([1001], 'read');
+      expect(startPageIsError, isTrue);
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
+
       skore.refusal = SkoreRefusal.forbidden;
       final (_, forbidden) = await share([1001], 'read');
-      expect(
-        forbidden,
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its report management (Rapporten > Modellen). The Skore '
-        'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
-      );
-
-      skore.refusal = SkoreRefusal.page;
-      final (isError, page) = await share([1001], 'read');
-      expect(isError, isTrue);
-      expect(
-        page,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
-        'moment; the technical details are in the server log. Nothing was '
-        'changed in Skore.',
-      );
-      expect(page, isNot(contains(fakeSkoreNoAccessName)));
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
       expect(skore.calls, [
         _getTeachers,
         _getTeachers,
       ], reason: 'each call refused at its first read');
+      expect(skore.shareSaves, isEmpty);
+    });
+
+    test('an answer the server cannot use: says so, and that nothing was '
+        'changed, without quoting the page or blaming the rights', () async {
+      skore.unusable = true;
+      final (isError, text) = await share([1001], 'read');
+      expect(isError, isTrue);
+      expect(
+        text,
+        'Skore gave an answer the server could not use. Try again in a '
+        'moment; the technical details are in the server log. Nothing was '
+        'changed in Skore.',
+      );
+      expect(text, isNot(contains('Oeps')));
+      expect(skore.calls, [_getTeachers], reason: 'the first read');
     });
 
     test('an account with the rights for report management but not for '
         'gradebook management: the library refuses the first teacher, so '
         'the gradebook is named by its id, and nothing is saved', () async {
       skore
-        ..refusal = SkoreRefusal.forbidden
+        ..refusal = SkoreRefusal.startPage
         ..refusedPaths = {fakeSkoreGradebooksRpcPath};
       final (isError, text) = await share([1001, 1002], 'read');
       expect(isError, isTrue);
@@ -819,15 +846,15 @@ void main() {
         expect(isError, isTrue);
         expect(
           text,
-          // The first teacher's save: no result to name the gradebook from
-          // (dartschool#120).
+          // The first teacher's save: no result, but the gradebook as the
+          // library read it before the save, from its error (dartschool#120).
           startsWith(
-            'Sharing $_digitaleById in Skore with read access (they may read '
-            'it) stopped at Janssens, Jan (teacher id 1001):\n'
+            'Sharing $_digitale in Skore with read access (they may read it) '
+            'stopped at Janssens, Jan (teacher id 1001):\n'
             '- Janssens, Jan (teacher id 1001): may or may not have been '
             'shared (see below)\n'
-            'Sharing $_digitaleById with Janssens, Jan (teacher id 1001) with '
-            'read access may or may not have been saved',
+            'Sharing $_digitale with Janssens, Jan (teacher id 1001) with read '
+            'access may or may not have been saved',
           ),
         );
         expect(text, isNot(contains('The gradebook now')));
@@ -1020,12 +1047,14 @@ void main() {
       expect(isError, isTrue);
       expect(
         text,
-        'Unsharing $_digitaleById in Skore stopped at Maes, Mira (teacher id '
+        // The gradebook as the library read it before the save, from its
+        // error (dartschool#120).
+        'Unsharing $_digitale in Skore stopped at Maes, Mira (teacher id '
         '1006):\n'
         '- Maes, Mira (teacher id 1006): may or may not have been unshared '
         '(see below)\n'
-        'Unsharing $_digitaleById with Maes, Mira (teacher id 1006) may or '
-        'may not have been saved: the change was sent, but Skore did not '
+        'Unsharing $_digitale with Maes, Mira (teacher id 1006) may or may '
+        'not have been saved: the change was sent, but Skore did not '
         'confirm it. Do not call unshare_skore_gradebook again for it: first '
         'read the gradebooks with list_skore_gradebook_shares (teacher_id '
         '1005): when gradebook 34826 no longer lists teacher id 1006 among its '

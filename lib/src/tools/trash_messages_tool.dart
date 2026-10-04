@@ -82,26 +82,21 @@ Future<CallToolResult> _trash(
   final box = MessageBox.parse(arguments['box']);
   // Kept across the runs of the action, which withMessages may repeat after
   // some messages were moved (see changeEach): the messages passed to the
-  // move, those whose move was tried, and those whose move went out. A move
-  // Smartschool refused did not take effect, so it is sent again.
+  // move, and those whose move went out. withMessages repeats the action
+  // when moveToTrashFrom throws a SmartschoolSessionExpiredError, which it
+  // throws only when Smartschool refused the session for the move itself
+  // (since flutter_smartschool 0.3.4, yvanvds/dartschool#115): that move
+  // was not made, so it is sent again.
   final started = <int, ShortMessage>{};
-  final tried = <int>{};
   final moved = <int>{};
   final results = await withMessages(
     session,
     (messages) => changeEach(messages, box, ids, started: started, (id) async {
       if (!moved.contains(id)) {
-        // moveToTrashFrom checks its move with a `show message` right after
-        // it (yvanvds/dartschool#96), and throws also when only that check
-        // failed, after the move went out (yvanvds/dartschool#115). So a
-        // move tried before is sent again only when the box still holds
-        // the message.
-        if (!tried.add(id) &&
-            await box.message(messages, id, allRecipients: false) == null) {
-          moved.add(id);
-          return true;
-        }
         try {
+          // Returns what its own check after the move found: whether the
+          // box no longer holds the message, or null when Smartschool's
+          // answer said neither.
           final left = await messages.moveToTrashFrom(
             id,
             boxType: box.boxType,
@@ -110,15 +105,15 @@ Future<CallToolResult> _trash(
           moved.add(id);
           if (left != null) return left;
         } on SmartschoolMoveUncheckedError {
-          // The move went out and only the library's check after it failed
-          // (yvanvds/dartschool#115): checked below, never moved again.
+          // The move went out and only the library's check after it failed:
+          // checked below, never moved again.
           moved.add(id);
         }
       }
-      // A move that went out in an earlier run, or whose check said neither
-      // (null): getMessage returns null for an id the box does not hold
-      // (yvanvds/dartschool#16), also for a message just moved to the trash
-      // (seen live, yvanvds/dartschool#96).
+      // A move that went out in an earlier run, or whose check failed or
+      // said neither: getMessage returns null once the box no longer holds
+      // the message, also for a message just moved to the trash, as the
+      // library's docs of getMessage and SmartschoolMoveUncheckedError say.
       return await box.message(messages, id, allRecipients: false) == null;
     }),
   );
