@@ -882,6 +882,33 @@ void main() {
   });
 
   group('formatElementKind', () {
+    test('names a meeting and a lesson-free day (#94), and counts them by '
+        'their own kind', () {
+      DateTime at(int hour) => DateTime(2026, 10, 5, hour);
+      for (final (type, kind, text) in [
+        ('planned-lessons', PlannedElementKind.lesson, 'lesson'),
+        (
+          'planned-placeholders',
+          PlannedElementKind.emptyLessonHour,
+          'empty lesson hour',
+        ),
+        ('planned-meetings', PlannedElementKind.meeting, 'meeting'),
+        (
+          'planned-lesson-free-days',
+          PlannedElementKind.lessonFreeDay,
+          'lesson-free day',
+        ),
+      ]) {
+        final element = _element(type: type, from: at(8), to: at(9));
+        expect(formatElementKind(element), text, reason: type);
+        expect(PlannedElementKind.of(element), kind, reason: type);
+      }
+      expect(PlannedElementKind.meeting.count(1), '1 meeting');
+      expect(PlannedElementKind.meeting.count(2), '2 meetings');
+      expect(PlannedElementKind.lessonFreeDay.count(2), '2 lesson-free days');
+      expect(PlannedElementKind.other.count(2), '2 other');
+    });
+
     test('names the type of an assignment, and the planner type of any '
         'other element', () {
       DateTime at(int hour) => DateTime(2026, 10, 5, hour);
@@ -906,12 +933,13 @@ void main() {
         ),
         'assignment',
       );
-      expect(
-        formatElementKind(
-          _element(type: 'planned-school-activities', from: at(8), to: at(9)),
-        ),
-        'planned-school-activities',
-      );
+      // A type the library knows but the tools do not name, and one the
+      // library does not know.
+      for (final type in ['planned-school-activities', 'planned-excursions']) {
+        final element = _element(type: type, from: at(8), to: at(9));
+        expect(formatElementKind(element), type);
+        expect(PlannedElementKind.of(element), PlannedElementKind.other);
+      }
     });
   });
 

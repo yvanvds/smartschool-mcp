@@ -146,6 +146,33 @@ void main() {
       );
       expect(tool.description, contains('wie geeft wiskunde in 3B1?'));
     });
+
+    test('list_skore_courses says that a course with sub-courses needs no '
+        'teacher of its own, and that only the courses marked "no teacher" '
+        'still need one (#100)', () {
+      final description = tools['list_skore_courses']!.description!;
+      expect(
+        description,
+        contains(
+          'a course with sub-courses (which needs no teacher of its own: its '
+          'sub-courses carry the assignments)',
+        ),
+      );
+      expect(
+        description,
+        contains(
+          'Only the courses marked "no teacher" still need a teacher; the '
+          'first line counts them as without a teacher.',
+        ),
+      );
+      expect(
+        description,
+        contains(
+          '"welke vakken van 5WW1 hebben nog geen leerkracht?" (the courses '
+          'marked "no teacher")',
+        ),
+      );
+    });
   });
 
   group('list_skore_classes', () {
@@ -204,11 +231,11 @@ void main() {
 
   group('list_skore_courses', () {
     test('lists the rows of a class nested by depth: group headers, a '
-        'course with several teachers, and two courses with the same code '
-        'told apart by id', () async {
+        'course with several teachers, courses with sub-courses, and two '
+        'courses with the same code told apart by id', () async {
       expect(
         await courses(2516),
-        'Skore class id 2516: 6 courses (3 without a teacher) and 2 group '
+        'Skore class id 2516: 6 courses (1 without a teacher) and 2 group '
         'headers, in Skore\'s order; each row belongs to the nearest row '
         'above it with a smaller depth.\n'
         '- Vakken [Vak] | course id 1966 | code Vak | depth 0 | group header, '
@@ -217,14 +244,15 @@ void main() {
         'AARDR | depth 1 | teacher: Janssens, Jan (teacher id 1001, '
         'assignment 31882)\n'
         '  - Eye4Skills (2 uur) (3e graad) [PROJE] | course id 2142 | code '
-        'PROJE | depth 1 | no teacher\n'
+        'PROJE | depth 1 | course with sub-courses, needs no teacher of its '
+        'own\n'
         '    - Project 1 (3e graad) [PROJE1] | course id 1840 | code PROJE1 | '
         'depth 2 | 3 teachers: Peeters, Piet (teacher id 1002, assignment '
         '34580); Dupré, Céline (teacher id 1003, assignment 34582); '
         "D'Hondt, Karel (teacher id 1004, assignment 34584)\n"
         '  - Toegepaste sociale- en gedragswetenschappen (6 uur) (5e j DG '
-        '(5WW)) [T.SOGEWE] | course id 1776 | code T.SOGEWE | depth 1 | no '
-        'teacher\n'
+        '(5WW)) [T.SOGEWE] | course id 1776 | code T.SOGEWE | depth 1 | '
+        'course with sub-courses, needs no teacher of its own\n'
         '    - Toegepaste sociale- en gedragswetenschappen (/90) (5e j DG '
         '(5WW)) [T.SOGEWE] | course id 2676 | code T.SOGEWE | depth 2 | no '
         'teacher\n'
@@ -236,6 +264,86 @@ void main() {
       );
       expect(skore.calls, ['GET $fakeSkoreOwnersPagePath']);
       expect(skore.requests.single.query, {'classID': '2516'});
+    });
+
+    group('answers "welke vakken van 5WW1 hebben nog geen leerkracht?" with '
+        'the courses without sub-courses only (#100)', () {
+      /// The course ids of the rows of [text] marked "no teacher".
+      List<int> withoutTeacher(String text) => [
+        for (final line in text.split('\n').skip(1))
+          if (line.endsWith(' | no teacher'))
+            int.parse(line.split(' | ')[1].substring('course id '.length)),
+      ];
+
+      /// The row of course [courseId] in [text], from its depth on.
+      String fromDepth(String text, int courseId) {
+        final row = text
+            .split('\n')
+            .singleWhere((line) => line.contains('| course id $courseId |'));
+        return row.substring(row.indexOf('| depth ') + 2);
+      }
+
+      const parent = 'course with sub-courses, needs no teacher of its own';
+
+      test('a course whose sub-courses all have a teacher (Eye4Skills) and '
+          'one whose sub-course has none (Toegepaste sociale- en '
+          'gedragswetenschappen) are neither counted nor marked "no '
+          'teacher": only that sub-course is', () async {
+        final classes = await ok('list_skore_classes', {'query': '5WW1'});
+        expect(classes, contains('- 5WW1 | class id 2516 |'));
+
+        final text = await courses(2516);
+
+        expect(
+          text,
+          startsWith('Skore class id 2516: 6 courses (1 without a teacher) '),
+        );
+        expect(withoutTeacher(text), [2676]);
+        expect(fromDepth(text, 2142), 'depth 1 | $parent');
+        expect(fromDepth(text, 1776), 'depth 1 | $parent');
+        // The tree tells it, not the labels: not a course followed by one
+        // at its own depth (Aardrijkskunde), a sub-course followed by a
+        // shallower row (Project 1; the sub-course without a teacher, before
+        // a group header) or the last row (Digitale vaardigheden). A group
+        // header with courses under it stays a group header.
+        expect(parent.allMatches(text), hasLength(2));
+        expect(fromDepth(text, 2676), 'depth 2 | no teacher');
+        expect(
+          fromDepth(text, 1966),
+          'depth 0 | group header, cannot get a teacher',
+        );
+      });
+
+      test('a course with sub-courses that has a teacher shows them, as any '
+          'course; once every course without sub-courses has one, none is '
+          'without a teacher', () async {
+        skore.addAssignment(2516, 2142, FakeSkoreTeacher.willems);
+
+        var text = await courses(2516);
+        expect(
+          fromDepth(text, 2142),
+          'depth 1 | teacher: Willems, Wim (teacher id 1005, assignment '
+          '35001)',
+        );
+        expect(
+          text,
+          startsWith('Skore class id 2516: 6 courses (1 without a teacher) '),
+        );
+        expect(withoutTeacher(text), [2676]);
+
+        skore.addAssignment(2516, 2676, FakeSkoreTeacher.maes);
+
+        text = await courses(2516);
+        expect(
+          text,
+          startsWith(
+            "Skore class id 2516: 6 courses and 2 group headers, in Skore's "
+            'order;',
+          ),
+        );
+        expect(withoutTeacher(text), isEmpty);
+        expect(fromDepth(text, 1776), 'depth 1 | $parent');
+      });
     });
 
     test('answers "wie geeft wiskunde in 3B1?": the class by name, then its '

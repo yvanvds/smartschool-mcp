@@ -13,9 +13,10 @@ ServerTool readPlannedElementTool(SmartschoolSession session) => ServerTool(
     title: 'Read a Smartschool planner element',
     description:
         'Reads one element of the Smartschool planner (a lesson, an '
-        'assignment, an empty lesson hour, …) in full, by the id '
-        'list_planner shows. Gives what its list line says, one field per '
-        'line, plus its public info and private info as plain text, its '
+        'assignment, an empty lesson hour, a meeting, a lesson-free day, …) '
+        'in full, by the id list_planner shows. Gives what its list line '
+        'says, one field per line, plus its public info and private info as '
+        'plain text, its '
         'labels, the names of its attachments and its weblinks; for an '
         'assignment also its type, from when pupils see it, whether it was '
         'announced and its status. Public info is what pupils see. Private '

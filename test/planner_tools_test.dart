@@ -5,6 +5,7 @@
 library;
 
 import 'package:dart_mcp/client.dart';
+import 'package:smartschool_mcp/src/planner/planner_format.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
@@ -132,13 +133,46 @@ void main() {
         'description': isA<String>(),
         'minItems': 1,
         'items': {
-          'enum': ['lessons', 'assignments', 'empty_lesson_hours', 'other'],
+          'enum': [
+            'lessons',
+            'assignments',
+            'empty_lesson_hours',
+            'meetings',
+            'lesson_free_days',
+            'other',
+          ],
           'type': 'string',
         },
       });
       expect(listTool.description, contains('at most 200 lines'));
       expect(listTool.description, contains('search_planners'));
       expect(listTool.description, contains('read_planned_element'));
+    });
+
+    test('list_planner names the kinds it shows (#94), takes each of them '
+        'in types, and says that other holds the kinds it does not name '
+        '(#103)', () {
+      final listTool = tools['list_planner']!;
+      expect(
+        listTool.description,
+        contains(
+          'meeting, such as a class council; lesson-free day, such as a '
+          'holiday, which can run over several days; or the planner\'s name '
+          'of another type',
+        ),
+      );
+      expect(
+        (listTool.inputSchema.properties!['types']! as Map)['description'],
+        contains(
+          'meetings (such as class councils), lesson_free_days (such as '
+          'holidays) and/or other (every kind not named here, such as '
+          'excursions)',
+        ),
+      );
+      // A types value for every kind the header counts, in its order.
+      expect([
+        for (final kind in PlannerKind.values) kind.kind,
+      ], PlannedElementKind.values);
     });
 
     test('read_planned_element says who reads the private info', () {
@@ -399,12 +433,236 @@ void main() {
       );
     });
 
-    test('says when nothing is planned', () async {
+    test('says when nothing is planned, without a note for the user\'s own '
+        'planner', () async {
       expect(
         await list({'from': '2026-12-24', 'until': '2026-12-26'}),
         'Planner: your own planner (me), from Thursday 2026-12-24 to '
         'Saturday 2026-12-26: nothing planned.',
       );
+    });
+
+    test('says to check the planner id when nothing is planned and the '
+        'planner cannot be named: Smartschool answers an id that names no '
+        'planner as an empty planner (#93)', () async {
+      // group/4069_1 names no planner; the fake answers it as the live
+      // planner did, with an empty list. Piet Peeters has a planner, with
+      // nothing planned in these days.
+      for (final (id, from, until, period) in [
+        (
+          'group/4069_1',
+          '2026-10-05',
+          '2026-10-09',
+          'from Monday 2026-10-05 to Friday 2026-10-09',
+        ),
+        (
+          _piet,
+          '2026-12-24',
+          '2026-12-26',
+          'from Thursday 2026-12-24 to Saturday 2026-12-26',
+        ),
+      ]) {
+        planner.requests.clear();
+
+        final text = await list({'planner': id, 'from': from, 'until': until});
+
+        expect(plannerRequests(), ['GET /planner/api/v1/planned-elements/$id']);
+        expect(
+          text,
+          'Planner: planner $id, $period: nothing planned.\n'
+          'Note: with nothing planned, the planner cannot be named, and '
+          'Smartschool answers a planner id that does not exist the same '
+          'way. If you expected elements, check the planner id with '
+          'search_planners.',
+        );
+      }
+    });
+
+    test('names the planner from the elements of the kinds left out, and '
+        'then needs no note when none of the kinds asked for is planned '
+        '(#93)', () async {
+      // 6A1 has lessons, an assignment and an empty lesson hour from
+      // Monday to Wednesday, and its element of another type on Thursday.
+      final text = await list({
+        'planner': _class6A1,
+        'from': '2026-10-05',
+        'until': '2026-10-07',
+        'types': ['other'],
+      });
+      expect(
+        text,
+        'Planner: planner group/4069_2001 (6A1), from Monday 2026-10-05 to '
+        'Wednesday 2026-10-07 (only other): nothing planned.',
+      );
+    });
+
+    group('names meetings and lesson-free days, counts them by kind (#94), '
+        'and takes them in types (#103)', () {
+      // The shapes of the live listing of #71, in the user's own planner,
+      // next to its elements of the captures.
+      setUp(() {
+        for (final element in [fakeMeeting, fakeLessonFreeDay]) {
+          planner.add(element, calendars: ['user/$fakePlannerMe']);
+        }
+      });
+
+      test('a lesson-free day of a week on the day it starts, and a '
+          'meeting', () async {
+        final text = await list({'from': '2026-11-02', 'until': '2026-11-09'});
+        expect(
+          text,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Monday '
+          '2026-11-09: 2 elements (1 meeting, 1 lesson-free day).\n'
+          'Monday 2026-11-02\n'
+          '- whole day until 2026-11-08 | lesson-free day | Herfstvakantie | '
+          'Iedereen | id planned-lesson-free-days/4069/'
+          'e0000000-0000-4000-8000-0000000000b2\n'
+          'Monday 2026-11-09\n'
+          '- 12:00–12:45 | meeting | BKR 6A1 | by Piet Peeters | room '
+          'vergaderzaal | id '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1',
+        );
+      });
+
+      test('after the kinds named before, with the plural for two '
+          'meetings', () async {
+        planner.add(
+          fakeMeeting.inSameHour(
+            id: 'e0000000-0000-4000-8000-0000000000b3',
+            type: 'planned-meetings',
+            name: 'Personeelsvergadering',
+          ),
+          calendars: ['user/$fakePlannerMe'],
+        );
+
+        final text = await list({'from': '2026-11-02', 'until': '2026-11-20'});
+
+        expect(
+          text.split('\n').first,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20: 4 elements (1 empty lesson hour, 2 meetings, 1 '
+          'lesson-free day).',
+        );
+        expect(
+          text,
+          contains(
+            '- 12:00–12:45 | meeting | Personeelsvergadering | by Piet '
+            'Peeters | room vergaderzaal |',
+          ),
+        );
+      });
+
+      test('lists only meetings for types meetings, and only lesson-free '
+          'days for lesson_free_days, kept from every type read: the planner '
+          'is not asked for them (#103)', () async {
+        final meetings = await list({
+          'from': '2026-11-02',
+          'until': '2026-11-20',
+          'types': ['meetings'],
+        });
+        expect(planner.calendarQueries.single, isNot(contains('types')));
+        expect(
+          meetings,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20 (only meetings): 1 element (1 meeting).\n'
+          'Monday 2026-11-09\n'
+          '- 12:00–12:45 | meeting | BKR 6A1 | by Piet Peeters | room '
+          'vergaderzaal | id '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1',
+        );
+
+        planner.requests.clear();
+        final lessonFreeDays = await list({
+          'from': '2026-11-02',
+          'until': '2026-11-20',
+          'types': ['lesson_free_days'],
+        });
+        expect(planner.calendarQueries.single, isNot(contains('types')));
+        expect(
+          lessonFreeDays,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20 (only lesson-free days): 1 element (1 lesson-free '
+          'day).\n'
+          'Monday 2026-11-02\n'
+          '- whole day until 2026-11-08 | lesson-free day | Herfstvakantie | '
+          'Iedereen | id planned-lesson-free-days/4069/'
+          'e0000000-0000-4000-8000-0000000000b2',
+        );
+      });
+
+      test('keeps under other only the kinds the tool does not name, no '
+          'meetings or lesson-free days (#103)', () async {
+        planner.add(
+          fakeMeeting.inSameHour(
+            id: 'e0000000-0000-4000-8000-0000000000b4',
+            type: 'planned-school-activities',
+            name: 'Infomoment',
+          ),
+          calendars: ['user/$fakePlannerMe'],
+        );
+
+        final text = await list({
+          'from': '2026-11-02',
+          'until': '2026-11-20',
+          'types': ['other'],
+        });
+
+        expect(planner.calendarQueries.single, isNot(contains('types')));
+        expect(
+          text,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20 (only other): 1 element (1 other).\n'
+          'Monday 2026-11-09\n'
+          '- 12:00–12:45 | planned-school-activities | Infomoment | by Piet '
+          'Peeters | room vergaderzaal | id '
+          'planned-school-activities/4069/'
+          'e0000000-0000-4000-8000-0000000000b4',
+        );
+      });
+
+      test('reads every type when one of the kinds is kept here, as for '
+          'lessons and meetings, and asks the planner for the types when '
+          'none is (#103)', () async {
+        final text = await list({
+          'from': '2026-10-05',
+          'until': '2026-11-20',
+          'types': ['lessons', 'meetings'],
+        });
+        // Never planned-meetings, which was never tried live: the lessons
+        // and the meetings are both kept here.
+        expect(planner.calendarQueries.single, isNot(contains('types')));
+        expect(
+          text,
+          'Planner: your own planner (me), from Monday 2026-10-05 to Friday '
+          '2026-11-20 (only lessons, meetings): 2 elements (1 lesson, 1 '
+          'meeting).\n'
+          'Monday 2026-10-05\n'
+          '- 10:20–11:10 | lesson | Lussen: for en while | informatica | '
+          '6A1, 6A2 | room 101 | id '
+          'planned-lessons/4069/e0000000-0000-4000-8000-000000000007\n'
+          'Monday 2026-11-09\n'
+          '- 12:00–12:45 | meeting | BKR 6A1 | by Piet Peeters | room '
+          'vergaderzaal | id '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1',
+        );
+
+        planner.requests.clear();
+        final lessonHours = await list({
+          'from': '2026-10-05',
+          'until': '2026-11-20',
+          'types': ['empty_lesson_hours', 'lessons'],
+        });
+        expect(
+          planner.calendarQueries.single['types'],
+          'planned-lessons,planned-placeholders',
+        );
+        expect(
+          lessonHours.split('\n').first,
+          'Planner: your own planner (me), from Monday 2026-10-05 to Friday '
+          '2026-11-20 (only lessons, empty lesson hours): 2 elements (1 '
+          'lesson, 1 empty lesson hour).',
+        );
+      });
     });
 
     group('with types', () {
@@ -444,8 +702,8 @@ void main() {
         );
       });
 
-      test('reads every type for other, and keeps the ones that are not a '
-          'lesson, assignment or empty lesson hour', () async {
+      test('reads every type for other, and keeps the ones the tool does not '
+          'name', () async {
         final text = await listTypes(['other']);
         expect(planner.calendarQueries.single, isNot(contains('types')));
         expect(
@@ -464,6 +722,8 @@ void main() {
           'lessons',
           'assignments',
           'empty_lesson_hours',
+          'meetings',
+          'lesson_free_days',
           'other',
         ]);
         expect(planner.calendarQueries.single, isNot(contains('types')));
@@ -596,7 +856,8 @@ void main() {
 
     test('says when the planner gives an answer it cannot use, without '
         'quoting it', () async {
-      final text = await error('list_planner', {'planner': 'group/4069_9999'});
+      planner.failing['/planner/api/v1/planned-elements/group/4069_2001'] = 400;
+      final text = await error('list_planner', {'planner': _class6A1});
       expect(
         text,
         'The planner gave an answer the server could not use (HTTP 400). Try '
@@ -694,6 +955,46 @@ void main() {
         'Organised by: Jan Peeters\n'
         'Room: 101',
       );
+    });
+
+    test('names a meeting and a lesson-free day (#94)', () async {
+      for (final element in [fakeMeeting, fakeLessonFreeDay]) {
+        planner.add(element, calendars: ['user/$fakePlannerMe']);
+      }
+
+      expect(
+        await read(fakeMeeting.ref),
+        startsWith(
+          'Planner element '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1\n'
+          'Kind: meeting\n'
+          'Name: BKR 6A1\n'
+          'When: Monday 2026-11-09 12:00–12:45\n'
+          'Organised by: Piet Peeters\n'
+          'Room: vergaderzaal\n'
+          '\n'
+          'Public info',
+        ),
+      );
+      expect(
+        await read(fakeLessonFreeDay.ref),
+        startsWith(
+          'Planner element '
+          'planned-lesson-free-days/4069/e0000000-0000-4000-8000-0000000000b2\n'
+          'Kind: lesson-free day\n'
+          'Name: Herfstvakantie\n'
+          'When: Monday 2026-11-02 whole day until 2026-11-08\n'
+          'Classes: Iedereen\n'
+          '\n'
+          'Public info',
+        ),
+      );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-meetings/4069/'
+            'e0000000-0000-4000-8000-0000000000b1',
+        'GET /planner/api/v1/planned-lesson-free-days/4069/'
+            'e0000000-0000-4000-8000-0000000000b2',
+      ]);
     });
 
     test('reads an element of a type the library does not know', () async {

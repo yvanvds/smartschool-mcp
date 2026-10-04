@@ -319,7 +319,7 @@ school, of zet **Skore-beheer** weer uit.
 - "Wie geeft wiskunde in 3B1?"
 - "Welke vakken van 5WW1 hebben nog geen leerkracht?"
 - "Aan welke vakken is mevrouw Dupré gekoppeld in 5WW1?"
-- "Koppel mevrouw Dupré aan Eye4Skills in 5WW1."
+- "Koppel mevrouw Dupré aan Project 2 van Eye4Skills in 5WW1."
   Claude zoekt de klas, het vak en de leerkracht op, toont wat het gaat
   koppelen, en koppelt pas na jouw akkoord. Daarna vraagt Claude Desktop
   nog eens toestemming. Het vak krijgt zo een nieuwe lesopdracht, met alle

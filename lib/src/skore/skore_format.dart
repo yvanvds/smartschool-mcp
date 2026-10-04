@@ -20,13 +20,15 @@ String formatSkoreClass(SkoreClass skoreClass) => [
 ].join(' | ');
 
 /// One row of a class's courses, indented two spaces per [SkoreCourse.depth]:
-/// its label, course id, code and depth, and whether it is a group header,
-/// or its teachers with their assignments.
+/// its label, course id, code and depth, and then its teachers with their
+/// assignments, or, without any, whether it is a group header, a course
+/// with sub-courses ([hasSubCourses], see [skoreHasSubCourses]), which
+/// needs no teacher of its own, or a course without a teacher.
 ///
 /// For example `  - Project 1 (3e graad) [PROJE1] | course id 1840 | code
 /// PROJE1 | depth 1 | 2 teachers: Peeters, Piet (teacher id 1002,
 /// assignment 34580); Dupré, Céline (teacher id 1003, assignment 34582)`.
-String formatSkoreCourse(SkoreCourse course) {
+String formatSkoreCourse(SkoreCourse course, {required bool hasSubCourses}) {
   final assignments = course.assignments;
   final teachers = assignments.length == 1
       ? 'teacher'
@@ -41,12 +43,36 @@ String formatSkoreCourse(SkoreCourse course) {
     'depth ${course.depth}',
     if (course.isGroupHeader)
       'group header, cannot get a teacher'
-    else if (assignments.isEmpty)
-      'no teacher'
+    else if (assignments.isNotEmpty)
+      '$teachers: ${assignments.map(formatSkoreAssignment).join('; ')}'
+    else if (hasSubCourses)
+      'course with sub-courses, needs no teacher of its own'
     else
-      '$teachers: ${assignments.map(formatSkoreAssignment).join('; ')}',
+      'no teacher',
   ];
   return '${'  ' * course.depth}- ${parts.join(' | ')}';
+}
+
+/// Whether row [index] of [courses], the rows of a class in Skore's order,
+/// is a course with sub-courses: the next row is deeper (#100). The tree
+/// tells it, not the labels.
+///
+/// Such a course needs no teacher of its own: its sub-courses carry the
+/// assignments, as a Skore administrator confirmed. A group header with
+/// courses under it is one too, but it cannot get a teacher at all.
+bool skoreHasSubCourses(List<SkoreCourse> courses, int index) =>
+    index + 1 < courses.length &&
+    courses[index + 1].depth > courses[index].depth;
+
+/// Whether row [index] of [courses] still needs a teacher: a course, not a
+/// group header, without a teacher and without sub-courses
+/// ([skoreHasSubCourses]). These are the rows [formatSkoreCourse] marks
+/// `no teacher`.
+bool skoreNeedsTeacher(List<SkoreCourse> courses, int index) {
+  final course = courses[index];
+  return !course.isGroupHeader &&
+      course.assignments.isEmpty &&
+      !skoreHasSubCourses(courses, index);
 }
 
 /// [course] in a sentence: its label in quotes, then its course id, such as

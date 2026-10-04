@@ -45,13 +45,18 @@ const changeablePresenceNames = {
 };
 
 /// The presence codes of a school structure ([PresenceService.getAllCodes]),
-/// to name what a half-day holds and to tell its [PresenceKind]; empty for a
-/// class without a structure (a grouping class), whose half-days are named
-/// by their code id.
+/// to name what a half-day holds and to tell its [PresenceKind]. For a
+/// class without a structure (a grouping class), the codes of the official
+/// classes (`officialPresenceCodes`, #99); a half-day whose code is not
+/// among them is named by its code id.
 final class PresenceCodes {
-  PresenceCodes(this.codes);
+  PresenceCodes(this.codes, {this.source = 'the class'});
 
   final List<PresenceCode> codes;
+
+  /// Whose codes they are, to say that a code or alias id is not among
+  /// them: `the class`, or `the official classes` for a grouping class.
+  final String source;
 
   /// "Aanwezig", or null when the school has no such code.
   PresenceCode? get present => _named(PresenceService.presentCodeName);
@@ -97,13 +102,13 @@ final class PresenceCodes {
           }
         }
       }
-      return 'alias id $aliasId (not among the codes of the class)';
+      return 'alias id $aliasId (not among the codes of $source)';
     }
     if (codeId == null) return 'nothing recorded';
     for (final code in codes) {
       if (code.codeId == codeId) return '"${_name(code.name)}"';
     }
-    return 'code id $codeId (not among the codes of the class)';
+    return 'code id $codeId (not among the codes of $source)';
   }
 
   /// What [cell] holds, with its motivation when it has one: for example

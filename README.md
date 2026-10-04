@@ -352,14 +352,29 @@ client name. It also installs again while that copy runs.
 - `list_planner`: what is planned in a planner (`me`, the default, or a
   planner id) in a period (`from` and `until`, today to 7 days ahead by
   default), optionally only some kinds (`types`: lessons, assignments,
-  empty lesson hours, other). Per day, in date order, one line per element:
-  the time (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the
-  kind (an assignment with its type, such as `KO Kleine Overhoring`), name,
-  course, classes, organiser (left out in the user's own planner), rooms
-  and the element id. A class planner holds a timetable slot for every
-  teacher of every hour (32 in one week of a class seen live), so at most
-  200 elements are shown, with a note on how to narrow down; the request
-  itself may span a school year.
+  empty lesson hours, meetings, lesson-free days, other; other holds every
+  kind not named, such as excursions). The planner is asked only for
+  lessons, assignments and empty lesson hours; for any other kind every
+  type is read and the kinds asked for are kept (asking the planner for
+  meetings or lesson-free days was never tried live). Per day, in date
+  order, one line per element: the time
+  (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the kind
+  (lesson, an assignment with its type, such as `KO Kleine Overhoring`,
+  empty lesson hour, meeting, lesson-free day, or the planner's type name
+  of any other type, such as `planned-excursions`), name, course,
+  classes, organiser (left out in the user's own planner), rooms and the
+  element id. The header counts the elements by those kinds. A
+  lesson-free day can run over several days (the autumn holiday seen live
+  was one element of a week) and is listed on the day it starts. A class
+  planner holds a timetable slot for every teacher of every hour (32 in
+  one week of a class seen live), so at most 200 elements are shown, with
+  a note on how to narrow down; the request itself may span a school
+  year. The header names a planner other than
+  `me` from the elements read (the class, person or room they name). When
+  nothing is planned there, the planner cannot be named, and Smartschool
+  answers a planner id that names no planner the same way, without an
+  error; the answer then adds a note to check the id with `search_planners`
+  (dartschool#127; a workaround, tracked in #102).
 - `read_planned_element`: one element in full, by its id: what its list
   line says, plus its public and private info as plain text (through
   `htmlToText`, never raw HTML), its labels, the names of its attachments
@@ -522,11 +537,17 @@ gradebooks (dartschool#74):
 - `list_skore_courses`: the courses of one class (`class_id`, from
   `list_skore_classes`) with the teachers assigned to each, Skore's
   "lesopdrachten" (`getCourses`), in Skore's order and indented by depth.
-  Per row: its label, course id, code and depth, and then that it is a
-  group header (which cannot get a teacher), that it has no teacher, or
-  its teachers with their teacher id and assignment id (which is also the
-  gradebook's id). The first line counts the courses, those without a
-  teacher, and the group headers. Course codes are not unique within a
+  Per row: its label, course id, code and depth, and then its teachers
+  with their teacher id and assignment id (which is also the gradebook's
+  id), or, without any, that it is a group header (which cannot get a
+  teacher), a course with sub-courses (which needs no teacher of its own:
+  its sub-courses carry the assignments, as a Skore administrator
+  confirmed in #100), or a course with no teacher. A row is a course with
+  sub-courses when the next row is deeper: the tree tells it, not the
+  labels. The first line counts the courses, those that still need a
+  teacher (no teacher and no sub-courses), and the group headers; the
+  description tells Claude that only the courses marked "no teacher"
+  still need one. Course codes are not unique within a
   class (a course and its sub-course can share one), so the description
   tells Claude to name a course by its id. An empty list means a class
   without a course structure or an unknown id; the result says so.
@@ -677,8 +698,16 @@ first two only read, the last two change the presences of pupils:
   (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
   alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
   or "nothing recorded", with its motivation, and per pupil the pupil id the
-  writes take. Rows per lesson are left out (the library ignores them). When
-  the module lists no pupils, the tool gives the module's reason
+  writes take. A grouping class has no structure, so the module gives no
+  codes for it, while its pupils' half-days hold the codes of their official
+  classes (seen live: every half-day of the grouping class 2A held code id
+  70, "Aanwezig" in the official class 2A ECO, #99). Its statuses are named
+  with the codes of every structure among the classes of the configuration,
+  one `getAllCodes` per distinct structure, each code once by its id
+  (`officialPresenceCodes`); by their code id when the account sees no
+  class with a structure. That is a workaround for yvanvds/dartschool#126,
+  which #101 tracks. Rows per lesson are left out (the library ignores
+  them). When the module lists no pupils, the tool gives the module's reason
   (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
   geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
   de toekomst afwezigheden op te nemen." for a day in the future.
@@ -866,18 +895,19 @@ the other, and the arguments of the writes. In `presence_opt_in.dart`: the
 presence tools behind their switch (`presenceOptIn`). The tests run against
 a fake Presence module (`test/support/fake_presence.dart`) in the shape of
 dartschool's trimmed captures, with fake names: three classes (one the
-account may only view, one grouping class), the codes of a structure
-("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
-half-days of each kind and a registration per lesson. It carries out a save
-on the half-days as the live module did in dartschool#2 and answers it as
-the module's web client reads the answer (the records as stored), can answer
-it without the records, refuse it with the module's error objects, answer it
-with an error page, lose its answer or answer it without carrying it out
-(`nextSaves`). It answers `getClass` as the module did live
-(dartschool#104): every class it knows with its pupils, also one the account
-may only view, and a class without pupils, a class ID it does not know and
-a day after `today` without pupils, with `saveIsAllowed: false` and the
-module's reason.
+account may only view, one grouping class, without codes), the codes of a
+structure ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and
+pupils with half-days of each kind and a registration per lesson; a test
+adds an official class in a second structure with codes of its own. It
+carries out a save on the half-days as the live module did in dartschool#2
+and answers it as the module's web client reads the answer (the records as
+stored), can answer it without the records, refuse it with the module's
+error objects, answer it with an error page, lose its answer or answer it
+without carrying it out (`nextSaves`). It answers `getClass` as the module
+did live (dartschool#104): every class it knows with its pupils, also one
+the account may only view, and a class without pupils, a class ID it does
+not know and a day after `today` without pupils, with `saveIsAllowed:
+false` and the module's reason.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in

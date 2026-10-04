@@ -344,7 +344,14 @@ void main() {
       'description': isA<String>(),
       'minItems': 1,
       'items': {
-        'enum': ['lessons', 'assignments', 'empty_lesson_hours', 'other'],
+        'enum': [
+          'lessons',
+          'assignments',
+          'empty_lesson_hours',
+          'meetings',
+          'lesson_free_days',
+          'other',
+        ],
         'type': 'string',
       },
     });
