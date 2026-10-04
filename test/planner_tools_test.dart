@@ -141,6 +141,23 @@ void main() {
       expect(listTool.description, contains('read_planned_element'));
     });
 
+    test('list_planner names the kinds it shows, and says that other holds '
+        'meetings and lesson-free days (#94)', () {
+      final listTool = tools['list_planner']!;
+      expect(
+        listTool.description,
+        contains(
+          'meeting, such as a class council; lesson-free day, such as a '
+          'holiday, which can run over several days; or the planner\'s name '
+          'of another type',
+        ),
+      );
+      expect(
+        (listTool.inputSchema.properties!['types']! as Map)['description'],
+        contains('other (every other kind, meetings and lesson-free days too)'),
+      );
+    });
+
     test('read_planned_element says who reads the private info', () {
       final readTool = tools['read_planned_element']!;
       expect(readTool.inputSchema.required, ['id']);
@@ -462,6 +479,94 @@ void main() {
       );
     });
 
+    group('names meetings and lesson-free days, and counts them by kind '
+        '(#94)', () {
+      // The shapes of the live listing of #71, in the user's own planner,
+      // next to its elements of the captures.
+      setUp(() {
+        for (final element in [fakeMeeting, fakeLessonFreeDay]) {
+          planner.add(element, calendars: ['user/$fakePlannerMe']);
+        }
+      });
+
+      test('a lesson-free day of a week on the day it starts, and a '
+          'meeting', () async {
+        final text = await list({'from': '2026-11-02', 'until': '2026-11-09'});
+        expect(
+          text,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Monday '
+          '2026-11-09: 2 elements (1 meeting, 1 lesson-free day).\n'
+          'Monday 2026-11-02\n'
+          '- whole day until 2026-11-08 | lesson-free day | Herfstvakantie | '
+          'Iedereen | id planned-lesson-free-days/4069/'
+          'e0000000-0000-4000-8000-0000000000b2\n'
+          'Monday 2026-11-09\n'
+          '- 12:00–12:45 | meeting | BKR 6A1 | by Piet Peeters | room '
+          'vergaderzaal | id '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1',
+        );
+      });
+
+      test('after the kinds named before, with the plural for two '
+          'meetings', () async {
+        planner.add(
+          fakeMeeting.inSameHour(
+            id: 'e0000000-0000-4000-8000-0000000000b3',
+            type: 'planned-meetings',
+            name: 'Personeelsvergadering',
+          ),
+          calendars: ['user/$fakePlannerMe'],
+        );
+
+        final text = await list({'from': '2026-11-02', 'until': '2026-11-20'});
+
+        expect(
+          text.split('\n').first,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20: 4 elements (1 empty lesson hour, 2 meetings, 1 '
+          'lesson-free day).',
+        );
+        expect(
+          text,
+          contains(
+            '- 12:00–12:45 | meeting | Personeelsvergadering | by Piet '
+            'Peeters | room vergaderzaal |',
+          ),
+        );
+      });
+
+      test('keeps them under other in types, and counts them by kind there '
+          'too', () async {
+        final text = await list({
+          'from': '2026-11-02',
+          'until': '2026-11-20',
+          'types': ['other'],
+        });
+        expect(planner.calendarQueries.single, isNot(contains('types')));
+        expect(
+          text.split('\n').first,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20 (only other): 2 elements (1 meeting, 1 lesson-free '
+          'day).',
+        );
+        expect(text, isNot(contains('empty lesson hour')));
+
+        planner.requests.clear();
+        final lessonHours = await list({
+          'from': '2026-11-02',
+          'until': '2026-11-20',
+          'types': ['empty_lesson_hours'],
+        });
+        expect(planner.calendarQueries.single['types'], 'planned-placeholders');
+        expect(
+          lessonHours.split('\n').first,
+          'Planner: your own planner (me), from Monday 2026-11-02 to Friday '
+          '2026-11-20 (only empty lesson hours): 1 element (1 empty lesson '
+          'hour).',
+        );
+      });
+    });
+
     group('with types', () {
       Future<String> listTypes(List<String> types) => list({
         'planner': _class6A1,
@@ -750,6 +855,46 @@ void main() {
         'Organised by: Jan Peeters\n'
         'Room: 101',
       );
+    });
+
+    test('names a meeting and a lesson-free day (#94)', () async {
+      for (final element in [fakeMeeting, fakeLessonFreeDay]) {
+        planner.add(element, calendars: ['user/$fakePlannerMe']);
+      }
+
+      expect(
+        await read(fakeMeeting.ref),
+        startsWith(
+          'Planner element '
+          'planned-meetings/4069/e0000000-0000-4000-8000-0000000000b1\n'
+          'Kind: meeting\n'
+          'Name: BKR 6A1\n'
+          'When: Monday 2026-11-09 12:00–12:45\n'
+          'Organised by: Piet Peeters\n'
+          'Room: vergaderzaal\n'
+          '\n'
+          'Public info',
+        ),
+      );
+      expect(
+        await read(fakeLessonFreeDay.ref),
+        startsWith(
+          'Planner element '
+          'planned-lesson-free-days/4069/e0000000-0000-4000-8000-0000000000b2\n'
+          'Kind: lesson-free day\n'
+          'Name: Herfstvakantie\n'
+          'When: Monday 2026-11-02 whole day until 2026-11-08\n'
+          'Classes: Iedereen\n'
+          '\n'
+          'Public info',
+        ),
+      );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-meetings/4069/'
+            'e0000000-0000-4000-8000-0000000000b1',
+        'GET /planner/api/v1/planned-lesson-free-days/4069/'
+            'e0000000-0000-4000-8000-0000000000b2',
+      ]);
     });
 
     test('reads an element of a type the library does not know', () async {

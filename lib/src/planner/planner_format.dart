@@ -111,18 +111,65 @@ String formatElementTime(PlannedElement element) {
       : '${formatPlannerClock(from)} until ${formatPlannerTime(to)}';
 }
 
+/// What a planned element is, as the planner tools name it and count it:
+/// the kinds they name, and [other] for every other type, also one the
+/// library does not know.
+enum PlannedElementKind {
+  lesson('lesson', 'lessons', PlannedElementType.lesson),
+  assignment('assignment', 'assignments', PlannedElementType.assignment),
+  emptyLessonHour(
+    'empty lesson hour',
+    'empty lesson hours',
+    PlannedElementType.placeholder,
+  ),
+
+  /// A meeting, such as a class council (`planned-meetings`, seen live in
+  /// #71).
+  meeting('meeting', 'meetings', PlannedElementType.meeting),
+
+  /// A lesson-free day, such as a holiday (`planned-lesson-free-days`, seen
+  /// live in #71). One element can run over several days: the autumn
+  /// holiday was one element of a week.
+  lessonFreeDay(
+    'lesson-free day',
+    'lesson-free days',
+    PlannedElementType.lessonFreeDay,
+  ),
+
+  /// Every other type. A line names it by the planner's name for it
+  /// ([formatElementKind]).
+  other('other', 'other', null);
+
+  const PlannedElementKind(this.singular, this.plural, this.type);
+
+  final String singular;
+  final String plural;
+
+  /// The element type, or null for [other].
+  final PlannedElementType? type;
+
+  /// The kind of [element].
+  static PlannedElementKind of(PlannedElement element) => values.firstWhere(
+    (kind) => kind.type == element.type,
+    orElse: () => other,
+  );
+
+  /// `1 meeting`, `2 meetings`.
+  String count(int count) => '$count ${count == 1 ? singular : plural}';
+}
+
 /// What [element] is: `lesson`, `assignment KO Kleine Overhoring` (with its
-/// type), `empty lesson hour`, or the planner's name of any other type
-/// (`planned-school-activities`).
-String formatElementKind(PlannedElement element) => switch (element.type) {
-  PlannedElementType.lesson => 'lesson',
-  PlannedElementType.assignment => [
-    'assignment',
-    if (element.assignmentType case final type?) formatAssignmentType(type),
-  ].where((part) => part.isNotEmpty).join(' '),
-  PlannedElementType.placeholder => 'empty lesson hour',
-  _ => element.typeName,
-};
+/// type), `empty lesson hour`, `meeting`, `lesson-free day`, or the
+/// planner's name of any other type (`planned-school-activities`).
+String formatElementKind(PlannedElement element) =>
+    switch (PlannedElementKind.of(element)) {
+      PlannedElementKind.assignment => [
+        'assignment',
+        if (element.assignmentType case final type?) formatAssignmentType(type),
+      ].where((part) => part.isNotEmpty).join(' '),
+      PlannedElementKind.other => element.typeName,
+      final kind => kind.singular,
+    };
 
 /// [type], an assignment type, as the planner shows it: its abbreviation and
 /// name, `KO Kleine Overhoring`, or the one it has.

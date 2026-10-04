@@ -14,30 +14,26 @@ const defaultPlannerDays = 7;
 const maxPlannerLines = 200;
 
 /// The kinds of element `list_planner` can be limited to (its `types`).
+///
+/// The header counts the elements by the finer [PlannedElementKind].
 enum PlannerKind {
-  lessons('lessons', 'lesson', 'lessons', PlannedElementType.lesson),
-  assignments(
-    'assignments',
-    'assignment',
-    'assignments',
-    PlannedElementType.assignment,
-  ),
+  lessons('lessons', 'lessons', PlannedElementType.lesson),
+  assignments('assignments', 'assignments', PlannedElementType.assignment),
   emptyLessonHours(
     'empty_lesson_hours',
-    'empty lesson hour',
     'empty lesson hours',
     PlannedElementType.placeholder,
   ),
 
-  /// Every other type, also one the library does not know.
-  other('other', 'other', 'other', null);
+  /// Every other type: meetings and lesson-free days too, and a type the
+  /// library does not know.
+  other('other', 'other', null);
 
-  const PlannerKind(this.argument, this.singular, this.plural, this.type);
+  const PlannerKind(this.argument, this.plural, this.type);
 
   /// The name in the `types` argument.
   final String argument;
 
-  final String singular;
   final String plural;
 
   /// The element type, or null for [other].
@@ -48,9 +44,6 @@ enum PlannerKind {
     (kind) => kind.type == element.type,
     orElse: () => other,
   );
-
-  /// `1 lesson`, `2 lessons`.
-  String count(int count) => '$count ${count == 1 ? singular : plural}';
 }
 
 /// `list_planner`: what is planned in a planner (the user's own, or that of
@@ -71,9 +64,12 @@ ServerTool listPlannerTool(
         'one line per element: the time (for an assignment, its deadline), '
         'the kind (lesson; assignment with its type, such as "KO Kleine '
         'Overhoring"; empty lesson hour, an hour of the timetable without a '
-        'lesson; or another planner type), the name, course, classes, who '
-        'planned it, the room, and the id for read_planned_element. A class '
-        'planner holds the elements of everyone who teaches the class: each '
+        'lesson; meeting, such as a class council; lesson-free day, such as '
+        'a holiday, which can run over several days; or the planner\'s name '
+        'of another type, such as planned-excursions), the name, course, '
+        'classes, who planned it, the room, and the id for '
+        'read_planned_element. A class planner holds the elements of '
+        'everyone who teaches the class: each '
         'of their timetable hours shows as an empty lesson hour until a '
         'lesson fills it. To see whether a room is free, list its planner for '
         'that day. A long period is fine, but at most $maxPlannerLines lines '
@@ -103,7 +99,8 @@ ServerTool listPlannerTool(
           description:
               'Only these kinds: lessons, assignments (tests, tasks), '
               'empty_lesson_hours (hours of the timetable without a lesson) '
-              'and/or other. Default: all.',
+              'and/or other (every other kind, meetings and lesson-free days '
+              'too). Default: all.',
           values: [for (final kind in PlannerKind.values) kind.argument],
           minItems: 1,
         ),
@@ -190,7 +187,8 @@ const unnamedPlannerNote =
     'you expected elements, check the planner id with search_planners.';
 
 /// What `list_planner` answers: a header with the planner, the period and
-/// the counts, then the [elements] of [kinds] per day, at most
+/// the counts by kind ([PlannedElementKind]: a meeting counts as a meeting,
+/// not as other), then the [elements] of [kinds] per day, at most
 /// [maxPlannerLines].
 ///
 /// [elements] are every element read, also those of other kinds than
@@ -228,9 +226,9 @@ String formatPlannerList({
   }
 
   final counts = [
-    for (final kind in PlannerKind.values)
-      if (listed.where((e) => PlannerKind.of(e) == kind).length case final count
-          when count > 0)
+    for (final kind in PlannedElementKind.values)
+      if (listed.where((e) => PlannedElementKind.of(e) == kind).length
+          case final count when count > 0)
         kind.count(count),
   ];
   final sorted = sortedByTime(listed);

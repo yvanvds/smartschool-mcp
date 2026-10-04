@@ -352,14 +352,20 @@ client name. It also installs again while that copy runs.
 - `list_planner`: what is planned in a planner (`me`, the default, or a
   planner id) in a period (`from` and `until`, today to 7 days ahead by
   default), optionally only some kinds (`types`: lessons, assignments,
-  empty lesson hours, other). Per day, in date order, one line per element:
-  the time (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the
-  kind (an assignment with its type, such as `KO Kleine Overhoring`), name,
-  course, classes, organiser (left out in the user's own planner), rooms
-  and the element id. A class planner holds a timetable slot for every
-  teacher of every hour (32 in one week of a class seen live), so at most
-  200 elements are shown, with a note on how to narrow down; the request
-  itself may span a school year. The header names a planner other than
+  empty lesson hours, other; other holds meetings and lesson-free days
+  too). Per day, in date order, one line per element: the time
+  (`10:20–11:10`, or `08:30 (deadline)` for an assignment), the kind
+  (lesson, an assignment with its type, such as `KO Kleine Overhoring`,
+  empty lesson hour, meeting, lesson-free day, or the planner's type name
+  of any other type, such as `planned-excursions`), name, course,
+  classes, organiser (left out in the user's own planner), rooms and the
+  element id. The header counts the elements by those kinds. A
+  lesson-free day can run over several days (the autumn holiday seen live
+  was one element of a week) and is listed on the day it starts. A class
+  planner holds a timetable slot for every teacher of every hour (32 in
+  one week of a class seen live), so at most 200 elements are shown, with
+  a note on how to narrow down; the request itself may span a school
+  year. The header names a planner other than
   `me` from the elements read (the class, person or room they name). When
   nothing is planned there, the planner cannot be named, and Smartschool
   answers a planner id that names no planner the same way, without an

@@ -1484,6 +1484,46 @@ final fakeOwnLesson = FakePlannedElement(
   publicInfo: '<p>Breng je laptop mee.</p>',
 );
 
+// ---------------------------------------------------------------------------
+// Types seen live that the captures do not have
+// ---------------------------------------------------------------------------
+
+/// The meeting room of the live meeting of #71.
+const fakeMeetingRoom = FakePlannerRoom(
+  '10000000-0000-4000-8000-000000000201',
+  'vergaderzaal',
+);
+
+/// Everyone at the school: the group of the live lesson-free day of #71.
+const fakeEveryone = FakePlannerGroup('4069_1000', 'Iedereen');
+
+/// A meeting (`planned-meetings`) in the shape of the live listing of #71,
+/// anonymised: a class council (`BKR`) of 45 minutes, organised by a
+/// colleague, in the meeting room, without classes or a course.
+final fakeMeeting = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-0000000000b1',
+  type: 'planned-meetings',
+  name: 'BKR 6A1',
+  from: plannerTime(2026, 11, 9, 12, 0),
+  to: plannerTime(2026, 11, 9, 12, 45),
+  organisers: [fakePiet],
+  rooms: [fakeMeetingRoom],
+);
+
+/// A lesson-free day (`planned-lesson-free-days`) in the shape of the live
+/// listing of #71: the autumn holiday, one whole-day element from Monday
+/// 2026-11-02 to Sunday 2026-11-08, for everyone, without an organiser (its
+/// live line named none).
+final fakeLessonFreeDay = FakePlannedElement(
+  id: 'e0000000-0000-4000-8000-0000000000b2',
+  type: 'planned-lesson-free-days',
+  name: 'Herfstvakantie',
+  from: plannerTime(2026, 11, 2),
+  to: plannerTime(2026, 11, 8, 23, 59, 59),
+  wholeDay: true,
+  groups: [fakeEveryone],
+);
+
 /// The captures, served by [FakePlanner.loadCaptures].
 extension FakePlannerCaptures on FakePlanner {
   /// Serves dartschool's captures: the week of 6A1 in its class planner,
