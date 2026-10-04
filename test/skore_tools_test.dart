@@ -218,13 +218,13 @@ void main() {
       );
     });
 
-    test('says when Skore lists no classes at all', () async {
+    test('says when Skore lists no classes at all, without blaming the '
+        'rights, which Skore refuses instead (dartschool#91)', () async {
       skore.models.clear();
       expect(
         await ok('list_skore_classes'),
         'Skore lists no classes in its report models. A school without '
-        'report models in Skore has none; an account without the rights for '
-        'score management in Skore may also get an empty list.',
+        'report models in Skore has none.',
       );
     });
   });
@@ -409,6 +409,15 @@ void main() {
       expect(skore.calls, ['POST $fakeSkoreOwnersRpcPath getTeachers']);
     });
 
+    test('says when Skore lists no teachers at all, without blaming the '
+        'rights, which Skore refuses instead (dartschool#91)', () async {
+      skore.teachers.clear();
+      expect(
+        await ok('list_skore_teachers'),
+        'Skore lists no teachers that can be assigned.',
+      );
+    });
+
     test('finds a teacher by name in any order, ignoring case and '
         'accents', () async {
       expect(
@@ -432,44 +441,64 @@ void main() {
       'list_skore_teachers': <String, Object?>{},
     };
 
-    test('refused by Skore (HTTP 403): every tool says that the account has '
-        'no rights for score management, which rights it needs and what to '
-        'do, without quoting the page', () async {
-      skore.refusal = SkoreRefusal.forbidden;
+    const noRights =
+        'This account has no rights for score management in Skore: Skore '
+        'refused it its report management (Rapporten > Modellen). The Skore '
+        'tools need $_rightsAndFix: $_fix.';
 
-      for (final MapEntry(key: tool, value: arguments) in calls.entries) {
-        expect(
-          await error(tool, arguments),
-          'This account has no rights for score management in Skore: Skore '
-          'refused it its report management (Rapporten > Modellen). The '
-          'Skore tools need $_rightsAndFix: $_fix.',
-          reason: tool,
-        );
-      }
-      expect(skore.calls, hasLength(3));
-    });
-
-    test('answered with a page instead of data, as such an account most '
-        'likely is (dartschool#91): every tool says that the account usually '
-        'lacks the rights, without quoting the page or calling it '
-        'unexpected', () async {
-      skore.refusal = SkoreRefusal.page;
+    test('sent on to the start page, as Skore answered such an account live '
+        '(dartschool#91; a GET followed, a POST not): every tool says that '
+        'the account has no rights for score management, which rights it '
+        'needs and what to do, without quoting the page', () async {
+      skore.refusal = SkoreRefusal.startPage;
 
       for (final MapEntry(key: tool, value: arguments) in calls.entries) {
         final text = await error(tool, arguments);
-        expect(
-          text,
-          'Skore gave an answer the server could not use; usually the '
-          'account lacks $_rightsAndFix. If so, $_fix. Otherwise try again '
-          'in a moment; the technical details are in the server log.',
-          reason: tool,
-        );
-        expect(text, isNot(contains(fakeSkoreNoAccessName)), reason: tool);
-        expect(text, isNot(contains('Geen toegang')), reason: tool);
-        expect(text, isNot(contains('unexpected')), reason: tool);
+        expect(text, noRights, reason: tool);
+        expect(text, isNot(contains(fakeDisplayName)), reason: tool);
       }
+      expect(skore.calls, [
+        'GET $fakeSkoreModelsPath',
+        'GET $fakeSkoreOwnersPagePath',
+        'POST $fakeSkoreOwnersRpcPath getTeachers',
+      ], reason: 'each sent once: not repeated after logging in again');
+    });
+
+    test('refused by Skore with HTTP 403: the same, without quoting the '
+        'page', () async {
+      skore.refusal = SkoreRefusal.forbidden;
+
+      for (final MapEntry(key: tool, value: arguments) in calls.entries) {
+        final text = await error(tool, arguments);
+        expect(text, noRights, reason: tool);
+        expect(text, isNot(contains(fakeSkoreNoAccessName)), reason: tool);
+      }
+      expect(skore.calls, hasLength(3));
     });
   });
+
+  test(
+    'an answer the server cannot use: every tool says so, without '
+    'quoting the page, calling it unexpected or blaming the rights',
+    () async {
+      skore.unusable = true;
+
+      for (final (tool, arguments) in [
+        ('list_skore_classes', <String, Object?>{}),
+        ('list_skore_courses', <String, Object?>{'class_id': 2516}),
+        ('list_skore_teachers', <String, Object?>{}),
+      ]) {
+        final text = await error(tool, arguments);
+        expect(
+          text,
+          'Skore gave an answer the server could not use. Try again in a '
+          'moment; the technical details are in the server log.',
+          reason: tool,
+        );
+        expect(text, isNot(contains('Oeps')), reason: tool);
+      }
+    },
+  );
 
   test('logs in again when the session expired, for a page and an RPC '
       'call', () async {

@@ -96,7 +96,7 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
-  final FakeSkore skore = FakeSkore();
+  final FakeSkore skore = FakeSkore(startPage: _homePage);
 
   /// The Presence module, served to logged-in requests: empty until a test
   /// fills it (`FakePresence.loadSchool`).

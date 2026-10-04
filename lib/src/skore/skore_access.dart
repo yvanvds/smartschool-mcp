@@ -53,7 +53,10 @@ Future<T> withSkore<T>(
 /// [rereadSkoreClass]).
 ///
 /// - [SmartschoolSkoreAccessDeniedError]: Skore refused the request to the
-///   account (HTTP 403), which lacks the rights for that part of Skore.
+///   account, which lacks the rights for that part of Skore. Skore sends
+///   every request of a teacher without the rights on to Smartschool's
+///   start page (yvanvds/dartschool#91); the library also takes HTTP 403 for
+///   it.
 /// - [SmartschoolSkoreMyGroupsError], from a write (`replaceTeacher`): the
 ///   current teacher of the assignment, named as the library read them
 ///   (dartschool#102; by id only when the error has no name), works with
@@ -65,13 +68,11 @@ Future<T> withSkore<T>(
 ///   library writes from what it read and quotes nothing else of Skore's
 ///   answers, is the reason passed on, with [reread], so that Claude can
 ///   correct the call.
-/// - Any other [SmartschoolSkoreError]: an answer the server cannot use.
-///   What Skore answers an account without the rights has not been
-///   captured yet (yvanvds/dartschool#91): it most likely ends up here (an
-///   HTML page instead of data), not as the error above. So, until it is,
-///   the message says that the account usually lacks the rights (a
-///   workaround; its removal is #74). The library's message can quote
-///   Skore's page, which may hold names, so it goes to the log only.
+/// - Any other [SmartschoolSkoreError]: an answer the server cannot use
+///   (an error page, data in an unknown shape). Not missing rights, which
+///   the library reports from every call as the first error above. The
+///   library's message can quote Skore's page, which may hold names, so it
+///   goes to the log only.
 ///
 /// A write that went out without Skore confirming it
 /// ([SmartschoolSkoreSaveUnconfirmedError], deliberately not a
@@ -114,10 +115,9 @@ ToolError? skoreToolError(
       );
     case SmartschoolSkoreError():
       log('skore: $error');
-      return ToolError(
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $skoreRights. If so, ${_fix(source)}. Otherwise try again in '
-        'a moment; the technical details are in the server log.',
+      return const ToolError(
+        'Skore gave an answer the server could not use. Try again in a '
+        'moment; the technical details are in the server log.',
       );
   }
   return null;
@@ -136,17 +136,22 @@ String _refusal(String message) {
 }
 
 /// What the Skore tools say when Skore refused [area] to the account.
-String skoreAccessDenied(SkoreAccessArea area, CredentialSource source) {
-  final part = switch (area) {
-    SkoreAccessArea.reportManagement =>
-      'report management (Rapporten > Modellen)',
-    SkoreAccessArea.gradebookManagement =>
-      'gradebook management (Puntenboeken)',
-  };
-  return 'This account has no rights for score management in Skore: Skore '
-      'refused it its $part. The Skore tools need $skoreRights: '
-      '${_fix(source)}.';
-}
+String skoreAccessDenied(SkoreAccessArea area, CredentialSource source) =>
+    _noRights([area], source);
+
+/// That the account has no rights for score management, as Skore refused
+/// it the parts of Skore in [refused].
+String _noRights(List<SkoreAccessArea> refused, CredentialSource source) =>
+    'This account has no rights for score management in Skore: Skore '
+    'refused it its ${refused.map(_part).join(' and its ')}. The Skore '
+    'tools need $skoreRights: ${_fix(source)}.';
+
+/// [area] as the messages name it.
+String _part(SkoreAccessArea area) => switch (area) {
+  SkoreAccessArea.reportManagement =>
+    'report management (Rapporten > Modellen)',
+  SkoreAccessArea.gradebookManagement => 'gradebook management (Puntenboeken)',
+};
 
 /// What the user does about missing rights, to end a sentence with.
 String _fix(CredentialSource source) =>
@@ -154,31 +159,35 @@ String _fix(CredentialSource source) =>
     '${source.name(Setting.skore)} ${source.where}, then ${source.restart}';
 
 /// Whether the account can use the Skore tools, for `smartschool_status`:
-/// one cheap read, the teachers Skore lets assign
-/// ([SkoreService.getTeachers]).
+/// the library's check of each part of Skore ([SkoreService.checkAccess]),
+/// with one small read per part: the teachers (report management) and the
+/// account's own gradebooks (gradebook management).
 ///
-/// An answer Skore refuses or the server cannot use is no access, with the
-/// message the tools give. So is an empty list of teachers: a school's
-/// Skore always has teachers, and an account without the rights may get an
-/// empty answer (yvanvds/dartschool#91; a workaround, its removal is #74).
+/// Access when Skore lets the account use both parts, as the tools need
+/// ([skoreRights]); no access when it refuses it either or both, as it
+/// refuses every request of a teacher without the rights (seen live,
+/// yvanvds/dartschool#91).
 ///
-/// Throws a `SmartschoolProblem` when it cannot log in or reach
-/// Smartschool.
+/// Throws a [ToolError] when Skore gives an answer the server cannot use,
+/// which is not taken for missing rights ([skoreToolError]), and a
+/// `SmartschoolProblem` when it cannot log in or reach Smartschool.
 Future<AccessCheck> checkSkoreAccess(SmartschoolSession session) async {
-  final List<SkoreTeacher> teachers;
-  try {
-    teachers = await withSkore(session, (skore) => skore.getTeachers());
-  } on ToolError catch (error) {
-    return AccessCheck.denied(error.message);
-  }
-  if (teachers.isEmpty) {
-    return AccessCheck.denied(
-      'Skore lists no teachers that can be assigned, as it may for an '
-      'account without $skoreRights. If so, ${_fix(session.source)}.',
+  final usable = await withSkore(session, (skore) => skore.checkAccess());
+  final refused = [
+    for (final area in SkoreAccessArea.values)
+      if (!usable.contains(area)) area,
+  ];
+  if (refused.isEmpty) {
+    return const AccessCheck.granted(
+      'Skore lets it use both Rapporten > Modellen and Puntenboeken',
     );
   }
-  return AccessCheck.granted(
-    'Skore lists ${teachers.length} '
-    '${teachers.length == 1 ? 'teacher' : 'teachers'} that can be assigned',
+  final source = session.source;
+  if (usable.isEmpty) return AccessCheck.denied(_noRights(refused, source));
+  return AccessCheck.denied(
+    'This account has only part of the rights for score management in '
+    'Skore: Skore lets it use its ${usable.map(_part).join(' and its ')}, '
+    'but refused it its ${refused.map(_part).join(' and its ')}. The Skore '
+    'tools need $skoreRights: ${_fix(source)}.',
   );
 }

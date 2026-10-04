@@ -657,19 +657,19 @@ course by id only, and for a replace not the teacher it had
 (yvanvds/dartschool#120, tracked in #90). Removing an assignment, choosing
 its pupils and Skore's import of assignments are not offered.
 
-Skore refusing a request to the account (HTTP 403,
-`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
+Skore refusing a request to the account
+(`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
 rights, with the part of Skore it was refused, what rights are needed, and
 to ask the school's Smartschool administrator for them or turn
-"Skore-beheer" off. What Skore really answers such an account has not been
-captured yet (yvanvds/dartschool#91): most likely a page instead of data,
-which the library reports as a plain `SmartschoolSkoreError`. Until then,
-any other `SmartschoolSkoreError` is reported as "Skore gave an answer the
-server could not use; usually the account lacks the rights", with the same
-advice; the library's message goes to the log only, as it can quote the
-page. From a write, each of these errors also says that nothing was changed
-in Skore. #74 tracks dropping that hedge once dartschool#91 is done, and #75
-the live check.
+"Skore-beheer" off. Skore sends every request of a teacher without the
+rights on to Smartschool's start page (seen live, yvanvds/dartschool#91),
+never with an empty list, and the library reports that from every call as
+that error (as it does HTTP 403). Any other `SmartschoolSkoreError` is an
+answer the server could not use, and is reported as such, with "try again
+in a moment"; the library's message goes to the log only, as it can quote
+the page. From a write, each of these errors also says that nothing was
+changed in Skore. What Skore answers a pupil, and an account with only one
+of the two parts of the rights, was not captured.
 
 The presence tools are offered only when the switch "Aanwezigheden" is on
 (see *Opt-in tools* below): they need the right to record half-day
@@ -867,10 +867,12 @@ gradebook, a course or a teacher in a sentence, and the `query` filter
 switch (`skoreOptIn`). The tests run against a fake Skore
 (`test/support/fake_skore.dart`) that serves the endpoints `SkoreService`
 reads, in the shape of dartschool's anonymised captures, with fake names;
-it can refuse an account without the rights with HTTP 403 or with a page
-instead of data, for every request or only for some services
-(`refusedPaths`). It carries out the save of an assignment (`saveOwner`) and
-answers `getMyGroups` as the live Skore did in dartschool#71; it gives a
+it can refuse an account without the rights by sending the request on to
+the start page, as Skore did live (dartschool#91), or with HTTP 403, for
+every request or only for some services (`refusedPaths`), and answer with
+an error page instead of data (`unusable`). It carries out the save of an
+assignment (`saveOwner`) and answers `getMyGroups` as the live Skore did in
+dartschool#71; it gives a
 teacher's gradebooks, one per assignment, with their shares (`getCourses`
 of the gradebooks service), and carries out the save of their shares
 (`saveShared`) as the live Skore did in dartschool#74. It can lose the
@@ -938,11 +940,15 @@ variable when it is set and not empty, else the credentials file's key.
 counts as off, and `smartschool_status` says so.
 
 `smartschool_status` has a line per switch: off, with how to turn it on and
-for whom; or on, with whether the account has the rights, checked with one
+for whom; or on, with whether the account has the rights, checked with a
 cheap read once the connection works (`OptInTools.checkAccess`; for Skore,
-`getTeachers`, where an empty list of teachers counts as no access too; for
-the presences, `getConfig`, where access means that the account may record
-presences for at least one class).
+the library's `checkAccess`, which reads the teachers for report management
+and the account's own gradebooks for gradebook management: access means
+both parts, and the line names the part an account with only one lacks;
+for the presences, `getConfig`, where access means that the account may
+record presences for at least one class). An answer that cannot tell
+(for Skore, one the server could not use) is reported as access that could
+not be checked.
 Registering the tools only once access is detected
 (`notifications/tools/list_changed`) was not chosen: the server logs in at
 the first tool call, so the tools would show up only later in the

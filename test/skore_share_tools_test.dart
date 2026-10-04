@@ -452,25 +452,39 @@ void main() {
 
     test('an account without the rights: says so, without quoting the '
         'page', () async {
-      skore.refusal = SkoreRefusal.forbidden;
-      expect(
-        await error('list_skore_gradebook_shares', {'teacher_id': 1005}),
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its gradebook management (Puntenboeken). The Skore tools '
-        'need $_rightsAndFix: $_fix.',
-      );
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its gradebook management (Puntenboeken). The Skore tools '
+          'need $_rightsAndFix: $_fix.';
+      // The read of the gradebooks comes first.
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final startPage = await error('list_skore_gradebook_shares', {
+        'teacher_id': 1005,
+      });
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
 
-      skore.refusal = SkoreRefusal.page;
+      skore.refusal = SkoreRefusal.forbidden;
+      final forbidden = await error('list_skore_gradebook_shares', {
+        'teacher_id': 1005,
+      });
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
+    });
+
+    test('an answer the server cannot use: says so, without quoting the page '
+        'or blaming the rights', () async {
+      skore.unusable = true;
       final text = await error('list_skore_gradebook_shares', {
         'teacher_id': 1005,
       });
       expect(
         text,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
+        'Skore gave an answer the server could not use. Try again in a '
         'moment; the technical details are in the server log.',
       );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
+      expect(text, isNot(contains('Oeps')));
     });
   });
 
@@ -727,37 +741,49 @@ void main() {
         'changed, without quoting the page', () async {
       // The tool's read of the teachers comes first: Skore refuses it its
       // report management.
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its report management (Rapporten > Modellen). The Skore '
+          'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.';
+
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final (startPageIsError, startPage) = await share([1001], 'read');
+      expect(startPageIsError, isTrue);
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
+
       skore.refusal = SkoreRefusal.forbidden;
       final (_, forbidden) = await share([1001], 'read');
-      expect(
-        forbidden,
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its report management (Rapporten > Modellen). The Skore '
-        'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
-      );
-
-      skore.refusal = SkoreRefusal.page;
-      final (isError, page) = await share([1001], 'read');
-      expect(isError, isTrue);
-      expect(
-        page,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
-        'moment; the technical details are in the server log. Nothing was '
-        'changed in Skore.',
-      );
-      expect(page, isNot(contains(fakeSkoreNoAccessName)));
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
       expect(skore.calls, [
         _getTeachers,
         _getTeachers,
       ], reason: 'each call refused at its first read');
+      expect(skore.shareSaves, isEmpty);
+    });
+
+    test('an answer the server cannot use: says so, and that nothing was '
+        'changed, without quoting the page or blaming the rights', () async {
+      skore.unusable = true;
+      final (isError, text) = await share([1001], 'read');
+      expect(isError, isTrue);
+      expect(
+        text,
+        'Skore gave an answer the server could not use. Try again in a '
+        'moment; the technical details are in the server log. Nothing was '
+        'changed in Skore.',
+      );
+      expect(text, isNot(contains('Oeps')));
+      expect(skore.calls, [_getTeachers], reason: 'the first read');
     });
 
     test('an account with the rights for report management but not for '
         'gradebook management: the library refuses the first teacher, so '
         'the gradebook is named by its id, and nothing is saved', () async {
       skore
-        ..refusal = SkoreRefusal.forbidden
+        ..refusal = SkoreRefusal.startPage
         ..refusedPaths = {fakeSkoreGradebooksRpcPath};
       final (isError, text) = await share([1001, 1002], 'read');
       expect(isError, isTrue);

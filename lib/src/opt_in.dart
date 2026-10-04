@@ -38,10 +38,13 @@ final class OptInTools {
   /// The tools of the group, in the order they are listed.
   final List<ServerTool> tools;
 
-  /// Checks with one cheap read whether the account has the [rights].
+  /// Checks with a cheap read (for Skore, one per part of Skore) whether the
+  /// account has the [rights].
   ///
   /// Throws a `SmartschoolProblem` when it cannot log in or reach
-  /// Smartschool, as `SmartschoolSession.run` does.
+  /// Smartschool, as `SmartschoolSession.run` does, and a [ToolError] when
+  /// the answer cannot tell whether the account has the rights; the status
+  /// then says that access could not be checked, with its message.
   final Future<AccessCheck> Function() checkAccess;
 
   /// The tools the server offers: [tools] when the switch is on, else none.

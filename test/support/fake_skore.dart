@@ -43,21 +43,23 @@ const fakeSkoreGradebooksRpcPath =
 /// with HTTP 501.
 const fakeSkoreGradebooksRpcMethods = {'getCourses', 'saveShared'};
 
-/// How the fake refuses an account without the rights for score management.
-///
-/// What the live Skore answers such an account has not been captured
-/// (yvanvds/dartschool#91), so the fake can answer both ways the library
-/// tells apart.
+/// How the fake refuses an account without the rights for score management:
+/// both ways the library reports as a `SmartschoolSkoreAccessDeniedError`,
+/// with the part of Skore of the request.
 enum SkoreRefusal {
-  /// HTTP 403 (Forbidden), with a page that names the user: the library's
-  /// `SmartschoolSkoreAccessDeniedError`, the only answer it takes for no
-  /// rights.
-  forbidden,
+  /// Sends the request on to Smartschool's start page, as the live Skore
+  /// answered every read of a teacher without the rights (captured in
+  /// yvanvds/dartschool#91, `test/skore_service_access_test.dart` there): a
+  /// `302` with `Location: /?module=Homepage`, `text/html` and an empty body.
+  /// Like `dart:io`'s `HttpClient`, the fake hands a POST's redirect back
+  /// unfollowed, and gives a GET the page it ends on, the account's start
+  /// page ([FakeSkore.startPage]) with `200`, with the redirect it followed
+  /// in `redirects`.
+  startPage,
 
-  /// A "no access" page that names the user, with HTTP 200, instead of
-  /// data: most likely what such an account gets. The library reports it
-  /// as a plain `SmartschoolSkoreError` (an answer it cannot use).
-  page,
+  /// HTTP 403 (Forbidden), with a page that names the user: the library's
+  /// other answer for no rights (dartschool#83), not seen from Skore.
+  forbidden,
 }
 
 /// How the fake answers a save (`saveOwner`, `saveShared`), for the tests of
@@ -260,6 +262,12 @@ const fakeSkore1B2 = FakeSkoreClass(2378, '1B2');
 /// teachers each is shared with ([shares]), and the save of those shares,
 /// carried out, or not, likewise.
 class FakeSkore {
+  FakeSkore({required this.startPage});
+
+  /// The account's start page, `/?module=Homepage`, where Skore sends a
+  /// request it refuses ([SkoreRefusal.startPage]).
+  final String startPage;
+
   /// The report models, with their groups and classes.
   final List<FakeSkoreModel> models = [];
 
@@ -275,6 +283,12 @@ class FakeSkore {
   /// as report management but not gradebook management
   /// ([fakeSkoreGradebooksRpcPath]).
   Set<String>? refusedPaths;
+
+  /// When true, every request that [refusal] does not refuse is answered
+  /// with Smartschool's error page (with HTTP 200) instead of data: not a
+  /// refusal, but an answer the library cannot use (a plain
+  /// `SmartschoolSkoreError`, whose message quotes the page).
+  bool unusable = false;
 
   /// How the fake answers a save (`saveOwner`, `saveShared`), after
   /// [nextSaves].
@@ -465,11 +479,28 @@ class FakeSkore {
       form: form,
     ));
     if (refusal case final refusal? when refusedPaths?.contains(path) ?? true) {
-      return _html(
-        _noAccessPage,
-        status: refusal == SkoreRefusal.forbidden ? 403 : 200,
-      );
+      return switch ((refusal, options.method)) {
+        (SkoreRefusal.startPage, 'GET') =>
+          _html(startPage)
+            ..redirects = [
+              RedirectRecord(
+                302,
+                'GET',
+                options.uri.resolve(_startPageLocation),
+              ),
+            ],
+        (SkoreRefusal.startPage, _) => ResponseBody.fromString(
+          '',
+          302,
+          headers: {
+            Headers.contentTypeHeader: ['text/html; charset=UTF-8'],
+            'location': [_startPageLocation],
+          },
+        ),
+        (SkoreRefusal.forbidden, _) => _html(_noAccessPage, status: 403),
+      };
     }
+    if (unusable) return _html(_errorPage);
     final query = options.uri.queryParameters;
     switch ((options.method, path)) {
       case ('GET', fakeSkoreModelsPath)
@@ -787,7 +818,11 @@ const _errorPage =
     '<!DOCTYPE html><html><head><title></title></head><body>'
     '<div id="#smscMain"><h1>Oeps, er ging iets mis</h1></div></body></html>';
 
-/// A "no access" page that names the user, as a refusal might.
+/// Where Skore sends every request of an account without the rights, as
+/// captured in dartschool#91.
+const _startPageLocation = '/?module=Homepage';
+
+/// A "no access" page that names the user, as a refusal with HTTP 403 might.
 const fakeSkoreNoAccessName = 'Lena Vermeulen';
 const _noAccessPage =
     '<!DOCTYPE html><html><body><h1>Geen toegang</h1>'

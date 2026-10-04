@@ -420,29 +420,37 @@ void main() {
 
     test('an account without the rights: says so, and that nothing was '
         'changed, without quoting the page', () async {
-      skore.refusal = SkoreRefusal.forbidden;
-      expect(
-        await error('add_skore_teacher', {
-          'class_id': 2516,
-          'course_id': 2142,
-          'teacher_id': 1005,
-        }),
-        'This account has no rights for score management in Skore: Skore '
-        'refused it its report management (Rapporten > Modellen). The Skore '
-        'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.',
-      );
+      const noRights =
+          'This account has no rights for score management in Skore: Skore '
+          'refused it its report management (Rapporten > Modellen). The Skore '
+          'tools need $_rightsAndFix: $_fix. Nothing was changed in Skore.';
 
-      skore.refusal = SkoreRefusal.page;
+      // As Skore answered such an account live (dartschool#91).
+      skore.refusal = SkoreRefusal.startPage;
+      final startPage = await add(2516, 2142, 1005);
+      expect(startPage, noRights);
+      expect(startPage, isNot(contains(fakeDisplayName)));
+
+      skore.refusal = SkoreRefusal.forbidden;
+      final forbidden = await add(2516, 2142, 1005);
+      expect(forbidden, noRights);
+      expect(forbidden, isNot(contains(fakeSkoreNoAccessName)));
+      expect(skore.calls, [_page, _page], reason: 'the first read, refused');
+      expect(skore.saves, isEmpty);
+    });
+
+    test('an answer the server cannot use: says so, and that nothing was '
+        'changed, without quoting the page or blaming the rights', () async {
+      skore.unusable = true;
       final text = await add(2516, 2142, 1005);
       expect(
         text,
-        'Skore gave an answer the server could not use; usually the account '
-        'lacks $_rightsAndFix. If so, $_fix. Otherwise try again in a '
+        'Skore gave an answer the server could not use. Try again in a '
         'moment; the technical details are in the server log. Nothing was '
         'changed in Skore.',
       );
-      expect(text, isNot(contains(fakeSkoreNoAccessName)));
-      expect(skore.calls, [_page, _page], reason: 'the first read, refused');
+      expect(text, isNot(contains('Oeps')));
+      expect(skore.calls, [_page], reason: 'the first read');
     });
 
     group('a save Skore does not confirm is never sent again, and is not '

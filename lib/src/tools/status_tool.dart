@@ -178,6 +178,8 @@ Future<String> _describeOptIn(
         : '$title: on; access: NO. ${check.detail}';
   } on SmartschoolProblem catch (problem) {
     return '$title: on; access could not be checked: ${problem.message}';
+  } on ToolError catch (error) {
+    return '$title: on; access could not be checked: ${error.message}';
   } catch (error, stackTrace) {
     log('smartschool_status: checking $title failed: $error\n$stackTrace');
     return '$title: on; access could not be checked: an unexpected error. '
