@@ -10,7 +10,8 @@ import 'server_tool.dart';
 /// `list_class_presences`: the pupils of one class in Smartschool's
 /// Presence module with what their half-days hold on one day, named with
 /// the codes of the class ([PresenceService.getClassPupils],
-/// [PresenceService.getAllCodes]).
+/// [PresenceService.getAllCodes]); for a grouping class, with those of the
+/// official classes (`officialPresenceCodes`, #99).
 ///
 /// [now] gives today, the default day.
 ServerTool listClassPresencesTool(
@@ -84,11 +85,20 @@ String formatPresenceDay(PresenceDay read) {
       ? 'This account may record presences for this class.'
       : 'This account may only view this class: set_pupils_late and '
             'set_pupils_present refuse it.';
-  final grouping = presenceClass.structId == null
-      ? ' The class is a grouping class without a school structure, so the '
-            "statuses are named by their code id; presences are recorded in "
-            "the pupils' official class."
-      : '';
+  // A grouping class has no codes of its own: its statuses are named with
+  // those of the official classes (#99, officialPresenceCodes).
+  final grouping = switch (presenceClass.structId) {
+    null when read.codes.codes.isNotEmpty =>
+      ' The class is a grouping class without a school structure: the '
+          'statuses are named with the codes of the official classes, and '
+          "presences are recorded in the pupils' official class.",
+    null =>
+      ' The class is a grouping class without a school structure, and this '
+          'account sees no official class whose codes could name the '
+          'statuses, so they are named by their code id; presences are '
+          "recorded in the pupils' official class.",
+    _ => '',
+  };
   if (read.pupils.isEmpty) {
     // The module says why (yvanvds/dartschool#104): a class without pupils,
     // a day in the future.

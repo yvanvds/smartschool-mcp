@@ -40,6 +40,12 @@ const fakePresenceTeLaat = 497;
 const fakePresenceZonderReden = 14;
 const fakePresenceDoktersattest = 479;
 
+/// A second school structure, of class 2A ECO ([fake2AEco]), with codes of
+/// its own (made up): "Aanwezig", the same code as in
+/// [fakePresenceStruct], and "Ziek", which only this structure holds.
+const fakePresenceOtherStruct = 412;
+const fakePresenceZiek = 488;
+
 /// What the module answers `getClass` for a class without pupils, and for a
 /// class ID it does not know (seen live, dartschool#104).
 const fakePresenceNoPupils = 'Deze klas bevat geen leerlingen.';
@@ -172,12 +178,27 @@ const fake1B = FakePresenceClass(
   pupils: [FakePresencePupil(1101, 5101, 'Wouters, Lars')],
 );
 
-/// Class 2A: a grouping class without a school structure.
+/// The pupil of class 2A, with a fake name.
+const fakeMaes = FakePresencePupil(1201, 5201, 'Maes, Finn');
+
+/// Class 2A: a grouping class without a school structure. The module gives
+/// no codes for it (its `structID` is `""`), while its pupils' half-days
+/// hold the codes of their official classes (seen live, #99).
 const fake2A = FakePresenceClass(
   1650,
   '2A  ',
   structId: null,
-  pupils: [FakePresencePupil(1201, 5201, 'Maes, Finn')],
+  pupils: [fakeMaes],
+);
+
+/// Class 2A ECO: the official class of the pupil of 2A, in another school
+/// structure ([fakePresenceOtherStruct]). Not in [FakePresence.loadSchool]:
+/// a test adds it.
+const fake2AEco = FakePresenceClass(
+  1968,
+  '2A ECO  ',
+  structId: fakePresenceOtherStruct,
+  pupils: [fakeMaes],
 );
 
 /// A fake Presence module, served by `FakeSmartschool` to logged-in
@@ -270,7 +291,8 @@ class FakePresence {
   /// [today]. In 1A: Peeters is present in the morning and the afternoon and
   /// has a registration per lesson; Janssens has nothing recorded; Dupont
   /// has a doctor's note in the morning; Claes is late in the morning, with a
-  /// motivation, and late without a valid reason in the afternoon.
+  /// motivation, and late without a valid reason in the afternoon. In 2A:
+  /// Maes is late in the morning and present in the afternoon.
   void loadSchool(String day) {
     today = day;
     classes.addAll(const [fake1A, fake1B, fake2A]);
@@ -301,9 +323,13 @@ class FakePresence {
       91001,
       codeId: fakePresenceTeLaat,
     );
-    halfDays[(1201, day, 'am')] = FakeHalfDay(
+    halfDays[(fakeMaes.userId, day, 'am')] = FakeHalfDay(
       92001,
       codeId: fakePresenceTeLaat,
+    );
+    halfDays[(fakeMaes.userId, day, 'pm')] = FakeHalfDay(
+      92002,
+      codeId: fakePresenceAanwezig,
     );
   }
 
@@ -330,10 +356,13 @@ class FakePresence {
       case fakePresenceCodesPath:
         return _json(
           jsonEncode(
-            int.tryParse(form['structID'] ?? '') == fakePresenceStruct &&
-                    form['ofschoolage'] == 'of_school_age'
-                ? _codes
-                : const [],
+            form['ofschoolage'] != 'of_school_age'
+                ? const []
+                : switch (int.tryParse(form['structID'] ?? '')) {
+                    fakePresenceStruct => _codes,
+                    fakePresenceOtherStruct => _otherCodes,
+                    _ => const [],
+                  },
           ),
         );
       case fakePresenceClassPath:
@@ -637,6 +666,17 @@ class FakePresence {
       'name': 'Doktersattest',
       'alias': [],
     },
+  ];
+
+  /// The codes of [fakePresenceOtherStruct], as `getAllCodes` answers them.
+  static const _otherCodes = [
+    {
+      'codeID': fakePresenceAanwezig,
+      'code': '|',
+      'name': 'Aanwezig',
+      'alias': [],
+    },
+    {'codeID': fakePresenceZiek, 'code': 'Z', 'name': 'Ziek', 'alias': []},
   ];
 
   static ResponseBody _html(String body, {int status = 200}) =>

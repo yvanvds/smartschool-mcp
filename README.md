@@ -677,8 +677,16 @@ first two only read, the last two change the presences of pupils:
   (`getAllCodes`): a code (`"Aanwezig"`, `"Te laat"`, `"Doktersattest"`), an
   alias with its code (`"Te laat zonder geldige reden" (under "Te laat")`),
   or "nothing recorded", with its motivation, and per pupil the pupil id the
-  writes take. Rows per lesson are left out (the library ignores them). When
-  the module lists no pupils, the tool gives the module's reason
+  writes take. A grouping class has no structure, so the module gives no
+  codes for it, while its pupils' half-days hold the codes of their official
+  classes (seen live: every half-day of the grouping class 2A held code id
+  70, "Aanwezig" in the official class 2A ECO, #99). Its statuses are named
+  with the codes of every structure among the classes of the configuration,
+  one `getAllCodes` per distinct structure, each code once by its id
+  (`officialPresenceCodes`); by their code id when the account sees no
+  class with a structure. That is a workaround for yvanvds/dartschool#126,
+  which #101 tracks. Rows per lesson are left out (the library ignores
+  them). When the module lists no pupils, the tool gives the module's reason
   (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
   geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
   de toekomst afwezigheden op te nemen." for a day in the future.
@@ -866,18 +874,19 @@ the other, and the arguments of the writes. In `presence_opt_in.dart`: the
 presence tools behind their switch (`presenceOptIn`). The tests run against
 a fake Presence module (`test/support/fake_presence.dart`) in the shape of
 dartschool's trimmed captures, with fake names: three classes (one the
-account may only view, one grouping class), the codes of a structure
-("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils with
-half-days of each kind and a registration per lesson. It carries out a save
-on the half-days as the live module did in dartschool#2 and answers it as
-the module's web client reads the answer (the records as stored), can answer
-it without the records, refuse it with the module's error objects, answer it
-with an error page, lose its answer or answer it without carrying it out
-(`nextSaves`). It answers `getClass` as the module did live
-(dartschool#104): every class it knows with its pupils, also one the account
-may only view, and a class without pupils, a class ID it does not know and
-a day after `today` without pupils, with `saveIsAllowed: false` and the
-module's reason.
+account may only view, one grouping class, without codes), the codes of a
+structure ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and
+pupils with half-days of each kind and a registration per lesson; a test
+adds an official class in a second structure with codes of its own. It
+carries out a save on the half-days as the live module did in dartschool#2
+and answers it as the module's web client reads the answer (the records as
+stored), can answer it without the records, refuse it with the module's
+error objects, answer it with an error page, lose its answer or answer it
+without carrying it out (`nextSaves`). It answers `getClass` as the module
+did live (dartschool#104): every class it knows with its pupils, also one
+the account may only view, and a class without pupils, a class ID it does
+not know and a day after `today` without pupils, with `saveIsAllowed:
+false` and the module's reason.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message attachments can use it too: `readDocument(bytes, name: ...)` in
