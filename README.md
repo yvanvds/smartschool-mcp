@@ -690,7 +690,8 @@ first two only read, the last two change the presences of pupils:
   (`getConfig`: its allowed classes, and the active class when it is not
   among them; not the placeholder "Uit Planner", class id -2, that the
   module gives as the active class of a teacher without a lesson at the
-  moment, #84, which #85 tracks until dartschool#117 is done), one line per
+  moment, #84, which the library keeps apart as `activePlaceholder`,
+  yvanvds/dartschool#117), one line per
   class with its name, class id (`groupID`), and whether the account may
   record presences for it (`userCanConfirm`: "may record" or "view only";
   not `userCanRecord`, which a teacher without the absence-administrator
