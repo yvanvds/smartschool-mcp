@@ -449,24 +449,23 @@ void main() {
       );
       expect(server.logins, 2);
       // The repeat lists the inbox no more: it checks the message moved
-      // before, and moves the one whose move was refused, after checking
-      // that the inbox still holds it: moveToTrashFrom throws the same when
-      // only its own check after the move failed (yvanvds/dartschool#115).
+      // before, and moves the one whose move was refused without checking
+      // the inbox first. moveToTrashFrom throws a
+      // SmartschoolSessionExpiredError only for a move it did not make; a
+      // move whose check failed is a SmartschoolMoveUncheckedError.
       expect(server.mailbox.actions, [
         _inboxListing,
         _move(101),
         _show(101),
         _show(101),
-        _show(103),
         _move(103),
         _show(103),
       ]);
       expect(trashed(), [101, 103]);
     });
 
-    test('at the check after a move, also after logging in again: the call '
-        'is repeated, checks the message again and does not move it '
-        'again', () async {
+    test('at the check after a move, also after logging in again: checks '
+        'the message again and does not move it again', () async {
       await list();
       server.mailbox.actions.clear();
       server
