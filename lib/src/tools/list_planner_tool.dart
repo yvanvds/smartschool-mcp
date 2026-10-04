@@ -147,10 +147,6 @@ Future<CallToolResult> _list(
     return (calendar, elements);
   });
 
-  final shown = [
-    for (final element in elements)
-      if (kinds == null || kinds.contains(PlannerKind.of(element))) element,
-  ];
   return CallToolResult(
     content: [
       TextContent(
@@ -160,7 +156,7 @@ Future<CallToolResult> _list(
           from: from,
           until: until,
           kinds: kinds,
-          elements: shown,
+          elements: elements,
         ),
       ),
     ],
@@ -180,8 +176,27 @@ Set<PlannerKind>? _kinds(Object? value) {
       : kinds;
 }
 
+/// What `list_planner` answers when nothing is planned in a planner other
+/// than the user's own and no element names it ([plannerName]).
+///
+/// Smartschool answers a planner id that names no planner (such as
+/// `group/4069_1`) as an empty planner, without an error, and the library
+/// cannot name a planner by its id, so the two cannot be told apart
+/// (yvanvds/dartschool#127). A workaround, whose removal is tracked in
+/// #102.
+const unnamedPlannerNote =
+    'Note: with nothing planned, the planner cannot be named, and '
+    'Smartschool answers a planner id that does not exist the same way. If '
+    'you expected elements, check the planner id with search_planners.';
+
 /// What `list_planner` answers: a header with the planner, the period and
-/// the counts, then [elements] per day, at most [maxPlannerLines].
+/// the counts, then the [elements] of [kinds] per day, at most
+/// [maxPlannerLines].
+///
+/// [elements] are every element read, also those of other kinds than
+/// [kinds] (read for [PlannerKind.other]): any of them can name the planner
+/// ([plannerName]). When nothing is planned in a planner other than the
+/// user's own and none of them names it, [unnamedPlannerNote] follows.
 ///
 /// The organisers of an element in the user's own planner leave out the
 /// user.
@@ -201,22 +216,29 @@ String formatPlannerList({
   final only = kinds == null
       ? ''
       : ' (only ${[for (final kind in kinds) kind.plural].join(', ')})';
-  if (elements.isEmpty) {
-    return 'Planner: $who, $period$only: nothing planned.';
+  final listed = [
+    for (final element in elements)
+      if (kinds == null || kinds.contains(PlannerKind.of(element))) element,
+  ];
+  if (listed.isEmpty) {
+    return [
+      'Planner: $who, $period$only: nothing planned.',
+      if (!planner.isMe && name == null) unnamedPlannerNote,
+    ].join('\n');
   }
 
   final counts = [
     for (final kind in PlannerKind.values)
-      if (elements.where((e) => PlannerKind.of(e) == kind).length
-          case final count when count > 0)
+      if (listed.where((e) => PlannerKind.of(e) == kind).length case final count
+          when count > 0)
         kind.count(count),
   ];
-  final sorted = sortedByTime(elements);
+  final sorted = sortedByTime(listed);
   final shown = sorted.take(maxPlannerLines).toList();
   final ownUserId = planner.isMe ? calendar.id : null;
   return [
-    'Planner: $who, $period$only: ${elements.length} '
-        '${elements.length == 1 ? 'element' : 'elements'} '
+    'Planner: $who, $period$only: ${listed.length} '
+        '${listed.length == 1 ? 'element' : 'elements'} '
         '(${counts.join(', ')}).',
     for (final MapEntry(key: day, value: dayElements) in elementsByDay(
       shown,

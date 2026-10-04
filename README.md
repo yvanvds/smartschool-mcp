@@ -359,7 +359,12 @@ client name. It also installs again while that copy runs.
   and the element id. A class planner holds a timetable slot for every
   teacher of every hour (32 in one week of a class seen live), so at most
   200 elements are shown, with a note on how to narrow down; the request
-  itself may span a school year.
+  itself may span a school year. The header names a planner other than
+  `me` from the elements read (the class, person or room they name). When
+  nothing is planned there, the planner cannot be named, and Smartschool
+  answers a planner id that names no planner the same way, without an
+  error; the answer then adds a note to check the id with `search_planners`
+  (dartschool#127; a workaround, tracked in #102).
 - `read_planned_element`: one element in full, by its id: what its list
   line says, plus its public and private info as plain text (through
   `htmlToText`, never raw HTML), its labels, the names of its attachments

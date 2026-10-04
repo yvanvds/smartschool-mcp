@@ -708,8 +708,8 @@ class FakePlannerHit {
 /// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
 ///   `from`, `to` and an optional `types`: the elements added to that
 ///   calendar that overlap the period, of those types. A calendar it does
-///   not know is answered with `400`, as the planner answers an id it
-///   refuses;
+///   not know is answered as an empty one (`[]`), as the live planner
+///   answered a planner id that names no planner (`group/4069_1`, #93);
 /// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
 ///   detail, or the planner's `404` for an element it does not have;
 /// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
@@ -728,7 +728,7 @@ class FakePlannerHit {
 ///   [courseList].
 ///
 /// The workload calls answer `400` for a class the fake does not know (one
-/// of no element or calendar), as the calendars do.
+/// of no element or calendar).
 ///
 /// And the writes of dartschool#87, which change what it serves as the live
 /// planner did (the request bodies are recorded as sent, for the tests to
@@ -1296,8 +1296,7 @@ class FakePlanner {
   }
 
   ResponseBody _calendar(String calendar, Map<String, String> query) {
-    final listed = calendars[calendar];
-    if (listed == null) return _badRequest();
+    final listed = calendars[calendar] ?? const <FakePlannedElement>[];
     final from = DateTime.parse(query['from']!);
     final to = DateTime.parse(query['to']!);
     final types = query['types']?.split(',').toSet();

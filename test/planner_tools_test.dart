@@ -399,11 +399,66 @@ void main() {
       );
     });
 
-    test('says when nothing is planned', () async {
+    test('says when nothing is planned, without a note for the user\'s own '
+        'planner', () async {
       expect(
         await list({'from': '2026-12-24', 'until': '2026-12-26'}),
         'Planner: your own planner (me), from Thursday 2026-12-24 to '
         'Saturday 2026-12-26: nothing planned.',
+      );
+    });
+
+    test('says to check the planner id when nothing is planned and the '
+        'planner cannot be named: Smartschool answers an id that names no '
+        'planner as an empty planner (#93)', () async {
+      // group/4069_1 names no planner; the fake answers it as the live
+      // planner did, with an empty list. Piet Peeters has a planner, with
+      // nothing planned in these days.
+      for (final (id, from, until, period) in [
+        (
+          'group/4069_1',
+          '2026-10-05',
+          '2026-10-09',
+          'from Monday 2026-10-05 to Friday 2026-10-09',
+        ),
+        (
+          _piet,
+          '2026-12-24',
+          '2026-12-26',
+          'from Thursday 2026-12-24 to Saturday 2026-12-26',
+        ),
+      ]) {
+        planner.requests.clear();
+
+        final text = await list({'planner': id, 'from': from, 'until': until});
+
+        expect(plannerRequests(), ['GET /planner/api/v1/planned-elements/$id']);
+        expect(
+          text,
+          'Planner: planner $id, $period: nothing planned.\n'
+          'Note: with nothing planned, the planner cannot be named, and '
+          'Smartschool answers a planner id that does not exist the same '
+          'way. If you expected elements, check the planner id with '
+          'search_planners.',
+        );
+      }
+    });
+
+    test('names the planner from the elements of the kinds left out, and '
+        'then needs no note when none of the kinds asked for is planned '
+        '(#93)', () async {
+      // 6A1 has lessons, an assignment and an empty lesson hour from
+      // Monday to Wednesday, and its element of another type on Thursday.
+      final text = await list({
+        'planner': _class6A1,
+        'from': '2026-10-05',
+        'until': '2026-10-07',
+        'types': ['other'],
+      });
+      expect(
+        text,
+        'Planner: planner group/4069_2001 (6A1), from Monday 2026-10-05 to '
+        'Wednesday 2026-10-07 (only other): nothing planned.',
       );
     });
 
@@ -596,7 +651,8 @@ void main() {
 
     test('says when the planner gives an answer it cannot use, without '
         'quoting it', () async {
-      final text = await error('list_planner', {'planner': 'group/4069_9999'});
+      planner.failing['/planner/api/v1/planned-elements/group/4069_2001'] = 400;
+      final text = await error('list_planner', {'planner': _class6A1});
       expect(
         text,
         'The planner gave an answer the server could not use (HTTP 400). Try '
