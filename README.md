@@ -445,12 +445,12 @@ client name. It also installs again while that copy runs.
   courses, visible or hidden in the module, the day it was last changed
   (the module's dates have no offset: Smartschool time) and its id. The
   courses are named as the library names them (`LessonContentCourse.name`,
-  dartschool#101), after the school's course list (one request more, only
-  when a lesfiche listed has a course); a course the list does not name is
-  an "unnamed course". When the course list cannot be read, only the number
-  of courses is shown: `getItems()` would lose the lesfiches then
-  (dartschool#118), so the tool reads the lesfiches without the names and
-  names them itself with the library's parsing (a workaround, #88). A label
+  dartschool#101), after the school's course list (one request more, when
+  any lesfiche has a course); a course the list does not name is an
+  "unnamed course". When the course list cannot be read, the library still
+  gives the lesfiches (`SmartschoolLessonContentCourseListError.items`,
+  dartschool#118), and only the number of courses is shown, with a note
+  when a lesfiche listed has a course. A label
   filter that matches nothing lists the labels there are. At most 200
   lines, with a note to narrow the list. An answer
   of the module the server cannot use (`SmartschoolLessonContentError`) is
