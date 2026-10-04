@@ -8,6 +8,23 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.3.0
+
+- Berichten: nu ook als gelezen of ongelezen markeren, een vlag geven, naar
+  de prullenbak verplaatsen en nieuwe berichten versturen aan personen en
+  groepen (pas na jouw bevestiging).
+- Planner: je eigen planner bekijken en die van klassen, collega's en
+  lokalen. Per dag zien welke toetsen en taken een klas al heeft. Je lesuren
+  invullen met lessen of lesfiches, en toetsen en taken plannen voor je
+  klassen (telkens pas na jouw bevestiging).
+- Skore-beheer: een nieuwe schakelaar voor wie in Skore de rechten heeft voor
+  puntenbeheer. Leerkrachten aan vakken koppelen en puntenboeken delen.
+- Aanwezigheden: een nieuwe schakelaar voor wie de halve-dagaanwezigheden
+  registreert. Leerlingen als te laat of weer als aanwezig markeren.
+- Leerlingen kunnen nu ook inloggen, zonder 2FA-sleutel.
+- De melding van een nieuwe versie geeft een directe downloadlink en zegt wat
+  er nieuw is.
+
 ## 0.2.0
 
 - Werkt nu ook in de ChatGPT-app en in Codex. Download `smartschool-mcp.exe`
