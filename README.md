@@ -491,14 +491,13 @@ client name. It also installs again while that copy runs.
   the date and hour, the type, the name and the info, and to wait for the
   user's confirmation. The library checks the type against the school's
   types again; when the school no longer has it (the types changed since
-  the session read them), the server reads the types again, for every
-  tool on the session, and the error lists them (the library's refusal
-  does not carry them: a workaround for yvanvds/dartschool#119, whose
-  removal is tracked in #89). The library sends the create
-  (`POST planned-assignments/blanco?waitForRefresh=true`, answered `201`)
-  once. The result gives the assignment as saved, with its id. Its name and
-  info change with `edit_planned_element`; its date, type and classes do
-  not change.
+  the session read them), the error lists the types that check read (the
+  library's refusal carries them, dartschool#119), and every tool on the
+  session takes them, without reading them again. The library sends the
+  create (`POST planned-assignments/blanco?waitForRefresh=true`, answered
+  `201`) once. The result gives the assignment as saved, with its id. Its
+  name and info change with `edit_planned_element`; its date, type and
+  classes do not change.
 - `trash_assignment`: moves an assignment of the user's own planner (`id`)
   to the planner's trash (`trashAssignment`, dartschool#89). Smartschool
   keeps it there for 30 days, and it can be restored in Smartschool itself;
@@ -820,8 +819,8 @@ reads an element's detail); the `classes` argument, 1 to a maximum of
 class planner ids (`classPlannersArgument`); the `from` and `until`
 arguments with a default period (`plannerPeriodArguments`); and the
 school's assignment types, read once per session (`AssignmentTypes.of`),
-and again when the library refused a type the school no longer has
-(`reread`). In
+and replaced by those the library's check read when it refused a type the
+school no longer has (`replace`). In
 `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment
 type (`formatAssignmentType`), one line per element (`formatElementLine`),

@@ -638,15 +638,21 @@ void main() {
       'passes on why the library refused the create before sending it: '
       'a type the school no longer has, after the session read the types',
       () async {
+        int typeReads() => [
+          for (final request in planner.requests)
+            if (request.path == fakeAssignmentTypesPath) request,
+        ].length;
+
         // The session reads the school's types once, here.
         await ok('list_class_assignments', {
           'classes': ['group/4069_2001'],
         });
+        expect(typeReads(), 1);
         planner.assignmentTypes.remove(FakeAssignmentType.ko);
 
-        // In the tool's words, with the school's types as they are now,
-        // which the server reads again (the refusal does not carry them,
-        // yvanvds/dartschool#119).
+        // In the tool's words, with the school's types as they are now: as
+        // the library's check read them, which its refusal carries
+        // (dartschool#119). The server does not read them again.
         expect(
           await error('plan_assignment', {
             'hour': fakeOwnSlot.ref,
@@ -663,8 +669,11 @@ void main() {
           'too. Nothing was changed in the planner.',
         );
         expect(planner.writes, isEmpty);
+        // The session's read and the library's check.
+        expect(typeReads(), 2);
 
-        // Every tool on the session has the types as they are now.
+        // Every tool on the session has the types as they are now, without
+        // reading them.
         expect(
           await ok('list_class_assignments', {
             'classes': ['group/4069_2001'],
@@ -687,6 +696,7 @@ void main() {
           ),
         );
         expect(planner.writes, isEmpty);
+        expect(typeReads(), 2);
       },
     );
 
