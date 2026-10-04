@@ -27,7 +27,8 @@ import 'presence_format.dart';
 //   first that fails. The library reads the class right before each save
 //   and refuses a half-day that holds another status than those
 //   ([changeablePresenceNames] as its `onlyReplacing`, dartschool#105): one
-//   that changed meanwhile is not overwritten.
+//   that changed meanwhile is not overwritten. It also refuses a pupil that
+//   read no longer lists (dartschool#116), without sending anything.
 // - The result says per pupil what the half-day holds now, as the module
 //   answered the save (the library returns it, dartschool#105). The class is
 //   read once more only when the change stopped, or when a save's answer
@@ -388,8 +389,13 @@ PresenceHalfDay? _cell(PresencePupil pupil, DayPart part, String date) =>
 /// action of its own, with the library's `setLate` or `setPresent`, which
 /// read the class right before the save and refuse a half-day that holds
 /// another status than [changeablePresenceNames], such as one that changed
-/// since the read before anything was sent ([readBefore]). [codes] name
-/// what it holds.
+/// since the read before anything was sent ([readBefore]), and a pupil the
+/// class no longer lists on that day. [codes] name what it holds.
+///
+/// Their refusal of a class without `userCanConfirm`
+/// (`SmartschoolPresenceNoConfirmRightError`) does not arise here: the
+/// server refused such a class before anything was sent, and the library
+/// goes by the configuration that read kept ([PresenceServices]).
 Future<_Step> _changeOne(
   SmartschoolSession session,
   PresenceServices services, {
@@ -435,6 +441,8 @@ Future<_Step> _changeOne(
       '${codes.describe(refused.halfDay)}, which the server never '
       'overwrites.',
     );
+  } on SmartschoolPresencePupilNotFoundError catch (missing) {
+    return _Refused(_notListed(missing, name));
   } on SmartschoolPresenceError catch (error) {
     log('presence: $error');
     return _Failed(_refusedSave(error, name), maybeSaved: false);
@@ -447,6 +455,20 @@ Future<_Step> _changeOne(
       maybeSaved: true,
     );
   }
+}
+
+/// Why the change for [name] stopped when the library's read right before
+/// the save did not list the pupil ([missing], yvanvds/dartschool#116), such
+/// as a pupil whose movement into the class ended: with the module's reason
+/// when it listed no pupils at all.
+String _notListed(SmartschoolPresencePupilNotFoundError missing, String name) {
+  final listedNone = switch (missing.errorMessage) {
+    final reason? =>
+      ' The Presence module now lists no pupils for it: '
+          '${formatModuleReason(reason)}',
+    null => '',
+  };
+  return '$name is no longer listed in the class on that day.$listedNone';
 }
 
 /// Why the change for [name] failed with [error]: the module's reason when

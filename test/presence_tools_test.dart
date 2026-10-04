@@ -966,38 +966,66 @@ void main() {
     });
   });
 
-  test('a pupil no longer listed right before the save: the change stops, '
-      'and the class read afterwards shows it', () async {
-    // The 2nd read of the class is the library's, right before the first
-    // pupil's save.
-    presence.onGetClass = (count) {
-      if (count == 2) {
-        presence.classes[0] = const FakePresenceClass(
-          298,
-          '1A  ',
-          pupils: [fakeJanssens, fakeDupont, fakeClaes],
-        );
-      }
-    };
+  group('a pupil the library no longer finds in the class right before the '
+      'save: the change stops there, says so, and the class read afterwards '
+      'shows it (dartschool#116)', () {
+    test('the class lists the other pupils', () async {
+      // The 2nd read of the class is the library's, right before the first
+      // pupil's save.
+      presence.onGetClass = (count) {
+        if (count == 2) {
+          presence.classes[0] = const FakePresenceClass(
+            298,
+            '1A  ',
+            pupils: [fakeJanssens, fakeDupont, fakeClaes],
+          );
+        }
+      };
 
-    final text = await error('set_pupils_late', write([1001, 1002]));
+      final text = await error('set_pupils_late', write([1001, 1002]));
 
-    // The library does not tell a pupil it cannot find from a refusal of
-    // the module (yvanvds/dartschool#116, tracked in #83).
-    expect(
-      text,
-      'Setting "Te laat" for $_morning stopped at Peeters, Lotte (pupil id '
-      '1001):\n'
-      '- Peeters, Lotte (pupil id 1001): not changed (see below); no longer '
-      'listed in the class\n'
-      '- Janssens, Emma (pupil id 1002): not tried; now: nothing recorded\n'
-      "Smartschool's Presence module refused the change for Peeters, Lotte "
-      '(pupil id 1001), or a read right before it; the technical details are '
-      'in the server log.\n'
-      'The pupils listed after them were not tried.',
-    );
-    expect(presence.calls, [..._readFirst, _getClass, _getClass]);
-    expect(presence.saves, isEmpty);
+      expect(
+        text,
+        'Setting "Te laat" for $_morning stopped at Peeters, Lotte (pupil id '
+        '1001):\n'
+        '- Peeters, Lotte (pupil id 1001): not changed (see below); no longer '
+        'listed in the class\n'
+        '- Janssens, Emma (pupil id 1002): not tried; now: nothing recorded\n'
+        'Peeters, Lotte (pupil id 1001) is no longer listed in the class on '
+        'that day. Nothing was saved for them.\n'
+        'The pupils listed after them were not tried.',
+      );
+      expect(presence.calls, [..._readFirst, _getClass, _getClass]);
+      expect(presence.saves, isEmpty);
+    });
+
+    test("the class lists no pupils at all: with the module's reason", () async {
+      // The 2nd read of the class is the library's, right before the first
+      // pupil's save.
+      presence.onGetClass = (count) {
+        if (count == 2) {
+          presence.classes[0] = const FakePresenceClass(298, '1A  ');
+        }
+      };
+
+      final text = await error('set_pupils_present', write([1002, 1004]));
+
+      expect(
+        text,
+        'Setting "Aanwezig" for $_morning stopped at Janssens, Emma (pupil id '
+        '1002):\n'
+        '- Janssens, Emma (pupil id 1002): not changed (see below); no longer '
+        'listed in the class\n'
+        '- Claes, Mila (pupil id 1004): not tried; no longer listed in the '
+        'class\n'
+        'Janssens, Emma (pupil id 1002) is no longer listed in the class on '
+        'that day. The Presence module now lists no pupils for it: "Deze klas '
+        'bevat geen leerlingen." Nothing was saved for them.\n'
+        'The pupils listed after them were not tried.',
+      );
+      expect(presence.calls, [..._readFirst, _getClass, _getClass]);
+      expect(presence.saves, isEmpty);
+    });
   });
 
   test('a session Smartschool refuses for the save: the library logs in '

@@ -745,8 +745,11 @@ left alone, as that read shows. For each other pupil, `setLate` and
 `setPresent` get those four statuses as their `onlyReplacing`
 (yvanvds/dartschool#105): the library reads the class right before the save
 and refuses a half-day that changed to another status meanwhile, without
-sending anything. They stop at the first pupil that fails (refused, a save
-the module refused, a login or connection failure). The result says per
+sending anything. It also refuses a pupil that read no longer lists, with
+its own error (yvanvds/dartschool#116): the result says the pupil is no
+longer listed in the class on that day, with the module's reason when it
+lists no pupils at all. They stop at the first pupil that fails (refused,
+a save the module refused, a login or connection failure). The result says per
 pupil whether the status was set (and what the half-day held right before),
 the pupil already had it, or was not changed or not tried, and what the
 half-day holds now: as the module answered the save, which the library
