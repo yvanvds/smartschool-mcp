@@ -121,17 +121,30 @@ Future<CallToolResult> _replace(
       ],
     );
   } on SmartschoolSkoreSaveUnconfirmedError catch (error) {
-    // The course by id only, and not the teacher the assignment had: the
-    // error carries nothing of what the library read (dartschool#120).
+    // The course and the teacher the assignment had, as the library read
+    // them before the save, from its error (dartschool#120). Caught as the
+    // base type, so that a save Skore did not confirm is never reported as an
+    // unexpected error: by id for an error without them, which replaceTeacher
+    // does not throw.
+    final (course, had) = switch (error) {
+      SmartschoolSkoreAssignmentSaveUnconfirmedError(
+        :final course,
+        :final replaced,
+      ) =>
+        (formatSkoreCourseName(course), replaced),
+      _ => ('course id $courseId', null),
+    };
     return skoreWriteNotConfirmed(
       tool: 'replace_skore_teacher',
       what:
-          'Giving assignment $assignmentId on course id $courseId of class id '
-          '$classId teacher id $teacherId',
+          'Giving assignment $assignmentId on $course of class id $classId '
+          'teacher id $teacherId${_insteadOf(had)}',
       check:
           'read the class with list_skore_courses (class_id $classId): when '
           'assignment $assignmentId has teacher id $teacherId, it was saved; '
-          'when it still has the teacher it had, nothing was saved',
+          'when it still has '
+          '${had == null ? 'the teacher it had' : formatSkoreTeacherOf(had)}, '
+          'nothing was saved',
       error: error,
     );
   }

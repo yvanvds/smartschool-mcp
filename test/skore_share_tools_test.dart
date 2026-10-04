@@ -28,13 +28,14 @@ const _getTeachers = 'POST $fakeSkoreOwnersRpcPath getTeachers';
 const _toolReads = [_getTeachers];
 
 /// Gradebook 34826 of the fake school in a sentence, as named from the
-/// library's first result.
+/// library's first result, or from its error when the save for the first
+/// teacher is not confirmed.
 const _digitale =
     'gradebook 34826 ("Digitale vaardigheden", class 5WW1) of Willems, Wim '
     '(teacher id 1005)';
 
 /// Gradebook 34826 by its id, as named when the change stopped at the first
-/// teacher: the library returned nothing to name it from.
+/// teacher before a save: the library gave nothing to name it from.
 const _digitaleById = 'gradebook 34826 of Willems, Wim (teacher id 1005)';
 
 /// What the result says after a check refused the change for [teacher].
@@ -845,15 +846,15 @@ void main() {
         expect(isError, isTrue);
         expect(
           text,
-          // The first teacher's save: no result to name the gradebook from
-          // (dartschool#120).
+          // The first teacher's save: no result, but the gradebook as the
+          // library read it before the save, from its error (dartschool#120).
           startsWith(
-            'Sharing $_digitaleById in Skore with read access (they may read '
-            'it) stopped at Janssens, Jan (teacher id 1001):\n'
+            'Sharing $_digitale in Skore with read access (they may read it) '
+            'stopped at Janssens, Jan (teacher id 1001):\n'
             '- Janssens, Jan (teacher id 1001): may or may not have been '
             'shared (see below)\n'
-            'Sharing $_digitaleById with Janssens, Jan (teacher id 1001) with '
-            'read access may or may not have been saved',
+            'Sharing $_digitale with Janssens, Jan (teacher id 1001) with read '
+            'access may or may not have been saved',
           ),
         );
         expect(text, isNot(contains('The gradebook now')));
@@ -1046,12 +1047,14 @@ void main() {
       expect(isError, isTrue);
       expect(
         text,
-        'Unsharing $_digitaleById in Skore stopped at Maes, Mira (teacher id '
+        // The gradebook as the library read it before the save, from its
+        // error (dartschool#120).
+        'Unsharing $_digitale in Skore stopped at Maes, Mira (teacher id '
         '1006):\n'
         '- Maes, Mira (teacher id 1006): may or may not have been unshared '
         '(see below)\n'
-        'Unsharing $_digitaleById with Maes, Mira (teacher id 1006) may or '
-        'may not have been saved: the change was sent, but Skore did not '
+        'Unsharing $_digitale with Maes, Mira (teacher id 1006) may or may '
+        'not have been saved: the change was sent, but Skore did not '
         'confirm it. Do not call unshare_skore_gradebook again for it: first '
         'read the gradebooks with list_skore_gradebook_shares (teacher_id '
         '1005): when gradebook 34826 no longer lists teacher id 1006 among its '

@@ -614,10 +614,12 @@ the gradebook's readers and writers afterwards; it is an error when it
 stopped. What each teacher had before, and whether a save was sent, come
 from the library's result (`SkoreGradebookShareChange`, dartschool#103),
 without a read of the tool's own. The tool names the gradebook (its course
-and class) from the first result, so by its id only when it stopped at the
-first teacher, and then gives no readers and writers either; for a save
-Skore did not confirm, the library's error carries nothing of the gradebook
-(yvanvds/dartschool#120, tracked in #90). Before each change the library
+and class) from the first result; when the save for the first teacher is
+not confirmed, from the library's error, which carries the gradebook as it
+was read before the save (`SmartschoolSkoreShareSaveUnconfirmedError`,
+dartschool#120). So it names the gradebook by its id only when it stopped at
+the first teacher before a save, and then gives no readers and writers
+either. Before each change the library
 reads the gradebooks (and, to share, the teachers) again and refuses the
 owner among the teachers, a gradebook that is not the owner's, and, to
 share, a teacher Skore does not list
@@ -652,10 +654,13 @@ return the assignment with the course as the library read it before the
 save, and for a replace the assignment as it was (`SkoreSavedAssignment`,
 dartschool#102), so the tools name the course and the teacher replaced
 without a read of their own. A save that Skore does not confirm returns
-nothing, and the library's error carries none of that: its result names the
-course by id only, and for a replace not the teacher it had
-(yvanvds/dartschool#120, tracked in #90). Removing an assignment, choosing
-its pupils and Skore's import of assignments are not offered.
+nothing, but the library's error carries the same
+(`SmartschoolSkoreAssignmentSaveUnconfirmedError`, dartschool#120): its
+result names the course by its label, and for a replace the teacher the
+assignment had, as the library read them before the save (a read afterwards
+cannot tell what was there before a save that may have gone through).
+Removing an assignment, choosing its pupils and Skore's import of
+assignments are not offered.
 
 Skore refusing a request to the account
 (`SmartschoolSkoreAccessDeniedError`) is reported as an account without the
