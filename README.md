@@ -522,11 +522,17 @@ gradebooks (dartschool#74):
 - `list_skore_courses`: the courses of one class (`class_id`, from
   `list_skore_classes`) with the teachers assigned to each, Skore's
   "lesopdrachten" (`getCourses`), in Skore's order and indented by depth.
-  Per row: its label, course id, code and depth, and then that it is a
-  group header (which cannot get a teacher), that it has no teacher, or
-  its teachers with their teacher id and assignment id (which is also the
-  gradebook's id). The first line counts the courses, those without a
-  teacher, and the group headers. Course codes are not unique within a
+  Per row: its label, course id, code and depth, and then its teachers
+  with their teacher id and assignment id (which is also the gradebook's
+  id), or, without any, that it is a group header (which cannot get a
+  teacher), a course with sub-courses (which needs no teacher of its own:
+  its sub-courses carry the assignments, as a Skore administrator
+  confirmed in #100), or a course with no teacher. A row is a course with
+  sub-courses when the next row is deeper: the tree tells it, not the
+  labels. The first line counts the courses, those that still need a
+  teacher (no teacher and no sub-courses), and the group headers; the
+  description tells Claude that only the courses marked "no teacher"
+  still need one. Course codes are not unique within a
   class (a course and its sub-course can share one), so the description
   tells Claude to name a course by its id. An empty list means a class
   without a course structure or an unknown id; the result says so.

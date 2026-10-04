@@ -494,7 +494,12 @@ void main() {
         expect(skore.saves, hasLength(1));
         expect(skore.calls.last, _rpc('saveOwner'));
         expect(server.logins, logins);
-        expect(await teachersOf(2516, 2142), 'no teacher');
+        // Nothing was saved: the course still has no teacher, and as a
+        // course with sub-courses it needs none (#100).
+        expect(
+          await teachersOf(2516, 2142),
+          'course with sub-courses, needs no teacher of its own',
+        );
       });
     });
 
@@ -750,7 +755,10 @@ void main() {
       'then give the course another teacher', () async {
     expect(
       await ok('list_skore_courses', {'class_id': 2516}),
-      contains('[PROJE] | course id 2142 | code PROJE | depth 1 | no teacher'),
+      // A course that needs a teacher: one without sub-courses (#100).
+      contains(
+        '[T.SOGEWE] | course id 2676 | code T.SOGEWE | depth 2 | no teacher',
+      ),
     );
     expect(
       await ok('list_skore_teachers', {'query': 'dupre'}),
@@ -758,26 +766,26 @@ void main() {
     );
     await ok('add_skore_teacher', {
       'class_id': 2516,
-      'course_id': 2142,
+      'course_id': 2676,
       'teacher_id': 1003,
     });
     expect(
-      await teachersOf(2516, 2142),
+      await teachersOf(2516, 2676),
       'teacher: Dupré, Céline (teacher id 1003, assignment 35001)',
     );
     await ok('replace_skore_teacher', {
       'class_id': 2516,
-      'course_id': 2142,
+      'course_id': 2676,
       'assignment_id': 35001,
       'teacher_id': 1001,
     });
     expect(
-      await teachersOf(2516, 2142),
+      await teachersOf(2516, 2676),
       'teacher: Janssens, Jan (teacher id 1001, assignment 35001)',
     );
     expect(skore.saves, [
-      ['2516', '2142', '', '1003'],
-      ['2516', '2142', '35001', '1001'],
+      ['2516', '2676', '', '1003'],
+      ['2516', '2676', '35001', '1001'],
     ]);
   });
 }

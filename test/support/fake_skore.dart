@@ -164,6 +164,11 @@ class FakeSkoreModel {
 /// teacher, a course with a sub-course and no teacher, a sub-course with
 /// three teachers, a course and its sub-course with the same code
 /// (`T.SOGEWE`), and a code with a space in it.
+///
+/// Its two courses with sub-courses have no teacher of their own, as live
+/// (#100): Eye4Skills, whose sub-course has teachers, and `T.SOGEWE`, whose
+/// sub-course has none. That sub-course is the one course of the class that
+/// needs a teacher.
 const fakeSkore5WW1 = FakeSkoreClass(2516, '5WW1', [
   FakeSkoreCourse(1966, 'Vakken', 'Vakken [Vak]', groupHeader: true),
   FakeSkoreCourse(
