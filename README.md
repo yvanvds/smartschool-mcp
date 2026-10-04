@@ -666,7 +666,9 @@ first two only read, the last two change the presences of pupils:
   module gives as the active class of a teacher without a lesson at the
   moment, #84, which #85 tracks until dartschool#117 is done), one line per
   class with its name, class id (`groupID`), and whether the account may
-  record presences for it (`userCanRecord`: "may record" or "view only"); a
+  record presences for it (`userCanConfirm`: "may record" or "view only";
+  not `userCanRecord`, which a teacher without the absence-administrator
+  rights has for every class, #95 and yvanvds/dartschool#121); a
   grouping class without a school structure is marked, as presences are
   recorded in the pupils' official class.
 - `list_class_presences`: the pupils of one class (`class_id`) on one day
@@ -728,8 +730,8 @@ gives without the pupil's name (yvanvds/dartschool#109). Any other
 `SmartschoolPresenceError` (the module refused a request with an error
 page, or a class, code or pupil could not be found) is reported as "usually
 the account lacks the right", with how to get it or turn "Aanwezigheden"
-off; the library's message goes to the log only. Confirming presences
-(`userCanConfirm`), other codes and the registration per lesson are not
+off; the library's message goes to the log only. Other codes and the
+registration per lesson (which `userCanRecord` seems to stand for) are not
 offered; #77 is the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`

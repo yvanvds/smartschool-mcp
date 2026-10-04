@@ -227,6 +227,26 @@ void main() {
       expect(presence.calls, [_getConfig]);
     });
 
+    test(
+      'a teacher without the absence-administrator rights: every class '
+      'view only, although the module gives userCanRecord for each (#95)',
+      () async {
+        presence.dropConfirmRight();
+
+        final text = await ok('list_presence_classes');
+
+        expect(
+          text,
+          'The Presence module lists 3 classes for this account, in its order; '
+          'it may record presences for 0 of them.\n'
+          '1A | class id 298 | view only\n'
+          '1B | class id 312 | view only\n'
+          '2A | class id 1650 | view only | grouping class (no school '
+          'structure): record in the official class',
+        );
+      },
+    );
+
     test('no classes: says the account most likely lacks the rights', () async {
       presence.classes.clear();
 
@@ -332,6 +352,26 @@ void main() {
         'set_pupils_late and set_pupils_present refuse it.\n'
         '- Wouters, Lars (pupil id 1101) | morning: "Te laat" | afternoon: '
         'nothing recorded',
+      );
+    });
+
+    test('a teacher without the absence-administrator rights: the pupils, '
+        'and that the writes refuse the class (#95)', () async {
+      presence.dropConfirmRight();
+
+      final text = await ok('list_class_presences', {
+        'class_id': 298,
+        'date': _day,
+      });
+
+      expect(
+        text,
+        startsWith(
+          'Class 1A (class id 298), Monday 2026-06-01: 4 pupils, in the '
+          "module's order. This account may only view this class: "
+          'set_pupils_late and set_pupils_present refuse it.\n'
+          '- Peeters, Lotte (pupil id 1001) | ',
+        ),
       );
     });
 
@@ -565,6 +605,27 @@ void main() {
         'Nothing was changed in Smartschool.',
       );
       expect(presence.calls, [_getConfig]);
+    });
+
+    test('a teacher without the absence-administrator rights, whom the module '
+        'gives userCanRecord but not userCanConfirm: refused after reading '
+        'only the configuration, so the save the module would refuse is never '
+        'sent (#95)', () async {
+      presence.dropConfirmRight();
+
+      for (final tool in ['set_pupils_late', 'set_pupils_present']) {
+        final text = await error(tool, write([1002]));
+
+        expect(
+          text,
+          'This account may not record presences for class 1A (class id '
+          "298): the Presence module lets it view the class only. Ask the "
+          "school's Smartschool administrator for the right to record "
+          'presences for it. Nothing was changed in Smartschool.',
+        );
+      }
+      expect(presence.calls, [_getConfig, _getConfig]);
+      expect(presence.saves, isEmpty);
     });
 
     test('a class or day the module refuses, with its reason, after reading '

@@ -16,7 +16,7 @@ import 'presence_format.dart';
 //
 // - Before anything is sent, the server reads the class once and refuses,
 //   for the whole call: a date in the future, a class the account may not
-//   record presences for (`userCanRecord`), a grouping class without a
+//   record presences for ([mayRecordHalfDays]), a grouping class without a
 //   school structure, a class or day the module refuses to record presences
 //   for (its `saveIsAllowed` and reason, yvanvds/dartschool#104), and a
 //   pupil who is not listed or whose half-day holds another status than
@@ -299,11 +299,11 @@ Future<T> _withPresenceWrite<T>(
 }
 
 /// Refuses, with a [ToolError], a class whose presences the account may not
-/// record: one it may only view (`userCanRecord`), and a grouping class
+/// record: one it may only view ([mayRecordHalfDays]), and a grouping class
 /// without a school structure.
 void _refuseClass(PresenceClassRef presenceClass) {
   final named = formatPresenceClassName(presenceClass);
-  if (!presenceClass.userCanRecord) {
+  if (!mayRecordHalfDays(presenceClass)) {
     throw ToolError(
       'This account may not record presences for $named: the Presence '
       'module lets it view the class only. Ask the school\'s Smartschool '

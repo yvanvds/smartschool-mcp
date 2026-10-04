@@ -80,7 +80,7 @@ String formatPresenceDay(PresenceDay read) {
   final presenceClass = read.presenceClass;
   final named = formatPresenceClassName(presenceClass);
   final when = formatPlannerDay(read.day);
-  final record = presenceClass.userCanRecord
+  final record = mayRecordHalfDays(presenceClass)
       ? 'This account may record presences for this class.'
       : 'This account may only view this class: set_pupils_late and '
             'set_pupils_present refuse it.';

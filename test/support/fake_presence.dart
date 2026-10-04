@@ -52,6 +52,13 @@ const fakePresenceFutureDay =
 /// The reason the fake gives for a save it refuses ([PresenceSave.rejected]).
 const fakePresenceSaveRefused = 'De afwezigheid kon niet worden opgeslagen.';
 
+/// What the module answers a save for a pupil of a class without
+/// `userCanConfirm` (seen live for a teacher without the absence-administrator
+/// rights, #95).
+const fakePresenceNoConfirmRight =
+    'U heeft geen rechten om afwezigheden te bevestigen voor deze leerling. '
+    'Contacteer uw beheerder.';
+
 /// How the fake answers a save, for the tests of a save that fails.
 enum PresenceSave {
   /// Carried out, and answered with the pupils sent and their records as
@@ -95,6 +102,7 @@ class FakePresenceClass {
     this.name, {
     this.structId = fakePresenceStruct,
     this.userCanRecord = true,
+    this.userCanConfirm = true,
     this.pupils = const [],
   });
 
@@ -106,8 +114,28 @@ class FakePresenceClass {
   /// The school structure, or null for a grouping class (`""`).
   final int? structId;
 
+  /// The module's `userCanRecord`, apparently the registration per lesson:
+  /// `true` for every class of a teacher, also without the
+  /// absence-administrator rights (seen live, #95).
   final bool userCanRecord;
+
+  /// Whether the account may set the half-days of the class: an absence
+  /// administrator's right. The fake refuses a save for a pupil of a class
+  /// without it, with [fakePresenceNoConfirmRight].
+  final bool userCanConfirm;
+
   final List<FakePresencePupil> pupils;
+
+  /// This class as a teacher without the absence-administrator rights sees
+  /// it: `userCanRecord` as it is, without `userCanConfirm`.
+  FakePresenceClass withoutConfirm() => FakePresenceClass(
+    groupId,
+    name,
+    structId: structId,
+    userCanRecord: userCanRecord,
+    userCanConfirm: false,
+    pupils: pupils,
+  );
 }
 
 /// A half-day of a pupil: its record id and what it holds.
@@ -140,6 +168,7 @@ const fake1B = FakePresenceClass(
   312,
   '1B  ',
   userCanRecord: false,
+  userCanConfirm: false,
   pupils: [FakePresencePupil(1101, 5101, 'Wouters, Lars')],
 );
 
@@ -224,6 +253,17 @@ class FakePresence {
               ...(presence as Map).cast<String, Object?>(),
             },
   ];
+
+  /// Shows every class as a teacher without the absence-administrator
+  /// rights sees it ([FakePresenceClass.withoutConfirm]): seen live, such a
+  /// teacher has `userCanRecord` for every class and `userCanConfirm` for
+  /// none, and the module refuses their saves (#95).
+  void dropConfirmRight() {
+    final teacher = [for (final c in classes) c.withoutConfirm()];
+    classes
+      ..clear()
+      ..addAll(teacher);
+  }
 
   /// The school of the captures, trimmed and with fake names: 1A, 1B (view
   /// only) and 2A (a grouping class), on [day] (`yyyy-MM-dd`), which is
@@ -311,7 +351,7 @@ class FakePresence {
       'adminNumber': c.structId == null ? '' : 6000 + c.groupId,
       'isOfficial': c.structId == null ? 0 : 1,
       'userCanRecord': c.userCanRecord,
-      'userCanConfirm': c.userCanRecord,
+      'userCanConfirm': c.userCanConfirm,
       'instituteNumber': c.structId == null ? '' : 125252,
       'structID': c.structId ?? '',
     };
@@ -442,7 +482,10 @@ class FakePresence {
     }
     final sent = (jsonDecode(form['pupils']!) as List)
         .cast<Map<String, Object?>>();
-    if (outcome == PresenceSave.rejected) {
+    final confirmable = sent.every(
+      (pupil) => _classOf(pupil)?.userCanConfirm ?? false,
+    );
+    if (outcome == PresenceSave.rejected || !confirmable) {
       return _json(
         jsonEncode({
           'hasErrors': true,
@@ -450,7 +493,9 @@ class FakePresence {
             for (final pupil in sent)
               for (final presence in pupil['presence']! as List)
                 {
-                  'message': fakePresenceSaveRefused,
+                  'message': confirmable
+                      ? fakePresenceSaveRefused
+                      : fakePresenceNoConfirmRight,
                   'presence': {
                     ...(presence as Map).cast<String, Object?>(),
                     'pupil': _pupilName(pupil['userID']),
@@ -508,18 +553,7 @@ class FakePresence {
     final changes = <((int, String, String), int?, int?, String)>[];
     for (final pupil in jsonDecode(payload) as List) {
       final userId = (pupil as Map)['userID'];
-      final presenceClass = classes
-          .where(
-            (c) =>
-                c.userCanRecord &&
-                c.structId != null &&
-                c.pupils.any(
-                  (p) =>
-                      p.userId == userId && p.movementId == pupil['movementID'],
-                ),
-          )
-          .firstOrNull;
-      if (presenceClass == null) return null;
+      if (_classOf(pupil.cast<String, Object?>()) == null) return null;
       for (final presence in pupil['presence'] as List) {
         if (presence case {
           'presenceID': final presenceId,
@@ -546,6 +580,21 @@ class FakePresence {
     }
     return changes;
   }
+
+  /// The official class of [pupil], a pupil of a save's `pupils` payload,
+  /// by its `userID` and `movementID`; null when no class of the fake with a
+  /// school structure lists that pupil.
+  FakePresenceClass? _classOf(Map<String, Object?> pupil) => classes
+      .where(
+        (c) =>
+            c.structId != null &&
+            c.pupils.any(
+              (p) =>
+                  p.userId == pupil['userID'] &&
+                  p.movementId == pupil['movementID'],
+            ),
+      )
+      .firstOrNull;
 
   /// The active class of the configuration for an account without a lesson
   /// at the moment ([noLesson]), as in dartschool's capture
