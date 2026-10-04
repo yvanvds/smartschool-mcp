@@ -94,7 +94,7 @@ String presenceFix(CredentialSource source) =>
 /// Whether the account can use the presence tools, for
 /// `smartschool_status`: one cheap read, the module's configuration
 /// ([PresenceService.getConfig]), which lists the classes the account may
-/// view and whether it may record presences for each.
+/// view and whether it may record presences for each ([mayRecordHalfDays]).
 ///
 /// Access when it may record presences for at least one class; no access
 /// when it may record for none (also when the module lists no classes), or
@@ -111,7 +111,7 @@ Future<AccessCheck> checkPresenceAccess(SmartschoolSession session) async {
   } on ToolError catch (error) {
     return AccessCheck.denied(error.message);
   }
-  final recordable = classes.where((c) => c.userCanRecord).length;
+  final recordable = classes.where(mayRecordHalfDays).length;
   final listed =
       '${classes.length} ${classes.length == 1 ? 'class' : 'classes'}';
   if (recordable == 0) {

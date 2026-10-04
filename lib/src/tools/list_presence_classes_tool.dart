@@ -46,7 +46,7 @@ Future<CallToolResult> _list(SmartschoolSession session) async {
         'account without $presenceRights. If so, '
         '${presenceFix(session.source)}.';
   } else {
-    final recordable = classes.where((c) => c.userCanRecord).length;
+    final recordable = classes.where(mayRecordHalfDays).length;
     final count = classes.length == 1 ? '1 class' : '${classes.length} classes';
     text = [
       'The Presence module lists $count for this account, in its order; it '

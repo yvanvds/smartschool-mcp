@@ -658,6 +658,23 @@ void main() {
       );
     });
 
+    test('on, but a teacher without the absence-administrator rights, who '
+        'has userCanRecord for every class and userCanConfirm for none: no '
+        'access (#95)', () async {
+      server.presence.dropConfirmRight();
+
+      final (_, text) = await status(presence: SwitchState.on);
+
+      expect(
+        text,
+        contains(
+          '\nAanwezigheden: on; access: NO. The Presence module lists 3 '
+          'classes for this account, but it may record presences for none of '
+          'them, as for an account without $rights. If so, $fix.\n',
+        ),
+      );
+    });
+
     test('on, but the module lists no classes: no access', () async {
       server.presence.classes.clear();
 

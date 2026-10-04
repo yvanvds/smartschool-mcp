@@ -159,13 +159,27 @@ String formatDayPart(DayPart part) => switch (part) {
   DayPart.afternoon => 'afternoon',
 };
 
+/// Whether the account may record the half-day presences of [presenceClass]
+/// (its pupils' mornings and afternoons, as `set_pupils_late` and
+/// `set_pupils_present` do): the module's `userCanConfirm` for the class.
+///
+/// Not its `userCanRecord`: the module gives a teacher without the
+/// absence-administrator rights `userCanRecord` for every class, and refuses
+/// that teacher's half-day save ("U heeft geen rechten om afwezigheden te
+/// bevestigen voor deze leerling."), while `userCanConfirm` is false for
+/// every class. An absence administrator has both (seen live, #95;
+/// yvanvds/dartschool#121).
+bool mayRecordHalfDays(PresenceClassRef presenceClass) =>
+    presenceClass.userCanConfirm;
+
 /// One class of `list_presence_classes`: name, class id, whether the
-/// account may record presences for it, and whether it is a grouping class
-/// without a school structure. For example `1A | class id 298 | may record`.
+/// account may record presences for it ([mayRecordHalfDays]), and whether
+/// it is a grouping class without a school structure. For example
+/// `1A | class id 298 | may record`.
 String formatPresenceClass(PresenceClassRef presenceClass) => [
   _label(presenceClass.name),
   'class id ${presenceClass.groupId}',
-  presenceClass.userCanRecord ? 'may record' : 'view only',
+  mayRecordHalfDays(presenceClass) ? 'may record' : 'view only',
   if (presenceClass.structId == null)
     'grouping class (no school structure): record in the official class',
 ].join(' | ');
