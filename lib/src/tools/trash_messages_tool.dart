@@ -101,13 +101,19 @@ Future<CallToolResult> _trash(
           moved.add(id);
           return true;
         }
-        final left = await messages.moveToTrashFrom(
-          id,
-          boxType: box.boxType,
-          boxId: await box.folderId(messages),
-        );
-        moved.add(id);
-        if (left != null) return left;
+        try {
+          final left = await messages.moveToTrashFrom(
+            id,
+            boxType: box.boxType,
+            boxId: await box.folderId(messages),
+          );
+          moved.add(id);
+          if (left != null) return left;
+        } on SmartschoolMoveUncheckedError {
+          // The move went out and only the library's check after it failed
+          // (yvanvds/dartschool#115): checked below, never moved again.
+          moved.add(id);
+        }
       }
       // A move that went out in an earlier run, or whose check said neither
       // (null): getMessage returns null for an id the box does not hold
