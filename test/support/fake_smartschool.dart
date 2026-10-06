@@ -237,7 +237,7 @@ class FakeSmartschool implements HttpClientAdapter {
     return uploads.respond(options) ??
         mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
-        planner.respond(options) ??
+        planner.respond(options, cancelled: cancelled) ??
         skore.respond(options) ??
         _html(_homePage);
   }

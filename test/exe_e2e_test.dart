@@ -104,6 +104,9 @@ void main() {
       'edit_planned_element',
       'clear_lesson',
       'list_lesfiches',
+      'read_lesfiche',
+      'read_lesfiche_attachment',
+      'save_lesfiche_attachment',
       'plan_lesfiche',
       'plan_assignment',
       'trash_assignment',
@@ -134,6 +137,8 @@ void main() {
       'read_planned_element',
       'list_class_assignments',
       'list_lesfiches',
+      'read_lesfiche',
+      'read_lesfiche_attachment',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -309,7 +314,11 @@ void main() {
     final readFileSchema = tools['read_intradesk_file']!['inputSchema'] as Map;
     expect(readFileSchema['required'], ['file_id']);
     expect((readFileSchema['properties'] as Map).keys, ['file_id']);
-    for (final name in ['save_intradesk_file', 'save_message_attachment']) {
+    for (final name in [
+      'save_intradesk_file',
+      'save_message_attachment',
+      'save_lesfiche_attachment',
+    ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
         'readOnlyHint': false,
@@ -443,6 +452,38 @@ void main() {
       'hour',
       'lesfiche',
     ]);
+    // One lesfiche in full, and its attachments (#113): by the lesfiche's
+    // id and kind, and the attachment by number or file name.
+    final readLesficheSchema = tools['read_lesfiche']!['inputSchema'] as Map;
+    expect(readLesficheSchema['required'], ['lesfiche']);
+    expect((readLesficheSchema['properties'] as Map).keys, [
+      'lesfiche',
+      'type',
+    ]);
+    expect((readLesficheSchema['properties'] as Map)['type'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'enum': ['lesson', 'assignment'],
+    });
+    for (final name in [
+      'read_lesfiche_attachment',
+      'save_lesfiche_attachment',
+    ]) {
+      final schema = tools[name]!['inputSchema'] as Map;
+      expect(schema['required'], ['lesfiche', 'attachment'], reason: name);
+      expect((schema['properties'] as Map).keys, [
+        'lesfiche',
+        'type',
+        'attachment',
+      ], reason: name);
+      expect((schema['properties'] as Map)['attachment'], {
+        'description': isA<String>(),
+        'anyOf': [
+          {'type': 'integer', 'minimum': 1},
+          {'type': 'string', 'minLength': 1},
+        ],
+      }, reason: name);
+    }
     // The assignments (#55): planned in an own lesson hour, for its classes
     // or some of them, and moved to the planner's trash by id.
     final planAssignmentSchema =
@@ -542,7 +583,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(43));
+    expect(tools, hasLength(46));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -607,7 +648,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(31));
+        expect(tools, hasLength(34));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -646,8 +687,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(39));
-      expect([for (final tool in tools.skip(31)) tool['name']], skoreTools);
+      expect(tools, hasLength(42));
+      expect([for (final tool in tools.skip(34)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -840,7 +881,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(31));
+        expect(tools, hasLength(34));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -880,8 +921,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(35));
-      expect([for (final tool in tools.skip(31)) tool['name']], presenceTools);
+      expect(tools, hasLength(38));
+      expect([for (final tool in tools.skip(34)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1077,10 +1118,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(43));
-      expect([for (final tool in tools.skip(39)) tool['name']], presenceTools);
+      expect(tools, hasLength(46));
+      expect([for (final tool in tools.skip(42)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(31).take(8)) tool['name'],
+        for (final tool in tools.skip(34).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1503,6 +1544,26 @@ void main() {
           'type': 'all',
         },
       ),
+      ('read_lesfiche', {'lesfiche': 'b0000000-0000-4000-8000-000000000001'}),
+      (
+        'read_lesfiche',
+        {
+          'lesfiche': 'b0000000-0000-4000-8000-000000000002',
+          'type': 'assignment',
+        },
+      ),
+      (
+        'read_lesfiche_attachment',
+        {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 1},
+      ),
+      (
+        'save_lesfiche_attachment',
+        {
+          'lesfiche': 'b0000000-0000-4000-8000-000000000001',
+          'type': 'lesson',
+          'attachment': 'lussen.txt',
+        },
+      ),
       (
         'plan_lesfiche',
         {
@@ -1631,6 +1692,30 @@ void main() {
           'hour':
               'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
           'lesfiche': 'Herhaling: lussen',
+        },
+        'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'read_lesfiche',
+        {'lesfiche': 'Herhaling: lussen'},
+        'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'read_lesfiche',
+        {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'type': 'lessons'},
+        '"lessons" is not one of the allowed values',
+      ),
+      (
+        'read_lesfiche_attachment',
+        {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': ' '},
+        'attachment is empty',
+      ),
+      (
+        'save_lesfiche_attachment',
+        {
+          'lesfiche':
+              'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'attachment': 1,
         },
         'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
       ),
@@ -1946,6 +2031,10 @@ void main() {
       ('reply_to_message', {'message_id': 123.0, 'body': 'Hallo'}),
       ('search_intradesk', {'query': 'uitstap', 'limit': 10.0}),
       ('save_message_attachment', {'message_id': 123.0, 'attachment': 2.0}),
+      (
+        'save_lesfiche_attachment',
+        {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 2.0},
+      ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 

@@ -15,10 +15,11 @@ Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen, en die toets of taak dan plannen. Je eigen lesuren invullen met
-  lessen of met je lesfiches uit de module Lesfiches, die lessen aanpassen en
-  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
-  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+  kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
+  Lesfiches lezen, met hun weblinks en bijlagen. Je eigen lesuren invullen
+  met lessen of met je lesfiches, die lessen aanpassen en een lesuur weer
+  leegmaken. Een toets of taak naar de prullenbak van de planner verplaatsen.
+  Telkens pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 - **Skore**, alleen voor wie er de rechten voor puntenbeheer heeft, zoals een
@@ -318,6 +319,11 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
   lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
   kunnen zo: een lesfiche van een toets of taak niet.
+- "Wat staat er in mijn lesfiche over recursie? Vat de bijlage samen."
+  Claude zoekt de lesfiche en leest ze: de info voor leerlingen, je
+  privé-info, de weblinks en de bijlagen, en wanneer je leerlingen die zien.
+  Een bijlage leest Claude, of het bewaart ze in je downloadmap. Aan de
+  lesfiche verandert niets.
 - "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
   uur."
   Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken

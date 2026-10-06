@@ -535,6 +535,44 @@ client name. It also installs again while that copy runs.
   of the module the server cannot use (`SmartschoolLessonContentError`) is
   "the Lesfiches module gave an answer the server could not use", with the
   details in the log only.
+- `read_lesfiche`: one lesfiche in full (`lesfiche`, an id from
+  `list_lesfiches`, and `type`: `lesson`, the default, or `assignment`),
+  with the library's `LessonContentService.getDetailById`
+  (dartschool#129), which reads it at `lessons/{id}` or `assignments/{id}`.
+  One field per line: kind (an assignment with its type), name, icon,
+  labels, courses (named as `list_lesfiches` names them; when the course
+  list cannot be read, `SmartschoolLessonContentCourseListError.items`
+  holds the detail, and only the number of courses is shown, with a note),
+  visible or hidden in the module, the weblinks (name, address, icon, when
+  pupils see it, id) and the attachments (numbered, with file name, size,
+  type, when pupils see it, id); then the public and private info as plain
+  text (through `htmlToText`, as `read_planned_element`). When pupils see a
+  weblink or an attachment (`LessonContentVisibility`) is worded from the
+  lesson the lesfiche is planned in: always, never, from its start, from
+  its end, or a number of days after its end; an option the library does
+  not know, by the module's name for it. Weblinks of publishers and
+  deeplinks are counted, not shown. The module answers a made-up id, and a
+  lesfiche asked for as the other kind, with `404`
+  (`SmartschoolLessonContentNotFoundError`), and an id that is not a UUID
+  with a bare `500`, so that one is not sent: both say to take the id and
+  the kind from `list_lesfiches`. A lesfiche in the trash is still
+  answered, as live.
+- `read_lesfiche_attachment`: opens one attachment of a lesfiche
+  (`lesfiche`, `type`, and `attachment`: its number in `read_lesfiche`, or
+  its file name, as `save_message_attachment` takes it; a name that two
+  attachments have, which the module allows, asks for the number) and
+  returns its text, or an image, as `read_intradesk_file` does (see
+  *Reading Intradesk files* below), with the library's
+  `downloadAttachmentStream`. It reads the lesfiche first, without the
+  course names (one request less), and refuses an attachment that is
+  larger than 25 MB by the size the lesfiche gives, or of a type that
+  cannot be read by its name, without downloading it. The library sends
+  the download without `Accept: application/json`: with it, Smartschool
+  answered `503` (seen live).
+- `save_lesfiche_attachment`: saves one attachment of a lesfiche, named
+  as `read_lesfiche_attachment` names it, into the download folder and
+  returns its full path, name and size, as `save_message_attachment` does
+  (see *Saving files* below).
 - `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
   `list_lesfiches`) into an empty lesson hour of the user's own planner
   (`hour`, as `plan_lesson`) with the library's `planLessonContent`
@@ -965,14 +1003,31 @@ switch has no default, so a reason a later version of the library adds
 fails the build. In
 `lesfiches.dart`: the kinds `list_lesfiches` lists (`LesficheKind`), the
 `lesfiche` argument (`lesficheArgument`), the filters (`lesficheMatches`),
-the order of the names (`compareLesficheNames`) and one line per lesfiche
-with its courses as the library names them (`formatLesficheLine`). The
-tests run against a fake planner (`test/support/fake_planner.dart`), built
-from dartschool's anonymised captures of the live planner, its workload view
-and the Lesfiches list, with the school's course list, which carries out the
-writes of dartschool#87 (fill, rename, change of the info, clear), the plan
-of a lesfiche of dartschool#88, and the create and the trash of an
-assignment of dartschool#89 as the live planner did.
+the order of the names (`compareLesficheNames`), one line per lesfiche
+with its courses as the library names them (`formatLesficheLine`), and the
+notes on courses the course list does not name or could not name
+(`unnamedLesficheCourseNote`, `lesficheCourseListNote`). In
+`lesfiche_detail.dart`, one lesfiche in full, for `read_lesfiche` and the
+tools that make, change or trash a lesfiche, which give it back in the same
+form: the `type` argument of a tool that takes one lesfiche
+(`lesficheTypeSchema`, `lesficheTypeArgument`), the read of its detail
+(`readLesficheDetail`, which keeps the detail when the course list fails
+and turns a `404` into "take the id and the kind from `list_lesfiches`",
+`lesficheNotFound`), the lesfiche as text (`formatLesficheDetail`, with
+`formatLesficheWeblink`, `formatLesficheAttachment` and
+`formatLesficheVisibility`, the wording of a `LessonContentVisibility`), the
+lesfiche in a few words (`lesficheTitle`, `lesficheKindName`), and the
+`attachment` argument of the tools that read or save one
+(`lesficheAttachmentSchema`, `lesficheAttachmentArgument`,
+`pickLesficheAttachment`, `findLesficheAttachment`,
+`lesficheAttachmentTitle`). The tests run against a fake planner
+(`test/support/fake_planner.dart`), built from dartschool's anonymised
+captures of the live planner, its workload view, the Lesfiches list and the
+detail of a lesfiche with the download of its attachment (dartschool#129),
+with the school's course list, which carries out the writes of
+dartschool#87 (fill, rename, change of the info, clear), the plan of a
+lesfiche of dartschool#88, and the create and the trash of an assignment of
+dartschool#89 as the live planner did.
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a
@@ -1042,15 +1097,19 @@ not know and a day after `today` without pupils, with `saveIsAllowed:
 false` and the module's reason.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
-that message attachments can use it too: `readDocument(bytes, name: ...)` in
-`document_reader.dart` returns a `DocumentText`, a `DocumentImage` or an
-`UnreadableDocument` with the reason (in `document_content.dart`); the
-readers per format are `docx_text.dart`, `xlsx_text.dart`, `pptx_text.dart`,
-`pdf_text.dart`, `plain_text.dart` and `image_content.dart`. Downloads go
-through `flutter_smartschool`'s streamed download with a size limit
+that message and lesfiche attachments can use it too: `readDocument(bytes,
+name: ...)` in `document_reader.dart` returns a `DocumentText`, a
+`DocumentImage` or an `UnreadableDocument` with the reason (in
+`document_content.dart`); the readers per format are `docx_text.dart`,
+`xlsx_text.dart`, `pptx_text.dart`, `pdf_text.dart`, `plain_text.dart` and
+`image_content.dart`. The tools that read a file (`read_intradesk_file`,
+`read_lesfiche_attachment`) share reading the download, the result and its
+log line (`readWholeDownload`, `documentResult`, `describeDocumentForLog`)
+in `lib/src/tools/document_result.dart`. Downloads go through
+`flutter_smartschool`'s streamed download with a size limit
 (`IntradeskService.downloadFileStream`, `MessageAttachment.downloadStream`,
-both with `maxBytes`), which also gives the file name from the
-`Content-Disposition` header.
+`LessonContentService.downloadAttachmentStream`, all with `maxBytes`),
+which also gives the file name from the `Content-Disposition` header.
 
 ### Opt-in tools
 
@@ -1152,7 +1211,9 @@ moved stays until the next walk.
 ### Reading Intradesk files
 
 `read_intradesk_file` downloads the file into memory (never to disk), reads
-it and forgets it. What a file is follows from its content, not its name:
+it and forgets it; `read_lesfiche_attachment` reads an attachment of a
+lesfiche the same way. What a file is follows from its content, not its
+name:
 
 - Word (`.docx`), Excel (`.xlsx`) and PowerPoint (`.pptx`), and their
   macro and template variants, as text: paragraphs with `#` headings and
@@ -1176,16 +1237,18 @@ it and forgets it. What a file is follows from its content, not its name:
   OpenDocument files and other formats are refused with the reason.
 
 Files larger than 25 MB are not opened: refused before downloading when the
-index knows the size, else as soon as Smartschool announces it or the
-download goes past it, and `flutter_smartschool` then stops the transfer.
+index knows the size (for an attachment of a lesfiche, when the lesfiche
+gives it), else as soon as Smartschool announces it or the download goes
+past it, and `flutter_smartschool` then stops the transfer.
 Text longer than 100,000 characters (Claude Desktop accepts about 150,000
 per tool result) is cut off with a note, and a PDF stops after 30 seconds of
 reading. The log shows formats, sizes and counts, never a name or any text.
 
 ### Saving files
 
-`save_intradesk_file` and `save_message_attachment` save a file into the
-download folder on this PC instead of returning what is in it. They are meant
+`save_intradesk_file`, `save_message_attachment` and
+`save_lesfiche_attachment` save a file into the download folder on this PC
+instead of returning what is in it. They are meant
 for a Claude Cowork project: Claude there reads the files in the project's
 folders (PDFs, scans, Word, Excel, images) far better than a tool result can
 carry them, so point the download folder at a (temporary) folder inside the
@@ -1214,13 +1277,14 @@ yet is created on the first save).
   holds a folder), dots and spaces at the end go, device names such as `CON`
   or `nul.txt` and names like the server's own files get a `_` in front, and
   a name longer than 120 characters is cut short, keeping its extension. The
-  result says what changed. No name at all: `intradesk-<id>` or
-  `attachment-<message id>-<number>`.
+  result says what changed. No name at all: `intradesk-<id>`,
+  `attachment-<message id>-<number>` or `lesfiche-attachment-<number>`.
 - **Size limit:** 200 MB (higher than `read_intradesk_file`'s 25 MB: nothing
   goes through the tool result). Refused before downloading when the
-  Intradesk index knows the size, else as soon as Smartschool announces it
-  or the download goes past it; `flutter_smartschool`'s streamed download
-  (`downloadFileStream`, `MessageAttachment.downloadStream`, both with
+  Intradesk index knows the size (or the lesfiche gives it), else as soon
+  as Smartschool announces it or the download goes past it;
+  `flutter_smartschool`'s streamed download (`downloadFileStream`,
+  `MessageAttachment.downloadStream`, `downloadAttachmentStream`, all with
   `maxBytes`) then stops the transfer.
 - **Written under a temporary name** (`.smartschool-mcp-<random>.part`) and
   renamed once complete; a failed download leaves nothing behind.
@@ -1237,8 +1301,8 @@ yet is created on the first save).
 The log shows sizes, timings and whether a name was changed, never a name.
 The code is in `lib/src/downloads/` (`DownloadFolder` in
 `download_folder.dart`, `safeFileName` in `file_names.dart`) and the tools
-in `lib/src/tools/save_intradesk_file_tool.dart` and
-`save_message_attachment_tool.dart`.
+in `lib/src/tools/save_intradesk_file_tool.dart`,
+`save_message_attachment_tool.dart` and `save_lesfiche_attachment_tool.dart`.
 
 Privacy: saved files are personal or school data, unencrypted, in a folder
 of the teacher's choice; the colleague guide (`docs/installatie.md`) says so,

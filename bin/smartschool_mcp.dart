@@ -30,10 +30,13 @@ import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_lesfiche_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
@@ -133,6 +136,9 @@ Future<void> _serve(ServerOptions options) async {
           editPlannedElementTool(session),
           clearLessonTool(session),
           listLesfichesTool(session),
+          readLesficheTool(session),
+          readLesficheAttachmentTool(session),
+          saveLesficheAttachmentTool(session, downloads),
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
