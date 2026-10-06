@@ -222,7 +222,31 @@ void main() {
         '1A | class id 298 | may record\n'
         '1B | class id 312 | view only\n'
         '2A | class id 1650 | may record | grouping class (no school '
-        'structure): record in the official class',
+        'structure): record in the official class | groups class id 1968 '
+        '(not among the classes this account may view)',
+      );
+      expect(presence.calls, [_getConfig]);
+    });
+
+    test('a grouping class: the classes it groups, when the module names '
+        'them, by name and class id; nothing for one that names none, whose '
+        'pupils come from across the school (#110)', () async {
+      presence.classes.addAll(const [fake2AEco, fakeTaalatelier]);
+
+      final text = await ok('list_presence_classes');
+
+      expect(
+        text,
+        'The Presence module lists 5 classes for this account, in its order; '
+        'it may record presences for 4 of them.\n'
+        '1A | class id 298 | may record\n'
+        '1B | class id 312 | view only\n'
+        '2A | class id 1650 | may record | grouping class (no school '
+        'structure): record in the official class | groups 2A ECO (class id '
+        '1968)\n'
+        '2A ECO | class id 1968 | may record\n'
+        'Taalatelier groep 1 | class id 5248 | may record | grouping class '
+        '(no school structure): record in the official class',
       );
       expect(presence.calls, [_getConfig]);
     });
@@ -242,7 +266,8 @@ void main() {
           '1A | class id 298 | view only\n'
           '1B | class id 312 | view only\n'
           '2A | class id 1650 | view only | grouping class (no school '
-          'structure): record in the official class',
+          'structure): record in the official class | groups class id 1968 '
+          '(not among the classes this account may view)',
         );
       },
     );
@@ -274,7 +299,8 @@ void main() {
           '1A | class id 298 | may record\n'
           '1B | class id 312 | view only\n'
           '2A | class id 1650 | may record | grouping class (no school '
-          'structure): record in the official class',
+          'structure): record in the official class | groups class id 1968 '
+          '(not among the classes this account may view)',
         );
       });
 
@@ -426,7 +452,8 @@ void main() {
 
     group('a grouping class: the module gives no codes for it; its statuses '
         'as the module names them with the records, or with the codes of '
-        "the pupil's official class (#99, #101)", () {
+        "the pupil's official class (#99, #101); per pupil, the official "
+        'class, where its presences are recorded (#110)', () {
       /// The heading of 2A, with [count] pupils.
       String heading(String count) =>
           'Class 2A (class id 1650), Monday 2026-06-01: $count, in the '
@@ -435,7 +462,8 @@ void main() {
           "presences are recorded in the pupils' official class.";
 
       test('"Te laat" and "Aanwezig", as the module names them with the '
-          'records; no codes read', () async {
+          'records; no codes read. The official class, which this account '
+          'does not see, by class id', () async {
         final text = await ok('list_class_presences', {
           'class_id': 1650,
           'date': _day,
@@ -444,15 +472,17 @@ void main() {
         expect(
           text,
           '${heading('1 pupil')}\n'
-          '- Maes, Finn (pupil id 1201) | morning: "Te laat" | afternoon: '
-          '"Aanwezig"',
+          '- Maes, Finn (pupil id 1201) | official class: class id 1968 (not '
+          'among the classes this account may view) | morning: "Te laat" | '
+          'afternoon: "Aanwezig"',
         );
         expect(presence.calls, [_getConfig, _getClass]);
       });
 
       test('a half-day the module gives no name with: the codes of the '
           "structure of the pupil's official class, read once per structure "
-          'after the pupils, not those of every class', () async {
+          'after the pupils, not those of every class. The official classes '
+          'by name and class id', () async {
         // 2A ECO, the official class of Maes, in a second structure, and
         // Peeters of 1A in 2A too. Maes holds "Ziek", a code of 2A ECO's
         // structure, and "Te laat", a code of 1A's.
@@ -480,11 +510,12 @@ void main() {
         expect(
           text,
           '${heading('2 pupils')}\n'
-          '- Maes, Finn (pupil id 1201) | morning: "Ziek" | afternoon: code '
-          'id 497 (the module gave no name with the record, and it is not '
-          "among the codes of the pupil's official class)\n"
-          '- Peeters, Lotte (pupil id 1001) | morning: "Aanwezig" | '
-          'afternoon: "Aanwezig"',
+          '- Maes, Finn (pupil id 1201) | official class: 2A ECO (class id '
+          '1968) | morning: "Ziek" | afternoon: code id 497 (the module gave '
+          "no name with the record, and it is not among the codes of the "
+          "pupil's official class)\n"
+          '- Peeters, Lotte (pupil id 1001) | official class: 1A (class id '
+          '298) | morning: "Aanwezig" | afternoon: "Aanwezig"',
         );
         expect(presence.calls, [_getConfig, _getClass, _getCodes, _getCodes]);
         expect(
@@ -510,13 +541,44 @@ void main() {
         expect(
           text,
           '${heading('1 pupil')}\n'
-          '- Maes, Finn (pupil id 1201) | morning: code id 497 (the module '
-          'gave no name with the record, and this account does not see the '
-          "pupil's official class, whose codes would name it) | afternoon: "
-          '"Aanwezig"',
+          '- Maes, Finn (pupil id 1201) | official class: class id 1968 (not '
+          'among the classes this account may view) | morning: code id 497 '
+          '(the module gave no name with the record, and this account does '
+          "not see the pupil's official class, whose codes would name it) | "
+          'afternoon: "Aanwezig"',
         );
         expect(presence.calls, [_getConfig, _getClass]);
       });
+
+      test(
+        'one that names no class it groups, with pupils from across the '
+        "school: each one's official class, also when the module gave none",
+        () async {
+          presence.classes.add(fakeTaalatelier);
+
+          final text = await ok('list_class_presences', {
+            'class_id': 5248,
+            'date': _day,
+          });
+
+          expect(
+            text,
+            'Class Taalatelier groep 1 (class id 5248), Monday 2026-06-01: 3 '
+            "pupils, in the module's order. This account may record presences "
+            'for this class. The class is a grouping class without a school '
+            "structure: presences are recorded in the pupils' official class.\n"
+            '- Peeters, Lotte (pupil id 1001) | official class: 1A (class id '
+            '298) | morning: "Aanwezig" | afternoon: "Aanwezig"\n'
+            '- Maes, Finn (pupil id 1201) | official class: class id 1968 (not '
+            'among the classes this account may view) | morning: "Te laat" | '
+            'afternoon: "Aanwezig"\n'
+            '- Goossens, Ruben (pupil id 1301) | official class: none given by '
+            'the module | morning: nothing recorded | afternoon: nothing '
+            'recorded',
+          );
+          expect(presence.calls, [_getConfig, _getClass]);
+        },
+      );
     });
 
     test('an unknown class id, or a date that is not a day: says what to '
@@ -741,14 +803,72 @@ void main() {
       expect(presence.calls, _readFirst);
     });
 
-    test('a grouping class, and an unknown class', () async {
-      expect(
-        await error('set_pupils_present', write([1201], classId: 1650)),
-        'Class 2A (class id 1650) is a grouping class without a school '
-        "structure: presences are recorded in the pupils' official class. "
-        'Find it with list_presence_classes. Nothing was changed in '
-        'Smartschool.',
-      );
+    test(
+      'a grouping class: refused after reading the class, naming the '
+      'official class of each pupil asked for, to call instead (#110)',
+      () async {
+        String refused(String tool, List<String> pupils) => [
+          'Class 2A (class id 1650) is a grouping class without a school '
+              "structure: presences are recorded in the pupils' official class, "
+              'not here. Call $tool with the official class of the pupils '
+              'instead, one call per class:',
+          ...pupils,
+          'Nothing was changed in Smartschool.',
+        ].join('\n');
+
+        // The official class of Maes, 2A ECO, is one this account does not
+        // see.
+        expect(
+          await error('set_pupils_late', write([1201], classId: 1650)),
+          refused('set_pupils_late', [
+            '- Maes, Finn (pupil id 1201): class id 1968 (not among the classes '
+                'this account may view)',
+          ]),
+        );
+        expect(presence.calls, [_getConfig, _getClass]);
+
+        // Here it sees 2A ECO, and Peeters of 1A is in 2A too.
+        presence.requests.clear();
+        presence.classes
+          ..add(fake2AEco)
+          ..[presence.classes.indexOf(fake2A)] = const FakePresenceClass(
+            1650,
+            '2A  ',
+            structId: null,
+            downStreamGroupIds: [1968],
+            pupils: [fakeMaes, fakePeeters],
+          );
+        expect(
+          await error(
+            'set_pupils_present',
+            write([1201, 1001, 4242], classId: 1650),
+          ),
+          refused('set_pupils_present', [
+            '- Maes, Finn (pupil id 1201): 2A ECO (class id 1968)',
+            '- Peeters, Lotte (pupil id 1001): 1A (class id 298)',
+            '- pupil id 4242: not listed in the class on that day',
+          ]),
+        );
+        expect(presence.calls, [_getConfig, _getClass]);
+        expect(presence.saves, isEmpty);
+
+        // One the account may only view is refused as such, after reading only
+        // the configuration.
+        presence
+          ..requests.clear()
+          ..dropConfirmRight();
+        expect(
+          await error('set_pupils_late', write([1201], classId: 1650)),
+          startsWith(
+            'This account may not record presences for class 2A (class id '
+            '1650): the Presence module lets it view the class only.',
+          ),
+        );
+        expect(presence.calls, [_getConfig]);
+      },
+    );
+
+    test('an unknown class', () async {
       expect(
         await error('set_pupils_late', write([1001], classId: 4242)),
         endsWith(

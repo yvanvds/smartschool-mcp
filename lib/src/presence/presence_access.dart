@@ -178,12 +178,18 @@ DateTime presenceToday(DateTime now) => DateTime(now.year, now.month, now.day);
 /// it.
 final class PresenceDay {
   const PresenceDay({
+    required this.config,
     required this.presenceClass,
     required this.day,
     required this.codes,
     required this.pupils,
     this.officialCodes = const {},
   });
+
+  /// The module's configuration, as read with the class: the classes this
+  /// account may view, which name the official class of each pupil of a
+  /// grouping class ([PresencePupil.officialClassId], `formatOfficialClass`).
+  final PresenceConfig config;
 
   /// The class, as the module's configuration lists it.
   final PresenceClassRef presenceClass;
@@ -276,6 +282,7 @@ Future<PresenceDay> readPresenceDay(
     schoolyearRefDate: config.schoolyearRefDate,
   );
   return PresenceDay(
+    config: config,
     presenceClass: presenceClass,
     day: day,
     codes: codes,

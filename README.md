@@ -701,7 +701,17 @@ first two only read, the last two change the presences of pupils:
   not `userCanRecord`, which a teacher without the absence-administrator
   rights has for every class, #95 and yvanvds/dartschool#121); a
   grouping class without a school structure is marked, as presences are
-  recorded in the pupils' official class.
+  recorded in the pupils' official class, with the classes it groups when
+  the module names them (`downStreamGroupIds`, yvanvds/dartschool#126,
+  #110): `groups 2A MAW (class id 1652), 2A ECO (class id 1968)`, each by
+  name and class id, or by class id alone ("not among the classes this
+  account may view") when the configuration does not list it, as for an
+  account without the absence-administrator rights, which is listed fewer
+  classes. Seen live for 6 of the school's 17 grouping classes, the
+  official classes of a year; for the others (such as "Taalatelier groep
+  1") and for every official class nothing is said, not "groups none": the
+  list is not the official classes of the pupils (the grouping class 2C
+  listed a pupil of 2E ECO).
 - `list_class_presences`: the pupils of one class (`class_id`) on one day
   (`date`, default today) with what their morning and afternoon hold
   (`getClassPupils`), named with the codes of the class's structure
@@ -718,7 +728,11 @@ first two only read, the last two change the presences of pupils:
   is named with the codes of the structure of the pupil's official class
   (`PresencePupil.officialClassId`, one `getAllCodes` per distinct
   structure, after the pupils), or by its code id when the account does not
-  see that class (#101). A half-day of any class whose code is not among
+  see that class (#101). In a grouping class, each pupil's line also names
+  the pupil's official class, where the writes record its presences
+  (`official class: 2A ECO (class id 1968)`; by class id alone when the
+  account does not see it, or "none given by the module", not seen live;
+  #110). A half-day of any class whose code is not among
   the codes read is named likewise. Rows per lesson are left out (the
   library ignores them). When the module lists no pupils, the tool gives the
   module's reason
@@ -744,7 +758,10 @@ Both writes guard the record (`changePresences` in
 `lib/src/presence/presence_writes.dart`). Before anything is sent they read
 the class once and refuse, for the whole call: a date in the future, a class
 the account may only view (after reading only the configuration), a
-grouping class, a class or day the module refuses to record presences for
+grouping class (after reading it: the error names the official class of
+each pupil asked for, to call the tool with instead, as the library's
+`setLate` and `setPresent` refuse a grouping class too, #110), a class or
+day the module refuses to record presences for
 (its `saveIsAllowed`, with its reason, yvanvds/dartschool#104), a pupil who
 is not listed, and a pupil whose half-day holds anything but nothing,
 "Aanwezig", "Te laat" or "Te laat zonder geldige reden", such as an absence
@@ -903,7 +920,8 @@ and turns the module's errors into `ToolError`s (`presenceToolError`, whose
 details go to the log only), and `runPresence`, which leaves them as they
 are; `PresenceServices`, one service per client for a tool call, so the
 configuration and the codes are read once per call; `readPresenceDay`, which
-reads a class on a day (`PresenceDay`: the class, its codes and its pupils);
+reads a class on a day (`PresenceDay`: the configuration, the class, its
+codes and its pupils);
 the `class_id` and `date` arguments (`presenceDay`); and
 `checkPresenceAccess`, the access check of `smartschool_status`. In
 `presence_format.dart`: what a half-day holds (`PresenceKind`, and

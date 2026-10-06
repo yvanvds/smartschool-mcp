@@ -17,12 +17,13 @@ import 'presence_format.dart';
 // - Before anything is sent, the server reads the class once and refuses,
 //   for the whole call: a date in the future, a class the account may not
 //   record presences for ([mayRecordHalfDays]), a grouping class without a
-//   school structure, a class or day the module refuses to record presences
-//   for (its `saveIsAllowed` and reason, yvanvds/dartschool#104), and a
-//   pupil who is not listed or whose half-day holds another status than
-//   nothing, "Aanwezig", "Te laat" or "Te laat zonder geldige reden". A pupil
-//   who already has the status (and the motivation) is left alone: nothing
-//   is saved for them.
+//   school structure (naming the official class of each pupil asked for, to
+//   call instead, #110), a class or day the module refuses to record
+//   presences for (its `saveIsAllowed` and reason, yvanvds/dartschool#104),
+//   and a pupil who is not listed or whose half-day holds another status
+//   than nothing, "Aanwezig", "Te laat" or "Te laat zonder geldige reden". A
+//   pupil who already has the status (and the motivation) is left alone:
+//   nothing is saved for them.
 // - The pupils are changed one after the other, and the change stops at the
 //   first that fails. The library reads the class right before each save
 //   and refuses a half-day that holds another status than those
@@ -208,14 +209,16 @@ Future<CallToolResult> changePresences(
   }
   final services = PresenceServices();
   final read = await _withPresenceWrite(session, (presence) async {
-    // The class first: a class the account may not record for is refused
-    // without reading its pupils.
+    // The class first: a class the account may only view is refused without
+    // reading its pupils. A grouping class is read, for the official class
+    // of each pupil asked for (_refuseGroupingClass).
     final config = await presence.getConfig();
     if (config.classForGroup(classId) case final presenceClass?) {
-      _refuseClass(presenceClass);
+      _refuseViewOnly(presenceClass);
     }
     return readPresenceDay(presence, classId, day);
   }, services);
+  _refuseGroupingClass(tool, read, pupilIds);
   _refuseBeforeSending(tool, read, pupilIds, part, target);
 
   final steps = <int, _Step>{};
@@ -299,25 +302,44 @@ Future<T> _withPresenceWrite<T>(
   }
 }
 
-/// Refuses, with a [ToolError], a class whose presences the account may not
-/// record: one it may only view ([mayRecordHalfDays]), and a grouping class
-/// without a school structure.
-void _refuseClass(PresenceClassRef presenceClass) {
-  final named = formatPresenceClassName(presenceClass);
-  if (!mayRecordHalfDays(presenceClass)) {
-    throw ToolError(
-      'This account may not record presences for $named: the Presence '
-      'module lets it view the class only. Ask the school\'s Smartschool '
-      'administrator for the right to record presences for it.',
-    );
-  }
-  if (presenceClass.structId == null) {
-    throw ToolError(
-      '${capitalized(named)} is a grouping class without a school '
-      "structure: presences are recorded in the pupils' official class. Find "
-      'it with list_presence_classes.',
-    );
-  }
+/// Refuses, with a [ToolError], a class whose presences the account may
+/// only view ([mayRecordHalfDays]).
+void _refuseViewOnly(PresenceClassRef presenceClass) {
+  if (mayRecordHalfDays(presenceClass)) return;
+  throw ToolError(
+    'This account may not record presences for '
+    '${formatPresenceClassName(presenceClass)}: the Presence module lets it '
+    "view the class only. Ask the school's Smartschool administrator for the "
+    'right to record presences for it.',
+  );
+}
+
+/// Refuses the call of [tool] with a [ToolError] when [read] is a grouping
+/// class without a school structure: presences are recorded in the pupils'
+/// official classes, and the library's `setLate` and `setPresent` refuse a
+/// grouping class too. The error names the official class of each of the
+/// pupils [pupilIds] as the class read lists them
+/// ([PresencePupil.officialClassId], [formatOfficialClass]), so that Claude
+/// can call [tool] with it instead, without searching the school's classes
+/// by name (#110).
+void _refuseGroupingClass(String tool, PresenceDay read, List<int> pupilIds) {
+  if (read.presenceClass.structId != null) return;
+  throw ToolError(
+    [
+      '${capitalized(formatPresenceClassName(read.presenceClass))} is a '
+          'grouping class without a school structure: presences are recorded '
+          "in the pupils' official class, not here. Call $tool with the "
+          'official class of the pupils instead, one call per class:',
+      for (final pupilId in pupilIds)
+        switch (read.pupil(pupilId)) {
+          final pupil? =>
+            '- ${formatPresencePupil(pupil)}: '
+                '${formatOfficialClass(pupil, read.config)}',
+          null => '- pupil id $pupilId: not listed in the class on that day',
+        },
+      nothingChangedInPresences,
+    ].join('\n'),
+  );
 }
 
 /// Refuses the call of [tool] with a [ToolError] when [read], the class

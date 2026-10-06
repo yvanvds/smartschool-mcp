@@ -165,6 +165,35 @@ String formatPresencePupil(PresencePupil pupil) =>
 String formatPresenceClassName(PresenceClassRef presenceClass) =>
     'class ${_label(presenceClass.name)} (class id ${presenceClass.groupId})';
 
+/// The class with class id [groupId], as the presence tools name a class
+/// that [config] need not list, such as a pupil's official class
+/// ([formatOfficialClass]) or a class a grouping class groups
+/// ([PresenceClassRef.downStreamGroupIds]): name and class id, such as
+/// `2A ECO (class id 1968)`, or, when the configuration does not list it,
+/// `class id 1968 (not among the classes this account may view)`. Seen
+/// live, an account without the absence-administrator rights is listed
+/// fewer classes than the school has, without sub-groups such as "2A ECO"
+/// (yvanvds/dartschool#121).
+String formatPresenceClassId(int groupId, PresenceConfig config) =>
+    switch (config.classForGroup(groupId)) {
+      final listed? => '${_label(listed.name)} (class id $groupId)',
+      null =>
+        'class id $groupId (not among the classes this account may '
+            'view)',
+    };
+
+/// The official class of [pupil] ([PresencePupil.officialClassId]), named
+/// with [config] ([formatPresenceClassId]): for a pupil listed in a
+/// grouping class, the class whose presences `set_pupils_late` and
+/// `set_pupils_present` record. `none given by the module` when the module
+/// gave none; not seen live, where it gave one with every pupil of all
+/// seventeen grouping classes of the school (yvanvds/dartschool#126).
+String formatOfficialClass(PresencePupil pupil, PresenceConfig config) =>
+    switch (pupil.officialClassId) {
+      final groupId? => formatPresenceClassId(groupId, config),
+      null => 'none given by the module',
+    };
+
 /// What the Presence module said, [text] (in Dutch), quoted on one line and
 /// ending a sentence: for example `"Deze klas bevat geen leerlingen."`.
 String formatModuleReason(String text) {
@@ -205,27 +234,57 @@ bool mayRecordHalfDays(PresenceClassRef presenceClass) =>
     presenceClass.userCanConfirm;
 
 /// One class of `list_presence_classes`: name, class id, whether the
-/// account may record presences for it ([mayRecordHalfDays]), and whether
-/// it is a grouping class without a school structure. For example
-/// `1A | class id 298 | may record`.
-String formatPresenceClass(PresenceClassRef presenceClass) => [
-  _label(presenceClass.name),
-  'class id ${presenceClass.groupId}',
-  mayRecordHalfDays(presenceClass) ? 'may record' : 'view only',
-  if (presenceClass.structId == null)
-    'grouping class (no school structure): record in the official class',
-].join(' | ');
+/// account may record presences for it ([mayRecordHalfDays]), whether it is
+/// a grouping class without a school structure, and the classes it groups,
+/// named with [config] ([formatPresenceClassId]). For example `1A | class
+/// id 298 | may record`, or `2A | class id 1650 | may record | grouping
+/// class (no school structure): record in the official class | groups 2A
+/// MAW (class id 1652), 2A ECO (class id 1968)`.
+///
+/// The classes it groups are those the module names, in its order
+/// ([PresenceClassRef.downStreamGroupIds]). Seen live: the official classes
+/// of a year for six of the school's seventeen grouping classes (2A: 2A
+/// MAW, 2A MOW, 2A STEMW and 2A ECO); none for every official class and for
+/// the other grouping classes, such as "Taalatelier groep 1", whose pupils
+/// come from official classes across the school. For those the line says
+/// nothing of them, not "groups none": the list is not the official classes
+/// of the pupils (the grouping class 2C listed a pupil of 2E ECO, which it
+/// does not name, yvanvds/dartschool#126), which `list_class_presences`
+/// gives per pupil.
+String formatPresenceClass(
+  PresenceClassRef presenceClass,
+  PresenceConfig config,
+) {
+  final grouped = [
+    for (final groupId in presenceClass.downStreamGroupIds)
+      formatPresenceClassId(groupId, config),
+  ];
+  return [
+    _label(presenceClass.name),
+    'class id ${presenceClass.groupId}',
+    mayRecordHalfDays(presenceClass) ? 'may record' : 'view only',
+    if (presenceClass.structId == null)
+      'grouping class (no school structure): record in the official class',
+    if (grouped.isNotEmpty) 'groups ${grouped.join(', ')}',
+  ].join(' | ');
+}
 
 /// One pupil of `list_class_presences` on the day [day] (`yyyy-MM-dd`):
-/// name, pupil id, and what the morning and the afternoon hold, named with
-/// [codes]. For example `- Peeters, Lotte (pupil id 1001) | morning:
-/// "Aanwezig" | afternoon: "Te laat", motivation "bus"`.
+/// name, pupil id, the pupil's [officialClass] when it is given (for a
+/// pupil of a grouping class, [formatOfficialClass]), and what the morning
+/// and the afternoon hold, named with [codes]. For example `- Peeters,
+/// Lotte (pupil id 1001) | morning: "Aanwezig" | afternoon: "Te laat",
+/// motivation "bus"`, or in a grouping class `- Maes, Finn (pupil id 1201)
+/// | official class: 2A ECO (class id 1968) | morning: "Te laat" |
+/// afternoon: "Aanwezig"`.
 String formatPresenceLine(
   PresencePupil pupil,
   String day,
-  PresenceCodes codes,
-) => [
+  PresenceCodes codes, {
+  String? officialClass,
+}) => [
   '- ${formatPresencePupil(pupil)}',
+  if (officialClass != null) 'official class: $officialClass',
   for (final part in DayPart.values)
     '${formatDayPart(part)}: '
         '${codes.describe(pupil.halfDayFor(part, date: day))}',

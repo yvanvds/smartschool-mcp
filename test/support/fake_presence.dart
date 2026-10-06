@@ -120,6 +120,7 @@ class FakePresenceClass {
     this.groupId,
     this.name, {
     this.structId = fakePresenceStruct,
+    this.downStreamGroupIds = const [],
     this.userCanRecord = true,
     this.userCanConfirm = true,
     this.pupils = const [],
@@ -132,6 +133,13 @@ class FakePresenceClass {
 
   /// The school structure, or null for a grouping class (`""`).
   final int? structId;
+
+  /// The classes this class groups, by class id, as `getConfig` and
+  /// `getClass` give them (`downStreamGroups`, seen live, dartschool#126):
+  /// for some grouping classes, such as 2A, the official classes of a year;
+  /// empty for every official class and for the other grouping classes,
+  /// such as "Taalatelier groep 1".
+  final List<int> downStreamGroupIds;
 
   /// The module's `userCanRecord`, apparently the registration per lesson:
   /// `true` for every class of a teacher, also without the
@@ -151,6 +159,7 @@ class FakePresenceClass {
     groupId,
     name,
     structId: structId,
+    downStreamGroupIds: downStreamGroupIds,
     userCanRecord: userCanRecord,
     userCanConfirm: false,
     pupils: pupils,
@@ -209,11 +218,14 @@ const fakeMaes = FakePresencePupil(
 /// Class 2A: a grouping class without a school structure. The module gives
 /// no codes for it (its `structID` is `""`), while its pupils' half-days
 /// hold the codes of their official classes, each record with its code and
-/// name (seen live, #99 and dartschool#126).
+/// name (seen live, #99 and dartschool#126). It names 2A ECO ([fake2AEco])
+/// among the classes it groups, as 2A did live (with 2A MAW, 2A MOW and 2A
+/// STEMW, left out here).
 const fake2A = FakePresenceClass(
   1650,
   '2A  ',
   structId: null,
+  downStreamGroupIds: [1968],
   pupils: [fakeMaes],
 );
 
@@ -225,6 +237,25 @@ const fake2AEco = FakePresenceClass(
   '2A ECO  ',
   structId: fakePresenceOtherStruct,
   pupils: [fakeMaes],
+);
+
+/// A pupil of Taalatelier groep 1 ([fakeTaalatelier]) whom no class of the
+/// fake with a school structure lists, and who has no
+/// [FakePresencePupil.officialClassId]: `getClass` gives it without an
+/// official class (`officialClass` null). Not seen live: the module gave
+/// one with every pupil of all seventeen grouping classes (dartschool#126).
+const fakeGoossens = FakePresencePupil(1301, 5301, 'Goossens, Ruben');
+
+/// Class Taalatelier groep 1: a grouping class that names no class it
+/// groups (`downStreamGroups` empty, as in dartschool's capture), with
+/// pupils of official classes across the school: Peeters of 1A, Maes of 2A
+/// ECO and Goossens without an official class. Not in
+/// [FakePresence.loadSchool]: a test adds it.
+const fakeTaalatelier = FakePresenceClass(
+  5248,
+  'Taalatelier groep 1  ',
+  structId: null,
+  pupils: [fakePeeters, fakeMaes, fakeGoossens],
 );
 
 /// A fake Presence module, served by `FakeSmartschool` to logged-in
@@ -406,6 +437,7 @@ class FakePresence {
       'userCanConfirm': c.userCanConfirm,
       'instituteNumber': c.structId == null ? '' : 125252,
       'structID': c.structId ?? '',
+      'downStreamGroups': c.downStreamGroupIds,
     };
     return {
       'hasErrors': false,
@@ -453,6 +485,7 @@ class FakePresence {
       'isOfficial': presenceClass.structId == null ? 0 : 1,
       'userCanRecord': presenceClass.userCanRecord,
       'structID': presenceClass.structId ?? '',
+      'downStreamGroups': presenceClass.downStreamGroupIds,
     };
     if (today case final today? when day.compareTo(today) > 0) {
       return _json(jsonEncode({...fields, ...refused(fakePresenceFutureDay)}));

@@ -13,7 +13,9 @@ import 'server_tool.dart';
 /// [PresenceService.getAllCodes]); for a grouping class, which has no
 /// structure, as the module names them with each record
 /// ([PresenceHalfDay.statusName]), or with the codes of the pupil's
-/// official class (`readPresenceDay`, #99 and yvanvds/dartschool#126).
+/// official class (`readPresenceDay`, #99 and yvanvds/dartschool#126), and
+/// with each pupil's official class, where its presences are recorded
+/// (#110).
 ///
 /// [now] gives today, the default day.
 ServerTool listClassPresencesTool(
@@ -29,16 +31,19 @@ ServerTool listClassPresencesTool(
         'afternoon, each by the name of its status (such as "Aanwezig", "Te '
         'laat", "Te laat zonder geldige reden" or an absence code), with its '
         'motivation, or "nothing recorded". One line per pupil: name, pupil '
-        'id, morning and afternoon. Take class_id from '
-        'list_presence_classes. Use it to check who was marked present or '
-        'late, and always before set_pupils_late or set_pupils_present: it '
-        'gives the pupil ids, and what their half-days hold now. Only the '
-        'half-days are shown, not the registrations per lesson. When the '
-        'module lists no pupils, the tool gives its reason, such as a class '
-        'without pupils or a day in the future. Only for an account with the '
-        'right to '
-        'record half-day presences, as an absence administrator has; without '
-        'it, the tool says so. Reading changes nothing.',
+        'id, morning and afternoon. For a grouping class (without a school '
+        "structure), each line also names the pupil's official class, by "
+        'name and class id: set_pupils_late and set_pupils_present record '
+        "the pupil's presences there, not in the grouping class. Take "
+        'class_id from list_presence_classes. Use it to check who was marked '
+        'present or late, and always before set_pupils_late or '
+        'set_pupils_present: it gives the pupil ids, and what their half-days '
+        'hold now. Only the half-days are shown, not the registrations per '
+        'lesson. When the module lists no pupils, the tool gives its reason, '
+        'such as a class without pupils or a day in the future. Only for an '
+        'account with the right to record half-day presences, as an absence '
+        'administrator has; without it, the tool says so. Reading changes '
+        'nothing.',
     inputSchema: Schema.object(
       properties: {
         'class_id': presenceClassIdSchema(),
@@ -89,8 +94,9 @@ String formatPresenceDay(PresenceDay read) {
             'set_pupils_present refuse it.';
   // A grouping class has no codes of its own: its statuses are named as the
   // module names them with the records (readPresenceDay), and the writes go
-  // to the official classes.
-  final grouping = presenceClass.structId == null
+  // to the official classes, named per pupil (#110).
+  final isGrouping = presenceClass.structId == null;
+  final grouping = isGrouping
       ? ' The class is a grouping class without a school structure: '
             "presences are recorded in the pupils' official class."
       : '';
@@ -111,6 +117,13 @@ String formatPresenceDay(PresenceDay read) {
     '${capitalized(named)}, $when: $count, in the '
         "module's order. $record$grouping",
     for (final pupil in read.pupils)
-      formatPresenceLine(pupil, read.date, read.codesOf(pupil)),
+      formatPresenceLine(
+        pupil,
+        read.date,
+        read.codesOf(pupil),
+        officialClass: isGrouping
+            ? formatOfficialClass(pupil, read.config)
+            : null,
+      ),
   ].join('\n');
 }
