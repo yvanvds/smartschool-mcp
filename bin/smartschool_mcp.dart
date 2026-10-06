@@ -15,9 +15,12 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/add_intradesk_weblink_tool.dart';
+import 'package:smartschool_mcp/src/tools/add_lesfiche_attachments_tool.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/create_lesfiche_tool.dart';
+import 'package:smartschool_mcp/src/tools/edit_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
@@ -30,19 +33,27 @@ import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_lesfiche_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
+import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/remove_lesfiche_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_recipients_tool.dart';
 import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
+import 'package:smartschool_mcp/src/tools/set_lesfiche_attachment_visibility_tool.dart';
+import 'package:smartschool_mcp/src/tools/set_lesfiche_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_intradesk_items_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
@@ -133,6 +144,17 @@ Future<void> _serve(ServerOptions options) async {
           editPlannedElementTool(session),
           clearLessonTool(session),
           listLesfichesTool(session),
+          readLesficheTool(session),
+          readLesficheAttachmentTool(session),
+          saveLesficheAttachmentTool(session, downloads),
+          createLesficheTool(session),
+          editLesficheTool(session),
+          setLesficheWeblinkTool(session),
+          removeLesficheWeblinkTool(session),
+          addLesficheAttachmentsTool(session),
+          setLesficheAttachmentVisibilityTool(session),
+          removeLesficheAttachmentTool(session),
+          trashLesfichesTool(session),
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),

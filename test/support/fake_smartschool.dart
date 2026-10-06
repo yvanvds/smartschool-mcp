@@ -86,8 +86,12 @@ class FakeSmartschool implements HttpClientAdapter {
   /// Every request, as `METHOD path`.
   final List<String> requests = [];
 
-  /// The Messages module, served to logged-in requests.
-  final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
+  /// The Messages module, served to logged-in requests. The attachments of
+  /// a message go through the shared [uploads].
+  late final FakeMailbox mailbox = FakeMailbox(
+    owner: fakeDisplayName,
+    uploads: uploads,
+  );
 
   /// The Intradesk module, served to logged-in requests.
   late final FakeIntradesk intradesk = FakeIntradesk(uploads: uploads);
@@ -98,7 +102,7 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The planner, served to logged-in requests. Its own account is
   /// [fakePlannerMe], the user of the fake's pages.
-  final FakePlanner planner = FakePlanner();
+  late final FakePlanner planner = FakePlanner(uploads: uploads);
 
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
@@ -237,7 +241,7 @@ class FakeSmartschool implements HttpClientAdapter {
     return uploads.respond(options) ??
         mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
-        planner.respond(options) ??
+        planner.respond(options, cancelled: cancelled) ??
         skore.respond(options) ??
         _html(_homePage);
   }

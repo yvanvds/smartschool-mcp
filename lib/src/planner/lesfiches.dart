@@ -8,7 +8,9 @@ import 'planner_format.dart';
 // of the user's own planner: the kinds a tool lists, the lesfiche id a tool
 // takes, the names of a lesfiche's courses, the order of the list, and one
 // line per lesfiche. Both tools reach the module with `withPlannerClient`
-// (`planner_access.dart`), which turns its errors into ToolErrors.
+// (`planner_access.dart`), which turns its errors into ToolErrors. One
+// lesfiche in full, with its weblinks and attachments, is in
+// `lesfiche_detail.dart`.
 
 /// The kinds of lesfiche `list_lesfiches` lists (its `type`).
 enum LesficheKind {
@@ -169,6 +171,21 @@ String formatLesficheCourses(
     if (unnamed > 1) '$unnamed unnamed courses',
   ].join(', ');
 }
+
+/// The note when the school's course list could not be read ([error]), so
+/// that only the number of a lesfiche's courses is shown
+/// ([formatLesficheCourses] without its names).
+String lesficheCourseListNote(SmartschoolLessonContentError error) =>
+    'Note: the names of the courses could not be read from the school\'s '
+    'course list'
+    '${error.statusCode == null ? '' : ' (HTTP ${error.statusCode})'}, so '
+    'only the number of courses is shown.';
+
+/// The note under lesfiches with a course that the school's course list
+/// does not name ([formatLesficheCourses]).
+const unnamedLesficheCourseNote =
+    'A course that the school\'s course list does not name shows as '
+    '"unnamed course".';
 
 /// One line describing [item]: kind, name, labels, courses
 /// ([formatLesficheCourses], by name unless not [withCourseNames]), visible

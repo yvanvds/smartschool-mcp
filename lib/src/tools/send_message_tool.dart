@@ -4,6 +4,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../messages/markdown_to_html.dart';
 import '../messages/recipient_search.dart';
 import '../session.dart';
+import '../uploads/local_files.dart';
 import 'message_sending.dart';
 import 'server_tool.dart';
 
@@ -24,7 +25,15 @@ const _maxListedCandidates = 10;
 /// search does not find exactly, or finds more than once, stops the send
 /// before anything is sent, with who the search does find, for the user to
 /// choose from.
-ServerTool sendMessageTool(SmartschoolSession session) => ServerTool(
+///
+/// Files from this PC go along as attachments ([messageAttachmentsArgument]:
+/// absolute paths of existing files of at most [maxBytes], checked before
+/// anything is sent), uploaded by the library into the compose form's upload
+/// directory before the submit (see [submitOnce]).
+ServerTool sendMessageTool(
+  SmartschoolSession session, {
+  int maxBytes = maxLocalFileBytes,
+}) => ServerTool(
   definition: Tool(
     name: 'send_message',
     title: 'Send a new Smartschool message',
@@ -34,23 +43,24 @@ ServerTool sendMessageTool(SmartschoolSession session) => ServerTool(
         'tool, look up every recipient with search_recipients, show the user '
         'exactly who will receive the message (the names as '
         'search_recipients lists them, with their class or group), the '
-        'subject and the exact text, and only call it after the user has '
-        'explicitly confirmed all of it. When search_recipients finds '
-        'several users or groups for a name, or none, ask the user who they '
-        'mean: never choose for them. A message to a group goes to all its '
-        'members. Pass each recipient as search_recipients lists it before '
-        'the "|", like "Sven Lamber (user 146)" or "5GZ (group 298)"; a name '
-        'alone is enough when exactly one user or group has that name. The '
-        'tool looks every recipient up again, and sends nothing when one '
-        'does not name exactly one user or group: it then lists who '
-        'Smartschool finds. Write body as plain text or simple Markdown: a '
-        'blank line between paragraphs, lines starting with "- " or "1. " '
-        'for lists, **bold**, *italic* and [text](https://...) links. HTML '
-        'in body is not interpreted: it is sent as text. Attachments are not '
-        'supported. The result says to whom the message was sent. If the '
-        'result says the message may or may not have been sent, do not call '
-        'this tool again for it: check the sent box with list_messages (box '
-        'sent) and tell the user.',
+        'subject, the exact text and every attachment with its name and '
+        'size, and only call it after the user has explicitly confirmed all '
+        'of it. When search_recipients finds several users or groups for a '
+        'name, or none, ask the user who they mean: never choose for them. A '
+        'message to a group goes to all its members. Pass each recipient as '
+        'search_recipients lists it before the "|", like "Sven Lamber (user '
+        '146)" or "5GZ (group 298)"; a name alone is enough when exactly one '
+        'user or group has that name. The tool looks every recipient up '
+        'again, and sends nothing when one does not name exactly one user or '
+        'group: it then lists who Smartschool finds. Write body as plain '
+        'text or simple Markdown: a blank line between paragraphs, lines '
+        'starting with "- " or "1. " for lists, **bold**, *italic* and '
+        '[text](https://...) links. HTML in body is not interpreted: it is '
+        'sent as text. ${messageAttachmentsDescription(maxBytes)} The '
+        'result says to whom the message was sent, and with which '
+        'attachments. If the result says the message may or may not have '
+        'been sent, do not call this tool again for it: check the sent box '
+        'with list_messages (box sent) and tell the user.',
     inputSchema: Schema.object(
       properties: {
         'to': _recipientsSchema(
@@ -76,6 +86,7 @@ ServerTool sendMessageTool(SmartschoolSession session) => ServerTool(
               'or simple Markdown.',
           minLength: 1,
         ),
+        'attachments': messageAttachmentsSchema(),
       },
       required: ['to', 'subject', 'body'],
     ),
@@ -87,7 +98,8 @@ ServerTool sendMessageTool(SmartschoolSession session) => ServerTool(
       openWorldHint: true,
     ),
   ),
-  handler: (request) => _sendMessage(session, request.arguments ?? const {}),
+  handler: (request) =>
+      _sendMessage(session, maxBytes, request.arguments ?? const {}),
 );
 
 Schema _recipientsSchema(String description, {int? minItems}) => Schema.list(
@@ -111,6 +123,7 @@ enum _Field {
 
 Future<CallToolResult> _sendMessage(
   SmartschoolSession session,
+  int maxBytes,
   Map<String, Object?> arguments,
 ) async {
   final requests = {
@@ -136,10 +149,20 @@ Future<CallToolResult> _sendMessage(
     );
   }
   final html = markdownToHtml(body);
+  final attachments = messageAttachmentsArgument(
+    arguments['attachments'],
+    maxBytes: maxBytes,
+  );
 
   try {
     final summary = await session.run(
-      (client) => _send(client, requests, subject: subject, html: html),
+      (client) => _send(
+        client,
+        requests,
+        subject: subject,
+        html: html,
+        attachments: attachments,
+      ),
     );
     return CallToolResult(
       content: [TextContent(text: 'Sent the message.\n$summary')],
@@ -178,7 +201,8 @@ List<RecipientRequest> _requests(Map<String, Object?> arguments, _Field field) {
 }
 
 /// Looks up the recipients of [requests], sends the message with [client]
-/// and returns to whom and with which subject ([sendSummary]).
+/// and the files [attachments], and returns to whom, with which subject and
+/// with which attachments ([sendSummary]).
 ///
 /// Every recipient is looked up (each name searched once, all on one compose
 /// form) before anything is sent. When one does not name exactly one user
@@ -192,6 +216,7 @@ Future<String> _send(
   Map<_Field, List<RecipientRequest>> requests, {
   required String subject,
   required String html,
+  required List<LocalFile> attachments,
 }) async {
   final messages = MessagesService(client);
   try {
@@ -213,6 +238,7 @@ Future<String> _send(
       cc: labels(_Field.cc),
       bcc: labels(_Field.bcc),
       subject: subject,
+      attachments: attachments,
     );
     await submitOnce(
       () => messages.sendMessage(
@@ -225,11 +251,13 @@ Future<String> _send(
           bccGroups: groups(_Field.bcc),
           subject: subject,
           bodyHtml: html,
+          attachmentPaths: [for (final file in attachments) file.path],
         ),
       ),
       tool: 'send_message',
       what: 'the message "$subject"',
       summary: summary,
+      attachments: attachments,
       composeRefused:
           'Smartschool did not open its compose form, or did not take the '
           'recipients of the message on it, so nothing was sent. The account '

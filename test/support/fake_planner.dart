@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart'
     show PlannerService;
+
+import 'fake_download.dart';
+import 'fake_uploads.dart';
 
 /// The planner user id of the fake's own account: the `authenticatedUser.id`
 /// of the fake's pages ([fakeDisplayName] in `fake_smartschool.dart`).
@@ -17,6 +21,35 @@ const fakeAssignmentTypesPath =
 /// Where the user's lesfiches are read: the Lesfiches module's list, with
 /// the slash at the end, as the library asks for it.
 const fakeLesfichesPath = '/lesson-content/api/v1/lesson-content/';
+
+const _lessonContentApi = '/lesson-content/api/v1';
+
+/// Where the detail of [lesfiche] is read (dartschool#129):
+/// `lessons/{id}` or `assignments/{id}`, by its kind.
+String fakeLesficheDetailPath(FakeLesfiche lesfiche) =>
+    '$_lessonContentApi/${lesfiche.type}/${lesfiche.id}';
+
+/// Where the attachment [attachment] of [lesfiche] is downloaded
+/// (dartschool#129).
+String fakeLesficheDownloadPath(
+  FakeLesfiche lesfiche,
+  FakeLesficheAttachment attachment,
+) =>
+    '${fakeLesficheDetailPath(lesfiche)}/attachments/${attachment.id}/'
+    'download';
+
+/// Where a new lesfiche of the kind [type] (`lessons`, `assignments`) is
+/// made (dartschool#129): `POST lessons/` or `assignments/`, with the slash.
+String fakeLesficheCreatePath([String type = 'lessons']) =>
+    '$_lessonContentApi/$type/';
+
+/// Where lesfiches are moved to the module's trash (dartschool#129): one
+/// `POST lesson-content/trash/bulk` for all of them.
+const fakeLesficheTrashPath = '$_lessonContentApi/lesson-content/trash/bulk';
+
+/// The id the fake gives the [n]th lesfiche its creates make.
+String fakeNewLesficheId(int n) =>
+    'b0000000-0000-4000-9000-${'$n'.padLeft(12, '0')}';
 
 /// Where the school's course list is read: by the library's session check,
 /// which takes the platform id from its first course, and by the Lesfiches
@@ -515,14 +548,94 @@ class FakePlannedElement {
   };
 }
 
+/// When pupils see a weblink or an attachment of a lesfiche, as the module
+/// writes it (dartschool#129): `{option, daysAfterEnd}`.
+Map<String, Object?> _visibilityJson(String option, int? daysAfterEnd) => {
+  'option': option,
+  'daysAfterEnd': daysAfterEnd,
+};
+
+/// A weblink of a lesfiche, in the shape of dartschool's trimmed capture of
+/// the detail (`test/lesson_content_write_test.dart` there, #129).
+class FakeLesficheWeblink {
+  const FakeLesficheWeblink({
+    required this.id,
+    required this.name,
+    required this.url,
+    this.icon = 'earth',
+    this.option = 'always',
+    this.daysAfterEnd,
+  });
+
+  final String id;
+  final String name;
+  final String url;
+  final String icon;
+
+  /// When pupils see it: `always`, `never`, `at-start`, `at-end` or
+  /// `days-after-end` (with [daysAfterEnd]), or any other text.
+  final String option;
+  final int? daysAfterEnd;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'url': url,
+    'icon': icon,
+    'visibility': _visibilityJson(option, daysAfterEnd),
+  };
+}
+
+/// An attachment of a lesfiche, in the shape of dartschool's trimmed
+/// capture of the detail (#129), with the [content] the fake serves at its
+/// download path ([fakeLesficheDownloadPath]).
+class FakeLesficheAttachment {
+  const FakeLesficheAttachment({
+    required this.id,
+    required this.fileName,
+    this.content = const [],
+    this.fileSize,
+    this.mimeType = 'text/plain',
+    this.option = 'always',
+    this.daysAfterEnd,
+  });
+
+  final String id;
+  final String fileName;
+
+  /// What the download gives.
+  final List<int> content;
+
+  /// The size the detail gives; the size of [content] by default.
+  final int? fileSize;
+  final String? mimeType;
+
+  /// When pupils see it, as [FakeLesficheWeblink.option].
+  final String option;
+  final int? daysAfterEnd;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'fileName': fileName,
+    'fileSize': fileSize ?? content.length,
+    'mimeType': mimeType,
+    'visibility': _visibilityJson(option, daysAfterEnd),
+  };
+}
+
 /// A lesfiche of the Lesfiches module (lesson content), which the fake
-/// lists at [fakeLesfichesPath] and the planner plans into an empty lesson
-/// hour.
+/// lists at [fakeLesfichesPath], whose detail it serves at
+/// [fakeLesficheDetailPath] with its attachments at
+/// [fakeLesficheDownloadPath], and which the planner plans into an empty
+/// lesson hour.
 ///
 /// The JSON has the shape of dartschool's anonymised capture of the live
 /// list (`test/lesson_content_service_test.dart` there, #88): dates without
 /// an offset, courses by id only, the school's labels (`platform`) and the
-/// user's own (`user`).
+/// user's own (`user`); the detail ([detailJson]) that of its trimmed
+/// capture of `GET lessons/{id}` (`test/lesson_content_write_test.dart`,
+/// #129): no dates, the private info (also as `info`), and the weblinks and
+/// attachments with their visibility.
 class FakeLesfiche {
   const FakeLesfiche({
     required this.id,
@@ -530,6 +643,7 @@ class FakeLesfiche {
     this.type = 'lessons',
     this.icon = 'document_observation',
     this.publicInfo = '',
+    this.privateInfo = '',
     this.isVisible = true,
     this.owner = fakePlannerMe,
     this.lastChanged = '2025-09-12 12:24:59',
@@ -537,7 +651,9 @@ class FakeLesfiche {
     this.labels = const [],
     this.ownLabels = const [],
     this.assignmentType,
+    this.weblinks = const [],
     this.attachments = const [],
+    this.partnerWeblinks = 0,
   });
 
   final String id;
@@ -549,6 +665,9 @@ class FakeLesfiche {
 
   /// HTML, as the module keeps it.
   final String publicInfo;
+
+  /// HTML, as the module keeps it; only in the detail.
+  final String privateInfo;
   final bool isVisible;
 
   /// The whole user id of the owner.
@@ -565,9 +684,42 @@ class FakeLesfiche {
   /// The texts of the user's own labels.
   final List<String> ownLabels;
   final FakeAssignmentType? assignmentType;
+  final List<FakeLesficheWeblink> weblinks;
+  final List<FakeLesficheAttachment> attachments;
 
-  /// The names of the attachments.
-  final List<String> attachments;
+  /// How many weblinks of publishers it has (made-up ones, without fields:
+  /// the server only counts them).
+  final int partnerWeblinks;
+
+  /// This lesfiche with the fields given changed, as a write of the module
+  /// leaves it (dartschool#129).
+  FakeLesfiche withChanges({
+    String? name,
+    String? icon,
+    String? publicInfo,
+    String? privateInfo,
+    bool? isVisible,
+    List<FakePlannerCourse>? courses,
+    List<FakeLesficheWeblink>? weblinks,
+    List<FakeLesficheAttachment>? attachments,
+  }) => FakeLesfiche(
+    id: id,
+    name: name ?? this.name,
+    type: type,
+    icon: icon ?? this.icon,
+    publicInfo: publicInfo ?? this.publicInfo,
+    privateInfo: privateInfo ?? this.privateInfo,
+    isVisible: isVisible ?? this.isVisible,
+    owner: owner,
+    lastChanged: lastChanged,
+    courses: courses ?? this.courses,
+    labels: labels,
+    ownLabels: ownLabels,
+    assignmentType: assignmentType,
+    weblinks: weblinks ?? this.weblinks,
+    attachments: attachments ?? this.attachments,
+    partnerWeblinks: partnerWeblinks,
+  );
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -607,12 +759,11 @@ class FakeLesfiche {
           'userId': owner,
         },
     ],
-    'weblinks': <Object?>[],
-    'partnerWeblinks': <Object?>[],
-    'attachments': [
-      for (final (index, name) in attachments.indexed)
-        {'id': 'f0000000-0000-4000-8000-00000000004$index', 'name': name},
+    'weblinks': [for (final weblink in weblinks) weblink.toJson()],
+    'partnerWeblinks': [
+      for (var i = 0; i < partnerWeblinks; i++) <String, Object?>{},
     ],
+    'attachments': [for (final attachment in attachments) attachment.toJson()],
     'deeplinks': <Object?>[],
     'capabilities': {
       'canUserSeeDetails': true,
@@ -621,6 +772,29 @@ class FakeLesfiche {
       'canUserTrashAsAdmin': false,
     },
     'type': type,
+  };
+
+  /// The detail of the lesfiche, as `GET lessons/{id}` (or
+  /// `assignments/{id}`) gives it: without dates, with the private info
+  /// (also as `info`), the goals, the upload folder and the mini-database
+  /// items, and the capabilities of the detail.
+  Map<String, Object?> detailJson() => {
+    for (final MapEntry(:key, :value) in toJson().entries)
+      if (key != 'dateStateChanged' && key != 'dateLastChanged') key: value,
+    'info': privateInfo,
+    'privateInfo': privateInfo,
+    'goals': <Object?>[],
+    'uploadFolder': null,
+    'miniDBItems': <Object?>[],
+    'capabilities': {
+      'canUserSeeUploadFolderInfo': false,
+      'canUserCreateUploadFolder': false,
+      'canUserSeeDetails': true,
+      'canUserEdit': true,
+      'canUserTrash': true,
+      'canUserTrashAsAdmin': false,
+      if (type == 'assignments') 'canUserChangeAssignmentTypeAsAdmin': false,
+    },
   };
 }
 
@@ -720,11 +894,15 @@ class FakePlannerHit {
 /// It serves:
 /// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
 ///   `from`, `to` and an optional `types`: the elements added to that
-///   calendar that overlap the period, of those types. A calendar it does
-///   not know is answered as an empty one (`[]`), as the live planner
-///   answers a room it does not have, and answered a group that its search
-///   does not offer (dartschool#127; it answers a person or class it does
-///   not have with `500`, which the fake does not);
+///   calendar that overlap the period, of those types. A calendar without
+///   elements is answered as an empty one (`[]`) when it was added
+///   ([addCalendar]), when the lookup names it, or when it is a room, as
+///   the live planner answers a room it does not have; a person or class
+///   it does not know otherwise with `500`, as the live planner answers a
+///   user or class id it does not have (dartschool#127, in the shape of
+///   dartschool's capture). A group that the planner has but its search
+///   does not offer, which the live planner answered with an empty list, is
+///   one added with [addCalendar] that the lookup does not name;
 /// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
 ///   detail, or the planner's `404` for an element it does not have;
 /// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
@@ -749,6 +927,14 @@ class FakePlannerHit {
 ///   [workloadSettings] ([FakeWorkloadSetting.noLimit] by default);
 /// - `GET` [fakeAssignmentTypesPath]: the [assignmentTypes];
 /// - `GET` [fakeLesfichesPath]: the [lesfiches], in the order added;
+/// - `GET` [fakeLesficheDetailPath] (dartschool#129, `lessons/{id}` or
+///   `assignments/{id}`): the detail of the lesfiche of that kind with that
+///   id ([FakeLesfiche.detailJson]); `404` with the module's bare problem for
+///   an id it does not have of that kind, as live (also a lesson's id asked
+///   for as an assignment);
+/// - `GET` [fakeLesficheDownloadPath] (dartschool#129): the content of the
+///   attachment, as a download ([fakeDownload]) with its file name; `404`
+///   for an attachment it does not have (made up);
 /// - `GET` [fakeCourseListPath], through [courseListAnswer]: the
 ///   [courseList].
 ///
@@ -788,6 +974,40 @@ class FakePlannerHit {
 ///   as [trashElement] does, and answers `200` with `[]`, as live; its
 ///   detail is then `404`.
 ///
+/// And the writes of the Lesfiches module of dartschool#129, as dartschool's
+/// captures show them (`test/lesson_content_write_test.dart` there), of a
+/// lesfiche of [lesfiches] at `lessons/{id}` or `assignments/{id}`:
+/// - `POST lessons/` or `assignments/`: the create ([_createLesfiche]);
+/// - `POST .../rename` (`newName`; an empty one gets a bare `400`, as live),
+///   `.../change-icon` (`newIcon`), `.../change-public-info`
+///   (`newPublicInfo`), `.../change-private-info` (`newPrivateInfo`),
+///   `.../change-courses` (`newCourses`, each `{platformId, id}`, stored as
+///   sent, also a course the course list does not have, as live),
+///   `.../mark-as-visible` and `.../mark-as-invisible`: change the lesfiche,
+///   and answer `200` with the whole lesfiche;
+/// - `POST .../weblinks` (`newName`, `newIcon`, `newUrl`, `newVisibility`;
+///   an address without `http(s)://` gets a bare `400`, as live) adds a
+///   weblink, and `POST .../weblinks/{id}` changes one: both answer `200`
+///   with the weblink only;
+/// - `POST .../attachments` (`randomDir`) adds the files of that upload
+///   directory, each with the visibility `always` whatever was asked (the
+///   module ignores the `visibilityOptions` sent, as live), and answers
+///   with the whole lesfiche; `POST .../attachments/{id}/change-visibility`
+///   (`newVisibility`) sets the visibility of an attachment, and answers
+///   with the whole lesfiche;
+/// - `DELETE .../weblinks/{id}` and `.../attachments/{id}` remove it, and
+///   answer `204`;
+/// - `POST` [fakeLesficheTrashPath] (`lessonContent`, each `{id, type,
+///   platformId}`): moves the lesfiches to the module's trash
+///   ([trashedLesfiches]), and answers `200` with `{"exceptions":[]}`; one
+///   in the trash already gets a bare `500`, as live
+///   ([_trashLesfiches]).
+///
+/// A write of a lesfiche the fake does not have, or of one in
+/// [trashedLesfiches] (whose detail is still served, as live), is answered
+/// with `404`; so is one of a weblink or an attachment the lesfiche does
+/// not have.
+///
 /// A write of an element the fake does not have is answered with `404`.
 /// The fake does not check whose element it changes: the library does that
 /// before it sends a write, and the tests check that none is sent for a
@@ -798,6 +1018,12 @@ class FakePlannerHit {
 /// [lostAnswers] carries the write to a path out, but drops the connection
 /// before the answer.
 class FakePlanner {
+  FakePlanner({FakeUploads? uploads}) : uploads = uploads ?? FakeUploads();
+
+  /// Smartschool's upload step, whose directories the create of a lesfiche
+  /// takes its attachments from (`randomDir`).
+  final FakeUploads uploads;
+
   /// The elements of each calendar, by `user/{id}`, `group/{id}` or
   /// `location/{id}`.
   final Map<String, List<FakePlannedElement>> calendars = {};
@@ -838,6 +1064,18 @@ class FakePlanner {
   /// The user's lesfiches in the Lesfiches module.
   final List<FakeLesfiche> lesfiches = [];
 
+  /// The ids of the lesfiches of [lesfiches] that are in the module's trash,
+  /// in lower case: the list ([fakeLesfichesPath]) leaves them out, their
+  /// detail is still served, and their writes are answered with `404`, as
+  /// live (dartschool#129).
+  final Set<String> trashedLesfiches = {};
+
+  /// The exceptions the module answers a move of these lesfiches to the
+  /// trash with, by lesfiche id in lower case: the move answers `200` with
+  /// them in its `exceptions`, by id, and leaves these lesfiches where they
+  /// are (in the shape of dartschool's test of the trash; not seen live).
+  final Map<String, Map<String, Object?>> lesficheTrashExceptions = {};
+
   /// The school's course list: [fakeSchoolCourses] by default, every course
   /// of the captures, as the live list holds all the school's courses
   /// (dartschool#101). The session check reads the platform id from its
@@ -874,11 +1112,20 @@ class FakePlanner {
   /// How many elements the writes made, for their ids.
   int _made = 0;
 
-  /// The planner requests that change something, as `POST path`, in order.
+  /// How many lesfiches the creates made, for their ids
+  /// ([fakeNewLesficheId]).
+  int _madeLesfiches = 0;
+
+  /// How many weblinks and attachments the creates made, for their ids.
+  int _madeParts = 0;
+
+  /// The planner and Lesfiches requests that change something, as `POST
+  /// path` or `DELETE path`, in order.
   List<String> get writes => [
     for (final request in requests)
-      if (request.method == 'POST' && _isWrite(request.path))
-        'POST ${request.path}',
+      if ((request.method == 'POST' || request.method == 'DELETE') &&
+          _isWrite(request.path))
+        '${request.method} ${request.path}',
   ];
 
   static bool _isWrite(String path) =>
@@ -993,11 +1240,17 @@ class FakePlanner {
       if (request.path.startsWith('$_api/planned-elements/')) request.query,
   ];
 
-  ResponseBody? respond(RequestOptions options) {
+  /// The answer to [options], or null for a request that is not the
+  /// planner's or the Lesfiches module's. A download stops sending when
+  /// [cancelled] completes.
+  ResponseBody? respond(RequestOptions options, {Future<void>? cancelled}) {
     final path = options.uri.path;
+    final lesficheRoute = _lesficheRoute(path);
     if (!path.startsWith('$_api/') &&
         path != fakeAssignmentTypesPath &&
-        path != fakeLesfichesPath) {
+        path != fakeLesfichesPath &&
+        path != fakeLesficheTrashPath &&
+        lesficheRoute == null) {
       return null;
     }
     requests.add((
@@ -1022,8 +1275,47 @@ class FakePlanner {
     if (path == fakeLesfichesPath) {
       if (options.method != 'GET') return null;
       return _json(
-        jsonEncode([for (final lesfiche in lesfiches) lesfiche.toJson()]),
+        jsonEncode([
+          for (final lesfiche in lesfiches)
+            if (!trashedLesfiches.contains(lesfiche.id.toLowerCase()))
+              lesfiche.toJson(),
+        ]),
       );
+    }
+    if (path == fakeLesficheTrashPath) {
+      if (options.method != 'POST') return null;
+      final answer = _trashLesfiches(options.data);
+      if (lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
+    }
+    if (lesficheRoute != null) {
+      if (options.method == 'GET') {
+        return _lesficheAnswer(lesficheRoute, cancelled);
+      }
+      final answer = switch (lesficheRoute) {
+        [final type, ''] when options.method == 'POST' => _createLesfiche(
+          type,
+          options.data,
+        ),
+        [_, _, _, ...] => _lesficheWrite(
+          options.method,
+          lesficheRoute,
+          options.data,
+        ),
+        _ => null,
+      };
+      if (answer != null && lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
     }
     final route = path.substring(_api.length + 1).split('/');
     if (options.method == 'POST') {
@@ -1112,6 +1404,393 @@ class FakePlanner {
     '{"status":404,"title":"Not Found","detail":"","type":""}',
     status: 404,
   );
+
+  /// The parts of [path] after the Lesfiches module's API when it is the
+  /// detail of a lesfiche, the download of an attachment
+  /// (`lessons/{id}`, `assignments/{id}/attachments/{id}/download`), the
+  /// create of a lesfiche (`lessons/`, as `['lessons', '']`) or a write of
+  /// one (`lessons/{id}/rename`, `lessons/{id}/weblinks/{id}`, ...), each
+  /// decoded; null for any other path.
+  static List<String>? _lesficheRoute(String path) {
+    if (!path.startsWith('$_lessonContentApi/')) return null;
+    final route = [
+      for (final part
+          in path.substring(_lessonContentApi.length + 1).split('/'))
+        Uri.decodeComponent(part),
+    ];
+    return switch (route) {
+      ['lessons' || 'assignments', _, ...] => route,
+      _ => null,
+    };
+  }
+
+  /// The lesfiche of the kind [type] (`lessons`, `assignments`) with [id],
+  /// or null when the fake has none.
+  FakeLesfiche? _lesficheOf(String type, String id) => lesfiches
+      .where(
+        (lesfiche) =>
+            lesfiche.type == type &&
+            lesfiche.id.toLowerCase() == id.toLowerCase(),
+      )
+      .firstOrNull;
+
+  /// The answer to a GET of a lesfiche's detail or of the download of an
+  /// attachment ([route], from [_lesficheRoute]).
+  ResponseBody? _lesficheAnswer(List<String> route, Future<void>? cancelled) {
+    final isDownload =
+        route.length == 5 &&
+        route[2] == 'attachments' &&
+        route[4] == 'download';
+    if (route.length != 2 && !isDownload) return null;
+    final lesfiche = _lesficheOf(route[0], route[1]);
+    if (lesfiche == null) return _notFound();
+    if (route.length == 2) return _json(jsonEncode(lesfiche.detailJson()));
+    final attachment = lesfiche.attachments
+        .where(
+          (attachment) => attachment.id.toLowerCase() == route[3].toLowerCase(),
+        )
+        .firstOrNull;
+    if (attachment == null) return _notFound();
+    return fakeDownload(
+      Uint8List.fromList(attachment.content),
+      name: attachment.fileName,
+      cancelled: cancelled,
+    );
+  }
+
+  /// Makes a lesfiche of the kind [type] (`lessons`, `assignments`) from
+  /// the create's body [data], as the module does (dartschool#129): a body
+  /// without every field the web client sends (the module answers a body
+  /// with only a name so), or an assignment without a type of the school's,
+  /// gets a bare `400`; a course is stored as sent, also one the course list
+  /// does not have; the attachments are the files of the upload directory
+  /// `randomDir`, each with the visibility `visibilityOptions` gives its
+  /// name. Answers `201` with `{"id"}` only, and adds the lesfiche to
+  /// [lesfiches] at the end, with the id [fakeNewLesficheId].
+  ResponseBody _createLesfiche(String type, Object? data) {
+    final body = data is Map ? data : const <Object?, Object?>{};
+    const lists = [
+      'courses',
+      'goals',
+      'labels',
+      'weblinks',
+      'partnerWeblinks',
+      'miniDBItems',
+      'deeplinks',
+    ];
+    final name = body['name'];
+    final icon = body['icon'];
+    final publicInfo = body['publicInfo'];
+    final privateInfo = body['privateInfo'];
+    final visibilityOptions = body['visibilityOptions'];
+    final randomDir = body['randomDir'];
+    if (name is! String ||
+        name.isEmpty ||
+        icon is! String ||
+        icon.isEmpty ||
+        publicInfo is! String ||
+        privateInfo is! String ||
+        lists.any((key) => body[key] is! List) ||
+        !body.containsKey('randomDir') ||
+        !body.containsKey('previousLessonContent') ||
+        visibilityOptions is! Map ||
+        (type == 'assignments') != body.containsKey('assignmentType')) {
+      return _badRequest();
+    }
+    FakeAssignmentType? assignmentType;
+    if (type == 'assignments') {
+      final typeId = '${body['assignmentType']}'.toLowerCase();
+      assignmentType = assignmentTypes
+          .where((known) => known.id.toLowerCase() == typeId)
+          .firstOrNull;
+      if (assignmentType == null) return _badRequest();
+    }
+    Map<Object?, Object?>? visibilityOf(String fileName) =>
+        visibilityOptions[fileName] as Map<Object?, Object?>?;
+    final files = randomDir == null
+        ? const <FakeUploadedFile>[]
+        : uploads.directories[randomDir] ?? const <FakeUploadedFile>[];
+    final lesfiche = FakeLesfiche(
+      id: fakeNewLesficheId(++_madeLesfiches),
+      name: name,
+      type: type,
+      icon: icon,
+      publicInfo: publicInfo,
+      privateInfo: privateInfo,
+      lastChanged: '2026-10-05 19:12:37',
+      courses: [
+        for (final course in (body['courses'] as List).cast<Map>())
+          courseList.where((known) => known.id == course['id']).firstOrNull ??
+              FakePlannerCourse('${course['id']}', ''),
+      ],
+      assignmentType: assignmentType,
+      weblinks: [
+        for (final weblink in (body['weblinks'] as List).cast<Map>())
+          FakeLesficheWeblink(
+            id: _newPartId('e'),
+            name: weblink['name'] as String,
+            url: weblink['url'] as String,
+            icon: weblink['icon'] as String,
+            option: (weblink['visibility'] as Map)['option'] as String,
+            daysAfterEnd:
+                (weblink['visibility'] as Map)['daysAfterEnd'] as int?,
+          ),
+      ],
+      attachments: [
+        for (final file in files)
+          FakeLesficheAttachment(
+            id: _newPartId('f'),
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.name.endsWith('.txt')
+                ? 'text/plain'
+                : 'application/octet-stream',
+            option: visibilityOf(file.name)?['option'] as String? ?? 'always',
+            daysAfterEnd: visibilityOf(file.name)?['daysAfterEnd'] as int?,
+          ),
+      ],
+    );
+    lesfiches.add(lesfiche);
+    return _json(jsonEncode({'id': lesfiche.id}), status: 201);
+  }
+
+  /// A new id for a weblink or an attachment, with [prefix] `e` for a
+  /// weblink and `f` for an attachment: the creates and the writes of
+  /// lesfiches count them together.
+  String _newPartId(String prefix) =>
+      '${prefix}1000000-0000-4000-9000-${'${++_madeParts}'.padLeft(12, '0')}';
+
+  /// Carries out the write [route] of a lesfiche (`[type, id, ...]`, from
+  /// [_lesficheRoute]) with [method] and the body [data], as the module does
+  /// (see the class doc); null for a write the module does not have.
+  ResponseBody? _lesficheWrite(
+    String method,
+    List<String> route,
+    Object? data,
+  ) {
+    final [type, id, ...rest] = route;
+    final index = lesfiches.indexWhere(
+      (lesfiche) =>
+          lesfiche.type == type &&
+          lesfiche.id.toLowerCase() == id.toLowerCase(),
+    );
+    if (index < 0 || trashedLesfiches.contains(id.toLowerCase())) {
+      return _notFound();
+    }
+    final lesfiche = lesfiches[index];
+    final body = data is Map ? data : const <Object?, Object?>{};
+    String? text(String key) => switch (body[key]) {
+      final String text => text,
+      _ => null,
+    };
+    ResponseBody changed(FakeLesfiche changed) {
+      lesfiches[index] = changed;
+      return _json(jsonEncode(changed.detailJson()));
+    }
+
+    int indexOf(List<String> ids, String wanted) =>
+        ids.indexWhere((id) => id.toLowerCase() == wanted.toLowerCase());
+    final weblinkIds = [for (final weblink in lesfiche.weblinks) weblink.id];
+    final attachmentIds = [
+      for (final attachment in lesfiche.attachments) attachment.id,
+    ];
+
+    switch ((method, rest)) {
+      case ('POST', ['rename']):
+        final name = text('newName');
+        if (name == null || name.trim().isEmpty) return _badRequest();
+        return changed(lesfiche.withChanges(name: name));
+      case ('POST', ['change-icon']):
+        final icon = text('newIcon');
+        if (icon == null || icon.isEmpty) return _badRequest();
+        return changed(lesfiche.withChanges(icon: icon));
+      case ('POST', ['change-public-info']):
+        final info = text('newPublicInfo');
+        if (info == null) return _badRequest();
+        return changed(lesfiche.withChanges(publicInfo: info));
+      case ('POST', ['change-private-info']):
+        final info = text('newPrivateInfo');
+        if (info == null) return _badRequest();
+        return changed(lesfiche.withChanges(privateInfo: info));
+      case ('POST', ['change-courses']):
+        final courses = body['newCourses'];
+        if (courses is! List) return _badRequest();
+        return changed(
+          lesfiche.withChanges(
+            courses: [
+              for (final course in courses.cast<Map>())
+                courseList
+                        .where((known) => known.id == course['id'])
+                        .firstOrNull ??
+                    FakePlannerCourse('${course['id']}', ''),
+            ],
+          ),
+        );
+      case (
+        'POST',
+        [final action && ('mark-as-visible' || 'mark-as-invisible')],
+      ):
+        return changed(
+          lesfiche.withChanges(isVisible: action == 'mark-as-visible'),
+        );
+      case ('POST', ['weblinks']):
+        final weblink = _weblinkOf(body, _newPartId('e'));
+        if (weblink == null) return _badRequest();
+        lesfiches[index] = lesfiche.withChanges(
+          weblinks: [...lesfiche.weblinks, weblink],
+        );
+        return _json(jsonEncode(weblink.toJson()));
+      case ('POST', ['weblinks', final weblinkId]):
+        final at = indexOf(weblinkIds, weblinkId);
+        if (at < 0) return _notFound();
+        final weblink = _weblinkOf(body, weblinkIds[at]);
+        if (weblink == null) return _badRequest();
+        lesfiches[index] = lesfiche.withChanges(
+          weblinks: [...lesfiche.weblinks]..[at] = weblink,
+        );
+        return _json(jsonEncode(weblink.toJson()));
+      case ('DELETE', ['weblinks', final weblinkId]):
+        final at = indexOf(weblinkIds, weblinkId);
+        if (at < 0) return _notFound();
+        lesfiches[index] = lesfiche.withChanges(
+          weblinks: [...lesfiche.weblinks]..removeAt(at),
+        );
+        return ResponseBody.fromString('', 204);
+      case ('POST', ['attachments']):
+        final files = uploads.directories[body['randomDir']];
+        if (files == null) return _badRequest();
+        return changed(
+          lesfiche.withChanges(
+            attachments: [
+              ...lesfiche.attachments,
+              for (final file in files)
+                FakeLesficheAttachment(
+                  id: _newPartId('f'),
+                  fileName: file.name,
+                  fileSize: file.size,
+                  mimeType: file.name.endsWith('.txt')
+                      ? 'text/plain'
+                      : 'application/octet-stream',
+                ),
+            ],
+          ),
+        );
+      case ('POST', ['attachments', final attachmentId, 'change-visibility']):
+        final at = indexOf(attachmentIds, attachmentId);
+        if (at < 0) return _notFound();
+        final visibility = body['newVisibility'];
+        if (visibility is! Map || visibility['option'] is! String) {
+          return _badRequest();
+        }
+        final old = lesfiche.attachments[at];
+        return changed(
+          lesfiche.withChanges(
+            attachments: [...lesfiche.attachments]
+              ..[at] = FakeLesficheAttachment(
+                id: old.id,
+                fileName: old.fileName,
+                content: old.content,
+                fileSize: old.fileSize,
+                mimeType: old.mimeType,
+                option: visibility['option'] as String,
+                daysAfterEnd: visibility['daysAfterEnd'] as int?,
+              ),
+          ),
+        );
+      case ('DELETE', ['attachments', final attachmentId]):
+        final at = indexOf(attachmentIds, attachmentId);
+        if (at < 0) return _notFound();
+        lesfiches[index] = lesfiche.withChanges(
+          attachments: [...lesfiche.attachments]..removeAt(at),
+        );
+        return ResponseBody.fromString('', 204);
+    }
+    return null;
+  }
+
+  /// Moves the lesfiches of the body [data] of a move to the trash
+  /// (`lessonContent`, each `{id, type, platformId}`, as the web client
+  /// sends it) to the module's trash ([trashedLesfiches]), as the module
+  /// does (dartschool#129), and answers `200` with `{"exceptions":[]}`.
+  ///
+  /// A lesfiche that is in the trash already gets a bare `500`, as live,
+  /// and so does one the fake does not have of that kind (made up); then
+  /// none is moved. A lesfiche of [lesficheTrashExceptions] stays where it
+  /// is, and the answer has its exception in `exceptions`, by its id; the
+  /// others are moved. A body without the list, or with an item without
+  /// its id, kind or platform, gets a bare `400` (made up).
+  ResponseBody _trashLesfiches(Object? data) {
+    final list = data is Map ? data['lessonContent'] : null;
+    if (list is! List ||
+        list.isEmpty ||
+        list.any(
+          (item) =>
+              item is! Map ||
+              item['id'] is! String ||
+              item['type'] is! String ||
+              item['platformId'] is! int,
+        )) {
+      return _badRequest();
+    }
+    final items = [
+      for (final item in list.cast<Map<Object?, Object?>>())
+        (id: item['id']! as String, type: item['type']! as String),
+    ];
+    if (items.any(
+      (item) =>
+          trashedLesfiches.contains(item.id.toLowerCase()) ||
+          _lesficheOf(item.type, item.id) == null,
+    )) {
+      return _json(
+        '{"status":500,"title":"Internal Server Error","detail":"",'
+        '"type":""}',
+        status: 500,
+      );
+    }
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      if (lesficheTrashExceptions[item.id.toLowerCase()] case final error?) {
+        exceptions[item.id] = error;
+      } else {
+        trashedLesfiches.add(item.id.toLowerCase());
+      }
+    }
+    return _json(
+      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
+    );
+  }
+
+  /// The weblink with [id] of the body [body] of a weblink write
+  /// (`newName`, `newIcon`, `newUrl`, `newVisibility`), or null when the
+  /// module answers it with a bare `400`: a value missing, or an address
+  /// without `http://` or `https://` (as live).
+  static FakeLesficheWeblink? _weblinkOf(
+    Map<Object?, Object?> body,
+    String id,
+  ) {
+    final name = body['newName'];
+    final icon = body['newIcon'];
+    final url = body['newUrl'];
+    final visibility = body['newVisibility'];
+    if (name is! String ||
+        name.trim().isEmpty ||
+        icon is! String ||
+        icon.isEmpty ||
+        url is! String ||
+        !RegExp('^https?://', caseSensitive: false).hasMatch(url) ||
+        visibility is! Map ||
+        visibility['option'] is! String) {
+      return null;
+    }
+    return FakeLesficheWeblink(
+      id: id,
+      name: name,
+      url: url,
+      icon: icon,
+      option: visibility['option'] as String,
+      daysAfterEnd: visibility['daysAfterEnd'] as int?,
+    );
+  }
 
   ResponseBody _fill(String ref, Object? data) {
     final body = data as Map;
@@ -1322,18 +2001,38 @@ class FakePlanner {
   }
 
   ResponseBody _calendar(String calendar, Map<String, String> query) {
-    final listed = calendars[calendar] ?? const <FakePlannedElement>[];
+    final listed = calendars[calendar];
+    if (listed == null && _hasNoPlanner(calendar)) {
+      return _json(
+        '{"status":500,"title":"Internal Server Error","detail":"","type":""}',
+        status: 500,
+      );
+    }
     final from = DateTime.parse(query['from']!);
     final to = DateTime.parse(query['to']!);
     final types = query['types']?.split(',').toSet();
     return _json(
       jsonEncode([
-        for (final element in listed)
+        for (final element in listed ?? const <FakePlannedElement>[])
           if (element.overlaps(from, to) &&
               (types == null || types.contains(element.type)))
             element.listJson(),
       ]),
     );
+  }
+
+  /// Whether [calendar] (`user/{id}`, `group/{id}`), one without elements
+  /// added, is a person or class the planner does not have: one that the
+  /// lookup does not name either ([_named]). A room is never one: the live
+  /// planner answers a room it does not have with an empty list.
+  bool _hasNoPlanner(String calendar) {
+    final slash = calendar.indexOf('/');
+    final id = calendar.substring(slash + 1);
+    return switch (calendar.substring(0, slash)) {
+      'user' => _named('users', id) == null,
+      'group' => _named('groups', id) == null,
+      _ => false,
+    };
   }
 
   ResponseBody _search(Object? data) {
@@ -1825,7 +2524,58 @@ final fakeLesficheFuncties = FakeLesfiche(
   name: 'Functies',
   publicInfo: '<p>Hoofdstuk 4</p>',
   courses: [fakeInformatica, _chemie],
-  attachments: ['hoofdstuk4.pdf'],
+  attachments: [
+    FakeLesficheAttachment(
+      id: 'f0000000-0000-4000-8000-000000000040',
+      fileName: 'hoofdstuk4.pdf',
+      mimeType: 'application/pdf',
+    ),
+  ],
+);
+
+/// The lesson lesfiche of dartschool's trimmed capture of the detail of a
+/// lesfiche (`test/lesson_content_write_test.dart` there, #129): public and
+/// private info, the course informatica, a weblink that pupils see from the
+/// end of the lesson, and a text file as an attachment that they never see.
+final fakeLesficheDetailLesson = FakeLesfiche(
+  id: 'b0000000-0000-4000-8000-000000000011',
+  name: 'Lussen',
+  publicInfo: '<p>Hoofdstuk 3</p>',
+  privateInfo: '<p>Voor mij</p>',
+  lastChanged: '2026-10-05 19:12:37',
+  courses: [fakeInformatica],
+  weblinks: [
+    const FakeLesficheWeblink(
+      id: 'e0000000-0000-4000-8000-000000000021',
+      name: 'Oefeningen',
+      url: 'https://example.com/oefeningen',
+      option: 'at-end',
+    ),
+  ],
+  attachments: [
+    FakeLesficheAttachment(
+      id: 'f0000000-0000-4000-8000-000000000031',
+      fileName: 'lussen.txt',
+      content: utf8.encode('dartschool test\n'),
+      option: 'never',
+    ),
+  ],
+);
+
+/// The assignment lesfiche of the same capture (#129): the lesson's
+/// content, of the school's type `KT Kleine Taak`, read at
+/// `assignments/{id}`.
+final fakeLesficheDetailAssignment = FakeLesfiche(
+  id: 'b0000000-0000-4000-8000-000000000012',
+  name: 'Lussen',
+  type: 'assignments',
+  publicInfo: '<p>Hoofdstuk 3</p>',
+  privateInfo: '<p>Voor mij</p>',
+  lastChanged: '2026-10-05 19:12:37',
+  courses: [fakeInformatica],
+  assignmentType: FakeAssignmentType.kt,
+  weblinks: fakeLesficheDetailLesson.weblinks,
+  attachments: fakeLesficheDetailLesson.attachments,
 );
 
 /// The Lesfiches module of the capture, served by
@@ -1837,5 +2587,13 @@ extension FakePlannerLesficheCaptures on FakePlanner {
     fakeLesficheLussen,
     fakeLesficheGame,
     fakeLesficheFuncties,
+  ]);
+
+  /// Serves the lesfiches of dartschool's capture of the detail (#129),
+  /// after those there are: [fakeLesficheDetailLesson] and
+  /// [fakeLesficheDetailAssignment].
+  void loadLesficheDetails() => lesfiches.addAll([
+    fakeLesficheDetailLesson,
+    fakeLesficheDetailAssignment,
   ]);
 }

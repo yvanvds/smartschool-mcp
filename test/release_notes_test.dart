@@ -16,6 +16,37 @@ import 'support/fake_github.dart';
 String _read(String path) =>
     File(path).readAsStringSync().replaceAll('\r\n', '\n');
 
+/// What [file] (a path from the project folder) imports or exports, and
+/// what those imports import further on: the files of this project, as
+/// paths from the project folder, and the other packages, as
+/// `package:<name>` (not followed); `dart:` libraries are left out.
+Set<String> _importGraph(String file) {
+  final reached = <String>{};
+  final todo = [file];
+  while (todo.isNotEmpty) {
+    final path = todo.removeLast();
+    if (!reached.add(path)) continue;
+    for (final match in _directive.allMatches(_read(path))) {
+      final uri = Uri.parse(match[1]!);
+      if (uri.isScheme('dart')) continue;
+      if (!uri.isScheme('package')) {
+        todo.add(Uri.parse(path).resolveUri(uri).path);
+      } else if (uri.pathSegments case ['smartschool_mcp', ...final rest]) {
+        todo.add(['lib', ...rest].join('/'));
+      } else {
+        reached.add('package:${uri.pathSegments.first}');
+      }
+    }
+  }
+  return reached..remove(file);
+}
+
+/// An import or export directive, with its URI.
+final _directive = RegExp(
+  r'''^(?:import|export)\s+['"]([^'"]+)['"]''',
+  multiLine: true,
+);
+
 void main() {
   test('the notes start with what is new in the version, from CHANGELOG.md, '
       'then how to install', () {
@@ -47,6 +78,18 @@ void main() {
     expect(UpdateChecker.notesSection(body), section.replaceAll('`', ''));
   });
 
+  test('the tool compiles in seconds: of the server it imports only '
+      'lib/src/release_notes.dart, which imports nothing, not '
+      'update_check.dart and all of flutter_smartschool with it', () {
+    final graph = _importGraph('tool/release_notes.dart');
+
+    expect(graph.where((path) => path.startsWith('lib/')), [
+      'lib/src/release_notes.dart',
+    ]);
+    expect(graph, isNot(contains('package:flutter_smartschool')));
+    expect(_importGraph('lib/src/release_notes.dart'), isEmpty);
+  });
+
   group('without a section for the version in CHANGELOG.md', () {
     late Directory project;
 
@@ -76,10 +119,10 @@ void main() {
       );
     });
 
-    // Each run JIT-compiles the tool and, through update_check.dart, the whole
-    // flutter_smartschool graph: 20 to 35 s on a developer's PC under its usual
-    // background load, more beside the e2e tests compiling the exe. Two runs do
-    // not fit the default 30 s; give them the budget the e2e files get.
+    // Each run JIT-compiles the tool: a few seconds, like check_version.dart,
+    // now that it no longer compiles flutter_smartschool (#121, and the import
+    // graph test above), which took 20 to 35 s a run on a loaded PC (#119).
+    // The budget the e2e files get stays as a ceiling, not a need.
     test('run as a script: exits with 1 and writes nothing, so the release '
         'workflow stops; with a section it writes the notes', () async {
       final output = File(

@@ -176,15 +176,9 @@ String formatLesfiches({
     if (shown.length > listed.length)
       'Note: only the first ${listed.length} of the ${shown.length} are '
           'shown: narrow the list with label or query.',
-    if (courseError case SmartschoolLessonContentError(
-      :final statusCode,
-    ) when listed.any((item) => item.courses.isNotEmpty))
-      'Note: the names of the courses could not be read from the school\'s '
-          'course list${statusCode == null ? '' : ' (HTTP $statusCode)'}, so '
-          'only the number of courses is shown.',
-    if (unnamed)
-      'A course that the school\'s course list does not name shows as '
-          '"unnamed course".',
+    if (courseError != null && listed.any((item) => item.courses.isNotEmpty))
+      lesficheCourseListNote(courseError),
+    if (unnamed) unnamedLesficheCourseNote,
     if (listed.any((item) => item.type != LessonContentType.lesson))
       'Only the lesson lesfiches can be planned, with plan_lesfiche.',
   ].join('\n');

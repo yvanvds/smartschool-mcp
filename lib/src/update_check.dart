@@ -8,6 +8,7 @@ import 'package:pub_semver/pub_semver.dart';
 import 'cache_folder.dart';
 import 'client_app.dart';
 import 'log.dart';
+import 'release_notes.dart' as release_notes;
 import 'version.dart';
 
 /// A release of this server published on GitHub.
@@ -187,9 +188,9 @@ final class UpdateChecker {
   static const exeAssetName = 'smartschool-mcp.exe';
 
   /// The heading of the section of a release's notes that says what is new
-  /// in it, for the user. `tool/release_notes.dart` puts it at the top of
-  /// the notes, with that version's section of `CHANGELOG.md` under it.
-  static const notesHeading = '## Nieuw in deze versie';
+  /// in it, for the user: [release_notes.notesHeading], which
+  /// `tool/release_notes.dart` puts at the top of the notes.
+  static const notesHeading = release_notes.notesHeading;
 
   /// The most characters of release notes the server passes on: of each
   /// release's [notesHeading] section, and of all of them together.

@@ -15,8 +15,11 @@ Je vraagt het gewoon in een gesprek:
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
-  kiezen, en die toets of taak dan plannen. Je eigen lesuren invullen met
-  lessen of met je lesfiches uit de module Lesfiches, die lessen aanpassen en
+  kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
+  Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken en
+  aanpassen in je eigen bibliotheek, met info, vakken, weblinks en bestanden
+  van je pc, en ze naar de prullenbak van de module verplaatsen. Je eigen
+  lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
@@ -318,6 +321,38 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
   lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
   kunnen zo: een lesfiche van een toets of taak niet.
+- "Wat staat er in mijn lesfiche over recursie? Vat de bijlage samen."
+  Claude zoekt de lesfiche en leest ze: de info voor leerlingen, je
+  privé-info, de weblinks en de bijlagen, en wanneer je leerlingen die zien.
+  Een bijlage leest Claude, of het bewaart ze in je downloadmap. Aan de
+  lesfiche verandert niets.
+- "Maak van deze les een lesfiche voor informatica, met dit werkblad als
+  bijlage en de link naar de oefeningen."
+  Claude toont eerst wat de lesfiche krijgt: de naam, het vak, de info voor
+  leerlingen en je privé-info, de weblinks en de bestanden met hun grootte,
+  en wanneer je leerlingen die zien (altijd, nooit, vanaf het begin of het
+  einde van de les, of enkele dagen erna). Na jouw akkoord maakt het de
+  lesfiche in je eigen bibliotheek ("Mijn lesfiches"), die alleen jij ziet
+  tot je ze in een les plant. Daarna kan Claude ze in je lesuren plannen.
+  Labels geef je zelf in de module Lesfiches. Bestaat er al een lesfiche
+  met die naam, dan maakt Smartschool een tweede, en Claude zegt dat.
+- "Geef mijn lesfiche Lussen ook het vak wiskunde, vervang de dode link
+  naar de oefeningen en laat de oplossingen pas na de les zien."
+  Claude leest de lesfiche en toont wat er verandert: de naam, de info, de
+  vakken, een weblink, een bijlage of wanneer je leerlingen die zien. Na
+  jouw akkoord past het de lesfiche aan in je eigen bibliotheek, en toont
+  het ze zoals ze nu is. Een bestand van je pc toevoegen of een bijlage
+  verwijderen kan ook. Of een les die je al uit de lesfiche gepland hebt
+  mee verandert, is niet zeker: vraag Claude dan om ook die les na te
+  kijken. Een lesfiche in de prullenbak kan Claude niet aanpassen.
+- "Gooi de testlesfiche Lussen weg die je daarnet maakte."
+  Claude zoekt de lesfiche op en toont welke lesfiches het naar de
+  prullenbak van de module Lesfiches verplaatst, met hun naam en of het een
+  les of een toets of taak is. Na jouw akkoord verplaatst het ze, ook
+  meerdere tegelijk. Daarna staan ze niet meer bij je lesfiches. Je zet ze
+  terug vanuit de prullenbak in de module Lesfiches zelf; voor altijd
+  verwijderen kan Claude niet. Een les die je al uit de lesfiche gepland
+  had, blijft in je planner staan.
 - "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
   uur."
   Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken
@@ -454,7 +489,10 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   lesuren weer leeg en verplaatst je toetsen en taken naar de prullenbak.
   Een toets of taak aankondigen, ze uit de prullenbak terugzetten of voor
   altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
-  module Lesfiches leest ze je lesfiches alleen: ze verandert er niets in.
+  module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in
+  je eigen bibliotheek, met hun weblinks en bijlagen, en verplaatst ze
+  lesfiches naar de prullenbak: er labels aan geven, ze uit de prullenbak
+  terugzetten of voor altijd verwijderen kan ze niet.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
   toets apart openen toont meteen de nieuwe.

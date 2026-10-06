@@ -5,9 +5,9 @@
 /// ```
 ///
 /// The notes start with what is new in the version, for colleagues: its
-/// section of `CHANGELOG.md` under [UpdateChecker.notesHeading], the section
-/// the update notice of an older server shows. Then come the install
-/// instructions of `.github/release-notes.md` under [installHeading].
+/// section of `CHANGELOG.md` under [notesHeading], the section the update
+/// notice of an older server shows. Then come the install instructions of
+/// `.github/release-notes.md` under [installHeading].
 /// `gh release create --generate-notes` adds GitHub's list of pull requests
 /// after them.
 ///
@@ -17,7 +17,9 @@ library;
 
 import 'dart:io';
 
-import 'package:smartschool_mcp/src/update_check.dart';
+// Only the heading, which imports nothing: update_check.dart would compile
+// all of flutter_smartschool for it.
+import 'package:smartschool_mcp/src/release_notes.dart';
 
 import 'check_version.dart';
 
@@ -30,10 +32,10 @@ const installNotesFile = '.github/release-notes.md';
 const installHeading = '## Installeren of bijwerken';
 
 /// The notes of a release: [whatIsNew] (a section of `CHANGELOG.md`) under
-/// [UpdateChecker.notesHeading], then [install] (the text of
-/// [installNotesFile]) under [installHeading].
+/// [notesHeading], then [install] (the text of [installNotesFile]) under
+/// [installHeading].
 String releaseNotes({required String whatIsNew, required String install}) => [
-  UpdateChecker.notesHeading,
+  notesHeading,
   '',
   whatIsNew.trim(),
   '',

@@ -5,6 +5,7 @@ import '../messages/markdown_to_html.dart';
 import '../messages/message_box.dart';
 import '../messages/reply_recipients.dart';
 import '../session.dart';
+import '../uploads/local_files.dart';
 import 'arguments.dart';
 import 'message_sending.dart';
 import 'server_tool.dart';
@@ -17,30 +18,37 @@ import 'server_tool.dart';
 /// twice by itself: see [_send].
 ///
 /// The reply is sent with the message's own reply form, so Smartschool links
-/// it to the original, with the original subject after one `Re:`.
-ServerTool replyToMessageTool(SmartschoolSession session) => ServerTool(
+/// it to the original, with the original subject after one `Re:`. Files from
+/// this PC go along as attachments, as with `send_message`
+/// ([messageAttachmentsArgument], files of at most [maxBytes]).
+ServerTool replyToMessageTool(
+  SmartschoolSession session, {
+  int maxBytes = maxLocalFileBytes,
+}) => ServerTool(
   definition: Tool(
     name: 'reply_to_message',
     title: 'Reply to a Smartschool message',
     description:
         'Sends a reply to a Smartschool message. Sending cannot be undone. '
         'Before calling this tool, read the message with read_message, '
-        'show the user the exact text of the reply and who will receive '
-        'it, and only call it after the user has explicitly confirmed '
-        'both. Who receives it: a reply to a message in the inbox or the '
-        'archive goes to its sender; with reply_all it goes to the sender '
-        'and to everyone in To and CC except the user. A reply to a '
-        'message in the sent box goes to its To recipients; with reply_all '
-        'also to its CC recipients. Smartschool links the reply to the '
-        'message. The subject is the original subject with one "Re:" in '
-        'front. Write body as plain text or simple Markdown: a blank line '
-        'between paragraphs, lines starting with "- " or "1. " for lists, '
-        '**bold**, *italic* and [text](https://...) links. HTML in body is '
-        'not interpreted: it is sent as text. Attachments, and messages that are not replies, '
-        'are not supported. The result says to whom the reply was sent. '
-        'If the result says the reply may or may not have been sent, do '
-        'not call this tool again for it: check the sent box with '
-        'list_messages (box sent) and tell the user.',
+        'show the user the exact text of the reply, who will receive it and '
+        'every attachment with its name and size, and only call it after '
+        'the user has explicitly confirmed all of it. Who receives it: a '
+        'reply to a message in the inbox or the archive goes to its sender; '
+        'with reply_all it goes to the sender and to everyone in To and CC '
+        'except the user. A reply to a message in the sent box goes to its '
+        'To recipients; with reply_all also to its CC recipients. '
+        'Smartschool links the reply to the message. The subject is the '
+        'original subject with one "Re:" in front. Write body as plain text '
+        'or simple Markdown: a blank line between paragraphs, lines starting '
+        'with "- " or "1. " for lists, **bold**, *italic* and '
+        '[text](https://...) links. HTML in body is not interpreted: it is '
+        'sent as text. ${messageAttachmentsDescription(maxBytes)} A new '
+        'message, not a reply, is sent with send_message. The result says '
+        'to whom the reply was sent, and with which attachments. If the '
+        'result says the reply may or may not have been sent, do not call '
+        'this tool again for it: check the sent box with list_messages (box '
+        'sent) and tell the user.',
     inputSchema: Schema.object(
       properties: {
         'message_id': Schema.int(
@@ -66,6 +74,7 @@ ServerTool replyToMessageTool(SmartschoolSession session) => ServerTool(
               'The box list_messages showed the message in: inbox '
               '(default), sent or archive.',
         ),
+        'attachments': messageAttachmentsSchema(),
       },
       required: ['message_id', 'body'],
     ),
@@ -77,11 +86,13 @@ ServerTool replyToMessageTool(SmartschoolSession session) => ServerTool(
       openWorldHint: true,
     ),
   ),
-  handler: (request) => _reply(session, request.arguments ?? const {}),
+  handler: (request) =>
+      _reply(session, maxBytes, request.arguments ?? const {}),
 );
 
 Future<CallToolResult> _reply(
   SmartschoolSession session,
+  int maxBytes,
   Map<String, Object?> arguments,
 ) async {
   final id = requiredIntArgument(arguments, 'message_id');
@@ -94,10 +105,21 @@ Future<CallToolResult> _reply(
     );
   }
   final html = markdownToHtml(body);
+  final attachments = messageAttachmentsArgument(
+    arguments['attachments'],
+    maxBytes: maxBytes,
+  );
 
   try {
     final summary = await session.run(
-      (client) => _send(client, box, id, replyAll: replyAll, html: html),
+      (client) => _send(
+        client,
+        box,
+        id,
+        replyAll: replyAll,
+        html: html,
+        attachments: attachments,
+      ),
     );
     return CallToolResult(
       content: [TextContent(text: 'Sent the reply to message $id.\n$summary')],
@@ -107,8 +129,8 @@ Future<CallToolResult> _reply(
   }
 }
 
-/// Sends the reply with [client] and returns to whom and with which subject
-/// ([sendSummary]).
+/// Sends the reply with [client] and the files [attachments], and returns to
+/// whom, with which subject and with which attachments ([sendSummary]).
 ///
 /// Sends it once, with [submitOnce], which says why repeating this (as
 /// [SmartschoolSession.run] does when Smartschool rejects the session)
@@ -121,6 +143,7 @@ Future<String> _send(
   int id, {
   required bool replyAll,
   required String html,
+  required List<LocalFile> attachments,
 }) async {
   final messages = MessagesService(client);
   try {
@@ -170,6 +193,7 @@ Future<String> _send(
       to: recipients.toNames,
       cc: recipients.ccNames,
       subject: subject,
+      attachments: attachments,
     );
     await submitOnce(
       () => messages.sendReply(
@@ -179,6 +203,7 @@ Future<String> _send(
           cc: recipients.cc,
           subject: subject,
           bodyHtml: html,
+          attachmentPaths: [for (final file in attachments) file.path],
         ),
         boxType: box.boxType,
         all: replyAll,
@@ -186,6 +211,7 @@ Future<String> _send(
       tool: 'reply_to_message',
       what: 'the reply to message $id',
       summary: summary,
+      attachments: attachments,
       // The reply form did not open, or Smartschool did not take a recipient
       // on or off it.
       composeRefused:

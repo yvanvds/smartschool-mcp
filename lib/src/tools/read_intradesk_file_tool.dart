@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
@@ -11,6 +8,7 @@ import '../intradesk/intradesk_format.dart';
 import '../intradesk/intradesk_index.dart';
 import '../log.dart';
 import '../session.dart';
+import 'document_result.dart';
 import 'server_tool.dart';
 
 /// Files larger than this are not downloaded.
@@ -94,7 +92,7 @@ Future<CallToolResult> _read(
         id,
         maxBytes: maxIntradeskFileBytes,
       );
-      return (known, download, await _readAll(download));
+      return (known, download, await readWholeDownload(download));
     } on SmartschoolDownloadError catch (error) {
       throw ToolError(
         'Smartschool could not download an Intradesk file with id $id '
@@ -128,30 +126,11 @@ Future<CallToolResult> _read(
     '${download.contentLength == null ? 'not announced' : 'announced'}, '
     'type ${download.contentType ?? 'none'}, file name '
     '${download.fileName == null ? 'not given' : 'given'}) downloaded in '
-    '$downloaded ms; ${_describeForLog(content)} in '
+    '$downloaded ms; ${describeDocumentForLog(content)} in '
     '${watch.elapsedMilliseconds - downloaded} ms',
   );
 
-  switch (content) {
-    case DocumentText():
-      return CallToolResult(
-        content: [TextContent(text: _text(title, content))],
-      );
-    case DocumentImage(:final bytes, :final mimeType, :final notes):
-      return CallToolResult(
-        content: [
-          TextContent(
-            text: [
-              '$title: image ($mimeType).',
-              for (final note in notes) 'Note: $note',
-            ].join('\n'),
-          ),
-          ImageContent(data: base64Encode(bytes), mimeType: mimeType),
-        ],
-      );
-    case UnreadableDocument(:final reason):
-      throw ToolError('$title: $reason');
-  }
+  return documentResult(title, content);
 }
 
 /// Refuses, before downloading it, a file the index knows to be a folder,
@@ -177,63 +156,5 @@ void _refuseBeforeDownload(String id, IntradeskItem? known) {
   }
 }
 
-/// All of [download]'s content. Its stream ends with a
-/// [SmartschoolDownloadTooLargeError] once more than the allowed bytes came
-/// in, or a [SmartschoolConnectionError] when the connection fails halfway;
-/// the library then stops the transfer. Read inside the session's run, so
-/// that a failed connection is reported like any other.
-Future<Uint8List> _readAll(SmartschoolDownload download) async {
-  final bytes = BytesBuilder(copy: false);
-  await for (final chunk in download.stream) {
-    bytes.add(chunk);
-  }
-  return bytes.takeBytes();
-}
-
 String _limit() =>
     'files up to ${formatFileSize(maxIntradeskFileBytes)} can be read.';
-
-/// The result for [document]: a line saying what it is, a blank line, the
-/// text, and notes.
-String _text(String title, DocumentText document) {
-  final length = document.text.length;
-  final summary = [
-    document.format.label,
-    ?document.parts,
-    if (length == 0)
-      'no text'
-    else if (!document.truncated)
-      '$length characters'
-    else if (document.fullLength case final full?)
-      'the first $length of $full characters'
-    else
-      'the first $length characters',
-  ].join(', ');
-  final notes = [
-    if (document.truncated)
-      'the text is cut off here, after $length '
-          '${document.fullLength == null ? 'characters; the rest of the file was not read' : 'of ${document.fullLength} characters'}.',
-    if (length == 0) 'it has no text: it may hold only pictures.',
-    ...document.notes,
-  ];
-  return [
-    '$title: $summary.',
-    if (length > 0) '\n${document.text}',
-    if (notes.isNotEmpty) '',
-    for (final note in notes) 'Note: ${_capitalise(note)}',
-  ].join('\n');
-}
-
-String _capitalise(String text) =>
-    text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
-
-/// [content] for the log: format, sizes and counts, never text or names.
-String _describeForLog(DocumentContent content) => switch (content) {
-  DocumentText(:final format, :final text, :final truncated, :final parts) =>
-    '${format.name}${parts == null ? '' : ' ($parts)'}, ${text.length} '
-        'characters${truncated ? ' (cut off)' : ''}',
-  DocumentImage(:final bytes, :final mimeType, :final notes) =>
-    'image $mimeType, ${bytes.length} bytes'
-        '${notes.isEmpty ? '' : ' (scaled down)'}',
-  UnreadableDocument() => 'unreadable',
-};
