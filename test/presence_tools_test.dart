@@ -332,6 +332,33 @@ void main() {
       });
     });
 
+    test('a half-day whose code or alias is not among the codes of the '
+        'class: as the module names it with the record, or by its id, and '
+        'why', () async {
+      // Not seen live. "Ziek" is a code of another structure, which the
+      // module names with the record as any; the alias 99 is one the module
+      // gives no name with.
+      presence.halfDay(fakeDupont.userId, _day, 'am')!.codeId =
+          fakePresenceZiek;
+      presence.halfDay(fakeClaes.userId, _day, 'pm')!.aliasId = 99;
+
+      final text = await ok('list_class_presences', {
+        'class_id': 298,
+        'date': _day,
+      });
+
+      expect(
+        text,
+        endsWith(
+          '- Dupont, Noah (pupil id 1003) | morning: "Ziek", motivation '
+          '"attest huisarts" | afternoon: nothing recorded\n'
+          '- Claes, Mila (pupil id 1004) | morning: "Te laat", motivation '
+          '"bus te laat" | afternoon: alias id 99 (the module gave no name '
+          'with the record, and it is not among the codes of the class)',
+        ),
+      );
+    });
+
     test('without a date: today', () async {
       final text = await ok('list_class_presences', {'class_id': 298});
 
@@ -397,19 +424,18 @@ void main() {
       );
     });
 
-    group('a grouping class: the module gives no codes for it, so its '
-        'statuses are named with the codes of the official classes (#99)', () {
-      /// The heading of 2A, with what the header says about its codes.
-      String heading(String codes) =>
-          "Class 2A (class id 1650), Monday 2026-06-01: 1 pupil, in the module's "
-          'order. This account may record presences for this class. The class '
-          'is a grouping class without a school structure$codes';
-      const named =
-          ': the statuses are named with the codes of the official classes, '
-          "and presences are recorded in the pupils' official class.";
+    group('a grouping class: the module gives no codes for it; its statuses '
+        'as the module names them with the records, or with the codes of '
+        "the pupil's official class (#99, #101)", () {
+      /// The heading of 2A, with [count] pupils.
+      String heading(String count) =>
+          'Class 2A (class id 1650), Monday 2026-06-01: $count, in the '
+          "module's order. This account may record presences for this class. "
+          'The class is a grouping class without a school structure: '
+          "presences are recorded in the pupils' official class.";
 
-      test('"Aanwezig" and "Te laat", not code ids; the structure of 1A and '
-          '1B read once', () async {
+      test('"Te laat" and "Aanwezig", as the module names them with the '
+          'records; no codes read', () async {
         final text = await ok('list_class_presences', {
           'class_id': 1650,
           'date': _day,
@@ -417,23 +443,34 @@ void main() {
 
         expect(
           text,
-          '${heading(named)}\n'
+          '${heading('1 pupil')}\n'
           '- Maes, Finn (pupil id 1201) | morning: "Te laat" | afternoon: '
           '"Aanwezig"',
         );
-        expect(presence.calls, [_getConfig, _getCodes, _getClass]);
-        expect(presence.requests[1].form, {
-          'structID': '$fakePresenceStruct',
-          'ofschoolage': 'of_school_age',
-        });
+        expect(presence.calls, [_getConfig, _getClass]);
       });
 
-      test('official classes in two structures: each read once, a code of '
-          'either named, a code of neither by its id', () async {
-        presence.classes.add(fake2AEco);
-        presence.halfDay(fakeMaes.userId, _day, 'am')!.codeId =
-            fakePresenceZiek;
-        presence.halfDay(fakeMaes.userId, _day, 'pm')!.codeId = 71;
+      test('a half-day the module gives no name with: the codes of the '
+          "structure of the pupil's official class, read once per structure "
+          'after the pupils, not those of every class', () async {
+        // 2A ECO, the official class of Maes, in a second structure, and
+        // Peeters of 1A in 2A too. Maes holds "Ziek", a code of 2A ECO's
+        // structure, and "Te laat", a code of 1A's.
+        presence.classes
+          ..add(fake2AEco)
+          ..[presence.classes.indexOf(fake2A)] = const FakePresenceClass(
+            1650,
+            '2A  ',
+            structId: null,
+            pupils: [fakeMaes, fakePeeters],
+          );
+        presence.halfDay(fakeMaes.userId, _day, 'am')!
+          ..codeId = fakePresenceZiek
+          ..unnamed = true;
+        presence.halfDay(fakeMaes.userId, _day, 'pm')!
+          ..codeId = fakePresenceTeLaat
+          ..unnamed = true;
+        presence.halfDay(fakePeeters.userId, _day, 'am')!.unnamed = true;
 
         final text = await ok('list_class_presences', {
           'class_id': 1650,
@@ -442,40 +479,41 @@ void main() {
 
         expect(
           text,
-          '${heading(named)}\n'
-          '- Maes, Finn (pupil id 1201) | morning: "Ziek" | afternoon: code id '
-          '71 (not among the codes of the official classes)',
+          '${heading('2 pupils')}\n'
+          '- Maes, Finn (pupil id 1201) | morning: "Ziek" | afternoon: code '
+          'id 497 (the module gave no name with the record, and it is not '
+          "among the codes of the pupil's official class)\n"
+          '- Peeters, Lotte (pupil id 1001) | morning: "Aanwezig" | '
+          'afternoon: "Aanwezig"',
         );
-        expect(presence.calls, [_getConfig, _getCodes, _getCodes, _getClass]);
+        expect(presence.calls, [_getConfig, _getClass, _getCodes, _getCodes]);
         expect(
           [
             for (final request in presence.requests)
               if (request.path == fakePresenceCodesPath)
                 request.form['structID'],
           ],
-          ['$fakePresenceStruct', '$fakePresenceOtherStruct'],
+          ['$fakePresenceOtherStruct', '$fakePresenceStruct'],
         );
       });
 
-      test('an account that sees no official class: the statuses by code id, '
-          'and why; no codes read', () async {
-        presence.classes.removeWhere((c) => c.structId != null);
+      test('a half-day the module gives no name with, of a pupil whose '
+          'official class this account does not see: by code id, and why; '
+          'no codes read', () async {
+        presence.halfDay(fakeMaes.userId, _day, 'am')!.unnamed = true;
 
         final text = await ok('list_class_presences', {
           'class_id': 1650,
           'date': _day,
         });
 
-        const byId =
-            ', and this account sees no official class whose codes could name '
-            'the statuses, so they are named by their code id; presences are '
-            "recorded in the pupils' official class.";
         expect(
           text,
-          '${heading(byId)}\n'
-          '- Maes, Finn (pupil id 1201) | morning: code id 497 (not among the '
-          'codes of the official classes) | afternoon: code id 70 (not among '
-          'the codes of the official classes)',
+          '${heading('1 pupil')}\n'
+          '- Maes, Finn (pupil id 1201) | morning: code id 497 (the module '
+          'gave no name with the record, and this account does not see the '
+          "pupil's official class, whose codes would name it) | afternoon: "
+          '"Aanwezig"',
         );
         expect(presence.calls, [_getConfig, _getClass]);
       });

@@ -45,18 +45,32 @@ const changeablePresenceNames = {
 };
 
 /// The presence codes of a school structure ([PresenceService.getAllCodes]),
-/// to name what a half-day holds and to tell its [PresenceKind]. For a
-/// class without a structure (a grouping class), the codes of the official
-/// classes (`officialPresenceCodes`, #99); a half-day whose code is not
-/// among them is named by its code id.
+/// to name what a half-day holds and to tell its [PresenceKind]: those of
+/// the class's structure, or, for a pupil of a grouping class, which has
+/// none, those of the structure of the pupil's official class when
+/// `readPresenceDay` read them (yvanvds/dartschool#126). A half-day whose
+/// code or alias is not among them is named by the name the module gave
+/// with its record ([PresenceHalfDay.statusName]), or else by its id, with
+/// [unnamed].
 final class PresenceCodes {
-  PresenceCodes(this.codes, {this.source = 'the class'});
+  PresenceCodes(
+    this.codes, {
+    this.unnamed = 'it is not among the codes of the class',
+  });
+
+  /// No codes, for a grouping class: its half-days are named by the name
+  /// the module gave with each record, or else by their id, with [unnamed].
+  PresenceCodes.none(String unnamed) : this(const [], unnamed: unnamed);
 
   final List<PresenceCode> codes;
 
-  /// Whose codes they are, to say that a code or alias id is not among
-  /// them: `the class`, or `the official classes` for a grouping class.
-  final String source;
+  /// Why a half-day whose code or alias is not among [codes], and that the
+  /// module gave no name with, stays named by its id: the end of `code id
+  /// 70 (the module gave no name with the record, and ...)`. `it is not
+  /// among the codes of the class`; for a pupil of a grouping class, `it is
+  /// not among the codes of the pupil's official class`, or `this account
+  /// does not see the pupil's official class, whose codes would name it`.
+  final String unnamed;
 
   /// "Aanwezig", or null when the school has no such code.
   PresenceCode? get present => _named(PresenceService.presentCodeName);
@@ -91,9 +105,14 @@ final class PresenceCodes {
 
   /// What [cell] holds, by name: `nothing recorded`, a code such as
   /// `"Te laat"`, an alias such as `"Te laat zonder geldige reden" (under
-  /// "Te laat")`, or a code or alias id the codes do not hold.
+  /// "Te laat")`; for a code or alias [codes] do not hold, the name the
+  /// module gave with the record ([PresenceHalfDay.statusName]: for an
+  /// alias, its name alone), or else its id with why it stays unnamed, such
+  /// as `code id 70 (the module gave no name with the record, and it is not
+  /// among the codes of the class)`.
   String statusOf(PresenceHalfDay? cell) {
-    final (codeId, aliasId) = (cell?.codeId, cell?.aliasId);
+    if (cell == null) return 'nothing recorded';
+    final (codeId, aliasId) = (cell.codeId, cell.aliasId);
     if (aliasId != null) {
       for (final code in codes) {
         for (final alias in code.aliases) {
@@ -102,13 +121,21 @@ final class PresenceCodes {
           }
         }
       }
-      return 'alias id $aliasId (not among the codes of $source)';
+      return _unnamed(cell, 'alias id $aliasId');
     }
     if (codeId == null) return 'nothing recorded';
     for (final code in codes) {
       if (code.codeId == codeId) return '"${_name(code.name)}"';
     }
-    return 'code id $codeId (not among the codes of $source)';
+    return _unnamed(cell, 'code id $codeId');
+  }
+
+  /// [cell], whose code or alias [id] is not among [codes]: by the name the
+  /// module gave with the record, or else by [id] and [unnamed].
+  String _unnamed(PresenceHalfDay cell, String id) {
+    final name = _name(cell.statusName ?? '');
+    if (name.isNotEmpty) return '"$name"';
+    return '$id (the module gave no name with the record, and $unnamed)';
   }
 
   /// What [cell] holds, with its motivation when it has one: for example

@@ -707,12 +707,16 @@ first two only read, the last two change the presences of pupils:
   codes for it, while its pupils' half-days hold the codes of their official
   classes (seen live: every half-day of the grouping class 2A held code id
   70, "Aanwezig" in the official class 2A ECO, #99). Its statuses are named
-  with the codes of every structure among the classes of the configuration,
-  one `getAllCodes` per distinct structure, each code once by its id
-  (`officialPresenceCodes`); by their code id when the account sees no
-  class with a structure. That is a workaround for yvanvds/dartschool#126,
-  which #101 tracks. Rows per lesson are left out (the library ignores
-  them). When the module lists no pupils, the tool gives the module's reason
+  as the module names them with each record (`PresenceHalfDay.statusName`,
+  given with every record seen live, yvanvds/dartschool#126), without
+  reading codes; a half-day the module gives no name with (not seen live)
+  is named with the codes of the structure of the pupil's official class
+  (`PresencePupil.officialClassId`, one `getAllCodes` per distinct
+  structure, after the pupils), or by its code id when the account does not
+  see that class (#101). A half-day of any class whose code is not among
+  the codes read is named likewise. Rows per lesson are left out (the
+  library ignores them). When the module lists no pupils, the tool gives the
+  module's reason
   (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
   geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
   de toekomst afwezigheden op te nemen." for a day in the future.
@@ -905,10 +909,12 @@ the other, and the arguments of the writes. In `presence_opt_in.dart`: the
 presence tools behind their switch (`presenceOptIn`). The tests run against
 a fake Presence module (`test/support/fake_presence.dart`) in the shape of
 dartschool's trimmed captures, with fake names: three classes (one the
-account may only view, one grouping class, without codes), the codes of a
-structure ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and
-pupils with half-days of each kind and a registration per lesson; a test
-adds an official class in a second structure with codes of its own. It
+account may only view, one grouping class, without codes, whose pupil's
+official class the account does not see), the codes of a structure
+("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils, each
+with its official class, with half-days of each kind, each record with the
+name the module gives it, and a registration per lesson; a test adds an
+official class in a second structure with codes of its own. It
 carries out a save on the half-days as the live module did in dartschool#2
 and answers it as the module's web client reads the answer (the records as
 stored), can answer it without the records, refuse it with the module's

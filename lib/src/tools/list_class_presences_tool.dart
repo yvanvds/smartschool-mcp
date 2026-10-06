@@ -10,8 +10,10 @@ import 'server_tool.dart';
 /// `list_class_presences`: the pupils of one class in Smartschool's
 /// Presence module with what their half-days hold on one day, named with
 /// the codes of the class ([PresenceService.getClassPupils],
-/// [PresenceService.getAllCodes]); for a grouping class, with those of the
-/// official classes (`officialPresenceCodes`, #99).
+/// [PresenceService.getAllCodes]); for a grouping class, which has no
+/// structure, as the module names them with each record
+/// ([PresenceHalfDay.statusName]), or with the codes of the pupil's
+/// official class (`readPresenceDay`, #99 and yvanvds/dartschool#126).
 ///
 /// [now] gives today, the default day.
 ServerTool listClassPresencesTool(
@@ -85,20 +87,13 @@ String formatPresenceDay(PresenceDay read) {
       ? 'This account may record presences for this class.'
       : 'This account may only view this class: set_pupils_late and '
             'set_pupils_present refuse it.';
-  // A grouping class has no codes of its own: its statuses are named with
-  // those of the official classes (#99, officialPresenceCodes).
-  final grouping = switch (presenceClass.structId) {
-    null when read.codes.codes.isNotEmpty =>
-      ' The class is a grouping class without a school structure: the '
-          'statuses are named with the codes of the official classes, and '
-          "presences are recorded in the pupils' official class.",
-    null =>
-      ' The class is a grouping class without a school structure, and this '
-          'account sees no official class whose codes could name the '
-          'statuses, so they are named by their code id; presences are '
-          "recorded in the pupils' official class.",
-    _ => '',
-  };
+  // A grouping class has no codes of its own: its statuses are named as the
+  // module names them with the records (readPresenceDay), and the writes go
+  // to the official classes.
+  final grouping = presenceClass.structId == null
+      ? ' The class is a grouping class without a school structure: '
+            "presences are recorded in the pupils' official class."
+      : '';
   if (read.pupils.isEmpty) {
     // The module says why (yvanvds/dartschool#104): a class without pupils,
     // a day in the future.
@@ -116,6 +111,6 @@ String formatPresenceDay(PresenceDay read) {
     '${capitalized(named)}, $when: $count, in the '
         "module's order. $record$grouping",
     for (final pupil in read.pupils)
-      formatPresenceLine(pupil, read.date, read.codes),
+      formatPresenceLine(pupil, read.date, read.codesOf(pupil)),
   ].join('\n');
 }
