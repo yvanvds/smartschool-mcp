@@ -14,10 +14,12 @@ import 'planner_format.dart';
 // `read_lesfiche` shows it and the tools that make, change or trash a
 // lesfiche (#114, #115, #116) give it back: the `type` argument of a tool
 // that takes one lesfiche, reading its detail, how it is written (with its
-// weblinks and attachments and when pupils see them), and the `attachment`
-// argument of the tools that save or read one of its attachments. The tools
-// reach the module with `withPlannerClient` (`planner_access.dart`), which
-// turns its other errors into ToolErrors.
+// weblinks and attachments and when pupils see them), the `visibility` a
+// tool that makes or changes a weblink or an attachment takes, and the
+// `attachment` argument of the tools that save or read one of its
+// attachments. The tools reach the module with `withPlannerClient`
+// (`planner_access.dart`), which turns its other errors into ToolErrors; the
+// writes share `lesfiche_writes.dart`.
 
 /// The `type` argument of a tool that takes one lesfiche, by the kind of
 /// lesfiche each value names: `lesson` (the default) or `assignment`, the
@@ -145,6 +147,71 @@ String formatLesficheVisibility(LessonContentVisibility visibility) {
           '${days == null ? '' : ' with $days days'}, which this server does '
           'not know',
   };
+}
+
+/// The values of a `visibility` argument ([lesficheVisibilityArgument]), as
+/// a tool's description and errors list them.
+const lesficheVisibilityValues =
+    'always (the default), never, at_start (from the start of the lesson it '
+    'is planned in), at_end (from its end) or after_end:N (from N days after '
+    'its end, N from 1 to ${LessonContentVisibility.maxDaysAfterEnd})';
+
+/// The input schema of a `visibility` argument of a weblink or an attachment
+/// of a lesfiche ([lesficheVisibilityArgument]), with [description] (what
+/// it is the visibility of) in front of the values.
+///
+/// A plain string, not an enum: `after_end:N` takes a number, and the tool
+/// words a wrong value itself.
+Schema lesficheVisibilitySchema({String description = 'When pupils see it'}) =>
+    Schema.string(
+      description:
+          '$description, counted from the lesson the lesfiche is planned in: '
+          '$lesficheVisibilityValues.',
+    );
+
+final _afterEnd = RegExp(r'^after[_-]end\s*:\s*(\d{1,4})$');
+
+/// [value], the visibility of a weblink or an attachment that a tool takes
+/// ([where] names it in an error, like `the visibility of weblink 1`):
+/// `always`, `never`, `at_start`, `at_end` or `after_end:N` with N from 1 to
+/// [LessonContentVisibility.maxDaysAfterEnd], the options the web client
+/// offers; [LessonContentVisibility.always] when it is absent or empty.
+/// Case and the white space around it do not matter, and a hyphen does for
+/// an underscore (`at-start`, the module's own name).
+///
+/// Throws a [ToolError] that lists the values for anything else, so that it
+/// never goes into a request. [formatLesficheVisibility] words the result.
+LessonContentVisibility lesficheVisibilityArgument(
+  Object? value, {
+  required String where,
+}) {
+  final text = value is String ? value.trim().toLowerCase() : null;
+  if (value == null || text == '') return LessonContentVisibility.always;
+  switch (text?.replaceAll('-', '_')) {
+    case 'always':
+      return LessonContentVisibility.always;
+    case 'never':
+      return LessonContentVisibility.never;
+    case 'at_start':
+      return LessonContentVisibility.atStart;
+    case 'at_end':
+      return LessonContentVisibility.atEnd;
+  }
+  if (_afterEnd.firstMatch(text ?? '') case final match?) {
+    final days = int.parse(match[1]!);
+    if (days >= 1 && days <= LessonContentVisibility.maxDaysAfterEnd) {
+      return LessonContentVisibility.afterEnd(days);
+    }
+    throw ToolError(
+      '$where is after_end:$days, but the web client offers 1 to '
+      '${LessonContentVisibility.maxDaysAfterEnd} days after the end of the '
+      'lesson. Nothing was sent.',
+    );
+  }
+  throw ToolError(
+    '$where is ${value is String ? '"$value"' : '$value'}, which is not a '
+    'visibility: pass $lesficheVisibilityValues. Nothing was sent.',
+  );
 }
 
 /// One line describing [weblink]: its name, address, icon, when pupils see

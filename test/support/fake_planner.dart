@@ -6,6 +6,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart'
     show PlannerService;
 
 import 'fake_download.dart';
+import 'fake_uploads.dart';
 
 /// The planner user id of the fake's own account: the `authenticatedUser.id`
 /// of the fake's pages ([fakeDisplayName] in `fake_smartschool.dart`).
@@ -36,6 +37,15 @@ String fakeLesficheDownloadPath(
 ) =>
     '${fakeLesficheDetailPath(lesfiche)}/attachments/${attachment.id}/'
     'download';
+
+/// Where a new lesfiche of the kind [type] (`lessons`, `assignments`) is
+/// made (dartschool#129): `POST lessons/` or `assignments/`, with the slash.
+String fakeLesficheCreatePath([String type = 'lessons']) =>
+    '$_lessonContentApi/$type/';
+
+/// The id the fake gives the [n]th lesfiche its creates make.
+String fakeNewLesficheId(int n) =>
+    'b0000000-0000-4000-9000-${'$n'.padLeft(12, '0')}';
 
 /// Where the school's course list is read: by the library's session check,
 /// which takes the platform id from its first course, and by the Lesfiches
@@ -940,6 +950,12 @@ class FakePlannerHit {
 /// [lostAnswers] carries the write to a path out, but drops the connection
 /// before the answer.
 class FakePlanner {
+  FakePlanner({FakeUploads? uploads}) : uploads = uploads ?? FakeUploads();
+
+  /// Smartschool's upload step, whose directories the create of a lesfiche
+  /// takes its attachments from (`randomDir`).
+  final FakeUploads uploads;
+
   /// The elements of each calendar, by `user/{id}`, `group/{id}` or
   /// `location/{id}`.
   final Map<String, List<FakePlannedElement>> calendars = {};
@@ -1015,6 +1031,13 @@ class FakePlanner {
 
   /// How many elements the writes made, for their ids.
   int _made = 0;
+
+  /// How many lesfiches the creates made, for their ids
+  /// ([fakeNewLesficheId]).
+  int _madeLesfiches = 0;
+
+  /// How many weblinks and attachments the creates made, for their ids.
+  int _madeParts = 0;
 
   /// The planner requests that change something, as `POST path`, in order.
   List<String> get writes => [
@@ -1173,6 +1196,17 @@ class FakePlanner {
       );
     }
     if (lesficheRoute != null) {
+      if (lesficheRoute case [final type, '']) {
+        if (options.method != 'POST') return null;
+        final answer = _createLesfiche(type, options.data);
+        if (lostAnswers.contains(path)) {
+          throw DioException.connectionError(
+            requestOptions: options,
+            reason: 'Connection reset by peer',
+          );
+        }
+        return answer;
+      }
       if (options.method != 'GET') return null;
       return _lesficheAnswer(lesficheRoute, cancelled);
     }
@@ -1265,9 +1299,10 @@ class FakePlanner {
   );
 
   /// The parts of [path] after the Lesfiches module's API when it is the
-  /// detail of a lesfiche or the download of an attachment
-  /// (`lessons/{id}`, `assignments/{id}/attachments/{id}/download`), each
-  /// decoded; null for any other path.
+  /// detail of a lesfiche, the download of an attachment
+  /// (`lessons/{id}`, `assignments/{id}/attachments/{id}/download`) or the
+  /// create of a lesfiche (`lessons/`, as `['lessons', '']`), each decoded;
+  /// null for any other path.
   static List<String>? _lesficheRoute(String path) {
     if (!path.startsWith('$_lessonContentApi/')) return null;
     final route = [
@@ -1276,7 +1311,7 @@ class FakePlanner {
         Uri.decodeComponent(part),
     ];
     return switch (route) {
-      ['lessons' || 'assignments', final id] when id.isNotEmpty => route,
+      ['lessons' || 'assignments', _] => route,
       ['lessons' || 'assignments', _, 'attachments', _, 'download'] => route,
       _ => null,
     };
@@ -1309,6 +1344,105 @@ class FakePlanner {
       name: attachment.fileName,
       cancelled: cancelled,
     );
+  }
+
+  /// Makes a lesfiche of the kind [type] (`lessons`, `assignments`) from
+  /// the create's body [data], as the module does (dartschool#129): a body
+  /// without every field the web client sends (the module answers a body
+  /// with only a name so), or an assignment without a type of the school's,
+  /// gets a bare `400`; a course is stored as sent, also one the course list
+  /// does not have; the attachments are the files of the upload directory
+  /// `randomDir`, each with the visibility `visibilityOptions` gives its
+  /// name. Answers `201` with `{"id"}` only, and adds the lesfiche to
+  /// [lesfiches] at the end, with the id [fakeNewLesficheId].
+  ResponseBody _createLesfiche(String type, Object? data) {
+    final body = data is Map ? data : const <Object?, Object?>{};
+    const lists = [
+      'courses',
+      'goals',
+      'labels',
+      'weblinks',
+      'partnerWeblinks',
+      'miniDBItems',
+      'deeplinks',
+    ];
+    final name = body['name'];
+    final icon = body['icon'];
+    final publicInfo = body['publicInfo'];
+    final privateInfo = body['privateInfo'];
+    final visibilityOptions = body['visibilityOptions'];
+    final randomDir = body['randomDir'];
+    if (name is! String ||
+        name.isEmpty ||
+        icon is! String ||
+        icon.isEmpty ||
+        publicInfo is! String ||
+        privateInfo is! String ||
+        lists.any((key) => body[key] is! List) ||
+        !body.containsKey('randomDir') ||
+        !body.containsKey('previousLessonContent') ||
+        visibilityOptions is! Map ||
+        (type == 'assignments') != body.containsKey('assignmentType')) {
+      return _badRequest();
+    }
+    FakeAssignmentType? assignmentType;
+    if (type == 'assignments') {
+      final typeId = '${body['assignmentType']}'.toLowerCase();
+      assignmentType = assignmentTypes
+          .where((known) => known.id.toLowerCase() == typeId)
+          .firstOrNull;
+      if (assignmentType == null) return _badRequest();
+    }
+    String partId(String prefix) =>
+        '${prefix}1000000-0000-4000-9000-'
+        '${'${++_madeParts}'.padLeft(12, '0')}';
+    Map<Object?, Object?>? visibilityOf(String fileName) =>
+        visibilityOptions[fileName] as Map<Object?, Object?>?;
+    final files = randomDir == null
+        ? const <FakeUploadedFile>[]
+        : uploads.directories[randomDir] ?? const <FakeUploadedFile>[];
+    final lesfiche = FakeLesfiche(
+      id: fakeNewLesficheId(++_madeLesfiches),
+      name: name,
+      type: type,
+      icon: icon,
+      publicInfo: publicInfo,
+      privateInfo: privateInfo,
+      lastChanged: '2026-10-05 19:12:37',
+      courses: [
+        for (final course in (body['courses'] as List).cast<Map>())
+          courseList.where((known) => known.id == course['id']).firstOrNull ??
+              FakePlannerCourse('${course['id']}', ''),
+      ],
+      assignmentType: assignmentType,
+      weblinks: [
+        for (final weblink in (body['weblinks'] as List).cast<Map>())
+          FakeLesficheWeblink(
+            id: partId('e'),
+            name: weblink['name'] as String,
+            url: weblink['url'] as String,
+            icon: weblink['icon'] as String,
+            option: (weblink['visibility'] as Map)['option'] as String,
+            daysAfterEnd:
+                (weblink['visibility'] as Map)['daysAfterEnd'] as int?,
+          ),
+      ],
+      attachments: [
+        for (final file in files)
+          FakeLesficheAttachment(
+            id: partId('f'),
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.name.endsWith('.txt')
+                ? 'text/plain'
+                : 'application/octet-stream',
+            option: visibilityOf(file.name)?['option'] as String? ?? 'always',
+            daysAfterEnd: visibilityOf(file.name)?['daysAfterEnd'] as int?,
+          ),
+      ],
+    );
+    lesfiches.add(lesfiche);
+    return _json(jsonEncode({'id': lesfiche.id}), status: 201);
   }
 
   ResponseBody _fill(String ref, Object? data) {

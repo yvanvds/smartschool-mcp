@@ -42,7 +42,9 @@ ServerTool planLesficheTool(SmartschoolSession session) => ServerTool(
         'the lesson may or may not have been saved, do not call this tool '
         'again for that hour: check the hour with read_planned_element and '
         'tell the user. To change a planned lesson, use '
-        'edit_planned_element; to empty its hour again, clear_lesson.',
+        'edit_planned_element; to empty its hour again, clear_lesson. For a '
+        'lesfiche that does not exist yet, make it first with '
+        'create_lesfiche.',
     inputSchema: Schema.object(
       properties: {
         'hour': Schema.string(

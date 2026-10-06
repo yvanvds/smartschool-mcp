@@ -18,6 +18,7 @@ import 'package:smartschool_mcp/src/tools/add_intradesk_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/create_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
@@ -139,6 +140,7 @@ Future<void> _serve(ServerOptions options) async {
           readLesficheTool(session),
           readLesficheAttachmentTool(session),
           saveLesficheAttachmentTool(session, downloads),
+          createLesficheTool(session),
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),

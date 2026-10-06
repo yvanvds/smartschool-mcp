@@ -16,10 +16,12 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
   kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
-  Lesfiches lezen, met hun weblinks en bijlagen. Je eigen lesuren invullen
-  met lessen of met je lesfiches, die lessen aanpassen en een lesuur weer
-  leegmaken. Een toets of taak naar de prullenbak van de planner verplaatsen.
-  Telkens pas nadat jij het goedgekeurd hebt.
+  Lesfiches lezen, met hun weblinks en bijlagen, en nieuwe lesfiches maken
+  in je eigen bibliotheek, met info, vakken, weblinks en bestanden van je
+  pc. Je eigen lesuren invullen met lessen of met je lesfiches, die lessen
+  aanpassen en een lesuur weer leegmaken. Een toets of taak naar de
+  prullenbak van de planner verplaatsen. Telkens pas nadat jij het
+  goedgekeurd hebt.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 

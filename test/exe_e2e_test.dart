@@ -107,6 +107,7 @@ void main() {
       'read_lesfiche',
       'read_lesfiche_attachment',
       'save_lesfiche_attachment',
+      'create_lesfiche',
       'plan_lesfiche',
       'plan_assignment',
       'trash_assignment',
@@ -583,7 +584,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(46));
+    expect(tools, hasLength(47));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -648,7 +649,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(34));
+        expect(tools, hasLength(35));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -687,8 +688,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(42));
-      expect([for (final tool in tools.skip(34)) tool['name']], skoreTools);
+      expect(tools, hasLength(43));
+      expect([for (final tool in tools.skip(35)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -881,7 +882,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(34));
+        expect(tools, hasLength(35));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -921,8 +922,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(38));
-      expect([for (final tool in tools.skip(34)) tool['name']], presenceTools);
+      expect(tools, hasLength(39));
+      expect([for (final tool in tools.skip(35)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1118,10 +1119,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(46));
-      expect([for (final tool in tools.skip(42)) tool['name']], presenceTools);
+      expect(tools, hasLength(47));
+      expect([for (final tool in tools.skip(43)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(34).take(8)) tool['name'],
+        for (final tool in tools.skip(35).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1898,6 +1899,202 @@ void main() {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
       expect(isError, isTrue, reason: '$tool $arguments');
       expect(text, contains(message), reason: '$tool $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('create_lesfiche is a write Claude Desktop asks approval for, which a '
+      'second call repeats; without settings: an error result that names '
+      'the missing settings; an invalid kind, assignment type, weblink, '
+      'visibility or path: an error that says what to fix, before any login '
+      '(#114)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    final files = await Directory.systemTemp.createTemp('smartschool_fiche_');
+    addTearDown(() => files.delete(recursive: true));
+    final werkblad = File('${files.path}${Platform.pathSeparator}werkblad.txt')
+      ..writeAsStringSync('Oefening 1');
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    final tool = tools['create_lesfiche']!;
+    expect(tool['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': true,
+      'idempotentHint': false,
+      'openWorldHint': true,
+    });
+    expect(
+      tool['description'],
+      allOf(
+        contains('after the user has explicitly confirmed it'),
+        contains('200 MB'),
+      ),
+    );
+    final schema = tool['inputSchema'] as Map;
+    expect(schema['required'], ['name']);
+    final properties = schema['properties'] as Map;
+    expect(properties.keys, [
+      'name',
+      'type',
+      'assignment_type',
+      'public_info',
+      'private_info',
+      'courses',
+      'weblinks',
+      'attachments',
+      'icon',
+    ]);
+    expect(properties['type'], {
+      'type': 'string',
+      'description': isA<String>(),
+      'enum': ['lesson', 'assignment'],
+    });
+    expect(properties['courses'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string', 'minLength': 1},
+    });
+    expect(properties['weblinks'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {
+        'type': 'object',
+        'properties': {
+          'name': {
+            'type': 'string',
+            'description': isA<String>(),
+            'minLength': 1,
+          },
+          'url': {
+            'type': 'string',
+            'description': isA<String>(),
+            'minLength': 1,
+          },
+          'visibility': {'type': 'string', 'description': isA<String>()},
+        },
+        'required': ['name', 'url'],
+      },
+    });
+    expect(properties['attachments'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {
+        'type': 'object',
+        'properties': {
+          'path': {
+            'type': 'string',
+            'description': isA<String>(),
+            'minLength': 1,
+          },
+          'visibility': {'type': 'string', 'description': isA<String>()},
+        },
+        'required': ['path'],
+      },
+      'maxItems': 10,
+    });
+    expect(
+      tools['plan_lesfiche']!['description'],
+      contains('make it first with create_lesfiche'),
+    );
+
+    for (final arguments in <Map<String, Object?>>[
+      {'name': 'Recursie'},
+      {
+        'name': 'Recursie',
+        'public_info': 'Hoofdstuk 5',
+        'courses': ['informatica'],
+        'weblinks': [
+          {
+            'name': 'Oefeningen',
+            'url': 'example.com/oefeningen',
+            'visibility': 'after_end:3',
+          },
+        ],
+        'attachments': [
+          {'path': werkblad.path, 'visibility': 'never'},
+        ],
+      },
+      {'name': 'Taak', 'type': 'assignment', 'assignment_type': 'KT'},
+    ]) {
+      final (isError, text) = await server.callTool(
+        'create_lesfiche',
+        arguments: arguments,
+      );
+      expect(isError, isTrue, reason: '$arguments');
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: '$arguments',
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (arguments, message) in <(Map<String, Object?>, String)>[
+      (
+        {'name': 'Les', 'type': 'lessons'},
+        '"lessons" is not one of the '
+            'allowed values',
+      ),
+      ({'name': 'Taak', 'type': 'assignment'}, 'assignment_type is missing'),
+      (
+        {'name': 'Les', 'assignment_type': 'KT'},
+        'assignment_type is for an assignment lesfiche only',
+      ),
+      ({'name': '   '}, 'name is empty'),
+      (
+        {
+          'name': 'Les',
+          'weblinks': [
+            {'name': 'Quiz', 'url': 'geen url'},
+          ],
+        },
+        'which is not a web address the Lesfiches web client takes',
+      ),
+      (
+        {
+          'name': 'Les',
+          'weblinks': [
+            {'name': 'Quiz', 'url': 'example.com', 'visibility': 'soms'},
+          ],
+        },
+        'is "soms", which is not a visibility',
+      ),
+      (
+        {
+          'name': 'Les',
+          'attachments': [
+            {'path': 'werkblad.txt'},
+          ],
+        },
+        '"werkblad.txt" in attachments is not a full path',
+      ),
+      (
+        {
+          'name': 'Les',
+          'attachments': [
+            {'path': werkblad.path},
+            {'path': werkblad.path},
+          ],
+        },
+        'attachments holds two files named "werkblad.txt"',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(
+        'create_lesfiche',
+        arguments: arguments,
+      );
+      expect(isError, isTrue, reason: '$arguments');
+      expect(text, contains(message), reason: '$arguments');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
 

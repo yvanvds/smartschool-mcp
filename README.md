@@ -573,6 +573,57 @@ client name. It also installs again while that copy runs.
   as `read_lesfiche_attachment` names it, into the download folder and
   returns its full path, name and size, as `save_message_attachment` does
   (see *Saving files* below).
+- `create_lesfiche`: makes a lesfiche in the user's own library ("Mijn
+  lesfiches") of the Lesfiches module in one create, as the web client
+  makes one, with the library's `LessonContentService.createLesson` or
+  `createAssignment` (dartschool#129): a `name` (at most 255 characters),
+  a `type` (`lesson`, the default, or `assignment` with `assignment_type`,
+  one of the school's types by abbreviation or name, matched as
+  `plan_assignment` matches its `type`), and optionally `public_info` and
+  `private_info` (plain text, as `plan_lesson`), `courses` (each by its
+  name as the tools show it, or by its id, found in the school's course
+  list: one the list does not have is an error that lists the names, and a
+  name two courses have one that gives their ids), `weblinks` (`{name, url,
+  visibility?}`, the address as the web client sends it,
+  `normalizeWeblinkUrl`; one it refuses is refused before sending),
+  `attachments` (`{path, visibility?}`, 1 to 10 files from this PC,
+  checked as `upload_intradesk_files` checks them, see *Uploading files*
+  below) and `icon` (the web client's by default: `document_observation`
+  for a lesson, `flags_red_yellow` for an assignment). A visibility is
+  `always` (the default), `never`, `at_start`, `at_end` or `after_end:N`,
+  N from 1 to 14 days after the end of the lesson the lesfiche is planned
+  in (`LessonContentVisibility`). The own library is private to the
+  teacher until a lesson is planned from the lesfiche, but the tool is
+  still marked destructive (and not idempotent): it is a write that Claude
+  is told to show the user first (kind, name, courses, info, each weblink,
+  each file with its size, and when pupils see them) and to make once per
+  lesfiche after the user's confirmation, a second call makes a second
+  lesfiche, and it sends files from this PC; Claude Desktop and Codex ask
+  for approval only for a tool marked destructive. Before sending, it
+  reads the user's lesfiches (for the note on namesakes below, and so that
+  the session's repeat of the call logs in again: the create goes out once
+  only, and is refused at once on an expired session, without a login,
+  dartschool#134),
+  the course list for the courses, and for an assignment the school's
+  types (read once per session). The library checks the courses and the
+  type again, uploads the files into a new upload directory, sends the
+  create once (`POST lessons/` or `assignments/`, answered `201` with the
+  id only) and reads the lesfiche back. A name that is taken is kept (the
+  module makes a second lesfiche, seen live), and the result names the
+  other lesfiches of that name and kind. The result is the lesfiche as
+  `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson) and
+  `read_lesfiche`. Labels are not in the library: the description says
+  the user sets them in the module. A refusal by the module (a bare `400`)
+  and a file Smartschool's upload step refuses (in Smartschool's words)
+  say that no lesfiche was made; a create the module does not confirm is
+  reported as maybe made, with `list_lesfiches` to check it, and a
+  lesfiche that was made but whose read-back failed or did not show
+  everything sent (`SmartschoolLessonContentSaveUnconfirmedError` with its
+  `lessonContentId`) as made, with its id and `read_lesfiche`; for both,
+  Claude is told not to call the tool again. When the school's types
+  changed since the session read them, the library refuses the type before
+  sending, and the error lists the types as they are now, which every tool
+  on the session takes from then on.
 - `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
   `list_lesfiches`) into an empty lesson hour of the user's own planner
   (`hour`, as `plan_lesson`) with the library's `planLessonContent`
@@ -586,7 +637,8 @@ client name. It also installs again while that copy runs.
   the lesfiches before it plans and refuses, before sending anything, an id
   the user has no lesfiche with and an assignment lesfiche; the tool says so
   in its own words and points to `list_lesfiches`. A hidden lesfiche is
-  planned like any other.
+  planned like any other. Its description points to `create_lesfiche` for
+  a lesfiche that does not exist yet.
 - `plan_assignment`: plans an assignment (a test, a task, something to
   bring along) in one of the user's own lesson hours (`hour`, an empty
   lesson hour or a lesson from `list_planner` with `me`) with the library's
@@ -1016,18 +1068,35 @@ and turns a `404` into "take the id and the kind from `list_lesfiches`",
 `lesficheNotFound`), the lesfiche as text (`formatLesficheDetail`, with
 `formatLesficheWeblink`, `formatLesficheAttachment` and
 `formatLesficheVisibility`, the wording of a `LessonContentVisibility`), the
-lesfiche in a few words (`lesficheTitle`, `lesficheKindName`), and the
-`attachment` argument of the tools that read or save one
-(`lesficheAttachmentSchema`, `lesficheAttachmentArgument`,
+`visibility` of a weblink or an attachment that a write takes
+(`lesficheVisibilityArgument`, `lesficheVisibilitySchema`,
+`lesficheVisibilityValues`: `always`, `never`, `at_start`, `at_end`,
+`after_end:N`), the lesfiche in a few words (`lesficheTitle`,
+`lesficheKindName`), and the `attachment` argument of the tools that read
+or save one (`lesficheAttachmentSchema`, `lesficheAttachmentArgument`,
 `pickLesficheAttachment`, `findLesficheAttachment`,
-`lesficheAttachmentTitle`). The tests run against a fake planner
-(`test/support/fake_planner.dart`), built from dartschool's anonymised
-captures of the live planner, its workload view, the Lesfiches list and the
-detail of a lesfiche with the download of its attachment (dartschool#129),
-with the school's course list, which carries out the writes of
-dartschool#87 (fill, rename, change of the info, clear), the plan of a
-lesfiche of dartschool#88, and the create and the trash of an assignment of
-dartschool#89 as the live planner did.
+`lesficheAttachmentTitle`). In `lesfiche_writes.dart`, for the tools that
+make or change a lesfiche: the `name`, `courses`, `weblinks` and
+`attachments` arguments, checked before anything is sent
+(`lesficheNameArgument`; `lesficheCoursesArgument` with `lesficheCourses`,
+which finds them by id or name in the school's course list;
+`lesficheWeblinksArgument` with `lesficheWeblinkArgument`;
+`lesficheAttachmentsArgument`, `{path, visibility?}` through the
+local-file helper, with `lesficheAttachments`; and their schemas),
+`withLesficheWrite` (the session runner for a write, with the library's
+refusals as `ToolError`s that say nothing was made) and the result of a
+write the module did not confirm (`lesficheWriteNotConfirmed`); a header
+note says why the session's repeat of a write cannot make a lesfiche
+twice, and why a read comes before the write. The tests run against a fake
+planner (`test/support/fake_planner.dart`), built from dartschool's
+anonymised captures of the live planner, its workload view, the Lesfiches
+list and the detail of a lesfiche with the download of its attachment
+(dartschool#129), with the school's course list, which carries out the
+writes of dartschool#87 (fill, rename, change of the info, clear), the plan
+of a lesfiche of dartschool#88, the create and the trash of an assignment of
+dartschool#89 as the live planner did, and the create of a lesfiche from the
+web client's body of dartschool#129, with its attachments from the fake
+upload step (`fakeLesficheCreatePath`, `fakeNewLesficheId`).
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a
@@ -1310,9 +1379,10 @@ and that they disappear after 7 days.
 
 ### Uploading files
 
-`upload_intradesk_files` sends files from this PC to Smartschool. The tools
-that upload share the local-file helper in `lib/src/uploads/local_files.dart`
-(for Intradesk now, for the attachments of a lesfiche or a message later):
+`upload_intradesk_files` and `create_lesfiche` send files from this PC to
+Smartschool. The tools that upload share the local-file helper in
+`lib/src/uploads/local_files.dart` (for Intradesk and the attachments of a
+new lesfiche now, for a message later):
 
 - **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
   1 to 10 per call. The server reads any file the user's Windows account can
@@ -1332,7 +1402,8 @@ that upload share the local-file helper in `lib/src/uploads/local_files.dart`
   `ArgumentError` about its path) and a failure of Smartschool's upload step
   (`SmartschoolAttachmentUploadError`, with Smartschool's own words in
   `serverMessage` when it gave them) into a `ToolError`, ending in what that
-  means for the call (for Intradesk: nothing was added).
+  means for the call (for Intradesk: nothing was added; for a lesfiche: no
+  lesfiche was made).
 
 The log shows counts and timings, never a name or a path.
 

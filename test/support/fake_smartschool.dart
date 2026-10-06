@@ -98,7 +98,7 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The planner, served to logged-in requests. Its own account is
   /// [fakePlannerMe], the user of the fake's pages.
-  final FakePlanner planner = FakePlanner();
+  late final FakePlanner planner = FakePlanner(uploads: uploads);
 
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).

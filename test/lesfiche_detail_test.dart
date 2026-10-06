@@ -113,6 +113,82 @@ void main() {
     });
   });
 
+  group('lesficheVisibilityArgument', () {
+    LessonContentVisibility parse(Object? value) =>
+        lesficheVisibilityArgument(value, where: 'the visibility');
+
+    test('every option the web client offers, always when absent or empty; '
+        'case, white space and a hyphen for an underscore do not matter', () {
+      expect(parse(null), LessonContentVisibility.always);
+      expect(parse(''), LessonContentVisibility.always);
+      expect(parse('  '), LessonContentVisibility.always);
+      expect(parse('always'), LessonContentVisibility.always);
+      expect(parse('never'), LessonContentVisibility.never);
+      expect(parse('at_start'), LessonContentVisibility.atStart);
+      expect(parse(' AT-START '), LessonContentVisibility.atStart);
+      expect(parse('at_end'), LessonContentVisibility.atEnd);
+      expect(parse('after_end:1'), LessonContentVisibility.afterEnd(1));
+      expect(parse('after-end: 14'), LessonContentVisibility.afterEnd(14));
+      expect(parse('After_End:07'), LessonContentVisibility.afterEnd(7));
+    });
+
+    test('goes out as the module takes it, and reads back in the words of '
+        'formatLesficheVisibility', () {
+      expect(parse('at_start').toJson(), {
+        'option': 'at-start',
+        'daysAfterEnd': null,
+      });
+      expect(parse('after_end:3').toJson(), {
+        'option': 'days-after-end',
+        'daysAfterEnd': 3,
+      });
+      expect(
+        formatLesficheVisibility(parse('after_end:3')),
+        'from 3 days after the end of the lesson it is planned in',
+      );
+    });
+
+    test('refuses days the web client does not offer, and anything else, '
+        'with the values', () {
+      const values =
+          'always (the default), never, at_start (from the start of the '
+          'lesson it is planned in), at_end (from its end) or after_end:N '
+          '(from N days after its end, N from 1 to 14)';
+      expect(lesficheVisibilityValues, values);
+      for (final days in [0, 15, 99]) {
+        expect(
+          () => parse('after_end:$days'),
+          throwsA(
+            _toolError(
+              'the visibility is after_end:$days, but the web client offers '
+              '1 to 14 days after the end of the lesson. Nothing was sent.',
+            ),
+          ),
+        );
+      }
+      for (final (value, shown) in [
+        ('sometimes', '"sometimes"'),
+        ('after_end', '"after_end"'),
+        ('after_end:-1', '"after_end:-1"'),
+        ('after_end:99999', '"after_end:99999"'),
+        ('days-after-end', '"days-after-end"'),
+        (3, '3'),
+        (true, 'true'),
+      ]) {
+        expect(
+          () => parse(value),
+          throwsA(
+            _toolError(
+              'the visibility is $shown, which is not a visibility: pass '
+              '$values. Nothing was sent.',
+            ),
+          ),
+          reason: '$value',
+        );
+      }
+    });
+  });
+
   group('a weblink and an attachment on a line', () {
     test('with what the module gave, and what it left out said so', () {
       expect(
