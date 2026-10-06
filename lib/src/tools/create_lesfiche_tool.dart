@@ -72,8 +72,11 @@ ServerTool createLesficheTool(
         'line between paragraphs; HTML in it is not interpreted, it shows as '
         'text. When pupils see a weblink or a file counts from the lesson '
         'the lesfiche is planned in: $lesficheVisibilityValues. The result '
-        'gives the lesfiche as made, with its id for plan_lesfiche and '
-        'read_lesfiche. If the result says the lesfiche may or may not have '
+        'gives the lesfiche as made, with its id for plan_lesfiche, '
+        'read_lesfiche and edit_lesfiche, which changes it later (its '
+        'weblinks and attachments change with set_lesfiche_weblink, '
+        'add_lesfiche_attachments and the like). If the result says the '
+        'lesfiche may or may not have '
         'been made, or that it was made without confirming everything, do '
         'not call this tool again for it, as a second call makes a second '
         'lesfiche: check it with list_lesfiches or read_lesfiche as the '
@@ -345,7 +348,12 @@ CallToolResult _result(
             'Its id is ${lesfiche.id}: read it with $readIt. This server '
                 'plans lesson lesfiches only; an assignment lesfiche is '
                 'planned in Smartschool itself.',
-          'Labels are set in the Lesfiches module itself.',
+          'Change it with edit_lesfiche, its weblinks with '
+              'set_lesfiche_weblink and remove_lesfiche_weblink, and its '
+              'attachments with add_lesfiche_attachments, '
+              'set_lesfiche_attachment_visibility and '
+              'remove_lesfiche_attachment. Labels are set in the Lesfiches '
+              'module itself.',
           if (namesakes.isNotEmpty) ...[
             'Note: you already had $others named "${lesfiche.name}". The '
                 'module keeps both; tell the user, who can tell them apart '
@@ -404,7 +412,9 @@ CallToolResult _notConfirmed(
             'Do not call create_lesfiche again for it: it exists, and a '
             'second call would make a second lesfiche. First read it with '
             '$readIt to see what it holds; then tell the user what you '
-            'found. What is missing can be added in the Lesfiches module.',
+            'found. What is missing can be added with edit_lesfiche (the '
+            'name, the courses), set_lesfiche_weblink or '
+            'add_lesfiche_attachments.',
       ),
     ],
   );

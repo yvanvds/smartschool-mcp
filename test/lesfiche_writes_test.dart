@@ -1,9 +1,11 @@
 /// The helpers of the tools that make or change a lesfiche
-/// (`lib/src/planner/lesfiche_writes.dart`, #114): the name, the courses
-/// (found by name in the school's course list), the weblinks and the
-/// attachments a tool takes, each checked before anything is sent. The
-/// write itself and its errors are tested over MCP in
-/// `lesfiche_create_tool_test.dart`.
+/// (`lib/src/planner/lesfiche_writes.dart`, #114, #115): the name, the
+/// courses (found by name in the school's course list), the weblinks and the
+/// attachments a tool takes, and the weblink or attachment a tool names by
+/// its id, each checked before anything is sent; the library's errors of a
+/// write as ToolErrors. The writes themselves are tested over MCP in
+/// `lesfiche_create_tool_test.dart`, `lesfiche_edit_tool_test.dart` and
+/// `lesfiche_weblink_attachment_tools_test.dart`.
 library;
 
 import 'dart:io';
@@ -26,6 +28,33 @@ final _informatica = _course('05', 'informatica');
 final _chemie = _course('06', 'chemie');
 final _lo = _course('04', 'lichamelijke opvoeding');
 final _school = [_informatica, _chemie, _lo];
+
+/// A lesfiche's detail as the module gives it, with two weblinks and an
+/// attachment.
+final _lussen = LessonContentDetail.fromJson({
+  'id': 'b0000000-0000-4000-8000-000000000011',
+  'platformId': 4069,
+  'name': 'Lussen',
+  'type': 'lessons',
+  'weblinks': [
+    for (final (n, name) in [('21', 'Oefeningen'), ('22', 'Quiz')])
+      {
+        'id': 'e0000000-0000-4000-8000-0000000000$n',
+        'name': name,
+        'url': 'https://example.com/$n',
+        'icon': 'earth',
+        'visibility': {'option': 'always', 'daysAfterEnd': null},
+      },
+  ],
+  'attachments': [
+    {
+      'id': 'f0000000-0000-4000-8000-000000000031',
+      'fileName': 'lussen.txt',
+      'fileSize': 16,
+      'visibility': {'option': 'never', 'daysAfterEnd': null},
+    },
+  ],
+});
 
 void main() {
   group('lesficheNameArgument', () {
@@ -274,6 +303,150 @@ void main() {
         ], maxBytes: 10),
         throwsA(_toolError(startsWith('The file "lussen.txt" ($lussen) is '))),
       );
+    });
+  });
+
+  group('a weblink or an attachment by its id', () {
+    test('the argument: without the white space around it, and without a '
+        'leading id as read_lesfiche prints it', () {
+      String parse(Object? value) =>
+          lesfichePartIdArgument(value, name: 'weblink_id', what: 'weblink');
+      expect(parse(' e0000000-0000-4000-8000-000000000021 '), endsWith('21'));
+      expect(parse('id e0000000-0000-4000-8000-000000000021'), endsWith('21'));
+      expect(parse('ID  E0000000'), 'E0000000');
+      for (final value in [null, '', '  ', 'id', ' id ', 7]) {
+        expect(
+          () => parse(value),
+          throwsA(
+            _toolError(
+              'weblink_id is empty: pass the id of the weblink as '
+              'read_lesfiche shows it at the end of its line, like '
+              'e0000000-0000-4000-8000-000000000021. Nothing was sent.',
+            ),
+          ),
+          reason: '$value',
+        );
+      }
+    });
+
+    test('found in the lesfiche ignoring case, the attachment with its '
+        'number', () {
+      expect(
+        lesficheWeblinkById(
+          _lussen,
+          'E0000000-0000-4000-8000-000000000022',
+        ).name,
+        'Quiz',
+      );
+      final (number, attachment) = lesficheAttachmentById(
+        _lussen,
+        'F0000000-0000-4000-8000-000000000031',
+      );
+      expect((number, attachment.fileName), (1, 'lussen.txt'));
+    });
+
+    test('an id the lesfiche does not have: its weblinks or attachments, '
+        'with their ids', () {
+      expect(
+        () => lesficheWeblinkById(_lussen, 'x'),
+        throwsA(
+          _toolError(
+            'The lesson lesfiche "Lussen" has no weblink with id x. Nothing '
+            'was sent. Its weblinks, each with its id at the end:\n'
+            '- Oefeningen | https://example.com/21 | icon earth | visible to '
+            'pupils: always | id e0000000-0000-4000-8000-000000000021\n'
+            '- Quiz | https://example.com/22 | icon earth | visible to '
+            'pupils: always | id e0000000-0000-4000-8000-000000000022',
+          ),
+        ),
+      );
+      expect(
+        () => lesficheAttachmentById(_lussen, 'x'),
+        throwsA(
+          _toolError(
+            'The lesson lesfiche "Lussen" has no attachment with id x. '
+            'Nothing was sent. Its attachments, each with its id at the end:\n'
+            '1. lussen.txt | 16 bytes | visible to pupils: never | id '
+            'f0000000-0000-4000-8000-000000000031',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('lesficheWriteToolError', () {
+    ToolError? map(Object error, {String? orGone}) => lesficheWriteToolError(
+      error,
+      what: 'the change of the name of the lesson lesfiche "Lussen"',
+      nothingDone: 'The lesfiche was not changed.',
+      orGone: orGone,
+    );
+
+    test('a 404 of a write: in the trash, or no longer there, or what else '
+        'is gone', () {
+      const notFound = SmartschoolLessonContentNotFoundError(
+        'rename: 404',
+        type: LessonContentType.lesson,
+        id: 'b0000000-0000-4000-8000-000000000011',
+      );
+      expect(
+        map(notFound)!.message,
+        'The Lesfiches module answered the change of the name of the lesson '
+        'lesfiche "Lussen" with HTTP 404: the lesfiche is in the trash or no '
+        'longer exists. A lesfiche in the trash can still be read, but not '
+        'changed, and list_lesfiches does not list it; the user restores it '
+        'from the trash in the Lesfiches module itself. The lesfiche was not '
+        'changed.',
+      );
+      expect(
+        map(notFound, orGone: 'the weblink was removed meanwhile')!.message,
+        contains(
+          'the lesfiche is in the trash or no longer exists, or the weblink '
+          'was removed meanwhile. A lesfiche',
+        ),
+      );
+    });
+
+    test('a refusal with or without reasons, and a refusal of the library '
+        'before sending', () {
+      expect(
+        map(
+          const SmartschoolLessonContentWriteRefusedError(
+            'refused',
+            statusCode: 422,
+            violations: ['name: too long'],
+          ),
+        )!.message,
+        'The Lesfiches module refused the change of the name of the lesson '
+        'lesfiche "Lussen" (HTTP 422): "name: too long". The lesfiche was not '
+        'changed.',
+      );
+      expect(
+        map(
+          ArgumentError.value(
+            ['c1'],
+            'courseIds',
+            'names courses the school does not have (getCourses): c1. '
+                'Smartschool would store them without complaint. Nothing was '
+                'sent',
+          ),
+        )!.message,
+        'The change of the name of the lesson lesfiche "Lussen" was refused '
+        'before it was sent: courseIds names courses the school does not '
+        'have (getCourses): c1. Smartschool would store them without '
+        'complaint. The lesfiche was not changed.',
+      );
+    });
+
+    test('not an unconfirmed write, a tool error, a range error or anything '
+        'else', () {
+      expect(
+        map(const SmartschoolLessonContentSaveUnconfirmedError('maybe')),
+        isNull,
+      );
+      expect(map(const ToolError('checked')), isNull);
+      expect(map(RangeError('bug')), isNull);
+      expect(map(StateError('bug')), isNull);
     });
   });
 }

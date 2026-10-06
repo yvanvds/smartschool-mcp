@@ -205,6 +205,10 @@ void main() {
           contains('Labels are not offered'),
           contains('up to 10 files of 64 bytes each'),
           contains('always (the default), never, at_start'),
+          contains(
+            'with its id for plan_lesfiche, read_lesfiche and '
+            'edit_lesfiche, which changes it later',
+          ),
         ),
       );
     });
@@ -316,7 +320,12 @@ void main() {
           'Its id is $id: plan it into an empty lesson hour of your own '
           'planner with plan_lesfiche, and read it with read_lesfiche '
           '(lesfiche $id).\n'
-          'Labels are set in the Lesfiches module itself.\n'
+          'Change it with edit_lesfiche, its weblinks with '
+          'set_lesfiche_weblink and remove_lesfiche_weblink, and its '
+          'attachments with add_lesfiche_attachments, '
+          'set_lesfiche_attachment_visibility and '
+          'remove_lesfiche_attachment. Labels are set in the Lesfiches '
+          'module itself.\n'
           '\n'
           'Lesfiche $id\n'
           'Kind: lesson\n'
@@ -422,7 +431,12 @@ void main() {
           'Its id is $id: read it with read_lesfiche (lesfiche $id, type '
           'assignment). This server plans lesson lesfiches only; an '
           'assignment lesfiche is planned in Smartschool itself.\n'
-          'Labels are set in the Lesfiches module itself.\n'
+          'Change it with edit_lesfiche, its weblinks with '
+          'set_lesfiche_weblink and remove_lesfiche_weblink, and its '
+          'attachments with add_lesfiche_attachments, '
+          'set_lesfiche_attachment_visibility and '
+          'remove_lesfiche_attachment. Labels are set in the Lesfiches '
+          'module itself.\n'
           'Note: you already had 1 other assignment lesfiche named "Taak: '
           'een eigen spel". The module keeps both; tell the user, who can '
           'tell them apart by their labels in the module:\n'
@@ -748,8 +762,9 @@ void main() {
         'it back failed. Do not call create_lesfiche again for it: it '
         'exists, and a second call would make a second lesfiche. First read '
         'it with read_lesfiche (lesfiche $id) to see what it holds; then '
-        'tell the user what you found. What is missing can be added in the '
-        'Lesfiches module.',
+        'tell the user what you found. What is missing can be added with '
+        'edit_lesfiche (the name, the courses), set_lesfiche_weblink or '
+        'add_lesfiche_attachments.',
       );
       expect(postsTo(_createLesson), 1, reason: 'not sent again');
       planner.failing.remove(_detailPath(1));
@@ -793,8 +808,9 @@ void main() {
         'sent. Do not call create_lesfiche again for it: it exists, and a '
         'second call would make a second lesfiche. First read it with '
         'read_lesfiche (lesfiche $id, type assignment) to see what it holds; '
-        'then tell the user what you found. What is missing can be added in '
-        'the Lesfiches module.',
+        'then tell the user what you found. What is missing can be added with '
+        'edit_lesfiche (the name, the courses), set_lesfiche_weblink or '
+        'add_lesfiche_attachments.',
       );
       expect(postsTo(_createAssignment), 1);
     });

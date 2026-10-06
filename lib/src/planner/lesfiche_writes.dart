@@ -2,6 +2,7 @@ import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
+import '../problems.dart';
 import '../session.dart';
 import '../tools/server_tool.dart';
 import '../uploads/local_files.dart';
@@ -10,13 +11,25 @@ import 'planner_access.dart';
 
 // Making and changing lesfiches in the user's own library of the Lesfiches
 // module (dartschool#129), shared by the tools that write there
-// (`create_lesfiche`, and the edits after it): the name, the courses, the
-// weblinks and the attachments a tool takes, checked before anything is
-// sent; the write itself, with the library's errors as ToolErrors
-// ([withLesficheWrite]); and a write the module did not confirm
-// ([lesficheWriteNotConfirmed]). When pupils see a weblink or an attachment
-// is parsed and worded in `lesfiche_detail.dart`
+// (`create_lesfiche`, and the edits after it: `edit_lesfiche`,
+// `set_lesfiche_weblink`, `remove_lesfiche_weblink`,
+// `add_lesfiche_attachments`, `set_lesfiche_attachment_visibility`,
+// `remove_lesfiche_attachment`): the name, the courses, the weblinks and the
+// attachments a tool takes, and the weblink or attachment it names by its
+// id, checked before anything is sent; the write itself, with the library's
+// errors as ToolErrors ([withLesficheWrite], [lesficheWriteToolError]); a
+// write the module did not confirm ([lesficheWriteNotConfirmed]); and the
+// result of a change, with the lesfiche read back
+// ([lesficheChangedResult]). When pupils see a weblink or an attachment is
+// parsed and worded in `lesfiche_detail.dart`
 // (`lesficheVisibilityArgument`, `formatLesficheVisibility`).
+//
+// The tools that change a lesfiche read it first, in the session action of
+// the write: the library's writes take the lesfiche as read, the tools check
+// the weblink or attachment they name against it, and a write's `404` then
+// means that the lesfiche is in the trash (a lesfiche in the trash is still
+// read, but its writes are answered `404`, seen live), not that the id or
+// the kind is wrong (`readLesficheDetail` says that).
 //
 // The library sends a create once, never again after logging in again, nor
 // retried in any other way (the same for adding a weblink and the last step
@@ -24,14 +37,17 @@ import 'planner_access.dart';
 // [SmartschoolLessonContentSaveUnconfirmedError] when the module's answer
 // does not confirm a write that went out. That is why repeating a write's
 // action, as [SmartschoolSession.run] does when Smartschool refused the
-// session, cannot make a lesfiche twice: a refused session means the write
-// was not carried out, and an unconfirmed write is not a refused session, so
-// it is not repeated. The repeat reads again what the action read before the
-// write, and that read must come first: a request that goes out once only
-// is refused at once on an expired session, without logging in, so it is a
-// read of the repeat that logs in again (yvanvds/dartschool#134). The module
-// keeps a name that is taken (seen live), so Claude is told never to call a
-// create again that may or may not have been made.
+// session, cannot make a lesfiche, a weblink or an attachment twice: a
+// refused session means the write was not carried out, and an unconfirmed
+// write is not a refused session, so it is not repeated. The repeat reads
+// again what the action read before the write, and that read must come
+// first: a request that goes out once only is refused at once on an expired
+// session, without logging in, so it is a read of the repeat that logs in
+// again (yvanvds/dartschool#134). The module keeps a name that is taken
+// (seen live), and adds a second weblink or attachment for a second add, so
+// Claude is told never to call a create or an add again that may or may not
+// have been made. The edits and the removals set or name what they act on:
+// the library retries them after logging in again, as a read.
 
 /// What a tool that makes a lesfiche adds to an error that came before the
 /// module made it (after the arguments were checked and sent on).
@@ -342,7 +358,47 @@ List<LesficheFile> lesficheAttachmentsArgument(
 /// lesfiche "Lussen"`), for the errors, and [nothingDone] says what an
 /// error means for the call (like [noLesficheMade]).
 ///
-/// The library's errors become [ToolError]s that end in [nothingDone]:
+/// The library's errors become [ToolError]s that end in [nothingDone]
+/// ([lesficheWriteToolError], with [files] and [orGone]). A [ToolError] of
+/// [write] itself (a check before sending), a
+/// [SmartschoolLessonContentSaveUnconfirmedError] (the write may or may not
+/// have been made: [lesficheWriteNotConfirmed]) and a login or connection
+/// failure are thrown as they are.
+Future<T> withLesficheWrite<T>(
+  SmartschoolSession session,
+  Future<T> Function(SmartschoolClient client) write, {
+  required String Function() what,
+  required String nothingDone,
+  Iterable<LocalFile> files = const [],
+  String? orGone,
+}) async {
+  try {
+    return await session.run(write);
+  } on SmartschoolLessonContentSaveUnconfirmedError {
+    rethrow;
+  } catch (error) {
+    final toolError = lesficheWriteToolError(
+      error,
+      what: what(),
+      nothingDone: nothingDone,
+      files: files,
+      orGone: orGone,
+    );
+    if (toolError == null) rethrow;
+    throw toolError;
+  }
+}
+
+/// The [ToolError] for [error], an error of a Lesfiches write that came
+/// before the module made or changed anything, ending in [nothingDone];
+/// null for anything else. [what] names what is written, like `the change
+/// of the name of the lesson lesfiche "Lussen"`.
+///
+/// - [SmartschoolLessonContentNotFoundError]: the module answered the write
+///   of a lesfiche that the tool read just before with `404`. A lesfiche in
+///   the trash is still read, but its writes are answered so (seen live,
+///   dartschool#129), so it is most likely there; [orGone] says what else
+///   may be gone (like `the weblink was removed meanwhile`);
 /// - [SmartschoolLessonContentWriteRefusedError]: the module refused the
 ///   write (HTTP `400` to `499`, a bare `400` seen live), with its reasons
 ///   in its own words when it gave any;
@@ -354,69 +410,80 @@ List<LesficheFile> lesficheAttachmentsArgument(
 /// - the other errors of the module and the planner ([plannerToolError]),
 ///   which come from a read before the write.
 ///
-/// A [ToolError] of [write] itself (a check before sending), a
-/// [SmartschoolLessonContentSaveUnconfirmedError] (the write may or may not
-/// have been made: [lesficheWriteNotConfirmed]) and a login or connection
-/// failure are thrown as they are.
-Future<T> withLesficheWrite<T>(
-  SmartschoolSession session,
-  Future<T> Function(SmartschoolClient client) write, {
-  required String Function() what,
+/// Not a [SmartschoolLessonContentSaveUnconfirmedError] (the write may or
+/// may not have been made: [lesficheWriteNotConfirmed]), a [ToolError], a
+/// login or connection failure, or a [RangeError] (a bug).
+ToolError? lesficheWriteToolError(
+  Object error, {
+  required String what,
   required String nothingDone,
   Iterable<LocalFile> files = const [],
-}) async {
-  try {
-    return await session.run(write);
-  } on SmartschoolLessonContentWriteRefusedError catch (error) {
-    // The library's message names the lesfiche: the log never shows a name.
-    log(
-      'lesfiches write: refused (HTTP ${error.statusCode}, '
-      '${error.violations.length} reasons)',
-    );
-    final violations = error.violations;
-    throw ToolError(
-      'The Lesfiches module refused ${what()} (HTTP ${error.statusCode})'
-      '${violations.isEmpty ? ', without saying why' : ': ${violations.map((v) => '"$v"').join(' ')}'}. '
-      '$nothingDone',
-    );
-  } on SmartschoolAttachmentUploadError catch (error) {
-    throw uploadToolError(error, files: files, nothingDone: nothingDone)!;
-  } on ArgumentError catch (error) {
-    if (error is RangeError) rethrow;
-    if (uploadToolError(error, files: files, nothingDone: nothingDone)
-        case final toolError?) {
-      throw toolError;
-    }
-    log('lesfiches write: refused before sending (${error.name})');
-    final message = '${error.message}'.replaceFirst(
-      RegExp(r'[.\s]*Nothing was sent\.?$'),
-      '',
-    );
-    throw ToolError(
-      '${_capitalised(what())} was refused before it was sent: '
-      '${error.name == null ? '' : '${error.name} '}$message. $nothingSent',
-    );
-  } on SmartschoolLessonContentSaveUnconfirmedError {
-    rethrow;
-  } catch (error) {
-    final toolError = plannerToolError(error);
-    if (toolError == null) rethrow;
-    throw ToolError('${toolError.message} $nothingDone');
+  String? orGone,
+}) {
+  switch (error) {
+    case SmartschoolLessonContentNotFoundError():
+      // The library's message names the lesfiche by its id only, but the
+      // log keeps to the same words as the other writes.
+      log('lesfiches write: the module answered 404');
+      return ToolError(
+        'The Lesfiches module answered $what with HTTP 404: the lesfiche is '
+        'in the trash or no longer exists'
+        '${orGone == null ? '' : ', or $orGone'}. A lesfiche in the trash '
+        'can still be read, but not changed, and list_lesfiches does not '
+        'list it; the user restores it from the trash in the Lesfiches '
+        'module itself. $nothingDone',
+      );
+    case SmartschoolLessonContentWriteRefusedError(
+      :final statusCode,
+      :final violations,
+    ):
+      // The library's message names the lesfiche: the log never shows a
+      // name.
+      log(
+        'lesfiches write: refused (HTTP $statusCode, '
+        '${violations.length} reasons)',
+      );
+      return ToolError(
+        'The Lesfiches module refused $what (HTTP $statusCode)'
+        '${violations.isEmpty ? ', without saying why' : ': ${violations.map((v) => '"$v"').join(' ')}'}. '
+        '$nothingDone',
+      );
+    case SmartschoolAttachmentUploadError():
+      return uploadToolError(error, files: files, nothingDone: nothingDone);
+    case ArgumentError(:final name, :final message) when error is! RangeError:
+      if (uploadToolError(error, files: files, nothingDone: nothingDone)
+          case final toolError?) {
+        return toolError;
+      }
+      log('lesfiches write: refused before sending ($name)');
+      final reason = '$message'.replaceFirst(
+        RegExp(r'[.\s]*Nothing was sent\.?$'),
+        '',
+      );
+      return ToolError(
+        '${_capitalised(what)} was refused before it was sent: '
+        '${name == null ? '' : '$name '}$reason. $nothingDone',
+      );
   }
+  final toolError = plannerToolError(error);
+  if (toolError == null) return null;
+  return ToolError('${toolError.message} $nothingDone');
 }
 
 /// The result of a Lesfiches write that went out without the module
 /// confirming it ([error]): [what] (like `The lesson lesfiche "Lussen"`)
-/// may or may not have been [done]. Claude must not call [tool] again for
-/// it ([why] says what a second call could do), but first [check] (like
-/// `list the lesfiches with list_lesfiches`) and tell the user.
+/// may or may not have been [done]. [also] comes after that (like what else
+/// the call did). Claude must not call [tool] again for it ([why], when
+/// given, says what a second call could do), but first [check] (like `list
+/// the lesfiches with list_lesfiches`) and tell the user.
 CallToolResult lesficheWriteNotConfirmed({
   required String tool,
   required String what,
   required String check,
-  required String why,
   required SmartschoolLessonContentSaveUnconfirmedError error,
+  String? why,
   String done = 'made',
+  String? also,
 }) {
   // Without the library's message, which names the lesfiche.
   log(
@@ -428,12 +495,140 @@ CallToolResult lesficheWriteNotConfirmed({
     isError: true,
     content: [
       TextContent(
-        text:
-            '$what may or may not have been $done: it was sent, but the '
-            'Lesfiches module did not confirm it. Do not call $tool again '
-            'for it: $why. First $check. Then tell the user what you found.',
+        text: [
+          '$what may or may not have been $done: it was sent, but the '
+              'Lesfiches module did not confirm it.',
+          ?also,
+          'Do not call $tool again for it${why == null ? '' : ': $why'}. '
+              'First $check. Then tell the user what you found.',
+        ].join(' '),
       ),
     ],
+  );
+}
+
+/// What a tool that changes a lesfiche adds to an error that came before
+/// the module changed anything.
+const lesficheUnchanged = 'The lesfiche was not changed.';
+
+/// `read_lesfiche (lesfiche <id>)`, with `type assignment` for an
+/// assignment lesfiche: how Claude reads the lesfiche [id] of the kind
+/// [type].
+String readLesficheCall(LessonContentType type, String id) =>
+    'read_lesfiche (lesfiche $id'
+    '${type == LessonContentType.assignment ? ', type assignment' : ''})';
+
+/// The result of a write that changed the lesfiche [id] of the kind [type]:
+/// [done] (what changed, a line each), a blank line, and the lesfiche read
+/// back with its courses named, as `read_lesfiche` shows it
+/// ([formatLesficheDetail]). The edits answer without the course names,
+/// and the weblink writes and the removals without the lesfiche.
+///
+/// The read is a session action of its own, after the write's, so that a
+/// repeat of the session for it never sends the write again. When it
+/// fails, the write still went through: the result says what changed, why
+/// the lesfiche is not shown, and how to read it.
+Future<CallToolResult> lesficheChangedResult(
+  SmartschoolSession session,
+  LessonContentType type,
+  String id,
+  List<String> done,
+) async {
+  String shown;
+  try {
+    final (:detail, :courseError) = await withPlannerClient(
+      session,
+      (client) => readLesficheDetail(client, type, id),
+    );
+    shown = formatLesficheDetail(detail, courseError: courseError);
+  } on Object catch (error) {
+    final message = switch (error) {
+      ToolError(:final message) => message,
+      SmartschoolProblem(:final message) => message,
+      _ => null,
+    };
+    if (message == null) rethrow;
+    log('lesfiches: reading the lesfiche back after a write failed');
+    shown =
+        'The change went through, but reading the lesfiche back failed: '
+        '$message Read it with ${readLesficheCall(type, id)} to see it.';
+  }
+  return CallToolResult(
+    content: [
+      TextContent(text: [...done, '', shown].join('\n')),
+    ],
+  );
+}
+
+/// [value], the argument [name] of a tool that names a weblink or an
+/// attachment of a lesfiche ([what], like `weblink`) by its id, as
+/// `read_lesfiche` prints it: without the white space around it, and
+/// without a leading `id `.
+///
+/// Throws a [ToolError] when that is empty, before anything is sent.
+/// [lesficheWeblinkById] and [lesficheAttachmentById] find it in the
+/// lesfiche.
+String lesfichePartIdArgument(
+  Object? value, {
+  required String name,
+  required String what,
+}) {
+  final text = (value is String ? value.trim() : '')
+      .replaceFirst(RegExp(r'^id(\s+|$)', caseSensitive: false), '')
+      .trim();
+  if (text.isNotEmpty) return text;
+  throw ToolError(
+    '$name is empty: pass the id of the $what as read_lesfiche shows it at '
+    'the end of its line, like e0000000-0000-4000-8000-000000000021. '
+    '$nothingSent',
+  );
+}
+
+/// The weblink of [lesfiche] with the id [id] (ignoring case).
+///
+/// Throws a [ToolError] that lists the weblinks of [lesfiche] with their
+/// ids when it has none with that id, before anything is sent.
+LessonContentWeblink lesficheWeblinkById(
+  LessonContentDetail lesfiche,
+  String id,
+) {
+  final weblinks = lesfiche.weblinks;
+  for (final weblink in weblinks) {
+    if (weblink.id.toLowerCase() == id.toLowerCase()) return weblink;
+  }
+  final listed = [
+    for (final weblink in weblinks) '- ${formatLesficheWeblink(weblink)}',
+  ];
+  throw ToolError(
+    '${_capitalised(lesficheTitle(lesfiche))} has no weblink with id $id. '
+    '$nothingSent '
+    '${weblinks.isEmpty ? 'It has no weblinks.' : 'Its weblinks, each with its id at the end:\n${listed.join('\n')}'}',
+  );
+}
+
+/// The attachment of [lesfiche] with the id [id] (ignoring case), with its
+/// number as `read_lesfiche` numbers them.
+///
+/// Throws a [ToolError] that lists the attachments of [lesfiche] with their
+/// ids when it has none with that id, before anything is sent.
+(int, LessonContentAttachment) lesficheAttachmentById(
+  LessonContentDetail lesfiche,
+  String id,
+) {
+  final attachments = lesfiche.attachments;
+  for (final (index, attachment) in attachments.indexed) {
+    if (attachment.id.toLowerCase() == id.toLowerCase()) {
+      return (index + 1, attachment);
+    }
+  }
+  final listed = [
+    for (final (index, attachment) in attachments.indexed)
+      '${index + 1}. ${formatLesficheAttachment(attachment)}',
+  ];
+  throw ToolError(
+    '${_capitalised(lesficheTitle(lesfiche))} has no attachment with id '
+    '$id. $nothingSent '
+    '${attachments.isEmpty ? 'It has no attachments.' : 'Its attachments, each with its id at the end:\n${listed.join('\n')}'}',
   );
 }
 

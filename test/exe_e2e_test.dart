@@ -108,6 +108,12 @@ void main() {
       'read_lesfiche_attachment',
       'save_lesfiche_attachment',
       'create_lesfiche',
+      'edit_lesfiche',
+      'set_lesfiche_weblink',
+      'remove_lesfiche_weblink',
+      'add_lesfiche_attachments',
+      'set_lesfiche_attachment_visibility',
+      'remove_lesfiche_attachment',
       'plan_lesfiche',
       'plan_assignment',
       'trash_assignment',
@@ -387,11 +393,19 @@ void main() {
     });
     // The planner writes (#53, #54, #55): pupils see a change at once, so
     // Claude Desktop asks for approval. A fill, a clear, a new assignment
-    // and a trash are not idempotent; an edit sets values, so it is.
+    // and a trash are not idempotent; an edit sets values, so it is. The
+    // same for the changes of a lesfiche (#115): an add is not idempotent,
+    // an edit and a removal are.
     for (final (name, idempotent) in [
       ('plan_lesson', false),
       ('edit_planned_element', true),
       ('clear_lesson', false),
+      ('edit_lesfiche', true),
+      ('set_lesfiche_weblink', false),
+      ('remove_lesfiche_weblink', true),
+      ('add_lesfiche_attachments', false),
+      ('set_lesfiche_attachment_visibility', true),
+      ('remove_lesfiche_attachment', true),
       ('plan_lesfiche', false),
       ('plan_assignment', false),
       ('trash_assignment', false),
@@ -584,7 +598,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(47));
+    expect(tools, hasLength(53));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -649,7 +663,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(35));
+        expect(tools, hasLength(41));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -688,8 +702,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(43));
-      expect([for (final tool in tools.skip(35)) tool['name']], skoreTools);
+      expect(tools, hasLength(49));
+      expect([for (final tool in tools.skip(41)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -882,7 +896,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(35));
+        expect(tools, hasLength(41));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -922,8 +936,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(39));
-      expect([for (final tool in tools.skip(35)) tool['name']], presenceTools);
+      expect(tools, hasLength(45));
+      expect([for (final tool in tools.skip(41)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1119,10 +1133,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(47));
-      expect([for (final tool in tools.skip(43)) tool['name']], presenceTools);
+      expect(tools, hasLength(53));
+      expect([for (final tool in tools.skip(49)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(35).take(8)) tool['name'],
+        for (final tool in tools.skip(41).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2095,6 +2109,206 @@ void main() {
       );
       expect(isError, isTrue, reason: '$arguments');
       expect(text, contains(message), reason: '$arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('the changes of a lesfiche are writes Claude Desktop asks approval '
+      'for; without settings: an error result that names the missing '
+      'settings; a call that changes nothing, an empty name or id, an invalid '
+      'weblink, visibility or path: an error that says what to fix, before '
+      'any login (#115)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    final files = await Directory.systemTemp.createTemp('smartschool_fiche_');
+    addTearDown(() => files.delete(recursive: true));
+    final werkblad = File('${files.path}${Platform.pathSeparator}werkblad.txt')
+      ..writeAsStringSync('Oefening 1');
+    const lesfiche = 'b0000000-0000-4000-8000-000000000011';
+    const weblink = 'e0000000-0000-4000-8000-000000000021';
+    const attachment = 'f0000000-0000-4000-8000-000000000031';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    for (final (name, required, properties) in [
+      (
+        'edit_lesfiche',
+        ['lesfiche'],
+        [
+          'lesfiche',
+          'type',
+          'name',
+          'icon',
+          'public_info',
+          'private_info',
+          'courses',
+          'visible',
+        ],
+      ),
+      (
+        'set_lesfiche_weblink',
+        ['lesfiche', 'name', 'url'],
+        ['lesfiche', 'type', 'weblink_id', 'name', 'url', 'icon', 'visibility'],
+      ),
+      (
+        'remove_lesfiche_weblink',
+        ['lesfiche', 'weblink_id'],
+        ['lesfiche', 'type', 'weblink_id'],
+      ),
+      (
+        'add_lesfiche_attachments',
+        ['lesfiche', 'attachments'],
+        ['lesfiche', 'type', 'attachments'],
+      ),
+      (
+        'set_lesfiche_attachment_visibility',
+        ['lesfiche', 'attachment_id', 'visibility'],
+        ['lesfiche', 'type', 'attachment_id', 'visibility'],
+      ),
+      (
+        'remove_lesfiche_attachment',
+        ['lesfiche', 'attachment_id'],
+        ['lesfiche', 'type', 'attachment_id'],
+      ),
+    ]) {
+      final schema = tools[name]!['inputSchema'] as Map;
+      expect(schema['required'], required, reason: name);
+      expect((schema['properties'] as Map).keys, properties, reason: name);
+      expect((schema['properties'] as Map)['type'], {
+        'type': 'string',
+        'description': isA<String>(),
+        'enum': ['lesson', 'assignment'],
+      }, reason: name);
+    }
+    final editSchema = tools['edit_lesfiche']!['inputSchema'] as Map;
+    expect((editSchema['properties'] as Map)['visible'], {
+      'type': 'boolean',
+      'description': isA<String>(),
+    });
+    expect(
+      tools['add_lesfiche_attachments']!['description'],
+      contains('200 MB'),
+    );
+    expect(
+      tools['create_lesfiche']!['description'],
+      contains('read_lesfiche and edit_lesfiche'),
+    );
+    expect(
+      tools['read_lesfiche']!['description'],
+      contains('edit_lesfiche changes the lesfiche'),
+    );
+
+    for (final (name, arguments) in <(String, Map<String, Object?>)>[
+      ('edit_lesfiche', {'lesfiche': lesfiche, 'name': 'Lussen 2'}),
+      (
+        'set_lesfiche_weblink',
+        {
+          'lesfiche': lesfiche,
+          'name': 'Quiz',
+          'url': 'example.com/quiz',
+          'visibility': 'after_end:3',
+        },
+      ),
+      (
+        'remove_lesfiche_weblink',
+        {'lesfiche': lesfiche, 'weblink_id': weblink},
+      ),
+      (
+        'add_lesfiche_attachments',
+        {
+          'lesfiche': lesfiche,
+          'attachments': [
+            {'path': werkblad.path, 'visibility': 'never'},
+          ],
+        },
+      ),
+      (
+        'set_lesfiche_attachment_visibility',
+        {
+          'lesfiche': lesfiche,
+          'attachment_id': attachment,
+          'visibility': 'at_end',
+        },
+      ),
+      (
+        'remove_lesfiche_attachment',
+        {'lesfiche': lesfiche, 'attachment_id': attachment},
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (name, arguments, message)
+        in <(String, Map<String, Object?>, String)>[
+          ('edit_lesfiche', {'lesfiche': lesfiche}, 'Nothing to change'),
+          (
+            'edit_lesfiche',
+            {'lesfiche': lesfiche, 'name': '   '},
+            'name is empty',
+          ),
+          (
+            'set_lesfiche_weblink',
+            {'lesfiche': lesfiche, 'name': 'Quiz', 'url': 'geen url'},
+            'which is not a web address the Lesfiches web client takes',
+          ),
+          (
+            'set_lesfiche_weblink',
+            {
+              'lesfiche': lesfiche,
+              'name': 'Quiz',
+              'url': 'example.com',
+              'visibility': 'soms',
+            },
+            'is "soms", which is not a visibility',
+          ),
+          (
+            'remove_lesfiche_weblink',
+            {'lesfiche': lesfiche, 'weblink_id': ' id '},
+            'weblink_id is empty',
+          ),
+          (
+            'add_lesfiche_attachments',
+            {
+              'lesfiche': lesfiche,
+              'attachments': [
+                {'path': 'werkblad.txt'},
+              ],
+            },
+            '"werkblad.txt" in attachments is not a full path',
+          ),
+          (
+            'set_lesfiche_attachment_visibility',
+            {
+              'lesfiche': lesfiche,
+              'attachment_id': attachment,
+              'visibility': ' ',
+            },
+            'visibility is missing',
+          ),
+          (
+            'remove_lesfiche_attachment',
+            {'lesfiche': 'Lussen!', 'attachment_id': attachment},
+            'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+          ),
+        ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: '$name $arguments');
+      expect(text, contains(message), reason: '$name $arguments');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
 

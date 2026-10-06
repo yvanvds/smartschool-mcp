@@ -28,7 +28,12 @@ ServerTool readLesficheTool(SmartschoolSession session) => ServerTool(
         'it to tell the user what a lesfiche holds, to compare a lesfiche '
         'with a lesson planned from it (read_planned_element), or to reuse '
         'its text. read_lesfiche_attachment reads the text of an attachment, '
-        'save_lesfiche_attachment saves one into the download folder. Pass '
+        'save_lesfiche_attachment saves one into the download folder. '
+        'edit_lesfiche changes the lesfiche; set_lesfiche_weblink and '
+        'remove_lesfiche_weblink change its weblinks, and '
+        'add_lesfiche_attachments, set_lesfiche_attachment_visibility and '
+        'remove_lesfiche_attachment its attachments, by the ids shown here. '
+        'Pass '
         'type assignment for an assignment lesfiche: a lesfiche asked for as '
         'the other kind is not found. Reading changes nothing in '
         'Smartschool.',

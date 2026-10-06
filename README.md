@@ -556,7 +556,8 @@ client name. It also installs again while that copy runs.
   (`SmartschoolLessonContentNotFoundError`), and an id that is not a UUID
   with a bare `500`, so that one is not sent: both say to take the id and
   the kind from `list_lesfiches`. A lesfiche in the trash is still
-  answered, as live.
+  answered, as live. Its description points to `edit_lesfiche` and the
+  tools that change the weblinks and attachments, by the ids it shows.
 - `read_lesfiche_attachment`: opens one attachment of a lesfiche
   (`lesfiche`, `type`, and `attachment`: its number in `read_lesfiche`, or
   its file name, as `save_message_attachment` takes it; a name that two
@@ -611,19 +612,113 @@ client name. It also installs again while that copy runs.
   id only) and reads the lesfiche back. A name that is taken is kept (the
   module makes a second lesfiche, seen live), and the result names the
   other lesfiches of that name and kind. The result is the lesfiche as
-  `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson) and
-  `read_lesfiche`. Labels are not in the library: the description says
-  the user sets them in the module. A refusal by the module (a bare `400`)
+  `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson),
+  `read_lesfiche` and `edit_lesfiche`, and the tools that change its
+  weblinks and attachments (below). Labels are not in the library: the
+  description says the user sets them in the module. A refusal by the module (a bare `400`)
   and a file Smartschool's upload step refuses (in Smartschool's words)
   say that no lesfiche was made; a create the module does not confirm is
   reported as maybe made, with `list_lesfiches` to check it, and a
   lesfiche that was made but whose read-back failed or did not show
   everything sent (`SmartschoolLessonContentSaveUnconfirmedError` with its
-  `lessonContentId`) as made, with its id and `read_lesfiche`; for both,
-  Claude is told not to call the tool again. When the school's types
+  `lessonContentId`) as made, with its id and `read_lesfiche` (what is
+  missing is added with `edit_lesfiche`, `set_lesfiche_weblink` or
+  `add_lesfiche_attachments`); for both, Claude is told not to call the
+  tool again. When the school's types
   changed since the session read them, the library refuses the type before
   sending, and the error lists the types as they are now, which every tool
   on the session takes from then on.
+- `edit_lesfiche`: changes one lesfiche of the user's own library
+  (`lesfiche` and `type`, as `read_lesfiche` takes them) with the
+  library's edits (dartschool#129), one per field given, in this order:
+  `name` (`rename`, at most 255 characters), `icon` (`changeIcon`),
+  `public_info` and `private_info` (`changePublicInfo`,
+  `changePrivateInfo`; plain text, as `edit_planned_element`: it replaces
+  the whole info, and an empty text empties it), `courses`
+  (`changeCourses`, by name or id as `create_lesfiche` takes them, in place
+  of all its courses; an empty list removes them) and `visible`
+  (`setVisible`: shown or hidden in the module; a hidden lesfiche is still
+  listed and can still be planned). Marked destructive (as
+  `create_lesfiche`, for Claude Desktop and Codex to ask approval) and
+  idempotent: each edit sets a value. Claude shows the lesfiche and what
+  changes, and calls after the user's confirmation. The tool reads the
+  lesfiche first (the edits take it as read) and, for `courses`, the
+  school's course list, so that an unknown course is refused before any
+  edit; the library checks the courses again. It stops at the first edit
+  that fails, and says which fields were changed before it and which were
+  not sent, as `edit_planned_element` does; a field that already had the
+  value given is sent all the same, and the result says so. The edits
+  answer with the whole lesfiche, but only `changeCourses` names its
+  courses, so the result reads the lesfiche once more at the end and gives
+  it as `read_lesfiche` shows it (`lesficheChangedResult`, in a session
+  action of its own); when that read fails, the result says what changed
+  and to read it with `read_lesfiche`. A lesfiche in the trash is still
+  read, but its edits are answered `404` (seen live,
+  `SmartschoolLessonContentNotFoundError`): the error says that it is in
+  the trash or no longer exists, and that the user restores it in the
+  module; an id or kind that is wrong is the `404` of the read before
+  (take them from `list_lesfiches`). An edit the module does not confirm
+  (`SmartschoolLessonContentSaveUnconfirmedError`) is reported as maybe
+  saved, with what was changed before it and `read_lesfiche` to check it.
+  The library retries an edit after logging in again, as a read. Whether a
+  lesson planned from the lesfiche earlier changes with it has not been
+  checked (#117): the descriptions of these tools do not promise it.
+- `set_lesfiche_weblink`: adds a weblink to a lesfiche (`addWeblink`), or,
+  with `weblink_id` (as `read_lesfiche` shows it), changes one
+  (`changeWeblink`): `name`, `url` (sent as the web client sends it, as
+  for `create_lesfiche`), and optionally `icon` (`earth` for a new one)
+  and `visibility` (as for `create_lesfiche`). A change sends every value:
+  the icon and the visibility that are not given stay as the weblink has
+  them. Marked destructive, and not idempotent: a second add adds a second
+  weblink. The tool reads the lesfiche first, in the session action of the
+  write: the library takes it as read, a weblink id the lesfiche does not
+  have is refused before sending (with its weblinks and their ids), and,
+  since the library sends an add once only, never again after logging in
+  again, it is that read that logs in again when the session repeats the
+  call (dartschool#134). The result says what was added or changed, with
+  the weblink's id, and gives the lesfiche as `read_lesfiche` shows it. A
+  refusal by the module (a bare `400`) says that nothing changed; an add
+  the module does not confirm is maybe added, with `read_lesfiche` to check
+  it and not to call again; a `404` is the trash, as for `edit_lesfiche`,
+  or a weblink removed meanwhile.
+- `remove_lesfiche_weblink`: removes one weblink of a lesfiche
+  (`weblink_id`) with `removeWeblink` (a `DELETE`, answered `204`). Marked
+  destructive and idempotent. It reads the lesfiche first and refuses a
+  weblink id it does not have before sending; the result names the weblink
+  removed and gives the lesfiche. A removal the module does not confirm is
+  maybe removed, with `read_lesfiche` to check it.
+- `add_lesfiche_attachments`: adds files from this PC (`attachments`,
+  `{path, visibility?}`, 1 to 10, checked as for `create_lesfiche`, see
+  *Uploading files* below) to a lesfiche with `addAttachments`: the
+  library reads the lesfiche, uploads the files into a new upload
+  directory, has the module take them once (never again after logging in
+  again), and then sets each visibility other than `always`
+  (`changeAttachmentVisibility`): the module gives every new attachment
+  `always`, and ignores the visibility sent with them (seen live). Marked
+  destructive, and not idempotent: a second call adds the files a second
+  time. The tool reads the lesfiche first in the session action, as
+  `set_lesfiche_weblink` does (dartschool#134). The result lists the
+  attachments added with their ids, notes a name the lesfiche had already
+  (the module keeps both), and gives the lesfiche. A file the upload step
+  refuses (in Smartschool's words), a refusal and a `404` say that nothing
+  changed. An add the module does not confirm cannot be told from one whose
+  files went in but whose visibility could not be set (both a
+  `SmartschoolLessonContentSaveUnconfirmedError`, dartschool#135, #126):
+  either says that the files may or may not have been added, or added with
+  `always`, and not to call again but to read the lesfiche and set a
+  visibility with `set_lesfiche_attachment_visibility`.
+- `set_lesfiche_attachment_visibility`: sets when pupils see one
+  attachment of a lesfiche (`attachment_id`, as `read_lesfiche` shows it,
+  and `visibility`) with `changeAttachmentVisibility`. Marked destructive
+  and idempotent. It reads the lesfiche first and refuses an attachment id
+  it does not have before sending; the result says what the visibility was
+  before, and gives the lesfiche.
+- `remove_lesfiche_attachment`: removes one attachment of a lesfiche
+  (`attachment_id`) with `removeAttachment` (a `DELETE`, answered `204`).
+  Marked destructive and idempotent; the description points to
+  `save_lesfiche_attachment` to keep a copy. It reads the lesfiche first
+  and refuses an attachment id it does not have before sending; the result
+  names the file removed with its size, and gives the lesfiche.
 - `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
   `list_lesfiches`) into an empty lesson hour of the user's own planner
   (`hour`, as `plan_lesson`) with the library's `planLessonContent`
@@ -1083,20 +1178,28 @@ which finds them by id or name in the school's course list;
 `lesficheWeblinksArgument` with `lesficheWeblinkArgument`;
 `lesficheAttachmentsArgument`, `{path, visibility?}` through the
 local-file helper, with `lesficheAttachments`; and their schemas),
-`withLesficheWrite` (the session runner for a write, with the library's
-refusals as `ToolError`s that say nothing was made) and the result of a
-write the module did not confirm (`lesficheWriteNotConfirmed`); a header
-note says why the session's repeat of a write cannot make a lesfiche
-twice, and why a read comes before the write. The tests run against a fake
+the weblink or attachment a tool names by its id
+(`lesfichePartIdArgument`, `lesficheWeblinkById`,
+`lesficheAttachmentById`), `withLesficheWrite` (the session runner for a
+write, with the library's errors as `ToolError`s that say nothing was made
+or changed, `lesficheWriteToolError`; a `404` of a write says that the
+lesfiche is in the trash), the result of a write the module did not
+confirm (`lesficheWriteNotConfirmed`), and the result of a change, with
+the lesfiche read back (`lesficheChangedResult`); a header note says why
+the session's repeat of a write cannot make a lesfiche, a weblink or an
+attachment twice, and why a read comes before the write. The tests run against a fake
 planner (`test/support/fake_planner.dart`), built from dartschool's
 anonymised captures of the live planner, its workload view, the Lesfiches
 list and the detail of a lesfiche with the download of its attachment
 (dartschool#129), with the school's course list, which carries out the
 writes of dartschool#87 (fill, rename, change of the info, clear), the plan
 of a lesfiche of dartschool#88, the create and the trash of an assignment of
-dartschool#89 as the live planner did, and the create of a lesfiche from the
-web client's body of dartschool#129, with its attachments from the fake
-upload step (`fakeLesficheCreatePath`, `fakeNewLesficheId`).
+dartschool#89 as the live planner did, and the writes of a lesfiche of
+dartschool#129: the create from the web client's body, with its
+attachments from the fake upload step (`fakeLesficheCreatePath`,
+`fakeNewLesficheId`), the edits, and the weblinks and attachments added,
+changed and removed, with a trash (`trashedLesfiches`) whose lesfiches are
+read but not written, as live.
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a
@@ -1379,10 +1482,10 @@ and that they disappear after 7 days.
 
 ### Uploading files
 
-`upload_intradesk_files` and `create_lesfiche` send files from this PC to
-Smartschool. The tools that upload share the local-file helper in
-`lib/src/uploads/local_files.dart` (for Intradesk and the attachments of a
-new lesfiche now, for a message later):
+`upload_intradesk_files`, `create_lesfiche` and `add_lesfiche_attachments`
+send files from this PC to Smartschool. The tools that upload share the
+local-file helper in `lib/src/uploads/local_files.dart` (for Intradesk and
+the attachments of a lesfiche now, for a message later):
 
 - **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
   1 to 10 per call. The server reads any file the user's Windows account can
@@ -1402,8 +1505,9 @@ new lesfiche now, for a message later):
   `ArgumentError` about its path) and a failure of Smartschool's upload step
   (`SmartschoolAttachmentUploadError`, with Smartschool's own words in
   `serverMessage` when it gave them) into a `ToolError`, ending in what that
-  means for the call (for Intradesk: nothing was added; for a lesfiche: no
-  lesfiche was made).
+  means for the call (for Intradesk: nothing was added; for a new lesfiche:
+  no lesfiche was made; for files added to a lesfiche: the lesfiche was not
+  changed).
 
 The log shows counts and timings, never a name or a path.
 
