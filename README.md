@@ -340,6 +340,48 @@ client name. It also installs again while that copy runs.
   and returns its full path, name and size, for a file `read_intradesk_file`
   cannot read (a scan, an old Office file, any other format) or when the
   user wants the file itself (see *Saving files* below).
+- `create_intradesk_folder`: adds a folder (`name`, an optional `color` of
+  Intradesk's eleven, yellow by default) to an Intradesk folder
+  (`folder_id`; the top of Intradesk is not offered), with the library's
+  `createFolder` (dartschool#128). With `confidential`, a confidential
+  folder, the only kind Intradesk adds inside a confidential folder. The
+  three tools that add to Intradesk are marked destructive, so Claude
+  Desktop asks for approval every time, and Claude is told to show the user
+  what goes where (the folder's path, from `search_intradesk`) and wait for
+  the user's confirmation first. Before sending, each reads the folder (its
+  listing, and, when the Intradesk index knows where it is, its entry in
+  the folder above, for its path and rights) and refuses a name the folder
+  holds already (any kind, ignoring case and spaces: Intradesk would not
+  refuse it, but rename the new item to `name (1)`), a folder the account
+  may not add to (`canAdd`, when the entry was read), and a folder of the
+  wrong kind for its parent (when known). The library sends a create once,
+  never again after logging in again; a create Intradesk does not confirm
+  is reported as maybe made, with how to check it (`list_intradesk_folder`),
+  and Claude is told not to call the tool again for it. The result is the
+  item as Intradesk made it (its id, the name as stored, the folder's
+  path); a name Intradesk changed anyway is pointed out. What was made goes
+  into the Intradesk index at once, when one is loaded, so
+  `search_intradesk` finds it without walking (see *Intradesk index*
+  below).
+- `add_intradesk_weblink`: adds a weblink (`name`, `url`, an optional
+  `icon`, `earth` by default) to an Intradesk folder, with the library's
+  `createWeblink`, as `create_intradesk_folder` adds a folder. The address
+  is sent as Intradesk's web client sends it (without white space, with
+  `http://` in front when it has no scheme; the library's
+  `normalizeWeblinkUrl`), and the result says so; an address the web client
+  refuses is refused before sending. A refusal by Intradesk (HTTP 400) is
+  reported with its reason, in its own words.
+- `upload_intradesk_files`: uploads 1 to 10 files from this PC (`paths`,
+  absolute) into an Intradesk folder, each under its own name, with the
+  library's `uploadFiles`, as `create_intradesk_folder` adds a folder. The
+  server reads any file the user's Windows account can read; Claude is told
+  to list the files with their names and sizes and the folder with its path
+  for the user's confirmation. Each path must be absolute and name an
+  existing file of at most 200 MB with a name Smartschool takes, and no two
+  files may have the same name (see *Uploading files* below). A file
+  Smartschool's upload step refuses is reported in Smartschool's words, and
+  then nothing was added; a file Intradesk did not take is listed with its
+  reason next to the files it added.
 - `search_planners`: finds the planner of a class, a person or a room by
   name, with the planner's own search (the library's `searchCalendars`).
   Each hit is listed with its kind (class, person, room), its name, what
@@ -827,9 +869,24 @@ argument (`intradeskIdArgument`) and listing-to-items conversion
 name with extension, path, size, date changed, `extension`, `mimeType`) and
 `IntradeskIndex` (lookup by id, the items inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
-`intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
-`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
-lines in `intradesk_format.dart`.
+`intradesk_walk.dart`; the index cache (`IntradeskIndexCache`, with `patch`
+for what a write added or removed) in `intradesk_cache.dart`; name matching
+in `intradesk_search.dart` and output lines in `intradesk_format.dart`. In
+`intradesk_writes.dart`, for the tools that add to Intradesk: the
+`folder_id` and `name` arguments (`intradeskFolderArgument`,
+`intradeskNameArgument`), the folder read before a write
+(`readIntradeskParent`, an `IntradeskParent` with its listing, path and
+entry, which refuses a taken name and a folder without `canAdd`),
+`withIntradeskWrite` (the library's refusals as `ToolError`s that say
+nothing was added), the result of a write Intradesk did not confirm
+(`intradeskWriteNotConfirmed`) and the index patch after a write
+(`addToIntradeskIndex`); a header note says why the session's repeat of a
+write cannot add twice. The tests run against a fake Intradesk
+(`test/support/fake_intradesk.dart`) that carries out the creates and the
+upload of dartschool#128 as the live Intradesk did (renaming a taken name,
+the bare `500`s and the `400`s with `violations`), behind the fake upload
+step (`test/support/fake_uploads.dart`) that the attachments of later tools
+can share.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
@@ -1045,6 +1102,16 @@ Intradesk above). The server logs the folder on first use. It holds the names an
 you can see on Intradesk, not file contents. Deleting it is safe: the next
 search builds it again. The log only shows counts, never a name or a query.
 
+What the server adds itself (`create_intradesk_folder`,
+`add_intradesk_weblink`, `upload_intradesk_files`) goes into the index at
+once, under the folder's path, in memory and in the file
+(`IntradeskIndexCache.patch`), so a search finds it without waiting for the
+next walk. Only an index that is loaded is patched, of any age, and only
+when it knows the folder; the patch keeps the time the index was built, so
+the next walk comes when it would have, and a walk that runs meanwhile gets
+the patch too. A patch also removes items (and everything in a removed
+folder), for a tool that moves items to the trash.
+
 ### Reading Intradesk files
 
 `read_intradesk_file` downloads the file into memory (never to disk), reads
@@ -1139,6 +1206,34 @@ in `lib/src/tools/save_intradesk_file_tool.dart` and
 Privacy: saved files are personal or school data, unencrypted, in a folder
 of the teacher's choice; the colleague guide (`docs/installatie.md`) says so,
 and that they disappear after 7 days.
+
+### Uploading files
+
+`upload_intradesk_files` sends files from this PC to Smartschool. The tools
+that upload share the local-file helper in `lib/src/uploads/local_files.dart`
+(for Intradesk now, for the attachments of a lesfiche or a message later):
+
+- **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
+  1 to 10 per call. The server reads any file the user's Windows account can
+  read, so the tool descriptions tell Claude to show the user every file,
+  with its name and size, before calling.
+- **Checks before anything is sent:** each path names an existing file, not
+  a folder, of at most 200 MB (a sanity limit, as high as what
+  `save_intradesk_file` saves: the library reads a file into memory to
+  upload it), with a name Smartschool takes (no `/ : * ? " \ < > |`, no dot
+  at the start or end; the upload step refuses any other), and no two files
+  have the same name, ignoring case. Each error names the path and says what
+  to do.
+- **Names:** a file goes in under the last part of its path (`localFileName`,
+  as the library takes it), described as `"brief.docx" (12 KB)`
+  (`LocalFile.description`, `describeLocalFiles`).
+- **Refusals:** `uploadToolError` turns the library's refusal of a file (an
+  `ArgumentError` about its path) and a failure of Smartschool's upload step
+  (`SmartschoolAttachmentUploadError`, with Smartschool's own words in
+  `serverMessage` when it gave them) into a `ToolError`, ending in what that
+  means for the call (for Intradesk: nothing was added).
+
+The log shows counts and timings, never a name or a path.
 
 ### Login
 

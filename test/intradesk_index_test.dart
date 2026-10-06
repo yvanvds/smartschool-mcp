@@ -232,6 +232,63 @@ void main() {
       expect(index.within('f4'), isEmpty);
     });
 
+    test('patched adds items after their folder, puts an item with a known id '
+        'in that one\'s place, and removes items with everything in a removed '
+        'folder, keeping when the index was built', () {
+      final index = _index();
+      const added = IntradeskItem(
+        kind: IntradeskItemKind.file,
+        id: 'c9',
+        name: 'nieuw.pdf',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+      );
+      // A walk found it already, under its old name; ids in another case.
+      const renamed = IntradeskItem(
+        kind: IntradeskItemKind.folder,
+        id: 'F3',
+        name: 'Formulieren 2026',
+        parentId: 'f1',
+        parentPath: 'Leerkrachten',
+      );
+
+      final patched = index.patched(added: [added, renamed], removed: ['F2']);
+
+      expect(
+        [for (final item in patched.items) item.path],
+        [
+          'Leerkrachten',
+          'Leerkrachten / Formulieren 2026',
+          'Leerkrachten / Uitstappen',
+          'Leerkrachten / Formulieren / uitstap.docx',
+          'Leerkrachten / Formulieren / Aanvraag uitstappen.pdf',
+          'Leerkrachten / Schoolsite',
+          'Leerkrachten / Uitstappen / nieuw.pdf',
+        ],
+      );
+      expect(patched.within('f4'), [added]);
+      expect(patched.find('c3'), isNull, reason: 'it was in Leerlingen');
+      expect(patched.builtAt, index.builtAt);
+      expect(patched.unlisted, 1);
+      expect(patched.skipped, 2);
+      expect(patched.walkTime, index.walkTime);
+      expect(index.items, _items, reason: 'the index itself is unchanged');
+
+      expect(index.patched(removed: ['']).items, _items);
+      expect(
+        [
+          for (final item in index.patched(removed: ['f3']).items) item.name,
+        ],
+        [
+          'Leerkrachten',
+          'Leerlingen',
+          'Uitstappen',
+          'Uitstap info.pdf',
+          'Schoolsite',
+        ],
+      );
+    });
+
     test('survives a JSON round trip; another format is refused', () {
       final index = _index();
       final copy = IntradeskIndex.fromJson(
@@ -566,6 +623,67 @@ void main() {
       now = now.add(const Duration(days: 30));
       expect((await newCache().saved())?.builtAt, DateTime.utc(2024, 9, 1, 8));
       expect(builds, 1);
+    });
+
+    group('patch', () {
+      const added = IntradeskItem(
+        kind: IntradeskItemKind.file,
+        id: 'c9',
+        name: 'nieuw.pdf',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+      );
+
+      test(
+        'without an index does nothing: nothing is built or written',
+        () async {
+          expect(await cache.patch(added: [added]), isNull);
+          expect(builds, 0);
+          expect(folder.existsSync(), isFalse);
+        },
+      );
+
+      test('patches the index in memory and on disk, of any age, keeping when '
+          'it was built; patches run in order', () async {
+        await cache.load(build);
+        now = now.add(const Duration(days: 3));
+
+        final first = cache.patch(added: [added]);
+        final second = cache.patch(removed: ['f2']);
+        expect((await first)!.find('c9'), isNotNull);
+        final patched = (await second)!;
+        expect(patched.find('c9'), isNotNull);
+        expect(patched.find('c3'), isNull);
+        expect(patched.builtAt, DateTime.utc(2024, 9, 1, 8));
+
+        expect((await cache.saved())!.toJson(), patched.toJson());
+        expect((await newCache().saved())!.toJson(), patched.toJson());
+        await cache.patch(removed: ['c9']);
+        expect((await newCache().saved())!.find('c9'), isNull);
+        expect(builds, 1);
+      });
+
+      test('a patch made while a walk runs is applied to the walk\'s index '
+          'before it is saved', () async {
+        final started = Completer<void>();
+        final gate = Completer<void>();
+        final loading = cache.load((progress) async {
+          started.complete();
+          await gate.future;
+          return build(progress);
+        });
+        await started.future;
+
+        expect(
+          await cache.patch(added: [added]),
+          isNull,
+          reason: 'no index yet',
+        );
+        gate.complete();
+
+        expect((await loading).index!.find('c9'), isNotNull);
+        expect((await newCache().saved())!.find('c9'), isNotNull);
+      });
     });
 
     test('an index that cannot be saved is still returned', () async {

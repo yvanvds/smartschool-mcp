@@ -14,8 +14,10 @@ import 'package:smartschool_mcp/src/server.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
+import 'package:smartschool_mcp/src/tools/add_intradesk_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
+import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
@@ -41,6 +43,7 @@ import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 
@@ -117,6 +120,9 @@ Future<void> _serve(ServerOptions options) async {
           listIntradeskFolderTool(session, intradeskIndex),
           readIntradeskFileTool(session, intradeskIndex),
           saveIntradeskFileTool(session, intradeskIndex, downloads),
+          createIntradeskFolderTool(session, intradeskIndex),
+          addIntradeskWeblinkTool(session, intradeskIndex),
+          uploadIntradeskFilesTool(session, intradeskIndex),
           searchPlannersTool(session),
           listPlannerTool(session),
           readPlannedElementTool(session),
