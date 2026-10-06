@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../log.dart';
 import '../planner/planner_access.dart';
 import '../planner/planner_format.dart';
 import '../session.dart';
@@ -147,7 +148,9 @@ Future<CallToolResult> _list(
       ? null
       : {for (final kind in kinds) kind.plannerType!};
 
-  final (calendar, elements) = await withPlanner(session, (service) async {
+  final (calendar, elements, lookup) = await withPlanner(session, (
+    service,
+  ) async {
     final calendar = await planner.resolve(service);
     final elements = await service.getPlannedElements(
       calendar,
@@ -155,7 +158,10 @@ Future<CallToolResult> _list(
       to: until,
       types: types,
     );
-    return (calendar, elements);
+    final lookup = needsPlannerLookup(planner, calendar, kinds, elements)
+        ? await _lookUp(service, calendar)
+        : null;
+    return (calendar, elements, lookup);
   });
 
   return CallToolResult(
@@ -168,6 +174,7 @@ Future<CallToolResult> _list(
           until: until,
           kinds: kinds,
           elements: elements,
+          lookup: lookup,
         ),
       ),
     ],
@@ -187,17 +194,88 @@ Set<PlannerKind>? _kinds(Object? value) {
       : kinds;
 }
 
-/// What `list_planner` answers when nothing is planned in a planner other
-/// than the user's own and no element names it ([plannerName]).
+/// The [elements] of [kinds] (of every kind for null): those that
+/// `list_planner` lists.
+List<PlannedElement> _listed(
+  Set<PlannerKind>? kinds,
+  List<PlannedElement> elements,
+) => [
+  for (final element in elements)
+    if (kinds == null || kinds.contains(PlannerKind.of(element))) element,
+];
+
+/// Whether `list_planner` looks [planner] up by its id
+/// ([PlannerService.getCalendar]): only when it is not the user's own,
+/// nothing of [kinds] is planned in it, and no element read ([elements],
+/// of every kind read) names it ([plannerName]). A listing whose elements
+/// name the planner sends no lookup.
 ///
-/// Smartschool answers a planner id that names no planner (such as
-/// `group/4069_1`) as an empty planner, without an error, and the library
-/// cannot name a planner by its id, so the two cannot be told apart
-/// (yvanvds/dartschool#127). A workaround, whose removal is tracked in
-/// #102.
+/// With nothing planned, the header cannot name the planner from the
+/// elements, and an id that names no planner can read as a free planner:
+/// the planner answers a room it does not have, and a group its search
+/// does not offer, with an empty list (see [PlannerService.getCalendar]
+/// and [PlannerService.getPlannedElements]).
+bool needsPlannerLookup(
+  PlannerRef planner,
+  PlannerCalendar calendar,
+  Set<PlannerKind>? kinds,
+  List<PlannedElement> elements,
+) =>
+    !planner.isMe &&
+    _listed(kinds, elements).isEmpty &&
+    plannerName(calendar, elements) == null;
+
+/// What the planner's lookup of a planner by its id
+/// ([PlannerService.getCalendar]) gave: what [named] it, null when the
+/// planner does not know the id; or the planner's [error] when the lookup
+/// failed.
+typedef PlannerLookup = ({
+  PlannerSearchResult? named,
+  SmartschoolPlannerError? error,
+});
+
+/// Looks [calendar] up by its id ([PlannerService.getCalendar]).
+///
+/// Only a [SmartschoolPlannerError] is caught, which the log gets (the
+/// library's message can quote the planner's answer): the elements were
+/// read, and the lookup only names the planner. A refused session or a lost
+/// connection still goes to [SmartschoolSession.run].
+Future<PlannerLookup> _lookUp(
+  PlannerService service,
+  PlannerCalendar calendar,
+) async {
+  try {
+    return (named: await service.getCalendar(calendar), error: null);
+  } on SmartschoolPlannerError catch (error) {
+    log('planner: $error');
+    return (named: null, error: error);
+  }
+}
+
+/// What `list_planner` adds when nothing is planned in a planner other than
+/// the user's own, no element names it, and the planner's lookup does not
+/// know its id: [PlannerService.getCalendar] returns null for no such
+/// person, class or room, and for a group that the planner's search does
+/// not offer.
+///
+/// The planner answers the elements of a room it does not have, and of a
+/// group its search does not offer, with an empty list (see
+/// [PlannerService.getPlannedElements]), the same as a planner with nothing
+/// planned.
+String unknownPlannerNote(PlannerCalendar calendar) =>
+    'Note: the planner\'s search offers no class, person or room with the '
+    'planner id ${formatPlannerId(calendar)}, and Smartschool answers such '
+    'an id as an empty planner, so this does not mean that a planner is '
+    'free. Check the planner id with search_planners.';
+
+/// What `list_planner` adds when nothing is planned in a planner other than
+/// the user's own, no element names it, and the planner's lookup by its id
+/// failed (the planner's error goes to the log): whether the id names a
+/// planner is then not known.
 const unnamedPlannerNote =
-    'Note: with nothing planned, the planner cannot be named, and '
-    'Smartschool answers a planner id that does not exist the same way. If '
+    'Note: with nothing planned, the planner cannot be named, and looking '
+    'up its id failed (the details are in the server log). Smartschool '
+    'answers some planner ids that name no planner as an empty planner. If '
     'you expected elements, check the planner id with search_planners.';
 
 /// What `list_planner` answers: a header with the planner, the period and
@@ -208,8 +286,14 @@ const unnamedPlannerNote =
 /// [elements] are every element read, also those of other kinds than
 /// [kinds] (every type is read for a kind the planner is not asked for,
 /// [PlannerKind.plannerType]): any of them can name the planner
-/// ([plannerName]). When nothing is planned in a planner other than the
-/// user's own and none of them names it, [unnamedPlannerNote] follows.
+/// ([plannerName]).
+///
+/// [lookup] is the planner's lookup of the planner by its id, or null when
+/// it was not looked up ([needsPlannerLookup]). The header then names the
+/// planner as the lookup does, and marks a person the planner counts as
+/// deleted ([PlannerSearchResult.isDeleted]); when the lookup does not know
+/// the id, [unknownPlannerNote] follows, and when it failed,
+/// [unnamedPlannerNote].
 ///
 /// The organisers of an element in the user's own planner leave out the
 /// user.
@@ -220,23 +304,30 @@ String formatPlannerList({
   required DateTime until,
   required Set<PlannerKind>? kinds,
   required List<PlannedElement> elements,
+  PlannerLookup? lookup,
 }) {
-  final name = plannerName(calendar, elements);
+  final named = lookup?.named;
+  final name =
+      plannerName(calendar, elements) ??
+      switch (named?.name.trim()) {
+        final name? when name.isNotEmpty => name,
+        _ => null,
+      };
+  final about = [?name, if (named?.isDeleted ?? false) 'deleted user'];
   final who = planner.isMe
       ? 'your own planner (me)'
-      : 'planner ${formatPlannerId(calendar)}${name == null ? '' : ' ($name)'}';
+      : 'planner ${formatPlannerId(calendar)}'
+            '${about.isEmpty ? '' : ' (${about.join(', ')})'}';
   final period = formatPlannerPeriod(from, until);
   final only = kinds == null
       ? ''
       : ' (only ${[for (final kind in kinds) kind.plural].join(', ')})';
-  final listed = [
-    for (final element in elements)
-      if (kinds == null || kinds.contains(PlannerKind.of(element))) element,
-  ];
+  final listed = _listed(kinds, elements);
   if (listed.isEmpty) {
     return [
       'Planner: $who, $period$only: nothing planned.',
-      if (!planner.isMe && name == null) unnamedPlannerNote,
+      if (lookup case (named: null, error: null)) unknownPlannerNote(calendar),
+      if (lookup?.error != null) unnamedPlannerNote,
     ].join('\n');
   }
 

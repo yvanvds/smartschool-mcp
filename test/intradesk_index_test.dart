@@ -217,6 +217,8 @@ void main() {
       expect(index.find('f3')?.kind, IntradeskItemKind.folder);
       expect(index.find('nope'), isNull);
       expect(index.count(IntradeskItemKind.folder), 4);
+      expect(index.findItem('c1')?.name, 'uitstap.docx');
+      expect(index.findItem(''), isNull, reason: 'a weblink without an id');
       expect(index.count(IntradeskItemKind.file), 3);
       expect(index.count(IntradeskItemKind.weblink), 1);
       expect(
@@ -230,6 +232,84 @@ void main() {
         ],
       );
       expect(index.within('f4'), isEmpty);
+    });
+
+    test('findItem finds a weblink by the id Smartschool gave it too, where '
+        'find finds only folders and files (#112)', () {
+      const weblink = IntradeskItem(
+        kind: IntradeskItemKind.weblink,
+        id: 'e1',
+        name: 'Oefensite',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+        url: 'https://example.com/oefenen',
+      );
+      final index = IntradeskIndex(
+        builtAt: DateTime.utc(2026, 10, 6),
+        items: [..._items, weblink],
+      );
+
+      expect(index.findItem('e1'), same(weblink));
+      expect(index.find('e1'), isNull);
+      expect(index.findItem('f3')?.kind, IntradeskItemKind.folder);
+      expect(index.findItem('nope'), isNull);
+    });
+
+    test('patched adds items after their folder, puts an item with a known id '
+        'in that one\'s place, and removes items with everything in a removed '
+        'folder, keeping when the index was built', () {
+      final index = _index();
+      const added = IntradeskItem(
+        kind: IntradeskItemKind.file,
+        id: 'c9',
+        name: 'nieuw.pdf',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+      );
+      // A walk found it already, under its old name; ids in another case.
+      const renamed = IntradeskItem(
+        kind: IntradeskItemKind.folder,
+        id: 'F3',
+        name: 'Formulieren 2026',
+        parentId: 'f1',
+        parentPath: 'Leerkrachten',
+      );
+
+      final patched = index.patched(added: [added, renamed], removed: ['F2']);
+
+      expect(
+        [for (final item in patched.items) item.path],
+        [
+          'Leerkrachten',
+          'Leerkrachten / Formulieren 2026',
+          'Leerkrachten / Uitstappen',
+          'Leerkrachten / Formulieren / uitstap.docx',
+          'Leerkrachten / Formulieren / Aanvraag uitstappen.pdf',
+          'Leerkrachten / Schoolsite',
+          'Leerkrachten / Uitstappen / nieuw.pdf',
+        ],
+      );
+      expect(patched.within('f4'), [added]);
+      expect(patched.find('c3'), isNull, reason: 'it was in Leerlingen');
+      expect(patched.builtAt, index.builtAt);
+      expect(patched.unlisted, 1);
+      expect(patched.skipped, 2);
+      expect(patched.walkTime, index.walkTime);
+      expect(index.items, _items, reason: 'the index itself is unchanged');
+
+      expect(index.patched(removed: ['']).items, _items);
+      expect(
+        [
+          for (final item in index.patched(removed: ['f3']).items) item.name,
+        ],
+        [
+          'Leerkrachten',
+          'Leerlingen',
+          'Uitstappen',
+          'Uitstap info.pdf',
+          'Schoolsite',
+        ],
+      );
     });
 
     test('survives a JSON round trip; another format is refused', () {
@@ -291,7 +371,8 @@ void main() {
     });
 
     test('an item line: kind, path or name, id, size, date changed and '
-        'confidential', () {
+        'confidential; a weblink with its id when it has one (#112), and its '
+        'address', () {
       final file = IntradeskItem(
         kind: IntradeskItemKind.file,
         id: 'c1',
@@ -320,6 +401,20 @@ void main() {
       expect(
         formatIntradeskItem(_items[7]),
         'weblink | Leerkrachten / Schoolsite | https://example.com',
+      );
+      const weblink = IntradeskItem(
+        kind: IntradeskItemKind.weblink,
+        id: 'e1',
+        name: 'Schoolsite',
+        parentId: 'f1',
+        parentPath: 'Leerkrachten',
+        url: 'https://example.com',
+        confidential: true,
+      );
+      expect(
+        formatIntradeskItem(weblink),
+        'weblink | Leerkrachten / Schoolsite | id e1 | https://example.com | '
+        'confidential',
       );
     });
 
@@ -566,6 +661,67 @@ void main() {
       now = now.add(const Duration(days: 30));
       expect((await newCache().saved())?.builtAt, DateTime.utc(2024, 9, 1, 8));
       expect(builds, 1);
+    });
+
+    group('patch', () {
+      const added = IntradeskItem(
+        kind: IntradeskItemKind.file,
+        id: 'c9',
+        name: 'nieuw.pdf',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+      );
+
+      test(
+        'without an index does nothing: nothing is built or written',
+        () async {
+          expect(await cache.patch(added: [added]), isNull);
+          expect(builds, 0);
+          expect(folder.existsSync(), isFalse);
+        },
+      );
+
+      test('patches the index in memory and on disk, of any age, keeping when '
+          'it was built; patches run in order', () async {
+        await cache.load(build);
+        now = now.add(const Duration(days: 3));
+
+        final first = cache.patch(added: [added]);
+        final second = cache.patch(removed: ['f2']);
+        expect((await first)!.find('c9'), isNotNull);
+        final patched = (await second)!;
+        expect(patched.find('c9'), isNotNull);
+        expect(patched.find('c3'), isNull);
+        expect(patched.builtAt, DateTime.utc(2024, 9, 1, 8));
+
+        expect((await cache.saved())!.toJson(), patched.toJson());
+        expect((await newCache().saved())!.toJson(), patched.toJson());
+        await cache.patch(removed: ['c9']);
+        expect((await newCache().saved())!.find('c9'), isNull);
+        expect(builds, 1);
+      });
+
+      test('a patch made while a walk runs is applied to the walk\'s index '
+          'before it is saved', () async {
+        final started = Completer<void>();
+        final gate = Completer<void>();
+        final loading = cache.load((progress) async {
+          started.complete();
+          await gate.future;
+          return build(progress);
+        });
+        await started.future;
+
+        expect(
+          await cache.patch(added: [added]),
+          isNull,
+          reason: 'no index yet',
+        );
+        gate.complete();
+
+        expect((await loading).index!.find('c9'), isNotNull);
+        expect((await newCache().saved())!.find('c9'), isNotNull);
+      });
     });
 
     test('an index that cannot be saved is still returned', () async {

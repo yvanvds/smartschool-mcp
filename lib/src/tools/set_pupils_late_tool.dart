@@ -39,9 +39,12 @@ ServerTool setPupilsLateTool(
         'as an absence the secretariat recorded), when a pupil is not listed '
         'in the class, for a day in the future, for a class the account may '
         'not record presences for, and for a class or day the Presence '
-        'module refuses (with its reason); the result says why. It marks the '
-        'pupils one after the other and stops at the first that fails, also '
-        "when a pupil's half-day changed to another status meanwhile. The "
+        'module refuses (with its reason); the result says why. A grouping '
+        'class (without a school structure) is refused too: presences are '
+        "recorded in each pupil's official class, which the result names, to "
+        'call this tool with instead. It marks the pupils one after the other '
+        "and stops at the first that fails, also when a pupil's half-day "
+        'changed to another status meanwhile. The '
         'result says per pupil whether the status was set, the pupil already '
         'had it (nothing saved), or was not changed or not tried, and what '
         'the half-day holds now, as Smartschool answered the save. Pass that '

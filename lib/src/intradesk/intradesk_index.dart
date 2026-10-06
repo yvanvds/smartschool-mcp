@@ -240,8 +240,18 @@ final class IntradeskIndex {
         item.id: item,
   };
 
+  late final Map<String, IntradeskItem> _weblinksById = {
+    for (final item in items)
+      if (item.id.isNotEmpty && item.kind == IntradeskItemKind.weblink)
+        item.id: item,
+  };
+
   /// The folder or file with [id], or null.
   IntradeskItem? find(String id) => _byId[id];
+
+  /// The folder, file or weblink with [id], or null: [find], and a weblink
+  /// that Smartschool gave an id.
+  IntradeskItem? findItem(String id) => _byId[id] ?? _weblinksById[id];
 
   /// How many items there are of [kind].
   int count(IntradeskItemKind kind) =>
@@ -258,6 +268,62 @@ final class IntradeskIndex {
       if (item.kind == IntradeskItemKind.folder) folders.add(item.id);
     }
     return inside;
+  }
+
+  /// This index after a write of the server's own (#111, #112), without
+  /// walking: with [added], and without the items whose id is in [removed]
+  /// and, for a folder, everything in it at any depth. Ids are compared
+  /// ignoring case; an empty id removes nothing.
+  ///
+  /// An item of [added] whose id the index has already takes that item's
+  /// place (a walk that ran meanwhile found it too); the others come last,
+  /// after the folder they are in, so a folder still comes before what is in
+  /// it. [builtAt], [unlisted], [skipped] and [walkTime] stay as they were:
+  /// the next walk comes when it would have.
+  IntradeskIndex patched({
+    Iterable<IntradeskItem> added = const [],
+    Iterable<String> removed = const [],
+  }) {
+    String key(String id) => id.toLowerCase();
+    final gone = {
+      for (final id in removed)
+        if (id.isNotEmpty) key(id),
+    };
+    final replacing = {
+      for (final item in added)
+        if (item.id.isNotEmpty) key(item.id): item,
+    };
+    final goneFolders = <String>{};
+    final placed = <IntradeskItem>{};
+    final kept = <IntradeskItem>[];
+    // Breadth-first: a folder comes before what is in it.
+    for (final item in items) {
+      final id = key(item.id);
+      if ((item.id.isNotEmpty && gone.contains(id)) ||
+          goneFolders.contains(key(item.parentId))) {
+        if (item.kind == IntradeskItemKind.folder && item.id.isNotEmpty) {
+          goneFolders.add(id);
+        }
+        continue;
+      }
+      final replacement = item.id.isEmpty ? null : replacing[id];
+      if (replacement != null) placed.add(replacement);
+      kept.add(replacement ?? item);
+    }
+    return IntradeskIndex(
+      builtAt: builtAt,
+      items: [
+        ...kept,
+        for (final item in added)
+          if (!placed.contains(item) &&
+              !gone.contains(key(item.id)) &&
+              !goneFolders.contains(key(item.parentId)))
+            item,
+      ],
+      unlisted: unlisted,
+      skipped: skipped,
+      walkTime: walkTime,
+    );
   }
 
   /// The version of the saved index. Files of another version are ignored:

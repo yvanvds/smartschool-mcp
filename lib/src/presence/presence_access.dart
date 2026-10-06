@@ -178,11 +178,18 @@ DateTime presenceToday(DateTime now) => DateTime(now.year, now.month, now.day);
 /// it.
 final class PresenceDay {
   const PresenceDay({
+    required this.config,
     required this.presenceClass,
     required this.day,
     required this.codes,
     required this.pupils,
+    this.officialCodes = const {},
   });
+
+  /// The module's configuration, as read with the class: the classes this
+  /// account may view, which name the official class of each pupil of a
+  /// grouping class ([PresencePupil.officialClassId], `formatOfficialClass`).
+  final PresenceConfig config;
 
   /// The class, as the module's configuration lists it.
   final PresenceClassRef presenceClass;
@@ -190,15 +197,27 @@ final class PresenceDay {
   /// The day, at midnight.
   final DateTime day;
 
-  /// The codes of the class's school structure; for a grouping class without
-  /// one, those of the official classes ([officialPresenceCodes]), empty
-  /// when the account sees none.
+  /// The codes of the class's school structure, which name what its
+  /// half-days hold and tell which of them the writes may change. A
+  /// grouping class has no structure, so no codes ([PresenceCodes.none]):
+  /// its pupils' half-days are named by [codesOf].
   final PresenceCodes codes;
+
+  /// For a grouping class, the codes of the structure of the official class
+  /// of each pupil with a half-day the module gave no name with, by pupil
+  /// id ([readPresenceDay]). Empty for a class with a structure.
+  final Map<int, PresenceCodes> officialCodes;
 
   /// The pupils with their half-day cells for [day], in the module's order,
   /// with what the module said about the class on that day
   /// (yvanvds/dartschool#104).
   final PresenceClassPupils pupils;
+
+  /// The codes that name the half-days of [pupil]: [codes], or, for a pupil
+  /// of a grouping class, those of its official class when [readPresenceDay]
+  /// read them ([officialCodes]).
+  PresenceCodes codesOf(PresencePupil pupil) =>
+      officialCodes[pupil.userId] ?? codes;
 
   /// Whether the module refuses to record presences for the class on [day]
   /// (its `saveIsAllowed` is `false`), as it answers a class without pupils
@@ -221,9 +240,19 @@ final class PresenceDay {
 
 /// Reads class [classId] on [day] with [presence]: the module's
 /// configuration (which must list the class), the codes of the class's
-/// school structure (for a grouping class, those of the official classes:
-/// [officialPresenceCodes]), and the pupils with their half-days, or the
-/// module's reason for listing none.
+/// school structure, and the pupils with their half-days, or the module's
+/// reason for listing none.
+///
+/// A grouping class has no structure, so no codes are read for it
+/// ([PresenceService.getAllCodes] is not to be asked without one: the
+/// module then answers the codes of the rows per lesson, which name no
+/// half-day). Its pupils' half-days hold the codes of their official
+/// classes, each record with the name the module gives it
+/// ([PresenceHalfDay.statusName], seen live with every record,
+/// yvanvds/dartschool#126), which names them. For a half-day the module
+/// gives no name with (not seen live), the codes of the structure of the
+/// pupil's official class ([PresencePupil.officialClassId]) are read after
+/// the pupils, one read per distinct structure ([_officialCodes]).
 ///
 /// Throws a [ToolError] when the configuration does not list the class.
 Future<PresenceDay> readPresenceDay(
@@ -242,9 +271,9 @@ Future<PresenceDay> readPresenceDay(
   }
   final structId = presenceClass.structId;
   final codes = structId == null
-      ? PresenceCodes(
-          await officialPresenceCodes(presence, config),
-          source: 'the official classes',
+      ? PresenceCodes.none(
+          "this account does not see the pupil's official class, whose codes "
+          'would name it',
         )
       : PresenceCodes(await presence.getAllCodes(structId));
   final pupils = await presence.getClassPupils(
@@ -253,42 +282,57 @@ Future<PresenceDay> readPresenceDay(
     schoolyearRefDate: config.schoolyearRefDate,
   );
   return PresenceDay(
+    config: config,
     presenceClass: presenceClass,
     day: day,
     codes: codes,
     pupils: pupils,
+    officialCodes: structId == null
+        ? await _officialCodes(
+            presence,
+            config,
+            pupils,
+            PresenceService.formatDate(day),
+          )
+        : const {},
   );
 }
 
-/// The codes that name the statuses of a grouping class (#99): those of the
-/// school structures of the classes of [config] ([presenceClasses]) that
-/// have one, each code once. One read per distinct structure
-/// ([PresenceService.getAllCodes], which the service keeps), none when the
-/// account sees no class with a structure.
-///
-/// A grouping class has no school structure, so the module gives no codes
-/// for it, but its pupils' half-days hold the codes of their official
-/// classes. Seen live: every half-day of the grouping class 2A held code id
-/// 70, which is "Aanwezig" in the official class 2A ECO. The library gives
-/// neither the codes of a grouping class nor a pupil's official class.
-/// Workaround for yvanvds/dartschool#126; #101 tracks its removal.
-///
-/// A code id names one code across the school's structures: a half-day
-/// stores only its code id (or alias id), without a structure, so a code
-/// that two structures hold is kept once.
-Future<List<PresenceCode>> officialPresenceCodes(
+/// For a grouping class: the codes that name the half-days of [day]
+/// (`yyyy-MM-dd`) of those of [pupils] the module gave no name with
+/// ([PresenceHalfDay.statusName] null for a half-day that holds a code or
+/// alias), by pupil id: those of the structure of each one's official class
+/// ([PresencePupil.officialClassId]), as [config] lists it
+/// ([PresenceConfig.classForGroup]). One [PresenceService.getAllCodes] per
+/// distinct structure. No entry for a pupil whose official class the
+/// configuration does not list with a structure: an account without the
+/// absence-administrator rights is listed fewer classes than the school has
+/// (yvanvds/dartschool#121); such a half-day stays named by its id.
+Future<Map<int, PresenceCodes>> _officialCodes(
   PresenceService presence,
   PresenceConfig config,
+  Iterable<PresencePupil> pupils,
+  String day,
 ) async {
-  final structures = {
-    for (final presenceClass in presenceClasses(config))
-      ?presenceClass.structId,
-  };
-  final codes = <int, PresenceCode>{};
-  for (final structId in structures) {
-    for (final code in await presence.getAllCodes(structId)) {
-      codes.putIfAbsent(code.codeId, () => code);
-    }
+  final byStructure = <int, PresenceCodes>{};
+  final byPupil = <int, PresenceCodes>{};
+  for (final pupil in pupils) {
+    final unnamed = DayPart.values.any((part) {
+      final cell = pupil.halfDayFor(part, date: day);
+      return cell != null &&
+          cell.statusName == null &&
+          (cell.codeId != null || cell.aliasId != null);
+    });
+    if (!unnamed) continue;
+    final structId = switch (pupil.officialClassId) {
+      final officialClassId? => config.classForGroup(officialClassId)?.structId,
+      null => null,
+    };
+    if (structId == null) continue;
+    byPupil[pupil.userId] = byStructure[structId] ??= PresenceCodes(
+      await presence.getAllCodes(structId),
+      unnamed: "it is not among the codes of the pupil's official class",
+    );
   }
-  return [...codes.values];
+  return byPupil;
 }

@@ -7,7 +7,8 @@ import 'server_tool.dart';
 
 /// `list_presence_classes`: the classes the account may view in
 /// Smartschool's Presence module, with whether it may record presences for
-/// each ([PresenceService.getConfig]).
+/// each, and for a grouping class the classes it groups when the module
+/// names them ([PresenceService.getConfig], #110).
 ServerTool listPresenceClassesTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'list_presence_classes',
@@ -20,7 +21,11 @@ ServerTool listPresenceClassesTool(SmartschoolSession session) => ServerTool(
         'and whether the account may record presences for it ("may record") '
         'or only view them ("view only"). A grouping class without a school '
         "structure is marked as such: presences are recorded in the pupils' "
-        'official class. Pass the class id to list_class_presences, '
+        'official class. When the module names the classes a grouping class '
+        'groups (such as the official classes of a year), they follow, by '
+        'name and class id ("groups ..."); that need not be the official '
+        'class of every pupil, which list_class_presences gives per pupil. '
+        'Pass the class id to list_class_presences, '
         'set_pupils_late and set_pupils_present. Only for an account with '
         'the right to record half-day presences, as an absence administrator '
         'has; without it, the tool says so. Reading changes nothing.',
@@ -36,9 +41,11 @@ ServerTool listPresenceClassesTool(SmartschoolSession session) => ServerTool(
 );
 
 Future<CallToolResult> _list(SmartschoolSession session) async {
-  final classes = presenceClasses(
-    await withPresence(session, (presence) => presence.getConfig()),
+  final config = await withPresence(
+    session,
+    (presence) => presence.getConfig(),
   );
+  final classes = presenceClasses(config);
   final String text;
   if (classes.isEmpty) {
     text =
@@ -51,7 +58,8 @@ Future<CallToolResult> _list(SmartschoolSession session) async {
     text = [
       'The Presence module lists $count for this account, in its order; it '
           'may record presences for $recordable of them.',
-      for (final presenceClass in classes) formatPresenceClass(presenceClass),
+      for (final presenceClass in classes)
+        formatPresenceClass(presenceClass, config),
     ].join('\n');
   }
   return CallToolResult(content: [TextContent(text: text)]);

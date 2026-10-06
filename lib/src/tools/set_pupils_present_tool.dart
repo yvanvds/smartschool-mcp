@@ -37,7 +37,10 @@ ServerTool setPupilsPresentTool(
         'recorded, which is changed in Smartschool itself), when a pupil is '
         'not listed in the class, for a day in the future, for a class the '
         'account may not record presences for, and for a class or day the '
-        'Presence module refuses (with its reason); the result says why. It '
+        'Presence module refuses (with its reason); the result says why. A '
+        'grouping class (without a school structure) is refused too: '
+        "presences are recorded in each pupil's official class, which the "
+        'result names, to call this tool with instead. It '
         'marks the pupils one after the other and stops at the first that '
         "fails, also when a pupil's half-day changed to another status "
         'meanwhile. The result says per pupil whether the status was set, '

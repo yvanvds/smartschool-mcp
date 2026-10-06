@@ -76,6 +76,10 @@ void main() {
       );
     });
 
+    // Each run JIT-compiles the tool and, through update_check.dart, the whole
+    // flutter_smartschool graph: 20 to 35 s on a developer's PC under its usual
+    // background load, more beside the e2e tests compiling the exe. Two runs do
+    // not fit the default 30 s; give them the budget the e2e files get.
     test('run as a script: exits with 1 and writes nothing, so the release '
         'workflow stops; with a section it writes the notes', () async {
       final output = File(
@@ -107,7 +111,7 @@ void main() {
         output.readAsStringSync(),
         releaseNotesFor(Directory.current, 'v$packageVersion'),
       );
-    });
+    }, timeout: const Timeout(Duration(minutes: 5)));
   });
 
   test('the release workflow checks the changelog, writes the notes with '

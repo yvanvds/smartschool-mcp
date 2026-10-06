@@ -9,7 +9,9 @@ Je vraagt het gewoon in een gesprek:
   bericht vertrekt, en een bericht gaat naar de prullenbak, pas nadat jij het
   goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
-  lezen.
+  lezen. Een nieuwe map, een weblink of bestanden van je pc in een map
+  zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk
+  verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
@@ -249,6 +251,28 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 - "Wat staat er in de map Vergaderingen op Intradesk?"
 - "Vat het verslag van de laatste personeelsvergadering op Intradesk samen."
 - "Bewaar het formulier voor de uitstap van Intradesk."
+- "Zet de brief voor de ouders die we net gemaakt hebben in de map Brieven
+  op Intradesk."
+  Claude zoekt eerst de map. Het toont welke bestanden (met hun naam en
+  grootte) in welke map komen, en wacht op jouw akkoord. Daarna vraagt
+  Claude Desktop nog eens toestemming. Iedereen die de map kan zien, ziet
+  het bestand meteen. Claude kan alleen bestanden doorgeven die op je pc
+  staan: je eigen bestanden, of wat Claude in je Cowork-project maakte. Een
+  bestand groter dan 200 MB zet je zelf op Intradesk.
+- "Maak op Intradesk in de map Informatica een map Toetsen 2026, met een
+  weblink naar de oefensite."
+  Ook een nieuwe map of een weblink komt er pas na jouw akkoord. Staat er in
+  de map al iets met dezelfde naam, dan zet Claude er niets bij en vraagt
+  het wat je wilt: Intradesk zou het nieuwe item anders zelf een andere naam
+  geven, zoals `brief (1).docx`. In een map waar je niets mag toevoegen,
+  zegt Claude dat ook.
+- "Gooi de map Toetsen 2025 op Intradesk weg."
+  Claude zoekt eerst de map en toont wat er naar de prullenbak van
+  Intradesk gaat, met het pad. Een map gaat met alles erin naar de
+  prullenbak. Pas na jouw akkoord verplaatst Claude ze; daarna vraagt Claude
+  Desktop nog eens toestemming. Intradesk bewaart de prullenbak 30 dagen:
+  tot dan zet je zelf iets terug vanuit de prullenbak in Intradesk. Claude
+  kan niets terugzetten en niets voor altijd verwijderen.
 
 ### Planner
 
@@ -417,7 +441,11 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
 - De extensie werkt alleen met berichten, Intradesk, de planner, met
   **Skore-beheer** aan Skore, en met **Aanwezigheden** aan de
   halve-dagaanwezigheden. Andere onderdelen van Smartschool kent ze
-  niet. In Skore leest ze de klassen, vakken, leerkrachten en gedeelde
+  niet. Op Intradesk maakt ze mappen en weblinks, zet ze bestanden van je
+  pc in een map en verplaatst ze mappen, bestanden en weblinks naar de
+  prullenbak: iets hernoemen of naar een andere map verplaatsen, een nieuwe
+  versie van een bestand zetten, iets uit de prullenbak terugzetten of voor
+  altijd verwijderen kan ze niet. In Skore leest ze de klassen, vakken, leerkrachten en gedeelde
   puntenboeken, koppelt ze leerkrachten aan vakken en deelt ze puntenboeken:
   een lesopdracht verwijderen kan ze niet. In de
   planner

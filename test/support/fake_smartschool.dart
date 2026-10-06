@@ -13,12 +13,14 @@ import 'fake_messages.dart';
 import 'fake_planner.dart';
 import 'fake_presence.dart';
 import 'fake_skore.dart';
+import 'fake_uploads.dart';
 
 export 'fake_intradesk.dart';
 export 'fake_messages.dart';
 export 'fake_planner.dart';
 export 'fake_presence.dart';
 export 'fake_skore.dart';
+export 'fake_uploads.dart';
 
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
@@ -88,7 +90,11 @@ class FakeSmartschool implements HttpClientAdapter {
   final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
 
   /// The Intradesk module, served to logged-in requests.
-  final FakeIntradesk intradesk = FakeIntradesk();
+  late final FakeIntradesk intradesk = FakeIntradesk(uploads: uploads);
+
+  /// Smartschool's upload step, shared by the modules that take files,
+  /// served to logged-in requests.
+  final FakeUploads uploads = FakeUploads();
 
   /// The planner, served to logged-in requests. Its own account is
   /// [fakePlannerMe], the user of the fake's pages.
@@ -205,7 +211,9 @@ class FakeSmartschool implements HttpClientAdapter {
         _rejectsLeft--;
         return ResponseBody.fromString('', 401);
       }
-      return mailbox.respond(options) ??
+      return uploads.respond(options) ??
+          mailbox.respond(options) ??
+          intradesk.respond(options) ??
           planner.respond(options) ??
           skore.respond(options) ??
           presence.respond(options) ??
@@ -226,7 +234,8 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == SmartschoolSession.sessionCheckPath) {
       return planner.courseListAnswer();
     }
-    return mailbox.respond(options, cancelled: cancelled) ??
+    return uploads.respond(options) ??
+        mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
         planner.respond(options) ??
         skore.respond(options) ??

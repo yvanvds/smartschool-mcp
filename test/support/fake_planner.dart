@@ -625,7 +625,9 @@ class FakeLesfiche {
 }
 
 /// A hit of the planner's search, in the shape of dartschool's anonymised
-/// captures of `POST quick-search/planner/search`.
+/// captures of `POST quick-search/planner/search`; the lookup of
+/// `POST quick-search/planner/start` names a calendar in the same shape
+/// (dartschool's `test/planner_calendar_test.dart`).
 class FakePlannerHit {
   FakePlannerHit.group(String id, this.name, {String description = ''})
     : json = {
@@ -643,11 +645,14 @@ class FakePlannerHit {
       };
 
   /// A person: [listedAs] is the title of the search list, last name first,
-  /// for a pupil with the class (`Janssens Lotte • 6A1`).
+  /// for a pupil with the class (`Janssens Lotte • 6A1`). [deleted] is a
+  /// user the planner counts as deleted (`state.deleted.isDeleted`), whom
+  /// the search leaves out and the lookup names all the same.
   FakePlannerHit.user(
     FakePlannerUser user, {
     String? listedAs,
     String description = '',
+    bool deleted = false,
   }) : name = user.name,
        json = {
          'identifier': {'id': user.id, 'type': 'user'},
@@ -656,6 +661,9 @@ class FakePlannerHit {
          ],
          'description': <Object?>[],
          'graphic': {'type': 'image', 'value': 'https://example.invalid/48'},
+         'state': {
+           'deleted': {'isDeleted': deleted, 'deletedLabel': ''},
+         },
          'origin': {
            'userIdentifier': user.id,
            'name': user.name,
@@ -698,22 +706,39 @@ class FakePlannerHit {
 
   final String name;
   final Map<String, Object?> json;
+
+  /// Whether the planner counts the hit as deleted.
+  bool get deleted =>
+      ((json['state'] as Map?)?['deleted'] as Map?)?['isDeleted'] == true;
 }
 
 /// The planner module of a fake Smartschool: the elements of the calendars
-/// of users, classes and rooms, the detail of each element, the search, and
-/// the workload view of classes with the school's assignment types.
+/// of users, classes and rooms, the detail of each element, the search and
+/// the lookup, and the workload view of classes with the school's
+/// assignment types.
 ///
 /// It serves:
 /// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
 ///   `from`, `to` and an optional `types`: the elements added to that
 ///   calendar that overlap the period, of those types. A calendar it does
 ///   not know is answered as an empty one (`[]`), as the live planner
-///   answered a planner id that names no planner (`group/4069_1`, #93);
+///   answers a room it does not have, and answered a group that its search
+///   does not offer (dartschool#127; it answers a person or class it does
+///   not have with `500`, which the fake does not);
 /// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
 ///   detail, or the planner's `404` for an element it does not have;
 /// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
-///   name or title holds the search string, ignoring case;
+///   name or title holds the search string, ignoring case, but a deleted
+///   user, as the planner leaves those out when it is not asked for them;
+/// - `POST /planner/api/v1/quick-search/planner/start` with the calendar
+///   ids in `users`, `groups` and `miniDbItems` (a room): the lookup of
+///   dartschool#127, in the shape of dartschool's captures
+///   (`test/planner_calendar_test.dart` there). Its `selection` names each
+///   id the fake knows: the hit of [hits] with that id (a deleted user
+///   too), or else the person, class or room of [users], [classes] or
+///   [rooms], as the search would show it; the fake's own account as the
+///   planner names it, `%quicksearch.me%`. An id it does not know is left
+///   out, as the planner leaves out what it does not offer;
 /// - `POST /planner/api/v1/workload/planned-elements` with `from` and `to`
 ///   and the `groups`: the assignments of those classes that overlap the
 ///   period, once each, in the order they were added (not by date, like
@@ -780,7 +805,7 @@ class FakePlanner {
   /// Every element, by [FakePlannedElement.ref].
   final Map<String, FakePlannedElement> elements = {};
 
-  /// What the search finds.
+  /// What the search finds (but a deleted user) and the lookup names.
   final List<FakePlannerHit> hits = [];
 
   /// The classes the fake knows, by id: those of the elements and of the
@@ -1004,6 +1029,7 @@ class FakePlanner {
     if (options.method == 'POST') {
       final answer = switch (route) {
         ['quick-search', 'planner', 'search'] => _search(options.data),
+        ['quick-search', 'planner', 'start'] => _lookup(options.data),
         ['workload', 'planned-elements'] => _workloadAssignments(
           options.uri.queryParameters,
           options.data,
@@ -1322,9 +1348,78 @@ class FakePlanner {
     return _json(
       jsonEncode([
         for (final hit in hits)
-          if (matches(hit)) hit.json,
+          if (!hit.deleted && matches(hit)) hit.json,
       ]),
     );
+  }
+
+  /// The fake's own account as the lookup names it: with a key of the
+  /// planner's web client texts, as in dartschool's capture.
+  static final _ownHit = FakePlannerHit.user(
+    const FakePlannerUser(fakePlannerMe, _ownName, _ownName),
+  );
+
+  static const _ownName = '%quicksearch.me%';
+
+  ResponseBody _lookup(Object? data) {
+    final body = data as Map;
+    return _json(
+      jsonEncode({
+        'selection': [
+          for (final list in ['users', 'groups', 'miniDbItems'])
+            for (final id in body[list] as List) ?_named(list, id as String),
+        ],
+        // The rest of the answer, as the planner always sends it: the own
+        // account as the search's suggestion, no favourites, and its option
+        // and setting.
+        'suggestions': [_ownHit.json],
+        'favourites': <Object?>[],
+        'searchOptions': [
+          {
+            'id': 'include-deleted',
+            'isDefaultSelected': false,
+            'extraData': <String, Object?>{},
+          },
+        ],
+        'settings': [
+          {
+            'id': 'debounce-values',
+            'extraData': {'cutOffPoint': 1, 'before': 1000, 'after': 200},
+          },
+        ],
+      }),
+    );
+  }
+
+  /// What the lookup names for [id], asked for in [list] (`users`, `groups`
+  /// or `miniDbItems`); null for an id the fake does not know.
+  Map<String, Object?>? _named(String list, String id) {
+    if (list == 'users' && id == fakePlannerMe) return _ownHit.json;
+    final type = switch (list) {
+      'users' => 'user',
+      'groups' => 'group',
+      _ => 'mini-db-2',
+    };
+    for (final hit in hits) {
+      final identifier = hit.json['identifier'] as Map;
+      if (identifier['id'] == id && identifier['type'] == type) {
+        return hit.json;
+      }
+    }
+    return switch (list) {
+      'users' => switch (users[id]) {
+        final user? => FakePlannerHit.user(user).json,
+        null => null,
+      },
+      'groups' => switch (classes[id]) {
+        final group? => FakePlannerHit.group(group.id, group.name).json,
+        null => null,
+      },
+      _ => [
+        for (final room in rooms.values)
+          if ('4069_${room.id}' == id) FakePlannerHit.room(room).json,
+      ].firstOrNull,
+    };
   }
 
   ResponseBody _json(String body, {int status = 200}) =>

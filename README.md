@@ -340,6 +340,74 @@ client name. It also installs again while that copy runs.
   and returns its full path, name and size, for a file `read_intradesk_file`
   cannot read (a scan, an old Office file, any other format) or when the
   user wants the file itself (see *Saving files* below).
+- `create_intradesk_folder`: adds a folder (`name`, an optional `color` of
+  Intradesk's eleven, yellow by default) to an Intradesk folder
+  (`folder_id`; the top of Intradesk is not offered), with the library's
+  `createFolder` (dartschool#128). With `confidential`, a confidential
+  folder, the only kind Intradesk adds inside a confidential folder. The
+  three tools that add to Intradesk are marked destructive, so Claude
+  Desktop asks for approval every time, and Claude is told to show the user
+  what goes where (the folder's path, from `search_intradesk`) and wait for
+  the user's confirmation first. Before sending, each reads the folder (its
+  listing, and, when the Intradesk index knows where it is, its entry in
+  the folder above, for its path and rights) and refuses a name the folder
+  holds already (any kind, ignoring case and spaces: Intradesk would not
+  refuse it, but rename the new item to `name (1)`), a folder the account
+  may not add to (`canAdd`, when the entry was read), and a folder of the
+  wrong kind for its parent (when known). The library sends a create once,
+  never again after logging in again; a create Intradesk does not confirm
+  is reported as maybe made, with how to check it (`list_intradesk_folder`),
+  and Claude is told not to call the tool again for it. The result is the
+  item as Intradesk made it (its id, the name as stored, the folder's
+  path); a name Intradesk changed anyway is pointed out. What was made goes
+  into the Intradesk index at once, when one is loaded, so
+  `search_intradesk` finds it without walking (see *Intradesk index*
+  below).
+- `add_intradesk_weblink`: adds a weblink (`name`, `url`, an optional
+  `icon`, `earth` by default) to an Intradesk folder, with the library's
+  `createWeblink`, as `create_intradesk_folder` adds a folder. The address
+  is sent as Intradesk's web client sends it (without white space, with
+  `http://` in front when it has no scheme; the library's
+  `normalizeWeblinkUrl`), and the result says so; an address the web client
+  refuses is refused before sending. A refusal by Intradesk (HTTP 400) is
+  reported with its reason, in its own words.
+- `upload_intradesk_files`: uploads 1 to 10 files from this PC (`paths`,
+  absolute) into an Intradesk folder, each under its own name, with the
+  library's `uploadFiles`, as `create_intradesk_folder` adds a folder. The
+  server reads any file the user's Windows account can read; Claude is told
+  to list the files with their names and sizes and the folder with its path
+  for the user's confirmation. Each path must be absolute and name an
+  existing file of at most 200 MB with a name Smartschool takes, and no two
+  files may have the same name (see *Uploading files* below). A file
+  Smartschool's upload step refuses is reported in Smartschool's words, and
+  then nothing was added; a file Intradesk did not take is listed with its
+  reason next to the files it added.
+- `trash_intradesk_items`: moves 1 to 20 folders, files and weblinks on
+  Intradesk (`items`, each `{"kind": "folder" | "file" | "weblink", "id"}`,
+  with the ids `list_intradesk_folder` and `search_intradesk` show, also a
+  weblink's) to Intradesk's trash, with the library's `trashFolder`,
+  `trashFile` and `trashWeblink` (dartschool#128). A move, not a deletion:
+  Intradesk keeps its trash for 30 days and the user restores from it in
+  Intradesk itself; the library neither reads nor restores the trash, and
+  never deletes for good. The tool is marked destructive, so Claude Desktop
+  asks for approval every time, and Claude is told to show the user each
+  item by name and path, say that a folder goes with everything in it and
+  how long the trash keeps it, and wait for the user's confirmation. It is
+  marked idempotent: Intradesk answers the move of an item in the trash
+  already with `204`, as the first time (so the result cannot tell the two
+  apart). Before sending, it refuses an id that is not an Intradesk id, an id
+  passed with two kinds, and an id the Intradesk index knows as another
+  kind. The items are moved one at a time, in order, each in a session call
+  of its own (the library sends a move again after logging in again, which
+  is harmless); at the first failure it stops, and the result lists what was
+  moved, the item that failed and what was not tried. A refusal (HTTP 400 to
+  499) is reported as not moved, with Intradesk's reasons; any other failure
+  as maybe moved, with the folder to list to check it, as for the writes
+  above. The library tells no unknown id apart (dartschool#133): Intradesk's
+  answer to one was not seen live, so it is reported as whatever the library
+  makes of it (#124). Items are named by their path when the index knows
+  them, and the result says what the index had in a folder that went along.
+  What was moved leaves the index at once (see *Intradesk index* below).
 - `search_planners`: finds the planner of a class, a person or a room by
   name, with the planner's own search (the library's `searchCalendars`).
   Each hit is listed with its kind (class, person, room), its name, what
@@ -370,11 +438,16 @@ client name. It also installs again while that copy runs.
   one week of a class seen live), so at most 200 elements are shown, with
   a note on how to narrow down; the request itself may span a school
   year. The header names a planner other than
-  `me` from the elements read (the class, person or room they name). When
-  nothing is planned there, the planner cannot be named, and Smartschool
-  answers a planner id that names no planner the same way, without an
-  error; the answer then adds a note to check the id with `search_planners`
-  (dartschool#127; a workaround, tracked in #102).
+  `me` from the elements read (the class, person or room they name). Only
+  when nothing is planned there and no element read names it, the planner
+  is looked up by its id with the library's `getCalendar` (one more
+  request, which only reads): the header names it as the lookup does, and
+  marks a person the planner counts as deleted. The planner answers a room
+  it does not have, and a group its search does not offer, as an empty
+  planner, without an error; when the lookup does not know the id, the
+  answer says so, and to check the id with `search_planners`. When the
+  lookup fails, a note says that the planner could not be named, with the
+  details in the server log.
 - `read_planned_element`: one element in full, by its id: what its list
   line says, plus its public and private info as plain text (through
   `htmlToText`, never raw HTML), its labels, the names of its attachments
@@ -696,7 +769,17 @@ first two only read, the last two change the presences of pupils:
   not `userCanRecord`, which a teacher without the absence-administrator
   rights has for every class, #95 and yvanvds/dartschool#121); a
   grouping class without a school structure is marked, as presences are
-  recorded in the pupils' official class.
+  recorded in the pupils' official class, with the classes it groups when
+  the module names them (`downStreamGroupIds`, yvanvds/dartschool#126,
+  #110): `groups 2A MAW (class id 1652), 2A ECO (class id 1968)`, each by
+  name and class id, or by class id alone ("not among the classes this
+  account may view") when the configuration does not list it, as for an
+  account without the absence-administrator rights, which is listed fewer
+  classes. Seen live for 6 of the school's 17 grouping classes, the
+  official classes of a year; for the others (such as "Taalatelier groep
+  1") and for every official class nothing is said, not "groups none": the
+  list is not the official classes of the pupils (the grouping class 2C
+  listed a pupil of 2E ECO).
 - `list_class_presences`: the pupils of one class (`class_id`) on one day
   (`date`, default today) with what their morning and afternoon hold
   (`getClassPupils`), named with the codes of the class's structure
@@ -707,12 +790,20 @@ first two only read, the last two change the presences of pupils:
   codes for it, while its pupils' half-days hold the codes of their official
   classes (seen live: every half-day of the grouping class 2A held code id
   70, "Aanwezig" in the official class 2A ECO, #99). Its statuses are named
-  with the codes of every structure among the classes of the configuration,
-  one `getAllCodes` per distinct structure, each code once by its id
-  (`officialPresenceCodes`); by their code id when the account sees no
-  class with a structure. That is a workaround for yvanvds/dartschool#126,
-  which #101 tracks. Rows per lesson are left out (the library ignores
-  them). When the module lists no pupils, the tool gives the module's reason
+  as the module names them with each record (`PresenceHalfDay.statusName`,
+  given with every record seen live, yvanvds/dartschool#126), without
+  reading codes; a half-day the module gives no name with (not seen live)
+  is named with the codes of the structure of the pupil's official class
+  (`PresencePupil.officialClassId`, one `getAllCodes` per distinct
+  structure, after the pupils), or by its code id when the account does not
+  see that class (#101). In a grouping class, each pupil's line also names
+  the pupil's official class, where the writes record its presences
+  (`official class: 2A ECO (class id 1968)`; by class id alone when the
+  account does not see it, or "none given by the module", not seen live;
+  #110). A half-day of any class whose code is not among
+  the codes read is named likewise. Rows per lesson are left out (the
+  library ignores them). When the module lists no pupils, the tool gives the
+  module's reason
   (`errorMessage`, yvanvds/dartschool#104), as seen live: "Deze klas bevat
   geen leerlingen." for a class without pupils, "Het is niet mogelijk om in
   de toekomst afwezigheden op te nemen." for a day in the future.
@@ -735,7 +826,10 @@ Both writes guard the record (`changePresences` in
 `lib/src/presence/presence_writes.dart`). Before anything is sent they read
 the class once and refuse, for the whole call: a date in the future, a class
 the account may only view (after reading only the configuration), a
-grouping class, a class or day the module refuses to record presences for
+grouping class (after reading it: the error names the official class of
+each pupil asked for, to call the tool with instead, as the library's
+`setLate` and `setPresent` refuse a grouping class too, #110), a class or
+day the module refuses to record presences for
 (its `saveIsAllowed`, with its reason, yvanvds/dartschool#104), a pupil who
 is not listed, and a pupil whose half-day holds anything but nothing,
 "Aanwezig", "Te laat" or "Te laat zonder geldige reden", such as an absence
@@ -799,11 +893,30 @@ Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
 (`intradeskItems`) in `intradesk_access.dart`; `IntradeskItem` (kind, id,
 name with extension, path, size, date changed, `extension`, `mimeType`) and
-`IntradeskIndex` (lookup by id, the items inside a folder) in
+`IntradeskIndex` (lookup by id, with `findItem` for a weblink too, the items
+inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
-`intradesk_walk.dart`; the index cache (`IntradeskIndexCache`) in
-`intradesk_cache.dart`; name matching in `intradesk_search.dart` and output
-lines in `intradesk_format.dart`.
+`intradesk_walk.dart`; the index cache (`IntradeskIndexCache`, with `patch`
+for what a write added or removed) in `intradesk_cache.dart`; name matching
+in `intradesk_search.dart` and output lines in `intradesk_format.dart`. In
+`intradesk_writes.dart`, for the tools that add to Intradesk: the
+`folder_id` and `name` arguments (`intradeskFolderArgument`,
+`intradeskNameArgument`), the folder read before a write
+(`readIntradeskParent`, an `IntradeskParent` with its listing, path and
+entry, which refuses a taken name and a folder without `canAdd`),
+`withIntradeskWrite` (the library's refusals as `ToolError`s that say
+nothing was added), the result of a write Intradesk did not confirm
+(`intradeskWriteNotConfirmed`) and the index patch after a write
+(`addToIntradeskIndex`); a header note says why the session's repeat of a
+write cannot add twice. `trash_intradesk_items` reads nothing before its
+moves but the index, and keeps its helpers to itself. The tests run against
+a fake Intradesk (`test/support/fake_intradesk.dart`) that carries out the
+creates, the upload and the moves to the trash of dartschool#128 as the
+live Intradesk did (renaming a taken name, the bare `500`s, the `400`s with
+`violations`, and a `204` for an item in the trash already), behind the
+fake upload step (`test/support/fake_uploads.dart`) that the attachments of
+later tools can share. It answers the move of an unknown id with `404`, an
+assumption until dartschool#133 captures Intradesk's answer.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
@@ -894,7 +1007,8 @@ and turns the module's errors into `ToolError`s (`presenceToolError`, whose
 details go to the log only), and `runPresence`, which leaves them as they
 are; `PresenceServices`, one service per client for a tool call, so the
 configuration and the codes are read once per call; `readPresenceDay`, which
-reads a class on a day (`PresenceDay`: the class, its codes and its pupils);
+reads a class on a day (`PresenceDay`: the configuration, the class, its
+codes and its pupils);
 the `class_id` and `date` arguments (`presenceDay`); and
 `checkPresenceAccess`, the access check of `smartschool_status`. In
 `presence_format.dart`: what a half-day holds (`PresenceKind`, and
@@ -905,10 +1019,12 @@ the other, and the arguments of the writes. In `presence_opt_in.dart`: the
 presence tools behind their switch (`presenceOptIn`). The tests run against
 a fake Presence module (`test/support/fake_presence.dart`) in the shape of
 dartschool's trimmed captures, with fake names: three classes (one the
-account may only view, one grouping class, without codes), the codes of a
-structure ("Aanwezig", "Te laat" with its alias, "Doktersattest"), and
-pupils with half-days of each kind and a registration per lesson; a test
-adds an official class in a second structure with codes of its own. It
+account may only view, one grouping class, without codes, whose pupil's
+official class the account does not see), the codes of a structure
+("Aanwezig", "Te laat" with its alias, "Doktersattest"), and pupils, each
+with its official class, with half-days of each kind, each record with the
+name the module gives it, and a registration per lesson; a test adds an
+official class in a second structure with codes of its own. It
 carries out a save on the half-days as the live module did in dartschool#2
 and answers it as the module's web client reads the answer (the records as
 stored), can answer it without the records, refuse it with the module's
@@ -1016,6 +1132,17 @@ Intradesk above). The server logs the folder on first use. It holds the names an
 you can see on Intradesk, not file contents. Deleting it is safe: the next
 search builds it again. The log only shows counts, never a name or a query.
 
+What the server adds itself (`create_intradesk_folder`,
+`add_intradesk_weblink`, `upload_intradesk_files`) goes into the index at
+once, under the folder's path, in memory and in the file
+(`IntradeskIndexCache.patch`), so a search finds it without waiting for the
+next walk. Only an index that is loaded is patched, of any age, and only
+when it knows the folder; the patch keeps the time the index was built, so
+the next walk comes when it would have, and a walk that runs meanwhile gets
+the patch too. What `trash_intradesk_items` moved leaves the index the same
+way, a folder with everything in it; an item that may or may not have been
+moved stays until the next walk.
+
 ### Reading Intradesk files
 
 `read_intradesk_file` downloads the file into memory (never to disk), reads
@@ -1110,6 +1237,34 @@ in `lib/src/tools/save_intradesk_file_tool.dart` and
 Privacy: saved files are personal or school data, unencrypted, in a folder
 of the teacher's choice; the colleague guide (`docs/installatie.md`) says so,
 and that they disappear after 7 days.
+
+### Uploading files
+
+`upload_intradesk_files` sends files from this PC to Smartschool. The tools
+that upload share the local-file helper in `lib/src/uploads/local_files.dart`
+(for Intradesk now, for the attachments of a lesfiche or a message later):
+
+- **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
+  1 to 10 per call. The server reads any file the user's Windows account can
+  read, so the tool descriptions tell Claude to show the user every file,
+  with its name and size, before calling.
+- **Checks before anything is sent:** each path names an existing file, not
+  a folder, of at most 200 MB (a sanity limit, as high as what
+  `save_intradesk_file` saves: the library reads a file into memory to
+  upload it), with a name Smartschool takes (no `/ : * ? " \ < > |`, no dot
+  at the start or end; the upload step refuses any other), and no two files
+  have the same name, ignoring case. Each error names the path and says what
+  to do.
+- **Names:** a file goes in under the last part of its path (`localFileName`,
+  as the library takes it), described as `"brief.docx" (12 KB)`
+  (`LocalFile.description`, `describeLocalFiles`).
+- **Refusals:** `uploadToolError` turns the library's refusal of a file (an
+  `ArgumentError` about its path) and a failure of Smartschool's upload step
+  (`SmartschoolAttachmentUploadError`, with Smartschool's own words in
+  `serverMessage` when it gave them) into a `ToolError`, ending in what that
+  means for the call (for Intradesk: nothing was added).
+
+The log shows counts and timings, never a name or a path.
 
 ### Login
 

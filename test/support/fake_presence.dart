@@ -6,8 +6,9 @@ import 'package:dio/dio.dart';
 // library's `PresenceService` reads and writes, answered in the shape of
 // dartschool's trimmed captures of the live module
 // (`test/presence_service_flow_test.dart`,
-// `test/presence_service_errors_test.dart` and
-// `test/presence_class_pupils_test.dart` there), with fake names, and the
+// `test/presence_service_errors_test.dart`,
+// `test/presence_class_pupils_test.dart` and
+// `test/presence_grouping_class_test.dart` there), with fake names, and the
 // save of a half-day (`savePupilsPresences`), carried out on the half-days as
 // the live module did in dartschool#2: the cell named by its `presenceID`
 // (a new one when it is null) gets the code or the alias sent, and its
@@ -94,11 +95,23 @@ enum PresenceSave {
 
 /// A pupil of a class, by internal user id.
 class FakePresencePupil {
-  const FakePresencePupil(this.userId, this.movementId, this.name);
+  const FakePresencePupil(
+    this.userId,
+    this.movementId,
+    this.name, {
+    this.officialClassId,
+  });
 
   final int userId;
   final int movementId;
   final String name;
+
+  /// The pupil's official class, which `getClass` gives with every pupil
+  /// (`officialClass`, seen live, dartschool#126), when no class of the fake
+  /// with a school structure lists the pupil: a class the account does not
+  /// see, as an account without the absence-administrator rights is listed
+  /// fewer classes than the school has (dartschool#121).
+  final int? officialClassId;
 }
 
 /// A class as the module's configuration lists it, with its pupils.
@@ -107,6 +120,7 @@ class FakePresenceClass {
     this.groupId,
     this.name, {
     this.structId = fakePresenceStruct,
+    this.downStreamGroupIds = const [],
     this.userCanRecord = true,
     this.userCanConfirm = true,
     this.pupils = const [],
@@ -119,6 +133,13 @@ class FakePresenceClass {
 
   /// The school structure, or null for a grouping class (`""`).
   final int? structId;
+
+  /// The classes this class groups, by class id, as `getConfig` and
+  /// `getClass` give them (`downStreamGroups`, seen live, dartschool#126):
+  /// for some grouping classes, such as 2A, the official classes of a year;
+  /// empty for every official class and for the other grouping classes,
+  /// such as "Taalatelier groep 1".
+  final List<int> downStreamGroupIds;
 
   /// The module's `userCanRecord`, apparently the registration per lesson:
   /// `true` for every class of a teacher, also without the
@@ -138,6 +159,7 @@ class FakePresenceClass {
     groupId,
     name,
     structId: structId,
+    downStreamGroupIds: downStreamGroupIds,
     userCanRecord: userCanRecord,
     userCanConfirm: false,
     pupils: pupils,
@@ -154,6 +176,12 @@ class FakeHalfDay {
 
   /// The motivation; null as the module sends an empty one.
   String? motivation;
+
+  /// Whether `getClass` gives the record without its `code`, the code or
+  /// alias it holds with its name (dartschool#126), so that the library has
+  /// no name for it. Not seen live: every record had one. For the tests of
+  /// what names such a half-day.
+  bool unnamed = false;
 }
 
 /// The pupils of class 1A of the fake school, with fake names.
@@ -178,16 +206,26 @@ const fake1B = FakePresenceClass(
   pupils: [FakePresencePupil(1101, 5101, 'Wouters, Lars')],
 );
 
-/// The pupil of class 2A, with a fake name.
-const fakeMaes = FakePresencePupil(1201, 5201, 'Maes, Finn');
+/// The pupil of class 2A, with a fake name; its official class is 2A ECO
+/// ([fake2AEco]), which the account does not see unless a test adds it.
+const fakeMaes = FakePresencePupil(
+  1201,
+  5201,
+  'Maes, Finn',
+  officialClassId: 1968,
+);
 
 /// Class 2A: a grouping class without a school structure. The module gives
 /// no codes for it (its `structID` is `""`), while its pupils' half-days
-/// hold the codes of their official classes (seen live, #99).
+/// hold the codes of their official classes, each record with its code and
+/// name (seen live, #99 and dartschool#126). It names 2A ECO ([fake2AEco])
+/// among the classes it groups, as 2A did live (with 2A MAW, 2A MOW and 2A
+/// STEMW, left out here).
 const fake2A = FakePresenceClass(
   1650,
   '2A  ',
   structId: null,
+  downStreamGroupIds: [1968],
   pupils: [fakeMaes],
 );
 
@@ -199,6 +237,25 @@ const fake2AEco = FakePresenceClass(
   '2A ECO  ',
   structId: fakePresenceOtherStruct,
   pupils: [fakeMaes],
+);
+
+/// A pupil of Taalatelier groep 1 ([fakeTaalatelier]) whom no class of the
+/// fake with a school structure lists, and who has no
+/// [FakePresencePupil.officialClassId]: `getClass` gives it without an
+/// official class (`officialClass` null). Not seen live: the module gave
+/// one with every pupil of all seventeen grouping classes (dartschool#126).
+const fakeGoossens = FakePresencePupil(1301, 5301, 'Goossens, Ruben');
+
+/// Class Taalatelier groep 1: a grouping class that names no class it
+/// groups (`downStreamGroups` empty, as in dartschool's capture), with
+/// pupils of official classes across the school: Peeters of 1A, Maes of 2A
+/// ECO and Goossens without an official class. Not in
+/// [FakePresence.loadSchool]: a test adds it.
+const fakeTaalatelier = FakePresenceClass(
+  5248,
+  'Taalatelier groep 1  ',
+  structId: null,
+  pupils: [fakePeeters, fakeMaes, fakeGoossens],
 );
 
 /// A fake Presence module, served by `FakeSmartschool` to logged-in
@@ -358,11 +415,8 @@ class FakePresence {
           jsonEncode(
             form['ofschoolage'] != 'of_school_age'
                 ? const []
-                : switch (int.tryParse(form['structID'] ?? '')) {
-                    fakePresenceStruct => _codes,
-                    fakePresenceOtherStruct => _otherCodes,
-                    _ => const [],
-                  },
+                : _codesByStruct[int.tryParse(form['structID'] ?? '')] ??
+                      const [],
           ),
         );
       case fakePresenceClassPath:
@@ -383,6 +437,7 @@ class FakePresence {
       'userCanConfirm': c.userCanConfirm,
       'instituteNumber': c.structId == null ? '' : 125252,
       'structID': c.structId ?? '',
+      'downStreamGroups': c.downStreamGroupIds,
     };
     return {
       'hasErrors': false,
@@ -404,7 +459,8 @@ class FakePresence {
   /// The pupils of a class with their presences on one day, as the module
   /// answers `getClass` for a single day with pupils and presences (see
   /// [FakePresence]): the class's fields first, as the live module answers
-  /// a class it knows.
+  /// a class it knows, and each pupil with its official class
+  /// ([_officialClassOf]) and its records with their codes (dartschool#126).
   ResponseBody _getClass(Map<String, String> form) {
     final presenceClass = _class(int.tryParse(form['classID'] ?? ''));
     final day = form['startDate'];
@@ -429,6 +485,7 @@ class FakePresence {
       'isOfficial': presenceClass.structId == null ? 0 : 1,
       'userCanRecord': presenceClass.userCanRecord,
       'structID': presenceClass.structId ?? '',
+      'downStreamGroups': presenceClass.downStreamGroupIds,
     };
     if (today case final today? when day.compareTo(today) > 0) {
       return _json(jsonEncode({...fields, ...refused(fakePresenceFutureDay)}));
@@ -446,10 +503,11 @@ class FakePresence {
               'movementID': pupil.movementId,
               'userID': pupil.userId,
               'name': pupil.name,
+              'officialClass': _officialClassOf(pupil),
               'presence': [
                 for (final part in ['am', 'pm'])
                   if (halfDay(pupil.userId, day, part) case final cell?)
-                    _record(pupil.userId, day, part, cell),
+                    _record(pupil.userId, day, part, cell, withCode: true),
                 if (lessonRows.contains((pupil.userId, day)))
                   {
                     'presenceID': 90099,
@@ -471,13 +529,18 @@ class FakePresence {
   }
 
   /// The half-day [cell] of pupil [userId] on [day], [part] (`am`, `pm`), as
-  /// the module gives a record in `getClass` and in the answer to a save.
+  /// the module gives a record in `getClass`, [withCode]: with its `code`,
+  /// the code or alias it holds, with its name ([_codeOf]; seen live with
+  /// every record, dartschool#126), unless the cell is [FakeHalfDay.unnamed]
+  /// or holds a code none of the fake's structures has. The answer to a
+  /// save gives the record without (not captured live).
   Map<String, Object?> _record(
     int userId,
     String day,
     String part,
-    FakeHalfDay cell,
-  ) => {
+    FakeHalfDay cell, {
+    bool withCode = false,
+  }) => {
     'presenceID': cell.presenceId,
     'presenceDate': day,
     'studentID': userId,
@@ -487,7 +550,61 @@ class FakePresence {
     'aliasID': cell.aliasId,
     'motivation': cell.motivation,
     'deleteStatus': 0,
+    if (withCode && !cell.unnamed)
+      'code': ?_codeOf(codeId: cell.codeId, aliasId: cell.aliasId),
   };
+
+  /// The official class of [pupil], as `getClass` gives it with every pupil
+  /// (`officialClass`, dartschool#126): the first class of the fake with a
+  /// school structure that lists the pupil, else the pupil's own
+  /// [FakePresencePupil.officialClassId].
+  int? _officialClassOf(FakePresencePupil pupil) =>
+      classes
+          .where(
+            (c) =>
+                c.structId != null &&
+                c.pupils.any((p) => p.userId == pupil.userId),
+          )
+          .firstOrNull
+          ?.groupId ??
+      pupil.officialClassId;
+
+  /// The `code` the module gives with a record that holds code [codeId] or
+  /// alias [aliasId], as in dartschool's capture
+  /// (`test/presence_grouping_class_test.dart` there), trimmed: the code
+  /// with the fields `getAllCodes` gives it and `isAlias` false, or the
+  /// alias with its `parentCodeID` and `isAlias` true, its `codeID` set to
+  /// the alias id. From the codes of whichever of the fake's structures
+  /// holds the id; null when none does.
+  static Map<String, Object?>? _codeOf({int? codeId, int? aliasId}) {
+    for (final MapEntry(key: structId, value: codes)
+        in _codesByStruct.entries) {
+      for (final code in codes) {
+        if (aliasId != null) {
+          for (final alias in code['alias'] as List) {
+            if ((alias as Map)['aliasID'] == aliasId) {
+              return {
+                ...alias.cast<String, Object?>(),
+                'codeID': aliasId,
+                'parentCodeID': code['codeID'],
+                'isAlias': true,
+              };
+            }
+          }
+        } else if (codeId != null && code['codeID'] == codeId) {
+          return {
+            'codeID': codeId,
+            'code': code['code'],
+            'name': code['name'],
+            'isOfficial': 1,
+            'structID': structId,
+            'isAlias': false,
+          };
+        }
+      }
+    }
+    return null;
+  }
 
   /// Carries out a save as the next save says, and answers it as the
   /// module's web client reads the answer (dartschool#105, #109): the pupils
@@ -636,6 +753,13 @@ class FakePresence {
     'structID': null,
     'studierichting': '',
     'userCanConfirm': false,
+  };
+
+  /// The codes of each school structure of the fake, as `getAllCodes`
+  /// answers them.
+  static const _codesByStruct = {
+    fakePresenceStruct: _codes,
+    fakePresenceOtherStruct: _otherCodes,
   };
 
   /// The codes of [fakePresenceStruct], as `getAllCodes` answers them.

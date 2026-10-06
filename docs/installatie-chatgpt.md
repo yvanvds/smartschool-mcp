@@ -9,7 +9,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   bericht vertrekt, en een bericht gaat naar de prullenbak, pas nadat jij het
   goedgekeurd hebt.
 - **Intradesk:** documenten zoeken op naam, mappen bekijken en bestanden
-  lezen.
+  lezen. Een nieuwe map, een weblink of bestanden van je pc in een map
+  zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk
+  verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Planner:** je eigen planner bekijken, en die van klassen, collega's en
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
@@ -223,10 +225,12 @@ Hetzelfde als in Claude Desktop: zie
 Claude Desktop. Wat daar over Claude staat, geldt hier voor ChatGPT. Een paar
 verschillen:
 
-- **Berichten versturen en weggooien, de planner invullen.** ChatGPT toont
-  eerst de tekst en de ontvangers, de berichten die naar de prullenbak gaan,
-  of de lessen die in je planner komen of verdwijnen, en wacht op jouw
-  akkoord. Daarna vraagt de app nog eens toestemming. Kies daar niet om het
+- **Berichten versturen en weggooien, de planner invullen, iets op
+  Intradesk zetten of weggooien.** ChatGPT toont eerst de tekst en de
+  ontvangers, de berichten die naar de prullenbak gaan, de lessen die in je
+  planner komen of verdwijnen, of wat er in welke map op Intradesk komt of
+  naar de prullenbak gaat, en wacht op jouw akkoord. Daarna vraagt de app
+  nog eens toestemming. Kies daar niet om het
   altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
   (*Full access*): dan vraagt de app nergens meer toestemming voor.
 - **Afbeeldingen.** Een afbeelding van Intradesk (`.png`, `.jpg`) kan ChatGPT

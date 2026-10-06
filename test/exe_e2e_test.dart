@@ -92,6 +92,10 @@ void main() {
       'list_intradesk_folder',
       'read_intradesk_file',
       'save_intradesk_file',
+      'create_intradesk_folder',
+      'add_intradesk_weblink',
+      'upload_intradesk_files',
+      'trash_intradesk_items',
       'search_planners',
       'list_planner',
       'read_planned_element',
@@ -538,7 +542,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(39));
+    expect(tools, hasLength(43));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -603,7 +607,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(27));
+        expect(tools, hasLength(31));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -642,8 +646,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(35));
-      expect([for (final tool in tools.skip(27)) tool['name']], skoreTools);
+      expect(tools, hasLength(39));
+      expect([for (final tool in tools.skip(31)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -836,7 +840,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(27));
+        expect(tools, hasLength(31));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -876,8 +880,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(31));
-      expect([for (final tool in tools.skip(27)) tool['name']], presenceTools);
+      expect(tools, hasLength(35));
+      expect([for (final tool in tools.skip(31)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1073,10 +1077,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(39));
-      expect([for (final tool in tools.skip(35)) tool['name']], presenceTools);
+      expect(tools, hasLength(43));
+      expect([for (final tool in tools.skip(39)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(27).take(8)) tool['name'],
+        for (final tool in tools.skip(31).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1679,6 +1683,220 @@ void main() {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
       expect(isError, isTrue, reason: '$tool $arguments');
       expect(text, contains(message), reason: '$tool $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('the Intradesk write tools are writes Claude Desktop asks approval '
+      'for; without settings: an error result that names the missing '
+      'settings; an invalid folder id, name, colour, address or path: an '
+      'error that says what to fix, before any login (#111)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    final files = await Directory.systemTemp.createTemp('smartschool_upload_');
+    addTearDown(() => files.delete(recursive: true));
+    final brief = File('${files.path}${Platform.pathSeparator}brief.docx')
+      ..writeAsStringSync('Beste ouders');
+    const folder = 'aaaa1111-1111-4111-b111-111111111111';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    for (final name in [
+      'create_intradesk_folder',
+      'add_intradesk_weblink',
+      'upload_intradesk_files',
+    ]) {
+      expect(tools[name]!['annotations'], {
+        'title': isA<String>(),
+        'readOnlyHint': false,
+        'destructiveHint': true,
+        'idempotentHint': false,
+        'openWorldHint': true,
+      }, reason: name);
+    }
+    expect(
+      (tools['upload_intradesk_files']!['inputSchema'] as Map)['properties'],
+      containsPair('paths', {
+        'type': 'array',
+        'description': isA<String>(),
+        'items': {'type': 'string', 'minLength': 1},
+        'minItems': 1,
+        'maxItems': 10,
+      }),
+    );
+    expect(tools['upload_intradesk_files']!['description'], contains('200 MB'));
+
+    for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+      ('create_intradesk_folder', {'folder_id': folder, 'name': 'Toetsen'}),
+      (
+        'add_intradesk_weblink',
+        {'folder_id': folder, 'name': 'Oefensite', 'url': 'example.com/oefen'},
+      ),
+      (
+        'upload_intradesk_files',
+        {
+          'folder_id': folder,
+          'paths': [brief.path],
+        },
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: tool);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: tool,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (tool, arguments, message)
+        in <(String, Map<String, Object?>, String)>[
+          (
+            'create_intradesk_folder',
+            {'folder_id': 'Vakken', 'name': 'Toetsen'},
+            'folder_id must be an Intradesk id like',
+          ),
+          (
+            'create_intradesk_folder',
+            {'folder_id': ' ', 'name': 'Toetsen'},
+            'Adding at the top of Intradesk is not offered.',
+          ),
+          (
+            'create_intradesk_folder',
+            {'folder_id': folder, 'name': 'a/b'},
+            'Smartschool does not allow the name "a/b"',
+          ),
+          (
+            'create_intradesk_folder',
+            {'folder_id': folder, 'name': 'Toetsen', 'color': 'mauve'},
+            '"mauve" is not one of the allowed values',
+          ),
+          (
+            'add_intradesk_weblink',
+            {'folder_id': folder, 'name': 'Oefensite', 'url': 'geen url'},
+            'is not a web address that Intradesk takes',
+          ),
+          (
+            'upload_intradesk_files',
+            {
+              'folder_id': folder,
+              'paths': ['brief.docx'],
+            },
+            '"brief.docx" in paths is not a full path',
+          ),
+          (
+            'upload_intradesk_files',
+            {
+              'folder_id': folder,
+              'paths': [files.path],
+            },
+            'is a folder, not a file',
+          ),
+          (
+            'upload_intradesk_files',
+            {
+              'folder_id': folder,
+              'paths': [brief.path, brief.path],
+            },
+            'paths holds two files named "brief.docx"',
+          ),
+        ]) {
+      final (isError, text) = await server.callTool(tool, arguments: arguments);
+      expect(isError, isTrue, reason: '$tool $arguments');
+      expect(text, contains(message), reason: '$tool $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('trash_intradesk_items is a write Claude Desktop asks approval for '
+      'that a second call does not change; without settings: an error result '
+      'that names the missing settings; an id that is not an Intradesk id, '
+      'or one passed as two kinds: an error that says what to fix, before '
+      'any login (#112)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const folder = 'aaaa1111-1111-4111-b111-111111111111';
+    const file = 'cccc1111-1111-4111-b111-111111111111';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    final trash = tools['trash_intradesk_items']!;
+    expect(trash['annotations'], {
+      'title': isA<String>(),
+      'readOnlyHint': false,
+      'destructiveHint': true,
+      'idempotentHint': true,
+      'openWorldHint': true,
+    });
+    expect(
+      (trash['inputSchema'] as Map)['properties'],
+      containsPair(
+        'items',
+        allOf(containsPair('minItems', 1), containsPair('maxItems', 20)),
+      ),
+    );
+    expect(trash['description'], contains('keeps its trash for 30 days'));
+
+    final (isError, text) = await server.callTool(
+      'trash_intradesk_items',
+      arguments: {
+        'items': [
+          {'kind': 'folder', 'id': folder},
+          {'kind': 'file', 'id': file},
+        ],
+      },
+    );
+    expect(isError, isTrue);
+    expect(
+      text,
+      startsWith('Not all Smartschool settings are filled in. Missing: '),
+    );
+    expect(text, isNot(contains('#0')), reason: 'no stack trace');
+
+    for (final (items, message) in <(List<Object?>, String)>[
+      (
+        [
+          {'kind': 'file', 'id': 'Verslag.docx'},
+        ],
+        'The id of item 1, "Verslag.docx", is not an Intradesk id',
+      ),
+      (
+        [
+          {'kind': 'folder', 'id': folder},
+          {'kind': 'file', 'id': folder},
+        ],
+        'Items 1 and 2 have the same id $folder',
+      ),
+      (
+        [
+          {'kind': 'map', 'id': folder},
+        ],
+        '"map" is not one of the allowed values',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(
+        'trash_intradesk_items',
+        arguments: {'items': items},
+      );
+      expect(isError, isTrue, reason: '$items');
+      expect(text, contains(message), reason: '$items');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
 

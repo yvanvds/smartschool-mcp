@@ -109,6 +109,15 @@ final class IntradeskIndexCache {
   IntradeskWalkProgress? _progress;
   int _writes = 0;
 
+  /// The patches made while the running walk runs, applied to its index
+  /// before it is saved: the walk may have listed a folder before a write
+  /// changed it.
+  final List<({List<IntradeskItem> added, List<String> removed})>
+  _patchesDuringWalk = [];
+
+  /// The last [patch], which the next one waits for.
+  Future<void> _patching = Future.value();
+
   /// The folder the index is saved in.
   Directory get directory {
     if (_directory case final directory?) return directory;
@@ -212,8 +221,13 @@ final class IntradeskIndexCache {
   Future<IntradeskIndex> _build(IntradeskIndexBuilder build) {
     if (_building case final running?) return running;
     final progress = _progress = IntradeskWalkProgress();
+    _patchesDuringWalk.clear();
     final running = _building = () async {
-      final index = await build(progress);
+      var index = await build(progress);
+      for (final (:added, :removed) in _patchesDuringWalk) {
+        index = index.patched(added: added, removed: removed);
+      }
+      _patchesDuringWalk.clear();
       _index = index;
       await write(index);
       return index;
@@ -228,6 +242,40 @@ final class IntradeskIndexCache {
       ),
     );
     return running;
+  }
+
+  /// Patches the index after a write of the server's own, so that
+  /// `search_intradesk` finds what a tool added (#111) and no longer finds
+  /// what it moved to the trash (#112) at once, instead of after the next
+  /// walk: adds [added] and removes the items with an id in [removed], and
+  /// for a folder everything in it ([IntradeskIndex.patched]), then saves the
+  /// index in memory and on disk.
+  ///
+  /// Only when an index is loaded, in memory or on disk, of any age: without
+  /// one there is nothing to patch, and nothing is built. The patch keeps the
+  /// index's [IntradeskIndex.builtAt], so the next walk comes when it would
+  /// have. A walk that runs meanwhile gets the patch too, before its index is
+  /// saved. Patches run one at a time, in the order they are asked for.
+  ///
+  /// Returns the patched index, or null when there was none.
+  Future<IntradeskIndex?> patch({
+    Iterable<IntradeskItem> added = const [],
+    Iterable<String> removed = const [],
+  }) {
+    final change = (added: [...added], removed: [...removed]);
+    final patching = _patching.then((_) async {
+      if (_building != null) _patchesDuringWalk.add(change);
+      final saved = await _saved();
+      if (saved == null) return null;
+      final index = _index = saved.index.patched(
+        added: change.added,
+        removed: change.removed,
+      );
+      await write(index);
+      return index;
+    });
+    _patching = patching.then<void>((_) {}, onError: (Object _) {});
+    return patching;
   }
 
   /// The saved index, or null when there is none (or it cannot be read).
