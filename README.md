@@ -370,11 +370,16 @@ client name. It also installs again while that copy runs.
   one week of a class seen live), so at most 200 elements are shown, with
   a note on how to narrow down; the request itself may span a school
   year. The header names a planner other than
-  `me` from the elements read (the class, person or room they name). When
-  nothing is planned there, the planner cannot be named, and Smartschool
-  answers a planner id that names no planner the same way, without an
-  error; the answer then adds a note to check the id with `search_planners`
-  (dartschool#127; a workaround, tracked in #102).
+  `me` from the elements read (the class, person or room they name). Only
+  when nothing is planned there and no element read names it, the planner
+  is looked up by its id with the library's `getCalendar` (one more
+  request, which only reads): the header names it as the lookup does, and
+  marks a person the planner counts as deleted. The planner answers a room
+  it does not have, and a group its search does not offer, as an empty
+  planner, without an error; when the lookup does not know the id, the
+  answer says so, and to check the id with `search_planners`. When the
+  lookup fails, a note says that the planner could not be named, with the
+  details in the server log.
 - `read_planned_element`: one element in full, by its id: what its list
   line says, plus its public and private info as plain text (through
   `htmlToText`, never raw HTML), its labels, the names of its attachments

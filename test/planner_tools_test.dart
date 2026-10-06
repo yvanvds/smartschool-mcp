@@ -18,6 +18,10 @@ import 'support/mcp.dart';
 const _class6A1 = 'group/4069_2001';
 const _piet = 'user/4069_1002_0';
 
+/// Where the planner's lookup of a planner by its id goes
+/// (`PlannerService.getCalendar`).
+const _lookupPath = '/planner/api/v1/quick-search/planner/start';
+
 /// `10:20` for the moment [iso] in the time of this PC.
 String _clock(String iso) {
   final local = DateTime.parse(iso).toLocal();
@@ -389,6 +393,10 @@ void main() {
         'from': '2026-10-05',
         'until': '2026-10-09',
       });
+      // The elements name the planner: no lookup.
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/$_piet',
+      ]);
       expect(
         text,
         startsWith(
@@ -434,48 +442,155 @@ void main() {
     });
 
     test('says when nothing is planned, without a note for the user\'s own '
-        'planner', () async {
+        'planner, and without looking it up', () async {
       expect(
         await list({'from': '2026-12-24', 'until': '2026-12-26'}),
         'Planner: your own planner (me), from Thursday 2026-12-24 to '
         'Saturday 2026-12-26: nothing planned.',
       );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/user/$fakePlannerMe',
+      ]);
     });
 
-    test('says to check the planner id when nothing is planned and the '
-        'planner cannot be named: Smartschool answers an id that names no '
-        'planner as an empty planner (#93)', () async {
-      // group/4069_1 names no planner; the fake answers it as the live
-      // planner did, with an empty list. Piet Peeters has a planner, with
-      // nothing planned in these days.
-      for (final (id, from, until, period) in [
-        (
-          'group/4069_1',
-          '2026-10-05',
-          '2026-10-09',
-          'from Monday 2026-10-05 to Friday 2026-10-09',
-        ),
-        (
-          _piet,
-          '2026-12-24',
-          '2026-12-26',
-          'from Thursday 2026-12-24 to Saturday 2026-12-26',
-        ),
+    test('names a planner with nothing planned with the planner\'s lookup '
+        'of its id: a class, a colleague, a room, and the user\'s own '
+        'planner given by its id (#102)', () async {
+      // Nothing is planned in these days, so no element names the planner.
+      // The planner names the user's own planner %quicksearch.me%, which
+      // the library replaces with the user's name.
+      for (final (id, field, name) in [
+        (_class6A1, 'groups', '6A1'),
+        (_piet, 'users', 'Piet Peeters'),
+        (fakeRoom101.planner, 'miniDbItems', '101'),
+        ('user/$fakePlannerMe', 'users', 'Jan Peeters'),
       ]) {
         planner.requests.clear();
 
-        final text = await list({'planner': id, 'from': from, 'until': until});
+        final text = await list({
+          'planner': id,
+          'from': '2026-12-24',
+          'until': '2026-12-26',
+        });
 
-        expect(plannerRequests(), ['GET /planner/api/v1/planned-elements/$id']);
+        expect(plannerRequests(), [
+          'GET /planner/api/v1/planned-elements/$id',
+          'POST $_lookupPath',
+        ], reason: id);
+        final calendarId = id.substring(id.indexOf('/') + 1);
+        expect(planner.requests.last.data, {
+          for (final kind in ['users', 'groups', 'miniDbItems'])
+            kind: [if (kind == field) calendarId],
+        }, reason: id);
         expect(
           text,
-          'Planner: planner $id, $period: nothing planned.\n'
-          'Note: with nothing planned, the planner cannot be named, and '
-          'Smartschool answers a planner id that does not exist the same '
-          'way. If you expected elements, check the planner id with '
-          'search_planners.',
+          'Planner: planner $id ($name), from Thursday 2026-12-24 to '
+          'Saturday 2026-12-26: nothing planned.',
         );
       }
+      expect(planner.writes, isEmpty);
+    });
+
+    test('looks up a planner when none of the kinds asked for is planned, '
+        'as the planner was asked for those kinds only (#102)', () async {
+      // 6A1 has its assignment on Tuesday, and lessons on Wednesday and
+      // Friday.
+      final text = await list({
+        'planner': _class6A1,
+        'from': '2026-10-07',
+        'until': '2026-10-09',
+        'types': ['assignments'],
+      });
+
+      expect(planner.calendarQueries.single['types'], 'planned-assignments');
+      expect(plannerRequests().last, 'POST $_lookupPath');
+      expect(
+        text,
+        'Planner: planner group/4069_2001 (6A1), from Wednesday 2026-10-07 '
+        'to Friday 2026-10-09 (only assignments): nothing planned.',
+      );
+    });
+
+    test('marks a person the planner counts as deleted, whom its lookup '
+        'names (#102)', () async {
+      planner.hits.add(
+        FakePlannerHit.user(
+          const FakePlannerUser('4069_1006_0', 'Karel Claes', 'Claes Karel'),
+          deleted: true,
+        ),
+      );
+
+      expect(
+        await list({
+          'planner': 'user/4069_1006_0',
+          'from': '2026-10-05',
+          'until': '2026-10-09',
+        }),
+        'Planner: planner user/4069_1006_0 (Karel Claes, deleted user), from '
+        'Monday 2026-10-05 to Friday 2026-10-09: nothing planned.',
+      );
+    });
+
+    test('says plainly when a planner id names no planner: the planner\'s '
+        'lookup does not know it, and the planner answers it as an empty '
+        'planner (#102)', () async {
+      // As the live planner answered a room it does not have, and a group
+      // that its search does not offer: an empty list.
+      for (final (id, field) in [
+        ('location/4069_10000000-0000-4000-8000-000000000999', 'miniDbItems'),
+        ('group/4069_9', 'groups'),
+      ]) {
+        planner.requests.clear();
+
+        final text = await list({
+          'planner': id,
+          'from': '2026-10-05',
+          'until': '2026-10-09',
+        });
+
+        expect(plannerRequests(), [
+          'GET /planner/api/v1/planned-elements/$id',
+          'POST $_lookupPath',
+        ]);
+        expect((planner.requests.last.data as Map)[field], [
+          id.substring(id.indexOf('/') + 1),
+        ]);
+        expect(
+          text,
+          'Planner: planner $id, from Monday 2026-10-05 to Friday '
+          '2026-10-09: nothing planned.\n'
+          'Note: the planner\'s search offers no class, person or room with '
+          'the planner id $id, and Smartschool answers such an id as an '
+          'empty planner, so this does not mean that a planner is free. '
+          'Check the planner id with search_planners.',
+        );
+      }
+    });
+
+    test('says that the planner cannot be named when its lookup fails, and '
+        'still says that nothing is planned (#102)', () async {
+      planner.failing[_lookupPath] = 500;
+
+      final text = await list({
+        'planner': _piet,
+        'from': '2026-12-24',
+        'until': '2026-12-26',
+      });
+
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/$_piet',
+        'POST $_lookupPath',
+      ]);
+      expect(
+        text,
+        'Planner: planner $_piet, from Thursday 2026-12-24 to Saturday '
+        '2026-12-26: nothing planned.\n'
+        'Note: with nothing planned, the planner cannot be named, and '
+        'looking up its id failed (the details are in the server log). '
+        'Smartschool answers some planner ids that name no planner as an '
+        'empty planner. If you expected elements, check the planner id with '
+        'search_planners.',
+      );
     });
 
     test('names the planner from the elements of the kinds left out, and '
@@ -494,6 +609,10 @@ void main() {
         'Planner: planner group/4069_2001 (6A1), from Monday 2026-10-05 to '
         'Wednesday 2026-10-07 (only other): nothing planned.',
       );
+      // The elements read name the planner: no lookup (#102).
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/$_class6A1',
+      ]);
     });
 
     group('names meetings and lesson-free days, counts them by kind (#94), '
