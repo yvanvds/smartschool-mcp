@@ -33,7 +33,15 @@ import 'fake_uploads.dart';
 ///   [uploads] and answers `201` with `files` as an object keyed by file id
 ///   and `exceptions` as an empty list (or the files of [refusedUploads]);
 ///   a directory without files gets a bare `400`. A directory is not used
-///   up: taking it again adds its files again.
+///   up: taking it again adds its files again;
+/// - `POST .../{folders|weblinks|files}/{id}/trash` with `{}` moves the item
+///   to the trash ([trashed]) and answers an empty `204`: it no longer shows
+///   in its folder's listing, and a folder takes everything in it along. An
+///   item in the trash already (also one in a folder in the trash) gets
+///   `204` again, as live. An id the fake has no item of that kind for gets
+///   `404` with Intradesk's problem answer: Intradesk's answer to that was
+///   not seen live (yvanvds/dartschool#133), so it is the answer
+///   `folders/{id}/parents` gives an unknown id.
 ///
 /// A name that is taken is never refused: the new item is renamed to
 /// `name (1)` (`name (1).ext` for a file). A parent that is not a folder, a
@@ -51,7 +59,7 @@ class FakeIntradesk {
 
   static final _write = RegExp(
     r'^/intradesk/api/v1/(\d+)/(folders/|folders/as-confidential|weblinks/|'
-    r'files/upload)$',
+    r'files/upload|(folders|weblinks|files)/([^/]+)/trash)$',
   );
 
   /// The colours Intradesk has for a folder.
@@ -89,7 +97,7 @@ class FakeIntradesk {
 
   /// The writes that reached Intradesk (with a session), in order, as `POST
   /// path` with the path after the platform (`folders/`, `weblinks/`,
-  /// `files/upload`, ...), whatever the answer.
+  /// `files/upload`, `files/{id}/trash`, ...), whatever the answer.
   List<String> get writes => [
     for (final request in writeRequests) 'POST ${request.path}',
   ];
@@ -105,6 +113,13 @@ class FakeIntradesk {
   /// recorded: a test changes Intradesk there, as someone else in Smartschool
   /// between the tool's read and its write.
   void Function(String path, Map<String, Object?> body)? beforeWrite;
+
+  /// The ids of the items moved to the trash, in order, each once.
+  final List<String> trashed = [];
+
+  /// The listing key (`folders`, `files` or `weblinks`) of each item in the
+  /// trash, by id.
+  final Map<String, String> _trash = {};
 
   /// File names that `files/upload` does not take, with Intradesk's reason:
   /// they are listed in the answer's `exceptions` (keyed per file, as the
@@ -460,7 +475,8 @@ class FakeIntradesk {
           'folders/' => _createFolder(body, confidential: false),
           'folders/as-confidential' => _createFolder(body, confidential: true),
           'weblinks/' => _createWeblink(body),
-          _ => _takeFiles(body),
+          'files/upload' => _takeFiles(body),
+          _ => _moveToTrash(match[3]!, match[4]!),
         };
         if (override != null) {
           // Carried out, but the answer never arrives.
@@ -589,6 +605,40 @@ class FakeIntradesk {
     );
   }
 
+  /// Moves the item [id], listed under [key] (`folders`, `weblinks` or
+  /// `files`), to the trash and answers `204`; see the class doc.
+  ResponseBody _moveToTrash(String key, String id) {
+    if (_inTrash(id)) return ResponseBody.fromString('', 204);
+    for (final listing in _listings.values) {
+      final items = listing[key]!;
+      final index = items.indexWhere((item) => (item as Map)['id'] == id);
+      if (index < 0) continue;
+      items.removeAt(index);
+      _trash[id] = key;
+      trashed.add(id);
+      return ResponseBody.fromString('', 204);
+    }
+    return _problem(404);
+  }
+
+  /// Whether the item [id] is in the trash, or in a folder that is.
+  bool _inTrash(String id) {
+    if (_trash.containsKey(id)) return true;
+    final folders = [
+      for (final MapEntry(:key, :value) in _trash.entries)
+        if (value == 'folders') key,
+    ];
+    while (folders.isNotEmpty) {
+      final folder = folders.removeLast();
+      if (itemsIn(folder).any((item) => item['id'] == id)) return true;
+      folders.addAll([
+        for (final inside in _listings[folder]?['folders'] ?? const [])
+          (inside as Map)['id']! as String,
+      ]);
+    }
+    return false;
+  }
+
   /// [name], or as Intradesk renames a new item when the folder [parent]
   /// holds an item of that name already (seen live): `name (1)`, `name
   /// (2)`, ..., before the extension of a name with one.
@@ -614,7 +664,12 @@ class FakeIntradesk {
       ResponseBody.fromString(
         jsonEncode({
           'status': status,
-          'title': status == 500 ? 'Internal Server Error' : 'Bad Request',
+          'title': switch (status) {
+            500 => 'Internal Server Error',
+            404 => 'Not Found',
+            403 => 'Forbidden',
+            _ => 'Bad Request',
+          },
           'detail': '',
           'type': '',
           'violations': ?violations,

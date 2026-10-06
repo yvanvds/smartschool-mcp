@@ -240,8 +240,18 @@ final class IntradeskIndex {
         item.id: item,
   };
 
+  late final Map<String, IntradeskItem> _weblinksById = {
+    for (final item in items)
+      if (item.id.isNotEmpty && item.kind == IntradeskItemKind.weblink)
+        item.id: item,
+  };
+
   /// The folder or file with [id], or null.
   IntradeskItem? find(String id) => _byId[id];
+
+  /// The folder, file or weblink with [id], or null: [find], and a weblink
+  /// that Smartschool gave an id.
+  IntradeskItem? findItem(String id) => _byId[id] ?? _weblinksById[id];
 
   /// How many items there are of [kind].
   int count(IntradeskItemKind kind) =>

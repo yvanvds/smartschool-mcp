@@ -217,6 +217,8 @@ void main() {
       expect(index.find('f3')?.kind, IntradeskItemKind.folder);
       expect(index.find('nope'), isNull);
       expect(index.count(IntradeskItemKind.folder), 4);
+      expect(index.findItem('c1')?.name, 'uitstap.docx');
+      expect(index.findItem(''), isNull, reason: 'a weblink without an id');
       expect(index.count(IntradeskItemKind.file), 3);
       expect(index.count(IntradeskItemKind.weblink), 1);
       expect(
@@ -230,6 +232,27 @@ void main() {
         ],
       );
       expect(index.within('f4'), isEmpty);
+    });
+
+    test('findItem finds a weblink by the id Smartschool gave it too, where '
+        'find finds only folders and files (#112)', () {
+      const weblink = IntradeskItem(
+        kind: IntradeskItemKind.weblink,
+        id: 'e1',
+        name: 'Oefensite',
+        parentId: 'f4',
+        parentPath: 'Leerkrachten / Uitstappen',
+        url: 'https://example.com/oefenen',
+      );
+      final index = IntradeskIndex(
+        builtAt: DateTime.utc(2026, 10, 6),
+        items: [..._items, weblink],
+      );
+
+      expect(index.findItem('e1'), same(weblink));
+      expect(index.find('e1'), isNull);
+      expect(index.findItem('f3')?.kind, IntradeskItemKind.folder);
+      expect(index.findItem('nope'), isNull);
     });
 
     test('patched adds items after their folder, puts an item with a known id '
@@ -348,7 +371,8 @@ void main() {
     });
 
     test('an item line: kind, path or name, id, size, date changed and '
-        'confidential', () {
+        'confidential; a weblink with its id when it has one (#112), and its '
+        'address', () {
       final file = IntradeskItem(
         kind: IntradeskItemKind.file,
         id: 'c1',
@@ -377,6 +401,20 @@ void main() {
       expect(
         formatIntradeskItem(_items[7]),
         'weblink | Leerkrachten / Schoolsite | https://example.com',
+      );
+      const weblink = IntradeskItem(
+        kind: IntradeskItemKind.weblink,
+        id: 'e1',
+        name: 'Schoolsite',
+        parentId: 'f1',
+        parentPath: 'Leerkrachten',
+        url: 'https://example.com',
+        confidential: true,
+      );
+      expect(
+        formatIntradeskItem(weblink),
+        'weblink | Leerkrachten / Schoolsite | id e1 | https://example.com | '
+        'confidential',
       );
     });
 

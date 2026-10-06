@@ -55,13 +55,16 @@ String intradeskFileTitle(
 ///
 /// For example `file | Leerkrachten / Formulieren / uitstap.docx | id
 /// cccc1111-… | 178 KB | changed 2024-08-29`, or for a weblink
-/// `weblink | Leerkrachten / Schoolsite | https://…`.
+/// `weblink | Leerkrachten / Schoolsite | id eeee1111-… | https://…`, without
+/// the id when Smartschool gave it none. A weblink's id is what
+/// `trash_intradesk_items` takes (#112).
 String formatIntradeskItem(IntradeskItem item, {bool fullPath = true}) {
   final name = fullPath ? item.path : item.name;
   if (item.kind == IntradeskItemKind.weblink) {
     return [
       'weblink',
       name,
+      if (item.id.isNotEmpty) 'id ${item.id}',
       item.url ?? '(no address)',
       if (item.confidential) 'confidential',
     ].join(' | ');

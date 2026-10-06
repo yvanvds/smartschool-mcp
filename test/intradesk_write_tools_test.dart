@@ -1,9 +1,10 @@
-/// `create_intradesk_folder`, `add_intradesk_weblink` and
-/// `upload_intradesk_files`, called over MCP on the real server, session,
-/// library, index cache and local files, against a fake Smartschool whose
-/// Intradesk carries out the writes of yvanvds/dartschool#128 as the live
-/// one did (`test/support/fake_intradesk.dart`, with the request bodies and
-/// answers of dartschool's `intradesk_write_test.dart`).
+/// `create_intradesk_folder`, `add_intradesk_weblink`,
+/// `upload_intradesk_files` and `trash_intradesk_items`, called over MCP on
+/// the real server, session, library, index cache and local files, against a
+/// fake Smartschool whose Intradesk carries out the writes of
+/// yvanvds/dartschool#128 as the live one did
+/// (`test/support/fake_intradesk.dart`, with the request bodies and answers
+/// of dartschool's `intradesk_write_test.dart`).
 library;
 
 import 'dart:io';
@@ -16,6 +17,7 @@ import 'package:smartschool_mcp/src/tools/add_intradesk_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_intradesk_items_tool.dart';
 import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:test/test.dart';
 
@@ -23,6 +25,9 @@ import 'support/fake_smartschool.dart';
 import 'support/mcp.dart';
 
 const _api = '/intradesk/api/v1/4069';
+
+/// The id of the weblink Schoolsite in Vakken / Informatica.
+const schoolsite = 'eeee9999-0000-4000-8000-000000009999';
 
 /// The size limit of `upload_intradesk_files` here.
 const _limit = 64;
@@ -38,8 +43,8 @@ void main() {
   late ServerConnection connection;
 
   // The tree: Vakken (may add) / Informatica (may add) with Verslag.docx and
-  // the weblink Schoolsite; Archief (may not add); Leerlingendossiers
-  // (confidential, may add).
+  // the weblink Schoolsite ([schoolsite]); Archief (may not add);
+  // Leerlingendossiers (confidential, may add).
   late String vakken;
   late String informatica;
   late String verslag;
@@ -64,6 +69,7 @@ void main() {
         createIntradeskFolderTool(session, current),
         addIntradeskWeblinkTool(session, current),
         uploadIntradeskFilesTool(session, current, maxBytes: _limit),
+        trashIntradeskItemsTool(session, current),
         searchIntradeskTool(session, current),
         listIntradeskFolderTool(session, current),
       ],
@@ -82,7 +88,7 @@ void main() {
     );
     verslag = intradesk.addFile('Verslag.docx', parent: informatica);
     intradesk.addWeblink({
-      'id': 'eeee9999-0000-4000-8000-000000009999',
+      'id': schoolsite,
       'name': 'Schoolsite',
       'url': 'https://www.example.com',
     }, parent: informatica);
@@ -566,8 +572,8 @@ void main() {
         'Note: the address was sent as http://example.com/oefenen (with '
         'http:// in front), as Intradesk\'s own web client sends it: '
         'Intradesk takes an address only with http:// or https:// in front.\n'
-        '- weblink | Vakken / Informatica / Oefenplatform | '
-        'http://example.com/oefenen',
+        '- weblink | Vakken / Informatica / Oefenplatform | id '
+        'eeee0001-0000-4000-8000-000000000001 | http://example.com/oefenen',
       );
       expect(intradesk.writeRequests.single.path, 'weblinks/');
       expect(intradesk.writeRequests.single.body, {
@@ -858,5 +864,447 @@ void main() {
         expect(postsTo('files/upload'), 1);
       },
     );
+  });
+
+  group('trash_intradesk_items', () {
+    /// The `items` argument for [items], each `(kind, id)`.
+    Map<String, Object?> trash(List<(String, String)> items) => {
+      'items': [
+        for (final (kind, id) in items) {'kind': kind, 'id': id},
+      ],
+    };
+
+    /// The line of Verslag.docx as the index has it.
+    String verslagLine() =>
+        'file | Vakken / Informatica / Verslag.docx | id $verslag | 1000 '
+        'bytes | changed 2024-08-29';
+
+    /// The line of the weblink Schoolsite as the index has it.
+    const schoolsiteLine =
+        'weblink | Vakken / Informatica / Schoolsite | id $schoolsite | '
+        'https://www.example.com';
+
+    test(
+      'is listed as a write Claude Desktop asks approval for, that a '
+      'second call does not change, to be called only after the user '
+      'confirmed each item, with 1 to 20 items of a kind and an id',
+      () async {
+        final tool = (await connection.listTools(
+          ListToolsRequest(),
+        )).tools.singleWhere((tool) => tool.name == 'trash_intradesk_items');
+
+        expect(tool.toolAnnotations?.readOnlyHint, isFalse);
+        expect(tool.toolAnnotations?.destructiveHint, isTrue);
+        expect(tool.toolAnnotations?.idempotentHint, isTrue);
+        expect(tool.toolAnnotations?.openWorldHint, isTrue);
+        expect(
+          tool.description,
+          allOf(
+            contains(
+              'only call this tool after the user has explicitly confirmed it',
+            ),
+            contains('show the user each item by its name and path'),
+            contains('a folder goes to the trash with everything in it'),
+            contains('Intradesk keeps its trash for 30 days'),
+            contains('restore an item from the trash in Intradesk itself'),
+            contains('cannot restore anything, nor delete anything for good'),
+            contains('Moving an item to the trash again is harmless'),
+          ),
+        );
+        expect(tool.inputSchema.required, ['items']);
+        final items = tool.inputSchema.properties!['items']! as Map;
+        expect(items['minItems'], 1);
+        expect(items['maxItems'], maxIntradeskTrashItems);
+        expect(maxIntradeskTrashItems, 20);
+        final item = items['items'] as Map;
+        expect(item['required'], ['kind', 'id']);
+        expect(
+          (item['properties'] as Map)['kind'],
+          containsPair('enum', ['folder', 'file', 'weblink']),
+        );
+      },
+    );
+
+    test('with an index: moves each kind in order, sending {} to '
+        '{kind}/{id}/trash, names each item by its path, says what went '
+        'along with a folder, and patches the index, so that a search finds '
+        'none of it at once, also in a new server process', () async {
+      final oud = intradesk.addFolder('Oud 2025', parent: vakken);
+      intradesk.addFile('planning 2025.xlsx', parent: oud);
+      final toetsen = intradesk.addFolder('Toetsen 2025', parent: oud);
+      intradesk.addWeblink({
+        'id': 'eeee8888-0000-4000-8000-000000008888',
+        'name': 'Oefensite 2025',
+        'url': 'https://example.com/2025',
+      }, parent: toetsen);
+      await buildIndex();
+
+      final text = await ok(
+        'trash_intradesk_items',
+        trash([
+          ('file', verslag),
+          ('weblink', schoolsite.toUpperCase()),
+          ('folder', oud),
+        ]),
+      );
+
+      expect(
+        text,
+        'Moved 3 items to Intradesk\'s trash.\n'
+        '- ${verslagLine()}\n'
+        '- $schoolsiteLine\n'
+        '- folder | Vakken / Oud 2025 | id $oud | changed 2024-05-30\n'
+        'Intradesk keeps its trash for 30 days: until then, the user can '
+        'restore them from the trash in Intradesk itself.\n'
+        'Note: the folder "Vakken / Oud 2025" (id $oud) went to the trash '
+        'with everything in it: the Intradesk index had 3 items in it (1 '
+        'folder, 1 file and 1 weblink).',
+      );
+      expect(
+        [for (final request in intradesk.writeRequests) request.path],
+        [
+          'files/$verslag/trash',
+          'weblinks/$schoolsite/trash',
+          'folders/$oud/trash',
+        ],
+      );
+      expect([
+        for (final request in intradesk.writeRequests) request.body,
+      ], everyElement(isEmpty));
+      expect(intradesk.trashed, [verslag, schoolsite, oud]);
+      expect(namesIn(informatica), isEmpty);
+      expect(namesIn(vakken), ['Informatica']);
+      expect(intradesk.listed, isEmpty, reason: 'nothing read before');
+
+      for (final query in [
+        'verslag',
+        'schoolsite',
+        'oud',
+        'planning',
+        'toetsen',
+        'oefensite',
+      ]) {
+        expect(await found(query), isEmpty, reason: query);
+      }
+      expect(await found('informatica'), ['Vakken / Informatica']);
+      final again = await start();
+      expect(await found('planning', again), isEmpty);
+      expect(await found('informatica', again), ['Vakken / Informatica']);
+      expect(intradesk.listed, isEmpty, reason: 'no walk');
+    });
+
+    test('without an index: names each item by its kind and id and builds '
+        'none; the folder no longer lists the item', () async {
+      final text = await ok(
+        'trash_intradesk_items',
+        trash([('file', verslag)]),
+      );
+
+      expect(
+        text,
+        'Moved 1 item to Intradesk\'s trash.\n'
+        '- file | id $verslag\n'
+        'Intradesk keeps its trash for 30 days: until then, the user can '
+        'restore it from the trash in Intradesk itself.',
+      );
+      expect(intradesk.writes, ['POST files/$verslag/trash']);
+      expect(intradesk.listed, isEmpty, reason: 'no walk');
+      expect(await cache.saved(), isNull);
+      expect(
+        await ok('list_intradesk_folder', {'folder_id': informatica}),
+        allOf(contains('Schoolsite'), isNot(contains('Verslag.docx'))),
+      );
+    });
+
+    test('an item in the trash already, by itself or in a folder in the '
+        'trash: Intradesk answers 204 as the first time, so it is reported '
+        'as moved', () async {
+      await ok('trash_intradesk_items', trash([('folder', informatica)]));
+
+      expect(
+        await ok(
+          'trash_intradesk_items',
+          trash([('folder', informatica), ('file', verslag)]),
+        ),
+        startsWith(
+          'Moved 2 items to Intradesk\'s trash.\n'
+          '- folder | id $informatica\n'
+          '- file | id $verslag\n',
+        ),
+      );
+      expect(intradesk.writes, [
+        'POST folders/$informatica/trash',
+        'POST folders/$informatica/trash',
+        'POST files/$verslag/trash',
+      ]);
+      expect(intradesk.trashed, [informatica]);
+    });
+
+    test('an id Intradesk has no item of that kind for: its refusal is '
+        'reported for that item, and the moves stop there, with what was '
+        'moved and what was not tried; the index loses only what was '
+        'moved', () async {
+      await buildIndex();
+      const unknown = '00000000-0000-4000-8000-000000000000';
+
+      final text = await error(
+        'trash_intradesk_items',
+        trash([
+          ('file', verslag),
+          ('folder', unknown),
+          ('weblink', schoolsite),
+        ]),
+      );
+
+      expect(
+        text,
+        'Moving to Intradesk\'s trash stopped at item 2 of 3: 1 item was '
+        'moved.\n'
+        'Moved to the trash:\n'
+        '- ${verslagLine()}\n'
+        'Not moved:\n'
+        '- folder | id $unknown\n'
+        'Not tried:\n'
+        '- $schoolsiteLine\n'
+        'Intradesk refused the move of the folder with id $unknown to the '
+        'trash (HTTP 404), without saying why. It was not moved. Check its '
+        'kind and id with list_intradesk_folder or search_intradesk, and '
+        'tell the user.\n'
+        'Intradesk keeps its trash for 30 days: until then, the user can '
+        'restore it from the trash in Intradesk itself.',
+      );
+      expect(intradesk.writes, [
+        'POST files/$verslag/trash',
+        'POST folders/$unknown/trash',
+      ]);
+      expect(namesIn(informatica), ['Schoolsite']);
+      expect(await found('verslag'), isEmpty);
+      expect(await found('schoolsite'), ['Vakken / Informatica / Schoolsite']);
+
+      // The id of a file the index does not know, passed as a folder's, is
+      // sent, and refused the same way.
+      final oud = intradesk.addFile('oud.pdf', parent: archief);
+      expect(
+        await error('trash_intradesk_items', trash([('folder', oud)])),
+        allOf(
+          startsWith(
+            'Moving to Intradesk\'s trash stopped at item 1 of 1: nothing '
+            'was moved.\n'
+            'Not moved:\n'
+            '- folder | id $oud\n',
+          ),
+          contains('(HTTP 404)'),
+          isNot(contains('Intradesk keeps its trash')),
+        ),
+      );
+      expect(namesIn(archief), ['oud.pdf']);
+    });
+
+    test('a refusal (HTTP 400 to 499) is reported with Intradesk\'s reasons, '
+        'if any: nothing was moved', () async {
+      intradesk.nextWrites
+        ..add(const FakeIntradeskWrite.refused(403))
+        // Made up: no refusal of a move to the trash was seen live.
+        ..add(const FakeIntradeskWrite.refused(400, ['Dit kan niet.']));
+
+      expect(
+        await error('trash_intradesk_items', trash([('file', verslag)])),
+        endsWith(
+          '\nIntradesk refused the move of the file with id $verslag to the '
+          'trash (HTTP 403), without saying why. It was not moved. Check its '
+          'kind and id with list_intradesk_folder or search_intradesk, and '
+          'tell the user.',
+        ),
+      );
+      expect(
+        await error('trash_intradesk_items', trash([('file', verslag)])),
+        contains('to the trash (HTTP 400): "Dit kan niet.". It was not moved.'),
+      );
+      expect(intradesk.trashed, isEmpty);
+      expect(namesIn(informatica), ['Verslag.docx', 'Schoolsite']);
+    });
+
+    test('a bare 500 is reported as maybe moved, with the folder to list, and '
+        'not sent again; the index keeps the item, and the items after it '
+        'are not tried', () async {
+      await buildIndex();
+      intradesk.nextWrites.add(const FakeIntradeskWrite.serverError());
+
+      expect(
+        await error(
+          'trash_intradesk_items',
+          trash([('file', verslag), ('folder', archief)]),
+        ),
+        'Moving to Intradesk\'s trash stopped at item 1 of 2: nothing was '
+        'moved.\n'
+        'Maybe moved:\n'
+        '- ${verslagLine()}\n'
+        'Not tried:\n'
+        '- folder | Archief | id $archief | changed 2024-05-30\n'
+        'The file "Vakken / Informatica / Verslag.docx" (id $verslag) may or '
+        'may not have been moved to the trash: it was sent, but Intradesk '
+        'did not confirm it. Moving it to the trash again is harmless. First '
+        'list its folder, Vakken / Informatica, with list_intradesk_folder '
+        '(folder_id $informatica) to see whether it is still there. Then '
+        'tell the user what you found.',
+      );
+      expect(postsTo('files/$verslag/trash'), 1);
+      expect(intradesk.writes, ['POST files/$verslag/trash']);
+      expect(await found('verslag'), ['Vakken / Informatica / Verslag.docx']);
+
+      // An item at the top of Intradesk is listed without folder_id.
+      intradesk.nextWrites.add(const FakeIntradeskWrite.serverError());
+      expect(
+        await error('trash_intradesk_items', trash([('folder', archief)])),
+        contains(
+          'First list the top of Intradesk with list_intradesk_folder '
+          '(without folder_id) to see whether it is still there.',
+        ),
+      );
+    });
+
+    test('an answer lost after the move went through: maybe moved; the '
+        'listing the result asks for shows it gone, and moving it again is '
+        'harmless', () async {
+      intradesk.nextWrites.add(const FakeIntradeskWrite.lost());
+
+      expect(
+        await error('trash_intradesk_items', trash([('file', verslag)])),
+        allOf(
+          contains('\nMaybe moved:\n- file | id $verslag\n'),
+          contains(
+            'First list the folder it was in with list_intradesk_folder to '
+            'see whether it is still there.',
+          ),
+        ),
+      );
+      expect(
+        await ok('list_intradesk_folder', {'folder_id': informatica}),
+        isNot(contains('Verslag.docx')),
+      );
+      expect(
+        await ok('trash_intradesk_items', trash([('file', verslag)])),
+        startsWith('Moved 1 item to Intradesk\'s trash.\n'),
+      );
+      expect(intradesk.trashed, [verslag]);
+    });
+
+    test('refuses, before anything is sent, an id that is not an Intradesk '
+        'id, an id passed as two kinds, and what the input schema does not '
+        'allow; with an index, an id it knows as another kind; the same item '
+        'twice is moved once', () async {
+      expect(
+        await error(
+          'trash_intradesk_items',
+          trash([('file', verslag), ('folder', '../../messages')]),
+        ),
+        'The id of item 2, "../../messages", is not an Intradesk id like '
+        '0a1b2c3d-1111-4222-8333-444455556666, as list_intradesk_folder and '
+        'search_intradesk show them. Nothing was sent.',
+      );
+      expect(
+        await error(
+          'trash_intradesk_items',
+          trash([('file', verslag), ('folder', verslag.toUpperCase())]),
+        ),
+        'Items 1 and 2 have the same id $verslag, once as a file and once as '
+        'a folder: an id names one item. Check its kind with '
+        'list_intradesk_folder or search_intradesk. Nothing was sent.',
+      );
+      await error('trash_intradesk_items', {'items': <Object?>[]});
+      await error('trash_intradesk_items', trash([('map', verslag)]));
+      await error('trash_intradesk_items', trash([('file', '')]));
+      await error(
+        'trash_intradesk_items',
+        trash([
+          for (var i = 0; i <= maxIntradeskTrashItems; i++) ('file', verslag),
+        ]),
+      );
+      expect(server.requests, isEmpty, reason: 'not even a login');
+
+      await buildIndex();
+      expect(
+        await error('trash_intradesk_items', trash([('folder', verslag)])),
+        'Item 1 is passed as a folder, but the Intradesk index knows id '
+        '$verslag as the file "Vakken / Informatica / Verslag.docx". Check '
+        'with the user that this is the item they confirmed, and pass kind '
+        'file. Nothing was sent.',
+      );
+      // Numbered as passed, also after an item named twice; the index knows
+      // a weblink by its id too.
+      expect(
+        await error(
+          'trash_intradesk_items',
+          trash([('file', verslag), ('file', verslag), ('file', schoolsite)]),
+        ),
+        'Item 3 is passed as a file, but the Intradesk index knows id '
+        '$schoolsite as the weblink "Vakken / Informatica / Schoolsite". '
+        'Check with the user that this is the item they confirmed, and pass '
+        'kind weblink. Nothing was sent.',
+      );
+      expect(intradesk.writes, isEmpty);
+
+      expect(
+        await ok(
+          'trash_intradesk_items',
+          trash([('file', verslag), ('file', ' ${verslag.toUpperCase()} ')]),
+        ),
+        startsWith('Moved 1 item to Intradesk\'s trash.\n- ${verslagLine()}\n'),
+      );
+      expect(intradesk.writes, ['POST files/$verslag/trash']);
+    });
+
+    test('Smartschool refuses the session for a move: the library logs in '
+        'again and sends the move again, and the item is moved once', () async {
+      server.expireSessionBefore(
+        (request) => isPostTo(request, 'files/$verslag/trash'),
+      );
+
+      expect(
+        await ok('trash_intradesk_items', trash([('file', verslag)])),
+        startsWith('Moved 1 item to Intradesk\'s trash.\n'),
+      );
+      expect(postsTo('files/$verslag/trash'), 2, reason: 'refused, then sent');
+      expect(intradesk.writes, ['POST files/$verslag/trash']);
+      expect(intradesk.trashed, [verslag]);
+      expect(server.logins, 2);
+    });
+
+    test('a login that fails before a move: that item is not moved, and the '
+        'result says which were', () async {
+      intradesk.beforeWrite = (path, body) {
+        if (path != 'files/$verslag/trash') return;
+        // The password changes, and the session ends, before the next move.
+        server.passwordAccepted = false;
+        server.expireSessionBefore(
+          (request) => isPostTo(request, 'weblinks/$schoolsite/trash'),
+        );
+      };
+
+      final text = await error(
+        'trash_intradesk_items',
+        trash([('file', verslag), ('weblink', schoolsite)]),
+      );
+
+      expect(
+        text,
+        allOf(
+          startsWith(
+            'Moving to Intradesk\'s trash stopped at item 2 of 2: 1 item was '
+            'moved.\n'
+            'Moved to the trash:\n'
+            '- file | id $verslag\n'
+            'Not moved:\n'
+            '- weblink | id $schoolsite\n',
+          ),
+          contains(
+            ' The weblink with id $schoolsite was not moved to the trash.\n'
+            'Intradesk keeps its trash for 30 days',
+          ),
+        ),
+      );
+      expect(intradesk.trashed, [verslag]);
+      expect(namesIn(informatica), ['Schoolsite']);
+    });
   });
 }

@@ -42,6 +42,7 @@ import 'package:smartschool_mcp/src/tools/search_recipients_tool.dart';
 import 'package:smartschool_mcp/src/tools/send_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_intradesk_items_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
@@ -123,6 +124,7 @@ Future<void> _serve(ServerOptions options) async {
           createIntradeskFolderTool(session, intradeskIndex),
           addIntradeskWeblinkTool(session, intradeskIndex),
           uploadIntradeskFilesTool(session, intradeskIndex),
+          trashIntradeskItemsTool(session, intradeskIndex),
           searchPlannersTool(session),
           listPlannerTool(session),
           readPlannedElementTool(session),

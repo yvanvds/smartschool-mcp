@@ -177,7 +177,8 @@ void main() {
       );
     });
 
-    test('shows weblinks and confidential items', () async {
+    test('shows weblinks, with the id Smartschool gave them (for '
+        'trash_intradesk_items), and confidential items', () async {
       server.intradesk
         ..addWeblink({
           'id': 'w1',
@@ -205,7 +206,7 @@ void main() {
       );
       expect(
         text,
-        endsWith('\n- weblink | Schoolsite | https://www.example.com'),
+        endsWith('\n- weblink | Schoolsite | id w1 | https://www.example.com'),
       );
     });
 

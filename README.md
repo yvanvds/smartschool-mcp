@@ -382,6 +382,32 @@ client name. It also installs again while that copy runs.
   Smartschool's upload step refuses is reported in Smartschool's words, and
   then nothing was added; a file Intradesk did not take is listed with its
   reason next to the files it added.
+- `trash_intradesk_items`: moves 1 to 20 folders, files and weblinks on
+  Intradesk (`items`, each `{"kind": "folder" | "file" | "weblink", "id"}`,
+  with the ids `list_intradesk_folder` and `search_intradesk` show, also a
+  weblink's) to Intradesk's trash, with the library's `trashFolder`,
+  `trashFile` and `trashWeblink` (dartschool#128). A move, not a deletion:
+  Intradesk keeps its trash for 30 days and the user restores from it in
+  Intradesk itself; the library neither reads nor restores the trash, and
+  never deletes for good. The tool is marked destructive, so Claude Desktop
+  asks for approval every time, and Claude is told to show the user each
+  item by name and path, say that a folder goes with everything in it and
+  how long the trash keeps it, and wait for the user's confirmation. It is
+  marked idempotent: Intradesk answers the move of an item in the trash
+  already with `204`, as the first time (so the result cannot tell the two
+  apart). Before sending, it refuses an id that is not an Intradesk id, an id
+  passed with two kinds, and an id the Intradesk index knows as another
+  kind. The items are moved one at a time, in order, each in a session call
+  of its own (the library sends a move again after logging in again, which
+  is harmless); at the first failure it stops, and the result lists what was
+  moved, the item that failed and what was not tried. A refusal (HTTP 400 to
+  499) is reported as not moved, with Intradesk's reasons; any other failure
+  as maybe moved, with the folder to list to check it, as for the writes
+  above. The library tells no unknown id apart (dartschool#133): Intradesk's
+  answer to one was not seen live, so it is reported as whatever the library
+  makes of it (#124). Items are named by their path when the index knows
+  them, and the result says what the index had in a folder that went along.
+  What was moved leaves the index at once (see *Intradesk index* below).
 - `search_planners`: finds the planner of a class, a person or a room by
   name, with the planner's own search (the library's `searchCalendars`).
   Each hit is listed with its kind (class, person, room), its name, what
@@ -867,7 +893,8 @@ Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
 (`intradeskItems`) in `intradesk_access.dart`; `IntradeskItem` (kind, id,
 name with extension, path, size, date changed, `extension`, `mimeType`) and
-`IntradeskIndex` (lookup by id, the items inside a folder) in
+`IntradeskIndex` (lookup by id, with `findItem` for a weblink too, the items
+inside a folder) in
 `intradesk_index.dart`; the tree walk (`buildIntradeskIndex`) in
 `intradesk_walk.dart`; the index cache (`IntradeskIndexCache`, with `patch`
 for what a write added or removed) in `intradesk_cache.dart`; name matching
@@ -881,12 +908,15 @@ entry, which refuses a taken name and a folder without `canAdd`),
 nothing was added), the result of a write Intradesk did not confirm
 (`intradeskWriteNotConfirmed`) and the index patch after a write
 (`addToIntradeskIndex`); a header note says why the session's repeat of a
-write cannot add twice. The tests run against a fake Intradesk
-(`test/support/fake_intradesk.dart`) that carries out the creates and the
-upload of dartschool#128 as the live Intradesk did (renaming a taken name,
-the bare `500`s and the `400`s with `violations`), behind the fake upload
-step (`test/support/fake_uploads.dart`) that the attachments of later tools
-can share.
+write cannot add twice. `trash_intradesk_items` reads nothing before its
+moves but the index, and keeps its helpers to itself. The tests run against
+a fake Intradesk (`test/support/fake_intradesk.dart`) that carries out the
+creates, the upload and the moves to the trash of dartschool#128 as the
+live Intradesk did (renaming a taken name, the bare `500`s, the `400`s with
+`violations`, and a `204` for an item in the trash already), behind the
+fake upload step (`test/support/fake_uploads.dart`) that the attachments of
+later tools can share. It answers the move of an unknown id with `404`, an
+assumption until dartschool#133 captures Intradesk's answer.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
@@ -1109,8 +1139,9 @@ once, under the folder's path, in memory and in the file
 next walk. Only an index that is loaded is patched, of any age, and only
 when it knows the folder; the patch keeps the time the index was built, so
 the next walk comes when it would have, and a walk that runs meanwhile gets
-the patch too. A patch also removes items (and everything in a removed
-folder), for a tool that moves items to the trash.
+the patch too. What `trash_intradesk_items` moved leaves the index the same
+way, a folder with everything in it; an item that may or may not have been
+moved stays until the next walk.
 
 ### Reading Intradesk files
 
