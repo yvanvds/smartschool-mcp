@@ -158,6 +158,11 @@ void main() {
       ]);
     });
 
+    // Each run JIT-compiles the tool with pub_semver and yaml: about 3 s alone
+    // on a developer's PC, several times that beside the e2e tests compiling
+    // the exe or on CI's 4-core runner. Three runs fit the default 30 s only
+    // while the machine is otherwise quiet; give them room for a tenfold
+    // slowdown.
     test('run as a script: exits with 1 and says what differs, so the '
         'release workflow stops; exits with 0 when all agree', () async {
       Future<ProcessResult> run(String tag) =>
@@ -186,6 +191,6 @@ void main() {
         noChangelog.stderr,
         contains('CHANGELOG.md: no section "## $packageVersion"'),
       );
-    });
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }
