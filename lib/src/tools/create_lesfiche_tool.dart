@@ -75,7 +75,8 @@ ServerTool createLesficheTool(
         'gives the lesfiche as made, with its id for plan_lesfiche, '
         'read_lesfiche and edit_lesfiche, which changes it later (its '
         'weblinks and attachments change with set_lesfiche_weblink, '
-        'add_lesfiche_attachments and the like). If the result says the '
+        'add_lesfiche_attachments and the like), and trash_lesfiches, which '
+        'moves it to the trash. If the result says the '
         'lesfiche may or may not have '
         'been made, or that it was made without confirming everything, do '
         'not call this tool again for it, as a second call makes a second '
@@ -352,8 +353,9 @@ CallToolResult _result(
               'set_lesfiche_weblink and remove_lesfiche_weblink, and its '
               'attachments with add_lesfiche_attachments, '
               'set_lesfiche_attachment_visibility and '
-              'remove_lesfiche_attachment. Labels are set in the Lesfiches '
-              'module itself.',
+              'remove_lesfiche_attachment. Move it to the trash with '
+              'trash_lesfiches. Labels are set in the Lesfiches module '
+              'itself.',
           if (namesakes.isNotEmpty) ...[
             'Note: you already had $others named "${lesfiche.name}". The '
                 'module keeps both; tell the user, who can tell them apart '

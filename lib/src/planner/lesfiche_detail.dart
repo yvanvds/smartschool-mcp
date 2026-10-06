@@ -11,8 +11,8 @@ import 'planner_access.dart';
 import 'planner_format.dart';
 
 // One lesfiche of the Lesfiches module in full (dartschool#129), as
-// `read_lesfiche` shows it and the tools that make, change or trash a
-// lesfiche (#114, #115, #116) give it back: the `type` argument of a tool
+// `read_lesfiche` shows it and the tools that make or change a lesfiche
+// (#114, #115) give it back: the `type` argument of a tool
 // that takes one lesfiche, reading its detail, how it is written (with its
 // weblinks and attachments and when pupils see them), the `visibility` a
 // tool that makes or changes a weblink or an attachment takes, and the

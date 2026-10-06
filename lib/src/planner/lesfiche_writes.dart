@@ -14,7 +14,8 @@ import 'planner_access.dart';
 // (`create_lesfiche`, and the edits after it: `edit_lesfiche`,
 // `set_lesfiche_weblink`, `remove_lesfiche_weblink`,
 // `add_lesfiche_attachments`, `set_lesfiche_attachment_visibility`,
-// `remove_lesfiche_attachment`): the name, the courses, the weblinks and the
+// `remove_lesfiche_attachment`; and `trash_lesfiches`, which moves
+// lesfiches to the trash): the name, the courses, the weblinks and the
 // attachments a tool takes, and the weblink or attachment it names by its
 // id, checked before anything is sent; the write itself, with the library's
 // errors as ToolErrors ([withLesficheWrite], [lesficheWriteToolError]); a
@@ -46,8 +47,9 @@ import 'planner_access.dart';
 // again (yvanvds/dartschool#134). The module keeps a name that is taken
 // (seen live), and adds a second weblink or attachment for a second add, so
 // Claude is told never to call a create or an add again that may or may not
-// have been made. The edits and the removals set or name what they act on:
-// the library retries them after logging in again, as a read.
+// have been made. The edits, the removals and the move to the trash set or
+// name what they act on: the library retries them after logging in again,
+// as a read.
 
 /// What a tool that makes a lesfiche adds to an error that came before the
 /// module made it (after the arguments were checked and sent on).

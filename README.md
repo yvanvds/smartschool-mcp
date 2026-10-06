@@ -557,7 +557,8 @@ client name. It also installs again while that copy runs.
   with a bare `500`, so that one is not sent: both say to take the id and
   the kind from `list_lesfiches`. A lesfiche in the trash is still
   answered, as live. Its description points to `edit_lesfiche` and the
-  tools that change the weblinks and attachments, by the ids it shows.
+  tools that change the weblinks and attachments, by the ids it shows, and
+  to `trash_lesfiches`.
 - `read_lesfiche_attachment`: opens one attachment of a lesfiche
   (`lesfiche`, `type`, and `attachment`: its number in `read_lesfiche`, or
   its file name, as `save_message_attachment` takes it; a name that two
@@ -613,9 +614,10 @@ client name. It also installs again while that copy runs.
   module makes a second lesfiche, seen live), and the result names the
   other lesfiches of that name and kind. The result is the lesfiche as
   `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson),
-  `read_lesfiche` and `edit_lesfiche`, and the tools that change its
-  weblinks and attachments (below). Labels are not in the library: the
-  description says the user sets them in the module. A refusal by the module (a bare `400`)
+  `read_lesfiche` and `edit_lesfiche`, the tools that change its weblinks
+  and attachments, and `trash_lesfiches` to undo it (below). Labels are
+  not in the library: the description says the user sets them in the
+  module. A refusal by the module (a bare `400`)
   and a file Smartschool's upload step refuses (in Smartschool's words)
   say that no lesfiche was made; a create the module does not confirm is
   reported as maybe made, with `list_lesfiches` to check it, and a
@@ -719,6 +721,35 @@ client name. It also installs again while that copy runs.
   `save_lesfiche_attachment` to keep a copy. It reads the lesfiche first
   and refuses an attachment id it does not have before sending; the result
   names the file removed with its size, and gives the lesfiche.
+- `trash_lesfiches`: moves lesfiches of the user's Lesfiches module
+  (`lesfiches`, 1 to 20 ids from `list_lesfiches`, lessons and assignments
+  together) to the module's trash with the library's `trash`
+  (dartschool#129): one `POST lesson-content/trash/bulk` for all of them,
+  after which `list_lesfiches` no longer lists them (their detail is still
+  read). The library takes each lesfiche as listed, with its kind and
+  platform, so the tool reads the list first (`getItems`, without the
+  course names), in the session action of the move, and matches the ids
+  (ignoring case, each once); an id that names no listed lesfiche is
+  refused before anything is sent, with a note that a lesfiche in the
+  trash is not listed, and so is a lesfiche of a kind the library cannot
+  write. A move, not a deletion: the user restores a lesfiche from the
+  trash in the module itself, and the library neither restores nor deletes
+  for good (`delete/bulk` is left out on purpose). A lesson planned from a
+  lesfiche earlier stays in the planner, which copied the lesfiche (#117
+  checks how much); the description says so. Marked destructive, for
+  Claude Desktop and Codex to ask approval: Claude shows each lesfiche by
+  name and kind, and calls once after the user's confirmation. Idempotent,
+  as `remove_lesfiche_attachment`: a second call finds the lesfiches no
+  longer listed and sends nothing. The result lists the lesfiches moved,
+  one line each as `list_lesfiches` shows them (their courses counted).
+  The library retries the move after logging in again, as a read. The
+  module answers the move of a lesfiche that is in the trash already with
+  a bare `500` (seen live; it was moved there after the tool read the
+  list), and an answer whose `exceptions` are not empty is not confirmed
+  either (`SmartschoolLessonContentSaveUnconfirmedError`): the result says
+  that some or all of them may or may not have been moved, and to check
+  with `list_lesfiches` which are still listed. A refusal by the module
+  (`400` to `499`) says that none was moved.
 - `plan_lesfiche`: plans a lesson lesfiche (`lesfiche`, an id from
   `list_lesfiches`) into an empty lesson hour of the user's own planner
   (`hour`, as `plan_lesson`) with the library's `planLessonContent`
@@ -1155,7 +1186,7 @@ with its courses as the library names them (`formatLesficheLine`), and the
 notes on courses the course list does not name or could not name
 (`unnamedLesficheCourseNote`, `lesficheCourseListNote`). In
 `lesfiche_detail.dart`, one lesfiche in full, for `read_lesfiche` and the
-tools that make, change or trash a lesfiche, which give it back in the same
+tools that make or change a lesfiche, which give it back in the same
 form: the `type` argument of a tool that takes one lesfiche
 (`lesficheTypeSchema`, `lesficheTypeArgument`), the read of its detail
 (`readLesficheDetail`, which keeps the detail when the course list fails
@@ -1171,8 +1202,8 @@ and turns a `404` into "take the id and the kind from `list_lesfiches`",
 or save one (`lesficheAttachmentSchema`, `lesficheAttachmentArgument`,
 `pickLesficheAttachment`, `findLesficheAttachment`,
 `lesficheAttachmentTitle`). In `lesfiche_writes.dart`, for the tools that
-make or change a lesfiche: the `name`, `courses`, `weblinks` and
-`attachments` arguments, checked before anything is sent
+make or change a lesfiche or move it to the trash: the `name`, `courses`,
+`weblinks` and `attachments` arguments, checked before anything is sent
 (`lesficheNameArgument`; `lesficheCoursesArgument` with `lesficheCourses`,
 which finds them by id or name in the school's course list;
 `lesficheWeblinksArgument` with `lesficheWeblinkArgument`;
@@ -1198,8 +1229,11 @@ dartschool#89 as the live planner did, and the writes of a lesfiche of
 dartschool#129: the create from the web client's body, with its
 attachments from the fake upload step (`fakeLesficheCreatePath`,
 `fakeNewLesficheId`), the edits, and the weblinks and attachments added,
-changed and removed, with a trash (`trashedLesfiches`) whose lesfiches are
-read but not written, as live.
+changed and removed, and the move of lesfiches to the trash
+(`fakeLesficheTrashPath`; a lesfiche in the trash already answered with a
+bare `500`, and `lesficheTrashExceptions` for an answer with
+`exceptions`), with a trash (`trashedLesfiches`) whose lesfiches are read
+but not written, and no longer listed, as live.
 
 Skore helpers for later tools live in `lib/src/skore/`. In
 `skore_access.dart`: `withSkore`, which runs an action with a

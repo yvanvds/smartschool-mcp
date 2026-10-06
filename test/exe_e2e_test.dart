@@ -114,6 +114,7 @@ void main() {
       'add_lesfiche_attachments',
       'set_lesfiche_attachment_visibility',
       'remove_lesfiche_attachment',
+      'trash_lesfiches',
       'plan_lesfiche',
       'plan_assignment',
       'trash_assignment',
@@ -395,7 +396,8 @@ void main() {
     // Claude Desktop asks for approval. A fill, a clear, a new assignment
     // and a trash are not idempotent; an edit sets values, so it is. The
     // same for the changes of a lesfiche (#115): an add is not idempotent,
-    // an edit and a removal are.
+    // an edit and a removal are, and so is the move of lesfiches to the
+    // trash (#116): a second call finds them no longer listed.
     for (final (name, idempotent) in [
       ('plan_lesson', false),
       ('edit_planned_element', true),
@@ -406,6 +408,7 @@ void main() {
       ('add_lesfiche_attachments', false),
       ('set_lesfiche_attachment_visibility', true),
       ('remove_lesfiche_attachment', true),
+      ('trash_lesfiches', true),
       ('plan_lesfiche', false),
       ('plan_assignment', false),
       ('trash_assignment', false),
@@ -598,7 +601,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(53));
+    expect(tools, hasLength(54));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -663,7 +666,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(41));
+        expect(tools, hasLength(42));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -702,8 +705,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(49));
-      expect([for (final tool in tools.skip(41)) tool['name']], skoreTools);
+      expect(tools, hasLength(50));
+      expect([for (final tool in tools.skip(42)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -896,7 +899,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(41));
+        expect(tools, hasLength(42));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -936,8 +939,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(45));
-      expect([for (final tool in tools.skip(41)) tool['name']], presenceTools);
+      expect(tools, hasLength(46));
+      expect([for (final tool in tools.skip(42)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1133,10 +1136,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(53));
-      expect([for (final tool in tools.skip(49)) tool['name']], presenceTools);
+      expect(tools, hasLength(54));
+      expect([for (final tool in tools.skip(50)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(41).take(8)) tool['name'],
+        for (final tool in tools.skip(42).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2309,6 +2312,94 @@ void main() {
       final (isError, text) = await server.callTool(name, arguments: arguments);
       expect(isError, isTrue, reason: '$name $arguments');
       expect(text, contains(message), reason: '$name $arguments');
+      expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('trash_lesfiches is a write Claude Desktop asks approval for that a '
+      'second call does not change, for 1 to 20 ids; without settings: an '
+      'error result that names the missing settings; an id that is not one '
+      'of a lesfiche: an error that says what to fix, before any login '
+      '(#116)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const lesson = 'b0000000-0000-4000-8000-000000000011';
+    const assignment = 'b0000000-0000-4000-8000-000000000012';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    final trash = tools['trash_lesfiches']!;
+    final schema = trash['inputSchema'] as Map;
+    expect(schema['required'], ['lesfiches']);
+    expect(schema['properties'], {
+      'lesfiches': {
+        'type': 'array',
+        'description': isA<String>(),
+        'items': {'type': 'string', 'minLength': 1},
+        'minItems': 1,
+        'maxItems': 20,
+      },
+    });
+    expect(
+      trash['description'],
+      allOf(
+        contains('restore them from the trash in the Lesfiches module'),
+        contains('A lesson planned from one of them earlier stays in the '),
+      ),
+    );
+    expect(
+      tools['create_lesfiche']!['description'],
+      contains('trash_lesfiches, which moves it to the trash'),
+    );
+    expect(
+      tools['read_lesfiche']!['description'],
+      contains('trash_lesfiches moves it to the trash'),
+    );
+
+    final (isError, text) = await server.callTool(
+      'trash_lesfiches',
+      arguments: {
+        'lesfiches': [lesson, assignment],
+      },
+    );
+    expect(isError, isTrue);
+    expect(
+      text,
+      startsWith('Not all Smartschool settings are filled in. Missing: '),
+    );
+    expect(text, isNot(contains('#0')), reason: 'no stack trace');
+
+    for (final (lesfiches, message) in <(List<Object?>, String)>[
+      (
+        [lesson, 'Lussen!'],
+        'item 2 of lesfiches must be the id of a lesfiche as list_lesfiches '
+            'shows it',
+      ),
+      (
+        <Object?>[],
+        'List has 0 items, but must have at least 1 at path '
+            '#root["lesfiches"]',
+      ),
+      (
+        [for (var i = 0; i < 21; i++) lesson],
+        'List has 21 items, but must have less than 20 at path '
+            '#root["lesfiches"]',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(
+        'trash_lesfiches',
+        arguments: {'lesfiches': lesfiches},
+      );
+      expect(isError, isTrue, reason: '$lesfiches');
+      expect(text, contains(message), reason: '$lesfiches');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
 

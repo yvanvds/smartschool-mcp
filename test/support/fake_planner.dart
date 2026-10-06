@@ -43,6 +43,10 @@ String fakeLesficheDownloadPath(
 String fakeLesficheCreatePath([String type = 'lessons']) =>
     '$_lessonContentApi/$type/';
 
+/// Where lesfiches are moved to the module's trash (dartschool#129): one
+/// `POST lesson-content/trash/bulk` for all of them.
+const fakeLesficheTrashPath = '$_lessonContentApi/lesson-content/trash/bulk';
+
 /// The id the fake gives the [n]th lesfiche its creates make.
 String fakeNewLesficheId(int n) =>
     'b0000000-0000-4000-9000-${'$n'.padLeft(12, '0')}';
@@ -992,7 +996,12 @@ class FakePlannerHit {
 ///   (`newVisibility`) sets the visibility of an attachment, and answers
 ///   with the whole lesfiche;
 /// - `DELETE .../weblinks/{id}` and `.../attachments/{id}` remove it, and
-///   answer `204`.
+///   answer `204`;
+/// - `POST` [fakeLesficheTrashPath] (`lessonContent`, each `{id, type,
+///   platformId}`): moves the lesfiches to the module's trash
+///   ([trashedLesfiches]), and answers `200` with `{"exceptions":[]}`; one
+///   in the trash already gets a bare `500`, as live
+///   ([_trashLesfiches]).
 ///
 /// A write of a lesfiche the fake does not have, or of one in
 /// [trashedLesfiches] (whose detail is still served, as live), is answered
@@ -1060,6 +1069,12 @@ class FakePlanner {
   /// detail is still served, and their writes are answered with `404`, as
   /// live (dartschool#129).
   final Set<String> trashedLesfiches = {};
+
+  /// The exceptions the module answers a move of these lesfiches to the
+  /// trash with, by lesfiche id in lower case: the move answers `200` with
+  /// them in its `exceptions`, by id, and leaves these lesfiches where they
+  /// are (in the shape of dartschool's test of the trash; not seen live).
+  final Map<String, Map<String, Object?>> lesficheTrashExceptions = {};
 
   /// The school's course list: [fakeSchoolCourses] by default, every course
   /// of the captures, as the live list holds all the school's courses
@@ -1234,6 +1249,7 @@ class FakePlanner {
     if (!path.startsWith('$_api/') &&
         path != fakeAssignmentTypesPath &&
         path != fakeLesfichesPath &&
+        path != fakeLesficheTrashPath &&
         lesficheRoute == null) {
       return null;
     }
@@ -1265,6 +1281,17 @@ class FakePlanner {
               lesfiche.toJson(),
         ]),
       );
+    }
+    if (path == fakeLesficheTrashPath) {
+      if (options.method != 'POST') return null;
+      final answer = _trashLesfiches(options.data);
+      if (lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
     }
     if (lesficheRoute != null) {
       if (options.method == 'GET') {
@@ -1679,6 +1706,58 @@ class FakePlanner {
         return ResponseBody.fromString('', 204);
     }
     return null;
+  }
+
+  /// Moves the lesfiches of the body [data] of a move to the trash
+  /// (`lessonContent`, each `{id, type, platformId}`, as the web client
+  /// sends it) to the module's trash ([trashedLesfiches]), as the module
+  /// does (dartschool#129), and answers `200` with `{"exceptions":[]}`.
+  ///
+  /// A lesfiche that is in the trash already gets a bare `500`, as live,
+  /// and so does one the fake does not have of that kind (made up); then
+  /// none is moved. A lesfiche of [lesficheTrashExceptions] stays where it
+  /// is, and the answer has its exception in `exceptions`, by its id; the
+  /// others are moved. A body without the list, or with an item without
+  /// its id, kind or platform, gets a bare `400` (made up).
+  ResponseBody _trashLesfiches(Object? data) {
+    final list = data is Map ? data['lessonContent'] : null;
+    if (list is! List ||
+        list.isEmpty ||
+        list.any(
+          (item) =>
+              item is! Map ||
+              item['id'] is! String ||
+              item['type'] is! String ||
+              item['platformId'] is! int,
+        )) {
+      return _badRequest();
+    }
+    final items = [
+      for (final item in list.cast<Map<Object?, Object?>>())
+        (id: item['id']! as String, type: item['type']! as String),
+    ];
+    if (items.any(
+      (item) =>
+          trashedLesfiches.contains(item.id.toLowerCase()) ||
+          _lesficheOf(item.type, item.id) == null,
+    )) {
+      return _json(
+        '{"status":500,"title":"Internal Server Error","detail":"",'
+        '"type":""}',
+        status: 500,
+      );
+    }
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      if (lesficheTrashExceptions[item.id.toLowerCase()] case final error?) {
+        exceptions[item.id] = error;
+      } else {
+        trashedLesfiches.add(item.id.toLowerCase());
+      }
+    }
+    return _json(
+      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
+    );
   }
 
   /// The weblink with [id] of the body [body] of a weblink write

@@ -163,7 +163,7 @@ void main() {
           'remove_lesfiche_weblink change its weblinks, and '
           'add_lesfiche_attachments, set_lesfiche_attachment_visibility and '
           'remove_lesfiche_attachment its attachments, by the ids shown '
-          'here.',
+          'here;',
         ),
       );
     });

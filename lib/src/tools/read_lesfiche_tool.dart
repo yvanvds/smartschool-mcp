@@ -32,8 +32,8 @@ ServerTool readLesficheTool(SmartschoolSession session) => ServerTool(
         'edit_lesfiche changes the lesfiche; set_lesfiche_weblink and '
         'remove_lesfiche_weblink change its weblinks, and '
         'add_lesfiche_attachments, set_lesfiche_attachment_visibility and '
-        'remove_lesfiche_attachment its attachments, by the ids shown here. '
-        'Pass '
+        'remove_lesfiche_attachment its attachments, by the ids shown here; '
+        'trash_lesfiches moves it to the trash. Pass '
         'type assignment for an assignment lesfiche: a lesfiche asked for as '
         'the other kind is not found. Reading changes nothing in '
         'Smartschool.',

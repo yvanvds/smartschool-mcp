@@ -53,6 +53,7 @@ import 'package:smartschool_mcp/src/tools/set_lesfiche_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_intradesk_items_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
@@ -153,6 +154,7 @@ Future<void> _serve(ServerOptions options) async {
           addLesficheAttachmentsTool(session),
           setLesficheAttachmentVisibilityTool(session),
           removeLesficheAttachmentTool(session),
+          trashLesfichesTool(session),
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
