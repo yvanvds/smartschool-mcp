@@ -720,11 +720,15 @@ class FakePlannerHit {
 /// It serves:
 /// - `GET /planner/api/v1/planned-elements/{user|group|location}/{id}` with
 ///   `from`, `to` and an optional `types`: the elements added to that
-///   calendar that overlap the period, of those types. A calendar it does
-///   not know is answered as an empty one (`[]`), as the live planner
-///   answers a room it does not have, and answered a group that its search
-///   does not offer (dartschool#127; it answers a person or class it does
-///   not have with `500`, which the fake does not);
+///   calendar that overlap the period, of those types. A calendar without
+///   elements is answered as an empty one (`[]`) when it was added
+///   ([addCalendar]), when the lookup names it, or when it is a room, as
+///   the live planner answers a room it does not have; a person or class
+///   it does not know otherwise with `500`, as the live planner answers a
+///   user or class id it does not have (dartschool#127, in the shape of
+///   dartschool's capture). A group that the planner has but its search
+///   does not offer, which the live planner answered with an empty list, is
+///   one added with [addCalendar] that the lookup does not name;
 /// - `GET /planner/api/v1/{plannedElementType}/{platformId}/{id}`: the
 ///   detail, or the planner's `404` for an element it does not have;
 /// - `POST /planner/api/v1/quick-search/planner/search`: the [hits] whose
@@ -1322,18 +1326,38 @@ class FakePlanner {
   }
 
   ResponseBody _calendar(String calendar, Map<String, String> query) {
-    final listed = calendars[calendar] ?? const <FakePlannedElement>[];
+    final listed = calendars[calendar];
+    if (listed == null && _hasNoPlanner(calendar)) {
+      return _json(
+        '{"status":500,"title":"Internal Server Error","detail":"","type":""}',
+        status: 500,
+      );
+    }
     final from = DateTime.parse(query['from']!);
     final to = DateTime.parse(query['to']!);
     final types = query['types']?.split(',').toSet();
     return _json(
       jsonEncode([
-        for (final element in listed)
+        for (final element in listed ?? const <FakePlannedElement>[])
           if (element.overlaps(from, to) &&
               (types == null || types.contains(element.type)))
             element.listJson(),
       ]),
     );
+  }
+
+  /// Whether [calendar] (`user/{id}`, `group/{id}`), one without elements
+  /// added, is a person or class the planner does not have: one that the
+  /// lookup does not name either ([_named]). A room is never one: the live
+  /// planner answers a room it does not have with an empty list.
+  bool _hasNoPlanner(String calendar) {
+    final slash = calendar.indexOf('/');
+    final id = calendar.substring(slash + 1);
+    return switch (calendar.substring(0, slash)) {
+      'user' => _named('users', id) == null,
+      'group' => _named('groups', id) == null,
+      _ => false,
+    };
   }
 
   ResponseBody _search(Object? data) {

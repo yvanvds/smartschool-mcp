@@ -535,7 +535,10 @@ void main() {
         'lookup does not know it, and the planner answers it as an empty '
         'planner (#102)', () async {
       // As the live planner answered a room it does not have, and a group
-      // that its search does not offer: an empty list.
+      // that its search does not offer: an empty list. The planner has that
+      // group (the fake's lookup does not name a calendar added without a
+      // class); a class it does not have it answers with HTTP 500 (#122).
+      planner.addCalendar('group/4069_9');
       for (final (id, field) in [
         ('location/4069_10000000-0000-4000-8000-000000000999', 'miniDbItems'),
         ('group/4069_9', 'groups'),
@@ -591,6 +594,94 @@ void main() {
         'empty planner. If you expected elements, check the planner id with '
         'search_planners.',
       );
+    });
+
+    test('says plainly when a person or class planner id names no planner: '
+        'the planner answers it with HTTP 500, and its lookup does not know '
+        'it (#122)', () async {
+      // As the live planner answered a user or class id it does not have
+      // (dartschool#127).
+      for (final (id, field) in [
+        ('group/4069_99999', 'groups'),
+        ('user/4069_99999_0', 'users'),
+      ]) {
+        planner.requests.clear();
+
+        final text = await error('list_planner', {
+          'planner': id,
+          'from': '2026-10-05',
+          'until': '2026-10-09',
+        });
+
+        expect(plannerRequests(), [
+          'GET /planner/api/v1/planned-elements/$id',
+          'POST $_lookupPath',
+        ], reason: id);
+        expect((planner.requests.last.data as Map)[field], [
+          id.substring(id.indexOf('/') + 1),
+        ], reason: id);
+        expect(
+          text,
+          'The planner\'s search offers no class, person or room with the '
+          'planner id $id, and Smartschool answers such an id with an error '
+          '(HTTP 500), so trying again will not help. Check the planner id '
+          'with search_planners.',
+        );
+      }
+      expect(planner.writes, isEmpty);
+    });
+
+    test('keeps the planner\'s error for HTTP 500 when its lookup names the '
+        'planner, or fails too (#122)', () async {
+      const failed =
+          'The planner gave an answer the server could not use (HTTP 500). '
+          'Try again in a moment; the technical details are in the server '
+          'log.';
+
+      // The lookup names Piet Peeters: the planner did fail.
+      planner.failing['/planner/api/v1/planned-elements/$_piet'] = 500;
+      expect(await error('list_planner', {'planner': _piet}), failed);
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/$_piet',
+        'POST $_lookupPath',
+      ]);
+
+      // The lookup fails too: whether the id names a planner is not known.
+      planner.requests.clear();
+      planner.failing[_lookupPath] = 500;
+      expect(
+        await error('list_planner', {'planner': 'group/4069_99999'}),
+        failed,
+      );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/group/4069_99999',
+        'POST $_lookupPath',
+      ]);
+    });
+
+    test('does not look up the user\'s own planner on HTTP 500, nor another '
+        'planner on another status (#122)', () async {
+      planner.failing['/planner/api/v1/planned-elements/user/$fakePlannerMe'] =
+          500;
+      expect(
+        await error('list_planner', {}),
+        'The planner gave an answer the server could not use (HTTP 500). Try '
+        'again in a moment; the technical details are in the server log.',
+      );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/user/$fakePlannerMe',
+      ]);
+
+      planner.requests.clear();
+      planner.failing['/planner/api/v1/planned-elements/$_class6A1'] = 502;
+      expect(
+        await error('list_planner', {'planner': _class6A1}),
+        'The planner gave an answer the server could not use (HTTP 502). Try '
+        'again in a moment; the technical details are in the server log.',
+      );
+      expect(plannerRequests(), [
+        'GET /planner/api/v1/planned-elements/$_class6A1',
+      ]);
     });
 
     test('names the planner from the elements of the kinds left out, and '

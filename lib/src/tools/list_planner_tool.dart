@@ -152,10 +152,12 @@ Future<CallToolResult> _list(
     service,
   ) async {
     final calendar = await planner.resolve(service);
-    final elements = await service.getPlannedElements(
+    final elements = await _elements(
+      service,
+      planner,
       calendar,
       from: from,
-      to: until,
+      until: until,
       types: types,
     );
     final lookup = needsPlannerLookup(planner, calendar, kinds, elements)
@@ -237,9 +239,11 @@ typedef PlannerLookup = ({
 /// Looks [calendar] up by its id ([PlannerService.getCalendar]).
 ///
 /// Only a [SmartschoolPlannerError] is caught, which the log gets (the
-/// library's message can quote the planner's answer): the elements were
-/// read, and the lookup only names the planner. A refused session or a lost
-/// connection still goes to [SmartschoolSession.run].
+/// library's message can quote the planner's answer): the lookup only names
+/// the planner. Elements that were read are listed all the same; when
+/// reading them failed ([_elements]), the planner's error for them is the
+/// one reported. A refused session or a lost connection still goes to
+/// [SmartschoolSession.run].
 Future<PlannerLookup> _lookUp(
   PlannerService service,
   PlannerCalendar calendar,
@@ -251,6 +255,53 @@ Future<PlannerLookup> _lookUp(
     return (named: null, error: error);
   }
 }
+
+/// Reads the elements of [calendar], the planner [planner] names, from
+/// [from] to [until], of [types] ([PlannerService.getPlannedElements]).
+///
+/// The planner answers a user or class id it does not have with HTTP `500`,
+/// a [SmartschoolPlannerError] that does not say why (see
+/// [PlannerService.getPlannedElements]). On a `500` for a planner other
+/// than the user's own, the planner is looked up by its id ([_lookUp]):
+/// when the lookup does not know the id either, a [ToolError] says so
+/// ([unknownPlannerError]), rather than to try again. When the lookup names
+/// the planner, or fails too, the planner did fail: its error is thrown
+/// on, for [withPlanner] to word.
+Future<List<PlannedElement>> _elements(
+  PlannerService service,
+  PlannerRef planner,
+  PlannerCalendar calendar, {
+  required DateTime from,
+  required DateTime until,
+  required Set<PlannedElementType>? types,
+}) async {
+  try {
+    return await service.getPlannedElements(
+      calendar,
+      from: from,
+      to: until,
+      types: types,
+    );
+  } on SmartschoolPlannerError catch (error) {
+    if (planner.isMe || error.statusCode != 500) rethrow;
+    if (await _lookUp(service, calendar) case (named: null, error: null)) {
+      log('planner: $error');
+      throw ToolError(unknownPlannerError(calendar));
+    }
+    rethrow;
+  }
+}
+
+/// What `list_planner` answers when the planner answers the elements of a
+/// planner other than the user's own with HTTP `500`, and its lookup does
+/// not know the id ([PlannerService.getCalendar] returns null): the planner
+/// answers a user or class id it does not have so (see
+/// [PlannerService.getPlannedElements]), and trying again cannot help.
+String unknownPlannerError(PlannerCalendar calendar) =>
+    'The planner\'s search offers no class, person or room with the '
+    'planner id ${formatPlannerId(calendar)}, and Smartschool answers such '
+    'an id with an error (HTTP 500), so trying again will not help. Check '
+    'the planner id with search_planners.';
 
 /// What `list_planner` adds when nothing is planned in a planner other than
 /// the user's own, no element names it, and the planner's lookup does not
