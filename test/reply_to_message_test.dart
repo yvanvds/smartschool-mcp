@@ -2,6 +2,8 @@
 /// library, against a fake Smartschool that sends messages.
 library;
 
+import 'dart:io';
+
 import 'package:dart_mcp/client.dart';
 import 'package:dio/dio.dart';
 import 'package:smartschool_mcp/src/session.dart';
@@ -100,11 +102,13 @@ void main() {
   late FakeSmartschool server;
   late FakeMailbox mailbox;
   late ServerConnection connection;
+  late Directory files;
 
   setUp(() async {
     server = FakeSmartschool();
     mailbox = server.mailbox;
     _fill(mailbox);
+    files = await tempCache();
     final session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
@@ -144,9 +148,16 @@ void main() {
   bool isRequestTo(RequestOptions request, String function) =>
       request.uri.queryParameters['function'] == function;
 
+  /// A file [name] of [size] bytes on this PC; returns its full path.
+  String file(String name, int size) {
+    final path = '${files.path}${Platform.pathSeparator}$name';
+    File(path).writeAsStringSync('x' * size);
+    return path;
+  }
+
   test('is listed as destructive and not idempotent, and tells Claude to get '
-      'explicit confirmation first and never to resend an unconfirmed '
-      'reply', () async {
+      'explicit confirmation first, also of the attachments, and never to '
+      'resend an unconfirmed reply', () async {
     final tool = (await connection.listTools(
       ListToolsRequest(),
     )).tools.singleWhere((t) => t.name == 'reply_to_message');
@@ -162,10 +173,20 @@ void main() {
     expect(
       description,
       contains(
-        'show the user the exact text of the reply and who will receive it, '
-        'and only call it after the user has explicitly confirmed both',
+        'show the user the exact text of the reply, who will receive it and '
+        'every attachment with its name and size, and only call it after the '
+        'user has explicitly confirmed all of it.',
       ),
     );
+    expect(
+      description,
+      contains(
+        'To attach files, pass the full paths of up to 10 files on this PC '
+        'in attachments',
+      ),
+    );
+    expect(description, contains('up to 200 MB each'));
+    expect(description, isNot(contains('not supported')));
     expect(description, contains('goes to its sender'));
     expect(description, contains('except the user'));
     expect(description, contains('Smartschool links the reply to the message'));
@@ -181,7 +202,19 @@ void main() {
 
     final schema = tool.inputSchema;
     expect(schema.required, ['message_id', 'body']);
-    expect(schema.properties!.keys, ['message_id', 'body', 'reply_all', 'box']);
+    expect(schema.properties!.keys, [
+      'message_id',
+      'body',
+      'reply_all',
+      'box',
+      'attachments',
+    ]);
+    expect(schema.properties!['attachments'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string', 'minLength': 1},
+      'maxItems': 10,
+    });
     expect(schema.properties!['message_id'], {
       'type': 'integer',
       'description': isA<String>(),
@@ -616,6 +649,119 @@ void main() {
       expect(await error({'message_id': 101, 'body': 'Hallo'}), _notConfirmed);
       expect(mailbox.submits, 1);
       expect(sends(), isEmpty);
+    });
+  });
+
+  group('attachments: files from this PC go along with the reply (#118)', () {
+    const replied =
+        'send reply-to=101 to=An Claes cc= bcc= subject=Re: Toets wiskunde '
+        'attachments=planning.pdf';
+
+    test('a file: uploaded into the directory of the reply form the reply is '
+        'sent with, and sent with it; the result names it, and read_message '
+        'lists it', () async {
+      final planning = file('planning.pdf', 3072);
+
+      expect(
+        await ok({
+          'message_id': 101,
+          'body': 'In bijlage de planning.',
+          'attachments': [planning],
+        }),
+        'Sent the reply to message 101.\n'
+        'To: An Claes\n'
+        'Subject: Re: Toets wiskunde\n'
+        'Attachments: "planning.pdf" (3.0 KB)',
+      );
+      // The first reply form gives who the reply goes to, the second sends
+      // it.
+      expect(server.uploads.uploads, [('dir2', 'planning.pdf')]);
+      expect(sends(), [replied]);
+      expect(mailbox.submits, 1);
+
+      final (_, read) = await callTool(connection, 'read_message', {
+        'message_id': 9001,
+        'box': 'sent',
+      });
+      expect(read, contains('\nTo: An Claes\n'));
+      expect(
+        read,
+        contains('\nAttachments (1):\n1. planning.pdf (3.00 KiB)\n'),
+      );
+      expect(read, endsWith('\n\nIn bijlage de planning.'));
+    });
+
+    test('a file that does not exist: refused before contacting '
+        'Smartschool', () async {
+      final missing = '${files.path}${Platform.pathSeparator}weg.pdf';
+
+      expect(
+        await error({
+          'message_id': 101,
+          'body': 'Hallo',
+          'attachments': [missing],
+        }),
+        'There is no file "$missing" on this PC (any more): check the path. '
+        'Nothing was sent.',
+      );
+      expect(
+        await error({
+          'message_id': 101,
+          'body': 'Hallo',
+          'attachments': ['planning.pdf'],
+        }),
+        startsWith('"planning.pdf" in attachments is not a full path'),
+      );
+      expect(server.requests, isEmpty);
+    });
+
+    test("a file Smartschool's upload step refuses: Smartschool's words, and "
+        'nothing is sent', () async {
+      server.uploads.nextRefusals.add((400, FakeUploads.badNameText));
+
+      expect(
+        await error({
+          'message_id': 101,
+          'body': 'Hallo',
+          'attachments': [file('planning.pdf', 10)],
+        }),
+        'Smartschool refused the file "planning.pdf" (HTTP 400): '
+        '"${FakeUploads.badNameText}" Rename the file, or leave it out. '
+        'Nothing was sent.',
+      );
+      expect(mailbox.submits, 0);
+      expect(sends(), isEmpty);
+    });
+
+    test('Smartschool refuses the session for the upload: the library does '
+        'not upload the file again after logging in; the repeat logs in, '
+        'uploads it into the directory of a new reply form and sends the '
+        'reply once', () async {
+      server.expireSessionBefore(
+        (request) =>
+            request.method == 'POST' &&
+            request.uri.path == FakeUploads.uploadPath,
+      );
+
+      expect(
+        await ok({
+          'message_id': 101,
+          'body': 'Hallo',
+          'attachments': [file('planning.pdf', 10)],
+        }),
+        endsWith('\nAttachments: "planning.pdf" (10 bytes)'),
+      );
+      expect(server.logins, 2);
+      expect(
+        server.requests.where((r) => r == 'POST ${FakeUploads.uploadPath}'),
+        hasLength(2),
+        reason: 'the refused one and the new one',
+      );
+      // Reply forms 1 and 2 were loaded in the first session, 3 and 4 in the
+      // new one.
+      expect(server.uploads.uploads, [('dir4', 'planning.pdf')]);
+      expect(sends(), [replied]);
+      expect(mailbox.submits, 1);
     });
   });
 }

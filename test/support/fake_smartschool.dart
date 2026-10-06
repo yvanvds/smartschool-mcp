@@ -86,8 +86,12 @@ class FakeSmartschool implements HttpClientAdapter {
   /// Every request, as `METHOD path`.
   final List<String> requests = [];
 
-  /// The Messages module, served to logged-in requests.
-  final FakeMailbox mailbox = FakeMailbox(owner: fakeDisplayName);
+  /// The Messages module, served to logged-in requests. The attachments of
+  /// a message go through the shared [uploads].
+  late final FakeMailbox mailbox = FakeMailbox(
+    owner: fakeDisplayName,
+    uploads: uploads,
+  );
 
   /// The Intradesk module, served to logged-in requests.
   late final FakeIntradesk intradesk = FakeIntradesk(uploads: uploads);

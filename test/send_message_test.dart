@@ -3,6 +3,8 @@
 /// form finds the users and groups of its directory and sends messages.
 library;
 
+import 'dart:io';
+
 import 'package:dart_mcp/client.dart';
 import 'package:dio/dio.dart';
 import 'package:smartschool_mcp/src/session.dart';
@@ -26,6 +28,9 @@ const _choose =
     'for them. Then call send_message again with each recipient as listed '
     'before the "|", like "Sven Lamber (user 146)".';
 
+/// The size limit of the attachments of `send_message` here.
+const _limit = 4096;
+
 void _fill(FakeMailbox mailbox) => mailbox.directory.addAll([
   const FakeRecipient.user(_me),
   const FakeRecipient.user('Sven Lamber', id: 1146, className: 'Klas: 5GZ'),
@@ -42,11 +47,13 @@ void main() {
   late FakeSmartschool server;
   late FakeMailbox mailbox;
   late ServerConnection connection;
+  late Directory files;
 
   setUp(() async {
     server = FakeSmartschool();
     mailbox = server.mailbox;
     _fill(mailbox);
+    files = await tempCache();
     final session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
@@ -57,10 +64,17 @@ void main() {
         listMessagesTool(session),
         readMessageTool(session),
         searchRecipientsTool(session),
-        sendMessageTool(session),
+        sendMessageTool(session, maxBytes: _limit),
       ],
     );
   });
+
+  /// A file [name] of [size] bytes on this PC; returns its full path.
+  String file(String name, int size) {
+    final path = '${files.path}${Platform.pathSeparator}$name';
+    File(path).writeAsStringSync('x' * size);
+    return path;
+  }
 
   Future<(CallToolResult, String)> send(Map<String, Object?> arguments) =>
       callTool(connection, 'send_message', arguments);
@@ -134,8 +148,8 @@ void main() {
     });
 
     test('send_message as destructive and not idempotent, telling Claude to '
-        'look the recipients up, get explicit confirmation first and never '
-        'resend an unconfirmed message', () async {
+        'look the recipients up, get explicit confirmation first, also of '
+        'the attachments, and never resend an unconfirmed message', () async {
       final sendTool = await tool('send_message');
 
       final annotations = sendTool.toolAnnotations!;
@@ -152,10 +166,24 @@ void main() {
           'look up every recipient with search_recipients, show the user '
           'exactly who will receive the message (the names as '
           'search_recipients lists them, with their class or group), the '
-          'subject and the exact text, and only call it after the user has '
-          'explicitly confirmed all of it.',
+          'subject, the exact text and every attachment with its name and '
+          'size, and only call it after the user has explicitly confirmed '
+          'all of it.',
         ),
       );
+      expect(
+        description,
+        contains(
+          'To attach files, pass the full paths of up to 10 files on this PC '
+          'in attachments, like C:\\Users\\jan\\Documents\\brief.docx',
+        ),
+      );
+      expect(
+        description,
+        contains("The server reads any file the user's Windows account can "),
+      );
+      expect(description, contains('up to 4.0 KB each'));
+      expect(description, isNot(contains('not supported')));
       expect(description, contains('never choose for them'));
       expect(
         description,
@@ -173,7 +201,20 @@ void main() {
 
       final schema = sendTool.inputSchema;
       expect(schema.required, ['to', 'subject', 'body']);
-      expect(schema.properties!.keys, ['to', 'cc', 'bcc', 'subject', 'body']);
+      expect(schema.properties!.keys, [
+        'to',
+        'cc',
+        'bcc',
+        'subject',
+        'body',
+        'attachments',
+      ]);
+      expect(schema.properties!['attachments'], {
+        'type': 'array',
+        'description': isA<String>(),
+        'items': {'type': 'string', 'minLength': 1},
+        'maxItems': 10,
+      });
       expect(schema.properties!['to'], {
         'type': 'array',
         'description': isA<String>(),
@@ -838,6 +879,196 @@ void main() {
       expect(await error(message), notConfirmed);
       expect(mailbox.submits, 1);
       expect(sends(), isEmpty);
+    });
+  });
+
+  group('attachments: files from this PC go along with the message '
+      '(#118)', () {
+    Map<String, Object?> message(List<Object?> attachments) => {
+      'to': ['Svenja Lamberts'],
+      'subject': 'Uitstap',
+      'body': 'In bijlage de brief.',
+      'attachments': attachments,
+    };
+
+    /// The upload requests that reached the server, also those it refused
+    /// for their session.
+    int uploadRequests() => server.requests
+        .where((request) => request == 'POST ${FakeUploads.uploadPath}')
+        .length;
+
+    test('two files: each uploaded into the directory of the compose form '
+        'the message is sent with, and sent with it; the result names them, '
+        'and read_message lists them', () async {
+      final brief = file('brief.docx', 2048);
+      final toets = file('toets #1.pdf', 20);
+
+      expect(
+        await ok(message([brief, toets])),
+        'Sent the message.\n'
+        'To: Svenja Lamberts\n'
+        'Subject: Uitstap\n'
+        'Attachments: "brief.docx" (2.0 KB) and "toets #1.pdf" (20 bytes)',
+      );
+      // The first compose form is the one the recipients are searched on,
+      // the second the one the message is sent with.
+      expect(server.uploads.uploads, [
+        ('dir2', 'brief.docx'),
+        ('dir2', 'toets #1.pdf'),
+      ]);
+      expect(sends(), [
+        'send to=Svenja Lamberts cc= bcc= subject=Uitstap '
+            'attachments=brief.docx,toets #1.pdf',
+      ]);
+      expect(mailbox.submits, 1);
+
+      // What Claude sees afterwards in the sent box.
+      final (_, sent) = await callTool(connection, 'list_messages', {
+        'box': 'sent',
+      });
+      expect(
+        sent,
+        endsWith(
+          '\n- id 9001 | 2024-04-01 10:01 | to Svenja Lamberts | Uitstap | '
+          'attachments',
+        ),
+      );
+      final (_, read) = await callTool(connection, 'read_message', {
+        'message_id': 9001,
+        'box': 'sent',
+      });
+      expect(
+        read,
+        contains(
+          '\nAttachments (2):\n'
+          '1. brief.docx (2.00 KiB)\n'
+          '2. toets #1.pdf (0.02 KiB)\n',
+        ),
+      );
+      expect(read, endsWith('\n\nIn bijlage de brief.'));
+    });
+
+    test('an empty list: the message goes without attachments', () async {
+      expect(
+        await ok(message([])),
+        'Sent the message.\n'
+        'To: Svenja Lamberts\n'
+        'Subject: Uitstap',
+      );
+      expect(sends(), ['send to=Svenja Lamberts cc= bcc= subject=Uitstap']);
+      expect(server.uploads.uploads, isEmpty);
+    });
+
+    test('refuses, before contacting Smartschool, a path that is not a full '
+        'path, a file that does not exist, a folder, a file over the limit, '
+        'two files with the same name and a name Smartschool does not '
+        'allow', () async {
+      final brief = file('brief.docx', 10);
+      final missing = '${files.path}${Platform.pathSeparator}weg.pdf';
+      final other = Directory('${files.path}${Platform.pathSeparator}andere')
+        ..createSync();
+      final copy = File('${other.path}${Platform.pathSeparator}BRIEF.docx')
+        ..writeAsStringSync('copy');
+      final big = file('groot.pdf', 2 * _limit);
+
+      expect(
+        await error(message(['brief.docx'])),
+        '"brief.docx" in attachments is not a full path: give the whole path '
+        'of the file, starting with the drive, like '
+        'C:\\Users\\jan\\Documents\\brief.docx. Nothing was sent.',
+      );
+      expect(
+        await error(message([brief, missing])),
+        'There is no file "$missing" on this PC (any more): check the path. '
+        'Nothing was sent.',
+      );
+      expect(
+        await error(message([files.path])),
+        '"${files.path}" in attachments is a folder, not a file: give the '
+        'paths of the files in it. Nothing was sent.',
+      );
+      expect(
+        await error(message([big])),
+        'The file "groot.pdf" ($big) is 8.0 KB, too large to send from here: '
+        'files up to 4.0 KB can be sent. The user can add it in Smartschool. '
+        'Nothing was sent.',
+      );
+      expect(
+        await error(message([brief, copy.path])),
+        'attachments holds two files named "BRIEF.docx" ($brief and '
+        '${copy.path}), which Smartschool would store under the same name: '
+        'send one of them, or rename one first. Nothing was sent.',
+      );
+      expect(
+        await error(message([file('.verborgen', 10)])),
+        startsWith('Smartschool does not take a file named ".verborgen"'),
+      );
+      expect(server.requests, isEmpty);
+    });
+
+    test("a file Smartschool's upload step refuses: Smartschool's words, and "
+        'nothing is sent', () async {
+      server.uploads.nextRefusals.add((400, FakeUploads.badNameText));
+
+      expect(
+        await error(message([file('brief.docx', 10)])),
+        'Smartschool refused the file "brief.docx" (HTTP 400): '
+        '"${FakeUploads.badNameText}" Rename the file, or leave it out. '
+        'Nothing was sent.',
+      );
+      expect(server.uploads.uploads, [('dir2', 'brief.docx')]);
+      expect(mailbox.submits, 0);
+      expect(sends(), isEmpty);
+    });
+
+    test('Smartschool refuses the session for an upload: the library does '
+        'not upload the file again after logging in; the repeat loads new '
+        'compose forms, logging in at the first (yvanvds/dartschool#134 does '
+        'not apply), uploads the file into the new directory and sends the '
+        'message once', () async {
+      server.expireSessionBefore(
+        (request) =>
+            request.method == 'POST' &&
+            request.uri.path == FakeUploads.uploadPath,
+      );
+
+      expect(
+        await ok(message([file('brief.docx', 10)])),
+        endsWith('\nAttachments: "brief.docx" (10 bytes)'),
+      );
+      expect(server.logins, 2);
+      expect(uploadRequests(), 2, reason: 'the refused one and the new one');
+      // Forms 1 and 2 (the search and the send) were loaded in the first
+      // session, 3 and 4 in the new one. The refused upload into dir2 was
+      // answered 401 before the upload step; the fake fails an upload into
+      // dir2 from the new session.
+      expect(server.uploads.uploads, [('dir4', 'brief.docx')]);
+      expect(server.uploads.directories['dir2'], isEmpty);
+      expect(sends(), [
+        'send to=Svenja Lamberts cc= bcc= subject=Uitstap '
+            'attachments=brief.docx',
+      ]);
+      expect(mailbox.submits, 1);
+    });
+
+    test('the connection fails after the submit went out: maybe sent, with '
+        'the attachments in the result, and neither uploaded nor sent '
+        'again', () async {
+      mailbox.submitAnswer = SubmitAnswer.responseLost;
+
+      expect(
+        await error(message([file('brief.docx', 10)])),
+        'The message may or may not have been sent: sending started, but '
+        'Smartschool did not confirm it. Do not send it again: first check '
+        'the sent box (list_messages with box sent), or ask the user to check '
+        'it in Smartschool.\n'
+        'To: Svenja Lamberts\n'
+        'Subject: Uitstap\n'
+        'Attachments: "brief.docx" (10 bytes)',
+      );
+      expect(uploadRequests(), 1);
+      expect(mailbox.submits, 1);
+      expect(sends(), hasLength(1));
     });
   });
 }

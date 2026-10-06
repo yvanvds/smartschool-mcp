@@ -270,6 +270,7 @@ void main() {
       'body',
       'reply_all',
       'box',
+      'attachments',
     ]);
     final recipientsSchema = tools['search_recipients']!['inputSchema'] as Map;
     expect(recipientsSchema['required'], ['query']);
@@ -298,6 +299,7 @@ void main() {
       'bcc',
       'subject',
       'body',
+      'attachments',
     ]);
     expect((sendSchema['properties'] as Map)['to'], {
       'type': 'array',
@@ -306,6 +308,19 @@ void main() {
       'minItems': 1,
       'maxItems': 50,
     });
+    // Files from this PC go along with a message or a reply (#118).
+    for (final (name, schema) in [
+      ('send_message', sendSchema),
+      ('reply_to_message', replySchema),
+    ]) {
+      expect((schema['properties'] as Map)['attachments'], {
+        'type': 'array',
+        'description': isA<String>(),
+        'items': {'type': 'string', 'minLength': 1},
+        'maxItems': 10,
+      }, reason: name);
+      expect(tools[name]!['description'], contains('up to 200 MB each'));
+    }
     final intradeskSearchSchema =
         tools['search_intradesk']!['inputSchema'] as Map;
     expect(intradeskSearchSchema['required'], ['query']);
@@ -1292,6 +1307,11 @@ void main() {
       environment: environmentWithoutSmartschool(),
     );
     await server.initialize();
+    final files = await Directory.systemTemp.createTemp('smartschool_attach_');
+    addTearDown(() => files.delete(recursive: true));
+    final brief = File('${files.path}${Platform.pathSeparator}brief.docx')
+      ..writeAsStringSync('Beste ouders');
+    final missing = '${files.path}${Platform.pathSeparator}weg.pdf';
 
     final (listError, listText) = await server.callTool(
       'list_messages',
@@ -1389,6 +1409,32 @@ void main() {
       'send_message',
       arguments: {'to': <String>[], 'subject': 'Uitstap', 'body': 'Hallo'},
     );
+    final (sendFileError, sendFileText) = await server.callTool(
+      'send_message',
+      arguments: {
+        'to': ['Sven Lamber (user 146)'],
+        'subject': 'Brief',
+        'body': 'In bijlage de brief.',
+        'attachments': [brief.path],
+      },
+    );
+    final (relativeFileError, relativeFileText) = await server.callTool(
+      'send_message',
+      arguments: {
+        'to': ['Sven Lamber (user 146)'],
+        'subject': 'Brief',
+        'body': 'In bijlage de brief.',
+        'attachments': ['brief.docx'],
+      },
+    );
+    final (missingFileError, missingFileText) = await server.callTool(
+      'reply_to_message',
+      arguments: {
+        'message_id': 123,
+        'body': 'In bijlage de planning.',
+        'attachments': [missing],
+      },
+    );
     final (intradeskError, intradeskText) = await server.callTool(
       'search_intradesk',
       arguments: {'query': 'formulier uitstap', 'refresh': true},
@@ -1447,6 +1493,7 @@ void main() {
       (replyError, replyText),
       (recipientsError, recipientsText),
       (sendError, sendText),
+      (sendFileError, sendFileText),
       (intradeskError, intradeskText),
       (folderError, folderText),
       (fileError, fileText),
@@ -1477,6 +1524,18 @@ void main() {
     expect(noRecipientError, isTrue);
     expect(noRecipientText, contains('to'));
     expect(noRecipientText, isNot(startsWith('Not all Smartschool')));
+    // An attachment is checked before any login (#118).
+    expect(relativeFileError, isTrue);
+    expect(
+      relativeFileText,
+      startsWith('"brief.docx" in attachments is not a full path'),
+    );
+    expect(missingFileError, isTrue);
+    expect(
+      missingFileText,
+      'There is no file "$missing" on this PC (any more): check the path. '
+      'Nothing was sent.',
+    );
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
     expect(badIdError, isTrue);

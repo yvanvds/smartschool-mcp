@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import 'fake_messages.dart' show sessionOf;
+
 /// A file uploaded into an upload directory of [FakeUploads].
 typedef FakeUploadedFile = ({String name, int size});
 
@@ -9,6 +11,11 @@ typedef FakeUploadedFile = ({String name, int size});
 /// through first (yvanvds/dartschool#128): the files are uploaded one by one
 /// into an upload directory, and the module (Intradesk, see
 /// `FakeIntradesk`) is then told to take the files of that directory.
+///
+/// A message's compose form hands out its own directory instead, its hidden
+/// `randomDir`, which belongs to the session the form was loaded in
+/// ([openDirectory], see `FakeMailbox`); the submit of the form sends the
+/// files of that directory with the message.
 ///
 /// As the live platform answered it on 2026-10-05 (dartschool's
 /// `intradesk_write_test.dart`):
@@ -52,6 +59,24 @@ class FakeUploads {
 
   int _directories = 0;
 
+  /// The session each directory of [openDirectory] belongs to, by
+  /// directory.
+  final Map<String, String?> _sessions = {};
+
+  /// Opens the empty upload directory [dir] that a page loaded in [session]
+  /// hands out: the `randomDir` of a message's compose form.
+  ///
+  /// The directory belongs to [session], as the form's tokens do: an upload
+  /// into it from another session fails the test with an
+  /// [UnsupportedError]. The library never sends one (`retryAfterLogin:
+  /// false`, `sameSessionAs: form`; yvanvds/dartschool#25, #38), and
+  /// Smartschool would take it (dartschool#38), so the fake refuses it to
+  /// catch it.
+  void openDirectory(String dir, {required String? session}) {
+    directories[dir] = [];
+    _sessions[dir] = session;
+  }
+
   /// Answers [options] if it is a request of the upload step.
   ResponseBody? respond(RequestOptions options) {
     final path = options.uri.path;
@@ -69,6 +94,12 @@ class FakeUploads {
         ?.value;
     final file = form.files.where((file) => file.key == 'file').firstOrNull;
     final name = file?.value.filename;
+    if (_sessions.containsKey(dir) && _sessions[dir] != sessionOf(options)) {
+      throw UnsupportedError(
+        'fake uploads: upload in ${sessionOf(options)} into the directory '
+        '$dir of a page of ${_sessions[dir]}',
+      );
+    }
     uploads.add((dir, name));
     if (nextRefusals.isNotEmpty) {
       final (status, body) = nextRefusals.removeAt(0);

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import 'fake_download.dart';
+import 'fake_uploads.dart';
 
 /// An attachment of a [FakeMessage].
 class FakeAttachment {
@@ -142,7 +143,12 @@ enum SubmitAnswer {
 /// the module page the archive's box id is read from, and sending: the
 /// compose forms, searching recipients on a form (in the [directory]), adding
 /// recipients (users and groups) to a form and taking them off, and
-/// submitting it.
+/// submitting it. The attachments of a message are uploaded with
+/// Smartschool's upload step ([uploads]) into the upload directory of its
+/// compose form (the form's hidden `randomDir`, which belongs to the session
+/// the form was loaded in), and the submit sends the files of that directory
+/// with the message, as the live platform did (dartschool's
+/// `messages_live_test.dart`).
 ///
 /// Responses have the shape of the dartschool fixtures under
 /// `test/fixtures/smartschool/requests/post/postboxes/`,
@@ -168,7 +174,8 @@ enum SubmitAnswer {
 /// recipient's read state (`+`).
 /// A message sent to the [owner] also lands in the inbox, with the same id.
 class FakeMailbox {
-  FakeMailbox({this.owner = 'Jan Peeters'});
+  FakeMailbox({this.owner = 'Jan Peeters', FakeUploads? uploads})
+    : uploads = uploads ?? FakeUploads();
 
   static const pageSize = 50;
 
@@ -183,6 +190,12 @@ class FakeMailbox {
 
   /// The logged-in user's name.
   final String owner;
+
+  /// Smartschool's upload step, shared with the other modules: each compose
+  /// form opens its `randomDir` there ([FakeUploads.openDirectory]), for the
+  /// session it was loaded in, and a submit sends the files uploaded into it
+  /// as the message's attachments.
+  final FakeUploads uploads;
 
   final List<FakeMessage> inbox = [];
   final List<FakeMessage> sent = [];
@@ -224,10 +237,11 @@ class FakeMailbox {
   /// every archive request, as `archive msgIDs=1,2`, every recipient search
   /// on a compose form, as `search val=Sven`, and every message sent, as
   /// `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with the
-  /// reply form of message 101, `send reply-to=101 to=...`. A group
-  /// recipient is named `G (group)`, after the users of its field; a user
-  /// who shares a name with another user of the [directory] is named with
-  /// the user id, as `A #1001`.
+  /// reply form of message 101, `send reply-to=101 to=...`; a message with
+  /// attachments ends in their names, as `... subject=S attachments=a,b`.
+  /// A group recipient is named `G (group)`, after the users of its field; a
+  /// user who shares a name with another user of the [directory] is named
+  /// with the user id, as `A #1001`.
   final List<String> actions = [];
 
   /// The users and groups the search of a compose form finds: those whose
@@ -796,11 +810,13 @@ ${[for (final (i, a) in attachments.indexed) '''
   }
 
   /// A compose form (`composeType` 0: new message, 1: reply, 2: reply to
-  /// all), with a new `uniqueUsc` and the recipients of a reply filled in
-  /// and registered with it, loaded in [session].
+  /// all), with a new `uniqueUsc`, a new upload directory (`randomDir`) and
+  /// the recipients of a reply filled in and registered with it, loaded in
+  /// [session].
   String _composePage(Map<String, String> query, {required String? session}) {
     final usc = 'usc${++_formsOpened}';
     _formSessions[usc] = session;
+    uploads.openDirectory('dir$_formsOpened', session: session);
     final id = int.tryParse(query['msgID'] ?? '');
     final sentBox = query['boxType'] == 'outbox';
     final message = id == null ? null : _find(id, query['boxType']!);
@@ -1046,10 +1062,19 @@ ${list('users', users)}
     final reply = fields['composeAction'] == '2' && answers != '0'
         ? 'reply-to=$answers '
         : '';
+    // The files uploaded into the form's directory go with the message.
+    final uploaded =
+        uploads.directories[fields['randomDir']] ?? const <FakeUploadedFile>[];
+    final attachments = [
+      for (final file in uploaded)
+        FakeAttachment(file.name, _kibibytes(file.size)),
+    ];
+    final fileNames = [for (final file in uploaded) file.name];
     sentBodies.add(body);
     actions.add(
       'send ${reply}to=${labels('0')} cc=${labels('2')} '
-      'bcc=${labels('3')} subject=$subject',
+      'bcc=${labels('3')} subject=$subject'
+      '${fileNames.isEmpty ? '' : ' attachments=${fileNames.join(',')}'}',
     );
     FakeMessage copy({required bool unread}) => FakeMessage(
       id: id,
@@ -1062,6 +1087,7 @@ ${list('users', users)}
       to: to,
       cc: cc,
       bcc: bcc,
+      attachments: attachments,
     );
     sent.add(copy(unread: false));
     if ([...to, ...cc, ...bcc].contains(owner)) inbox.add(copy(unread: true));
@@ -1104,6 +1130,12 @@ $data
     </actions>
   </response>
 </server>''';
+
+  /// [bytes] as Smartschool lists the size of an attachment, in KiB with two
+  /// decimals, like `123.48 KiB` (the dartschool fixtures); what it lists for
+  /// a file of less than 1 KiB has not been seen.
+  static String _kibibytes(int bytes) =>
+      '${(bytes / 1024).toStringAsFixed(2)} KiB';
 
   static String _escape(String text) => text
       .replaceAll('&', '&amp;')

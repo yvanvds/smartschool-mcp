@@ -295,9 +295,11 @@ client name. It also installs again while that copy runs.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
-  except those in BCC. The tool is marked destructive, so Claude Desktop
-  asks for approval every time, and Claude is told to show the text and
-  recipients and wait for the user's confirmation first. It never sends a
+  except those in BCC. Optionally with `attachments`: 1 to 10 files from
+  this PC, as `send_message` takes them (below). The tool is marked
+  destructive, so Claude Desktop asks for approval every time, and Claude is
+  told to show the text, the recipients and every attachment with its name
+  and size, and wait for the user's confirmation first. It never sends a
   reply twice by itself: when Smartschool does not confirm a send, it says
   the reply may have been sent and to check the sent box. The reply is sent
   with the message's own reply form, so Smartschool links it to the
@@ -321,7 +323,16 @@ client name. It also installs again while that copy runs.
   name that no one has exactly, or that several users or groups have (also
   a user and a group), stops the send before anything is sent, with who the
   search finds, for the user to choose: the tool never picks one. It sends
-  once, as `reply_to_message` does (`submitOnce`).
+  once, as `reply_to_message` does (`submitOnce`). Optionally with
+  `attachments`: 1 to 10 full paths of files on this PC (an empty list is
+  none), checked before anything is sent, as `upload_intradesk_files`
+  checks them (see *Uploading files* below), and uploaded by the library
+  (`SendMessageParams.attachmentPaths`) into the compose form's own upload
+  directory before the submit. Claude is told to show every file with its
+  name and size along with the recipients, subject and text; the result
+  names them, and `read_message` lists them on the sent message. A file
+  Smartschool's upload step refuses stops the send before the submit, with
+  Smartschool's reason: nothing was sent.
 - `search_intradesk`: searches the names of the folders, files and weblinks
   on Intradesk (not what is in the files), ignoring case and accents. Every
   word must occur in the full path and at least one in the name itself, so
@@ -1106,10 +1117,17 @@ one message at a time, the per-id loop and result (`changeEach`,
 takes a message out of its box (`trash_messages`) passes `changeEach` a
 `started` map, so that a repeat of the call (after Smartschool refused the
 session) does not report a message moved before as not in the box. The tools
-that send a message (`reply_to_message`, `send_message`) share the submit
-that is never repeated (`submitOnce`) and how its outcome is reported
-(`notConfirmedResult`, `sendSummary`) in
-`lib/src/tools/message_sending.dart`.
+that send a message (`reply_to_message`, `send_message`) share their
+`attachments` argument (`messageAttachmentsSchema`,
+`messageAttachmentsArgument`, `messageAttachmentsDescription`, through the
+local-file helper), the submit that is never repeated (`submitOnce`, which
+also turns a refused upload into a `ToolError` with `uploadToolError`) and
+how its outcome is reported (`notConfirmedResult`, `sendSummary`) in
+`lib/src/tools/message_sending.dart`. Their tests run against a fake
+Messages module (`test/support/fake_messages.dart`) whose compose forms each
+open their `randomDir` in the fake upload step, bound to the session the
+form was loaded in (an upload into it from another session fails the test),
+and whose submit sends the files of that directory with the message.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
@@ -1137,8 +1155,8 @@ creates, the upload and the moves to the trash of dartschool#128 as the
 live Intradesk did (renaming a taken name, the bare `500`s, the `400`s with
 `violations`, and a `204` for an item in the trash already), behind the
 fake upload step (`test/support/fake_uploads.dart`) that the attachments of
-later tools can share. It answers the move of an unknown id with `404`, an
-assumption until dartschool#133 captures Intradesk's answer.
+lesfiches and messages share. It answers the move of an unknown id with
+`404`, an assumption until dartschool#133 captures Intradesk's answer.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
@@ -1516,13 +1534,15 @@ and that they disappear after 7 days.
 
 ### Uploading files
 
-`upload_intradesk_files`, `create_lesfiche` and `add_lesfiche_attachments`
-send files from this PC to Smartschool. The tools that upload share the
-local-file helper in `lib/src/uploads/local_files.dart` (for Intradesk and
-the attachments of a lesfiche now, for a message later):
+`upload_intradesk_files`, `create_lesfiche`, `add_lesfiche_attachments`,
+`send_message` and `reply_to_message` send files from this PC to
+Smartschool. The tools that upload share the local-file helper in
+`lib/src/uploads/local_files.dart` (for Intradesk, the attachments of a
+lesfiche and those of a message):
 
 - **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
-  1 to 10 per call. The server reads any file the user's Windows account can
+  1 to 10 per call (for a message, `attachments` may also be left out or
+  empty). The server reads any file the user's Windows account can
   read, so the tool descriptions tell Claude to show the user every file,
   with its name and size, before calling.
 - **Checks before anything is sent:** each path names an existing file, not
@@ -1541,7 +1561,17 @@ the attachments of a lesfiche now, for a message later):
   `serverMessage` when it gave them) into a `ToolError`, ending in what that
   means for the call (for Intradesk: nothing was added; for a new lesfiche:
   no lesfiche was made; for files added to a lesfiche: the lesfiche was not
-  changed).
+  changed; for a message or a reply: nothing was sent, since the uploads
+  come before the submit).
+- **Sessions:** Intradesk and the Lesfiches module take a new upload
+  directory that is not bound to the session, so the uploads into it are
+  retried after a new login like a read. A message's attachments go into
+  the upload directory of its compose form (`randomDir`), which belongs to
+  the form's session: the library uploads them in that session only
+  (`retryAfterLogin: false`, `sameSessionAs: form`, dartschool#25, #38).
+  When Smartschool refuses the session for such an upload, the session's
+  repeat of the send loads a new compose form, logging in first, and
+  uploads the files again into its directory (see `submitOnce`).
 
 The log shows counts and timings, never a name or a path.
 
@@ -1570,9 +1600,9 @@ requests share that one login. When Smartschool still refuses the session,
 Sending is not, once Smartschool has handled the submit: `reply_to_message`
 and `send_message` turn a submit that Smartschool does not confirm
 (`SmartschoolSendUnconfirmedError`) into a result that is not retried. A
-step of the send that Smartschool refused the session for, the submit
-included, sent nothing, so `run` may repeat it (see `submitOnce` in
-`lib/src/tools/message_sending.dart`).
+step of the send that Smartschool refused the session for, the upload of
+an attachment and the submit included, sent nothing, so `run` may repeat
+it (see `submitOnce` in `lib/src/tools/message_sending.dart`).
 
 ### Update check
 

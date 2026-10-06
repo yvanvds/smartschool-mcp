@@ -73,7 +73,7 @@
     },
     {
       "name": "reply_to_message",
-      "description": "Beantwoordt een bericht, aan de afzender of aan iedereen, pas na jouw bevestiging."
+      "description": "Beantwoordt een bericht, aan de afzender of aan iedereen, eventueel met bestanden van je pc als bijlage, pas na jouw bevestiging."
     },
     {
       "name": "search_recipients",
@@ -81,7 +81,7 @@
     },
     {
       "name": "send_message",
-      "description": "Verstuurt een nieuw bericht aan personen of groepen, pas na jouw bevestiging van de ontvangers, het onderwerp en de tekst."
+      "description": "Verstuurt een nieuw bericht aan personen of groepen, eventueel met bestanden van je pc als bijlage, pas na jouw bevestiging van de ontvangers, het onderwerp, de tekst en de bijlagen."
     },
     {
       "name": "search_intradesk",
