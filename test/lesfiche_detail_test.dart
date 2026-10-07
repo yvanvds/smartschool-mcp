@@ -189,6 +189,37 @@ void main() {
     });
   });
 
+  group('lesficheVisibilityValue', () {
+    test('gives every option the web client offers as the argument takes '
+        'it', () {
+      for (final value in [
+        'always',
+        'never',
+        'at_start',
+        'at_end',
+        'after_end:1',
+        'after_end:14',
+      ]) {
+        final visibility = lesficheVisibilityArgument(value, where: 'it');
+        expect(lesficheVisibilityValue(visibility), value);
+        expect(
+          lesficheVisibilityValue(
+            _visibility(visibility.optionName, visibility.daysAfterEnd),
+          ),
+          value,
+          reason: 'as the module gives $value',
+        );
+      }
+    });
+
+    test('none for days after the end without a number, or an option the '
+        'library does not know', () {
+      expect(lesficheVisibilityValue(_visibility('days-after-end')), isNull);
+      expect(lesficheVisibilityValue(_visibility('after-exam')), isNull);
+      expect(lesficheVisibilityValue(_visibility('after-exam', 2)), isNull);
+    });
+  });
+
   group('a weblink and an attachment on a line', () {
     test('with what the module gave, and what it left out said so', () {
       expect(

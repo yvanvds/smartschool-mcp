@@ -723,10 +723,17 @@ client name. It also installs again while that copy runs.
   attachments added with their ids, notes a name the lesfiche had already
   (the module keeps both), and gives the lesfiche. A file the upload step
   refuses (in Smartschool's words), a refusal and a `404` say that nothing
-  changed. An add the module does not confirm cannot be told from one whose
-  files went in but whose visibility could not be set (both a
-  `SmartschoolLessonContentSaveUnconfirmedError`, dartschool#135, #126):
-  either says that the files may or may not have been added, or added with
+  changed. When the module took the files and only setting a visibility
+  failed (`SmartschoolLessonContentVisibilityNotSetError`, dartschool#135,
+  #126), the result is an error that lists the attachments added, with
+  their ids and their visibility as far as the library knows, says why the
+  visibility was not set (refused: not set; not confirmed: maybe set; the
+  session refused: not set), and gives each visibility not set (that one,
+  and those after it, which the library did not try) as a call of
+  `set_lesfiche_attachment_visibility`, without reading the lesfiche: the
+  files are on it, so not to call the tool again. A take the module does
+  not confirm (any other `SmartschoolLessonContentSaveUnconfirmedError`)
+  says that the files may or may not have been added, or added with
   `always`, and not to call again but to read the lesfiche and set a
   visibility with `set_lesfiche_attachment_visibility`.
 - `set_lesfiche_attachment_visibility`: sets when pupils see one
