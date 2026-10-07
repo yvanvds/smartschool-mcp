@@ -6,7 +6,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    hide IntradeskItemKind;
 import 'package:smartschool_mcp/src/intradesk/intradesk_access.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_format.dart';

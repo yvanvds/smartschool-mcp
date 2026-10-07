@@ -840,8 +840,8 @@ void main() {
     });
 
     test('Smartschool refuses the session for the create, which the library '
-        'does not send again: the session repeats the call, whose read of '
-        'the lesfiches comes first and logs in again, and makes the '
+        'does not send again: the session repeats the call, which the '
+        'library sends in a new session, logging in first, and makes the '
         'lesfiche once', () async {
       server.expireSessionBefore(
         (RequestOptions request) =>
@@ -854,12 +854,18 @@ void main() {
       );
       expect(postsTo(_createLesson), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $_createLesson');
+      final repeat = server.requests.sublist(first + 1);
       expect(
-        server.requests.sublist(first + 1).first,
-        'GET $fakeLesfichesPath',
+        repeat.first,
+        'GET /login',
         reason:
-            'the repeat reads the lesfiches first, which logs in again: '
-            'the create itself is refused at once on an expired session',
+            'after a refused session the library logs in before the next '
+            'request (yvanvds/dartschool#134)',
+      );
+      expect(
+        repeat.firstWhere((request) => request.contains('/lesson-content/')),
+        'GET $fakeLesfichesPath',
+        reason: 'the repeat reads the lesfiches first',
       );
       expect(planner.writes, ['POST $_createLesson'], reason: 'made once');
       expect(server.logins, 2);

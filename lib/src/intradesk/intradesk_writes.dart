@@ -1,5 +1,6 @@
 import 'package:dart_mcp/server.dart';
-import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    hide IntradeskItemKind;
 
 import '../log.dart';
 import '../session.dart';
@@ -188,9 +189,12 @@ String describeIntradeskItem(IntradeskItem item) =>
 /// Throws a [ToolError] when Intradesk has no folder [id]. A failure to list
 /// the folder above is logged, and leaves the entry unknown.
 ///
-/// A workaround: the library cannot read a folder's own entry by its id
-/// (yvanvds/dartschool#132), so without an index that knows the folder its
-/// rights and kind are not checked. Its removal is #123.
+/// A workaround: before flutter_smartschool 0.3.6 the library could not read
+/// a folder's own entry by its id (yvanvds/dartschool#132), so without an
+/// index that knows the folder its rights and kind are not checked here.
+/// Since 0.3.6 the library's create reads the folder itself and refuses
+/// those before sending (yvanvds/dartschool#138, see [withIntradeskWrite]).
+/// Its removal is #123.
 Future<IntradeskParent> readIntradeskParent(
   IntradeskService intradesk,
   IntradeskIndexCache cache,
@@ -255,7 +259,10 @@ Future<IntradeskParent> readIntradeskParent(
 /// The library's errors become [ToolError]s that say nothing was added:
 /// - [SmartschoolIntradeskWriteRefusedError]: Intradesk refused the write
 ///   (HTTP `400` to `499`), with its reasons in its own words (Dutch) when
-///   it gave any;
+///   it gave any; or, without a status, the library refused it after reading
+///   the folder, before sending it (a [SmartschoolIntradeskAddRefusedError]:
+///   the account may not add there, or the folder is of the wrong kind),
+///   with the library's message, which ends in "Nothing was sent.";
 /// - [SmartschoolIntradeskFolderNotFoundError]: the folder is gone;
 /// - [SmartschoolAttachmentUploadError], and an [ArgumentError] about one of
 ///   [files]: a file was not uploaded ([uploadToolError]);
@@ -274,6 +281,15 @@ Future<T> withIntradeskWrite<T>(
   try {
     return await withIntradesk(session, write);
   } on SmartschoolIntradeskWriteRefusedError catch (error) {
+    if (error.statusCode == null) {
+      // The library read the folder and refused the write before sending it
+      // (yvanvds/dartschool#138). Wording it by its reason is #123.
+      log('intradesk write: refused before sending (${error.runtimeType})');
+      throw ToolError(
+        '${_capitalised(what())} was refused before it was sent: '
+        '${error.message}',
+      );
+    }
     // The library's messages name the item: the log never shows a name.
     log(
       'intradesk write: refused (HTTP ${error.statusCode}, '

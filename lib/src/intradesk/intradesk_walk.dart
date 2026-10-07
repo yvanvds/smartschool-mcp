@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    hide IntradeskItemKind;
 
 import '../log.dart';
 import '../problems.dart';

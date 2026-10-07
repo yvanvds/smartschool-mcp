@@ -157,8 +157,10 @@ Future<CallToolResult> _create(
 /// Throws a [ToolError] when [parent] is known to take another kind of
 /// folder than asked: inside a confidential folder, Intradesk's web client
 /// adds only confidential folders; in an ordinary one, Intradesk refuses a
-/// confidential folder (HTTP `400`, seen live). When it is not known, the
-/// folder is sent as asked.
+/// confidential folder (HTTP `400`, seen live). When it is not known, it is
+/// left to the library, which since flutter_smartschool 0.3.6 reads the
+/// folder too and refuses the wrong kind before sending
+/// (yvanvds/dartschool#138).
 void _refuseWrongKind(IntradeskParent parent, {required bool confidential}) {
   final inConfidential = parent.confidential;
   if (inConfidential == null || inConfidential == confidential) return;
