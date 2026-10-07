@@ -7,7 +7,6 @@ import '../intradesk/intradesk_format.dart';
 import '../intradesk/intradesk_writes.dart';
 import '../log.dart';
 import '../session.dart';
-import '../uploads/local_files.dart';
 import 'server_tool.dart';
 
 /// `create_intradesk_folder`: adds a folder to a folder on Intradesk, with
@@ -17,12 +16,14 @@ import 'server_tool.dart';
 /// marked destructive (for Claude Desktop to ask for approval before every
 /// call), and Claude is told to show the user the name and the parent's path
 /// and wait for the user's confirmation. Before sending, the tool reads the
-/// parent ([readIntradeskParent]) and refuses a name the parent holds
-/// already, a parent the account may not add to, and a folder of the wrong
-/// kind for the parent (only a confidential folder goes in a confidential
-/// one). A create that Intradesk does not confirm is reported as maybe made
-/// ([intradeskWriteNotConfirmed]). The new folder goes into the index in
-/// [cache], when one is loaded ([addToIntradeskIndex]).
+/// parent and its path ([readIntradeskParent]) and refuses a name the parent
+/// holds already; the library reads the parent too and refuses a parent the
+/// account may not add to, and a folder of the wrong kind for the parent
+/// (only a confidential folder goes in a confidential one), which
+/// [withIntradeskWrite] words. A create that Intradesk does not confirm is
+/// reported as maybe made ([intradeskWriteNotConfirmed]). The new folder
+/// goes into the index in [cache], when one is loaded
+/// ([addToIntradeskIndex]).
 ServerTool createIntradeskFolderTool(
   SmartschoolSession session,
   IntradeskIndexCache cache,
@@ -104,28 +105,27 @@ Future<CallToolResult> _create(
   String where() => parent?.title ?? intradeskFolderTitle(folderId, null);
   final watch = Stopwatch()..start();
   try {
-    final folder = await withIntradeskWrite(session, (intradesk) async {
-      final read = parent = await readIntradeskParent(
-        intradesk,
-        cache,
-        folderId,
-      );
-      read.refuseWithoutAdd();
-      _refuseWrongKind(read, confidential: confidential);
-      read.refuseTakenNames([name], what: 'the new folder');
-      return intradesk.createFolder(
-        parentFolderId: folderId,
-        name: name,
-        color: color,
-        confidential: confidential,
-      );
-    }, what: () => 'the $kind "$name" in the ${where()}');
+    final folder = await withIntradeskWrite(
+      session,
+      (intradesk) async {
+        final read = parent = await readIntradeskParent(intradesk, folderId);
+        read.refuseTakenNames([name], what: 'the new folder');
+        return intradesk.createFolder(
+          parentFolderId: folderId,
+          name: name,
+          color: color,
+          confidential: confidential,
+        );
+      },
+      what: () => 'the $kind "$name" in the ${where()}',
+      where: where,
+    );
     final made = intradeskItems(
       IntradeskListing(folders: [folder], files: const [], weblinks: const []),
       folderId: folderId,
-      path: parent!.path ?? '',
+      path: parent!.path,
     );
-    final index = await addToIntradeskIndex(cache, parent!, made);
+    final index = await addToIntradeskIndex(cache, made);
     log(
       'create_intradesk_folder: made in ${watch.elapsedMilliseconds} ms '
       '($index)',
@@ -138,8 +138,7 @@ Future<CallToolResult> _create(
                 'colour ${folder.color.isEmpty ? color : folder.color}. Its '
                 'id is ${folder.id}.',
             ?renamedNote(name, folder.name),
-            for (final item in made)
-              '- ${formatIntradeskItem(item, fullPath: parent!.path != null)}',
+            for (final item in made) '- ${formatIntradeskItem(item)}',
           ].join('\n'),
         ),
       ],
@@ -152,26 +151,4 @@ Future<CallToolResult> _create(
       error: error,
     );
   }
-}
-
-/// Throws a [ToolError] when [parent] is known to take another kind of
-/// folder than asked: inside a confidential folder, Intradesk's web client
-/// adds only confidential folders; in an ordinary one, Intradesk refuses a
-/// confidential folder (HTTP `400`, seen live). When it is not known, it is
-/// left to the library, which since flutter_smartschool 0.3.6 reads the
-/// folder too and refuses the wrong kind before sending
-/// (yvanvds/dartschool#138).
-void _refuseWrongKind(IntradeskParent parent, {required bool confidential}) {
-  final inConfidential = parent.confidential;
-  if (inConfidential == null || inConfidential == confidential) return;
-  throw ToolError(
-    inConfidential
-        ? 'The ${parent.title} is confidential: inside a confidential folder '
-              'Intradesk adds only confidential folders. Pass confidential: '
-              'true, and tell the user that the new folder will be '
-              'confidential. $nothingSent'
-        : 'The ${parent.title} is not confidential: Intradesk adds a '
-              'confidential folder only inside a confidential folder. Leave '
-              'confidential out to add an ordinary folder. $nothingSent',
-  );
 }

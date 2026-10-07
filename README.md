@@ -359,19 +359,20 @@ client name. It also installs again while that copy runs.
   three tools that add to Intradesk are marked destructive, so Claude
   Desktop asks for approval every time, and Claude is told to show the user
   what goes where (the folder's path, from `search_intradesk`) and wait for
-  the user's confirmation first. Before sending, each reads the folder (its
-  listing, and, when the Intradesk index knows where it is, its entry in
-  the folder above, for its path and rights) and refuses a name the folder
-  holds already (any kind, ignoring case and spaces: Intradesk would not
-  refuse it, but rename the new item to `name (1)`), a folder the account
-  may not add to (`canAdd`, when the entry was read), and a folder of the
-  wrong kind for its parent (when known). The library reads the folder's
-  entry too before it sends a create (its parents and the listing of the
-  folder above, dartschool#138) and refuses those two itself, also without
-  the index; that refusal is reported in its words. The library sends a
-  create once, never again after logging in again; a create Intradesk does
-  not confirm
-  is reported as maybe made, with how to check it (`list_intradesk_folder`),
+  the user's confirmation first. Before sending, each reads the folder: its
+  path, with the library's `getFolderPath` (its parents, then the listing
+  of the top and of each folder above it, dartschool#132), and its listing,
+  and refuses a name the folder holds already (any kind, ignoring case and
+  spaces: Intradesk would not refuse it, but rename the new item to
+  `name (1)`). The library reads the folder's entry again right before it
+  sends a create (its parents and the listing of the folder above,
+  dartschool#138) and refuses, with nothing sent, a folder the account may
+  not add to (`canAdd`) and a folder of the wrong kind for its parent (only
+  a confidential folder inside a confidential one); the tool says so in its
+  own words, by the library's reason, with the folder's path. None of this
+  needs the Intradesk index. The library sends a create once, never again
+  after logging in again; a create Intradesk does not confirm is reported
+  as maybe made, with how to check it (`list_intradesk_folder`),
   and Claude is told not to call the tool again for it. The result is the
   item as Intradesk made it (its id, the name as stored, the folder's
   path); a name Intradesk changed anyway is pointed out. What was made goes
@@ -1146,10 +1147,11 @@ in `intradesk_search.dart` and output lines in `intradesk_format.dart`. In
 `intradesk_writes.dart`, for the tools that add to Intradesk: the
 `folder_id` and `name` arguments (`intradeskFolderArgument`,
 `intradeskNameArgument`), the folder read before a write
-(`readIntradeskParent`, an `IntradeskParent` with its listing, path and
-entry, which refuses a taken name and a folder without `canAdd`),
-`withIntradeskWrite` (the library's refusals as `ToolError`s that say
-nothing was added), the result of a write Intradesk did not confirm
+(`readIntradeskParent`, an `IntradeskParent` with its path and listing,
+which refuses a taken name), `withIntradeskWrite` (the library's refusals
+as `ToolError`s that say nothing was added, among them its refusal of a
+folder without `canAdd` or of the wrong kind, worded by its reason), the
+result of a write Intradesk did not confirm
 (`intradeskWriteNotConfirmed`) and the index patch after a write
 (`addToIntradeskIndex`); a header note says why the session's repeat of a
 write cannot add twice. `trash_intradesk_items` reads nothing before its
@@ -1429,10 +1431,10 @@ What the server adds itself (`create_intradesk_folder`,
 `add_intradesk_weblink`, `upload_intradesk_files`) goes into the index at
 once, under the folder's path, in memory and in the file
 (`IntradeskIndexCache.patch`), so a search finds it without waiting for the
-next walk. Only an index that is loaded is patched, of any age, and only
-when it knows the folder; the patch keeps the time the index was built, so
-the next walk comes when it would have, and a walk that runs meanwhile gets
-the patch too. What `trash_intradesk_items` moved leaves the index the same
+next walk. Only an index that is loaded is patched, of any age, also when
+it does not know the folder yet; the patch keeps the time the index was
+built, so the next walk comes when it would have, and a walk that runs
+meanwhile gets the patch too. What `trash_intradesk_items` moved leaves the index the same
 way, a folder with everything in it; an item that may or may not have been
 moved stays until the next walk.
 

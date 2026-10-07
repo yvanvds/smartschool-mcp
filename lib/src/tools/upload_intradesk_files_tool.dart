@@ -108,12 +108,7 @@ Future<CallToolResult> _upload(
     final result = await withIntradeskWrite(
       session,
       (intradesk) async {
-        final read = parent = await readIntradeskParent(
-          intradesk,
-          cache,
-          folderId,
-        );
-        read.refuseWithoutAdd();
+        final read = parent = await readIntradeskParent(intradesk, folderId);
         read.refuseTakenNames(
           names,
           what: files.length == 1 ? 'the file' : 'some of the files',
@@ -124,6 +119,7 @@ Future<CallToolResult> _upload(
         );
       },
       what: what,
+      where: where,
       files: files,
     );
     final made = intradeskItems(
@@ -133,11 +129,11 @@ Future<CallToolResult> _upload(
         weblinks: const [],
       ),
       folderId: folderId,
-      path: parent!.path ?? '',
+      path: parent!.path,
     );
     final index = made.isEmpty
         ? 'nothing made'
-        : await addToIntradeskIndex(cache, parent!, made);
+        : await addToIntradeskIndex(cache, made);
     log(
       'upload_intradesk_files: ${files.length} sent, ${made.length} made, '
       '${result.failures.length} failed in ${watch.elapsedMilliseconds} ms '
@@ -177,8 +173,7 @@ CallToolResult _result(
           'a file it added. Do not call upload_intradesk_files again for '
           'them: list the folder with list_intradesk_folder (folder_id '
           '${parent.id}) to see whether they are there, and tell the user.',
-    for (final item in made)
-      '- ${formatIntradeskItem(item, fullPath: parent.path != null)}',
+    for (final item in made) '- ${formatIntradeskItem(item)}',
     if (renamed.isNotEmpty)
       'Note: Intradesk stored ${renamed.join(', ')} under another name than '
           'any file sent: it renames a new file whose name is taken in the '

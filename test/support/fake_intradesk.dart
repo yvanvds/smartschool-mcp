@@ -18,7 +18,9 @@ import 'fake_uploads.dart';
 /// shows up in its parent's listing. A file added with content can be
 /// downloaded. The parents of a folder are served as Smartschool does, which
 /// the library asks for when a listing fails with a 500, and, with the
-/// listing of the folder above, to read the folder a create adds to before
+/// listings of the folders above, to read a folder's path and entry
+/// (`getFolderPath`, `getFolder`, yvanvds/dartschool#132): the write tools
+/// read the folder's path, and a create reads the folder it adds to before
 /// sending it (yvanvds/dartschool#138).
 ///
 /// The writes are carried out as the live Intradesk did on 2026-10-05, in
