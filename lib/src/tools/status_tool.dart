@@ -75,9 +75,7 @@ Future<CallToolResult> _status(
   try {
     settings = session.settings;
     displayName = await session.run((client) async {
-      // A live request, so a check hours after the first login still tests
-      // the connection now (and logs in again if the session expired).
-      await client.getJson(SmartschoolSession.sessionCheckPath);
+      await client.ensureAuthenticated();
       return (await client.getCurrentUser()).displayName;
     });
   } on SmartschoolProblem catch (error) {

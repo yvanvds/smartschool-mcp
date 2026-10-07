@@ -33,11 +33,6 @@ final class SmartschoolSession {
   SmartschoolSession(this.source, {ClientFactory? createClient})
     : _createClient = createClient ?? SmartschoolClient.create;
 
-  /// A GET that needs a valid session. Without one, Smartschool redirects it
-  /// to `/login` and the library's auth interceptor logs in. The library's
-  /// own session check (`ensureAuthenticated`) uses the same endpoint.
-  static const sessionCheckPath = '/course-list/api/v1/courses';
-
   final CredentialSource source;
   final ClientFactory _createClient;
 

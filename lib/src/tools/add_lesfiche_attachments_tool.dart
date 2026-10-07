@@ -24,8 +24,10 @@ import 'server_tool.dart';
 /// again), and then sets each visibility that is not `always`: the module
 /// gives every new attachment `always`, and ignores the visibility sent
 /// with them (seen live). The tool reads the lesfiche first, in the session
-/// action of the add (the library takes it as read), so that a repeat of
-/// the action logs in again with a read (yvanvds/dartschool#134).
+/// action of the add (the library takes it as read). When Smartschool
+/// refused the session for the take, the session repeats the action, and
+/// the library logs in again before the repeat's first request
+/// (yvanvds/dartschool#134).
 ///
 /// When the module took the files and only setting a visibility failed,
 /// the library says so with a [SmartschoolLessonContentVisibilityNotSetError]
@@ -133,10 +135,8 @@ Future<CallToolResult> _add(
     added = await withLesficheWrite(
       session,
       (client) async {
-        // First, so that a repeat of the session logs in again with a read:
-        // the take of the files is refused at once on an expired session,
-        // without a login (yvanvds/dartschool#134). The library reads the
-        // lesfiche again itself, to tell the new attachments by their ids.
+        // The library takes the lesfiche as read, and reads it again itself
+        // to tell the new attachments by their ids.
         final read = lesfiche = (await readLesficheDetail(
           client,
           type,

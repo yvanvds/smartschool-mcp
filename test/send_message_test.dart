@@ -1023,9 +1023,9 @@ void main() {
 
     test('Smartschool refuses the session for an upload: the library does '
         'not upload the file again after logging in; the repeat loads new '
-        'compose forms, logging in at the first (yvanvds/dartschool#134 does '
-        'not apply), uploads the file into the new directory and sends the '
-        'message once', () async {
+        'compose forms in a new session, the library logging in before the '
+        'first (yvanvds/dartschool#134), uploads the file into the new '
+        'directory and sends the message once', () async {
       server.expireSessionBefore(
         (request) =>
             request.method == 'POST' &&
@@ -1038,6 +1038,14 @@ void main() {
       );
       expect(server.logins, 2);
       expect(uploadRequests(), 2, reason: 'the refused one and the new one');
+      final refused = server.requests.indexOf('POST ${FakeUploads.uploadPath}');
+      expect(
+        server.requests[refused + 1],
+        'GET /login',
+        reason:
+            'after a refused session the library logs in before the next '
+            'request (yvanvds/dartschool#134)',
+      );
       // Forms 1 and 2 (the search and the send) were loaded in the first
       // session, 3 and 4 in the new one. The refused upload into dir2 was
       // answered 401 before the upload step; the fake fails an upload into

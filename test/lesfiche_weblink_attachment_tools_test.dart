@@ -452,18 +452,12 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
-      final repeat = server.requests.sublist(first + 1);
       expect(
-        repeat.first,
+        server.requests[first + 1],
         'GET /login',
         reason:
             'after a refused session the library logs in before the next '
             'request (yvanvds/dartschool#134)',
-      );
-      expect(
-        repeat.firstWhere((request) => request.contains('/lesson-content/')),
-        'GET $_lessonPath',
-        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'added once');
       expect(server.logins, 2);
@@ -999,18 +993,12 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
-      final repeat = server.requests.sublist(first + 1);
       expect(
-        repeat.first,
+        server.requests[first + 1],
         'GET /login',
         reason:
             'after a refused session the library logs in before the next '
             'request (yvanvds/dartschool#134)',
-      );
-      expect(
-        repeat.firstWhere((request) => request.contains('/lesson-content/')),
-        'GET $_lessonPath',
-        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'taken once');
       expect(server.logins, 2);

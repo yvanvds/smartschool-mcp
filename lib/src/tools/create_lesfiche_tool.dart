@@ -33,13 +33,14 @@ import 'server_tool.dart';
 /// The arguments are checked before anything is sent
 /// (`lesfiche_writes.dart`, the visibilities in `lesfiche_detail.dart`).
 /// The tool then reads the user's lesfiches, for the note on lesfiches of
-/// the same name and kind (that read also logs in again when the session
-/// repeats the call: the create goes out once only), the school's course
-/// list to find the courses by name, and for an assignment the school's
-/// assignment types. The library checks the courses and the type again,
-/// uploads the files, sends the create once and reads the new lesfiche
-/// back; a create it cannot confirm is reported as maybe made, or as made
-/// with its id when the module answered with one.
+/// the same name and kind, the school's course list to find the courses by
+/// name, and for an assignment the school's assignment types. The library
+/// checks the courses and the type again, uploads the files, sends the
+/// create once and reads the new lesfiche back; a create it cannot confirm
+/// is reported as maybe made, or as made with its id when the module
+/// answered with one. When Smartschool refused the session for the create,
+/// the session repeats the call, and the library logs in again before the
+/// repeat's first request (yvanvds/dartschool#134).
 ServerTool createLesficheTool(
   SmartschoolSession session, {
   int maxBytes = maxLocalFileBytes,
@@ -185,9 +186,8 @@ Future<CallToolResult> _create(
       session,
       (client) async {
         final lesfiches = LessonContentService(client);
-        // First, so that a repeat of the session logs in again with it:
-        // the create is refused at once on an expired session, without a
-        // login (yvanvds/dartschool#134).
+        // Before the create, as every read of the tool: an error up to the
+        // create means that no lesfiche was made.
         final items = await lesfiches.getItems(withCourseNames: false);
         final courses = wanted.isEmpty
             ? const <PlannerCourse>[]

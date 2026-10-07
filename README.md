@@ -622,17 +622,16 @@ client name. It also installs again while that copy runs.
   lesfiche after the user's confirmation, a second call makes a second
   lesfiche, and it sends files from this PC; Claude Desktop and Codex ask
   for approval only for a tool marked destructive. Before sending, it
-  reads the user's lesfiches (for the note on namesakes below, and so that
-  the session's repeat of the call logs in again: the create goes out once
-  only, and is refused at once on an expired session, without a login,
-  dartschool#134),
-  the course list for the courses, and for an assignment the school's
-  types (read once per session). The library checks the courses and the
-  type again, uploads the files into a new upload directory, sends the
-  create once (`POST lessons/` or `assignments/`, answered `201` with the
-  id only) and reads the lesfiche back. A name that is taken is kept (the
-  module makes a second lesfiche, seen live), and the result names the
-  other lesfiches of that name and kind. The result is the lesfiche as
+  reads the user's lesfiches (for the note on namesakes below), the course
+  list for the courses, and for an assignment the school's types (read
+  once per session). The library checks the courses and the type again,
+  uploads the files into a new upload directory, sends the create once
+  (`POST lessons/` or `assignments/`, answered `201` with the id only) and
+  reads the lesfiche back. When Smartschool refuses the session for the
+  create, the session repeats the call, and the library logs in again
+  before the repeat's first request (dartschool#134). A name that is
+  taken is kept (the module makes a second lesfiche, seen live), and the
+  result names the other lesfiches of that name and kind. The result is the lesfiche as
   `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson),
   `read_lesfiche` and `edit_lesfiche`, the tools that change its weblinks
   and attachments, and `trash_lesfiches` to undo it (below). Labels are
@@ -693,11 +692,12 @@ client name. It also installs again while that copy runs.
   the icon and the visibility that are not given stay as the weblink has
   them. Marked destructive, and not idempotent: a second add adds a second
   weblink. The tool reads the lesfiche first, in the session action of the
-  write: the library takes it as read, a weblink id the lesfiche does not
-  have is refused before sending (with its weblinks and their ids), and,
-  since the library sends an add once only, never again after logging in
-  again, it is that read that logs in again when the session repeats the
-  call (dartschool#134). The result says what was added or changed, with
+  write: the library takes it as read, and a weblink id the lesfiche does
+  not have is refused before sending (with its weblinks and their ids).
+  The library sends an add once only, never again after logging in again:
+  when Smartschool refuses the session for it, the session repeats the
+  call, and the library logs in again before the repeat's first request
+  (dartschool#134). The result says what was added or changed, with
   the weblink's id, and gives the lesfiche as `read_lesfiche` shows it. A
   refusal by the module (a bare `400`) says that nothing changed; an add
   the module does not confirm is maybe added, with `read_lesfiche` to check
@@ -718,10 +718,12 @@ client name. It also installs again while that copy runs.
   (`changeAttachmentVisibility`): the module gives every new attachment
   `always`, and ignores the visibility sent with them (seen live). Marked
   destructive, and not idempotent: a second call adds the files a second
-  time. The tool reads the lesfiche first in the session action, as
-  `set_lesfiche_weblink` does (dartschool#134). The result lists the
-  attachments added with their ids, notes a name the lesfiche had already
-  (the module keeps both), and gives the lesfiche. A file the upload step
+  time. The tool reads the lesfiche first in the session action. When
+  Smartschool refuses the session for the take, the session repeats the
+  call, and the library logs in again before the repeat's first request,
+  as for an add of `set_lesfiche_weblink` (dartschool#134). The result
+  lists the attachments added with their ids, notes a name the lesfiche
+  had already (the module keeps both), and gives the lesfiche. A file the upload step
   refuses (in Smartschool's words), a refusal and a `404` say that nothing
   changed. When the module took the files and only setting a visibility
   failed (`SmartschoolLessonContentVisibilityNotSetError`, dartschool#135,
