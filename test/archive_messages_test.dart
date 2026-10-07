@@ -118,6 +118,7 @@ void main() {
     expect(tool.description, contains('Wat kan ik zeker archiveren?'));
     expect(tool.description, contains('do not archive anything'));
     expect(tool.description, contains('propose a list'));
+    expect(tool.description, contains('they stay in their folder'));
     expect(tool.description, contains('from list_messages'));
     expect(tool.description, isNot(contains('newest 50')));
 
@@ -428,5 +429,81 @@ void main() {
         expect(_ids(server.mailbox.inbox), [101, 102, 103]);
       });
     }
+  });
+
+  test('a message in a folder the user made is not archived: the result '
+      'says which folder it is in (#131)', () async {
+    String listing(int boxId) =>
+        'message list boxID=$boxId boxType=inbox layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+    final mailbox = server.mailbox;
+    mailbox
+        .addFolder(30650, 'dartschool test')
+        .messages
+        .add(
+          FakeMessage(
+            id: 501,
+            sender: 'Directie',
+            subject: 'Kalender',
+            date: '2024-03-10 09:00',
+          ),
+        );
+    final projects = mailbox.addFolder(31000, 'Projecten');
+    mailbox
+        .addFolder(31001, '2026', parent: projects)
+        .messages
+        .add(
+          FakeMessage(
+            id: 511,
+            sender: 'Tom Maes',
+            subject: 'Projectweek',
+            date: '2024-03-09 12:00',
+          ),
+        );
+    mailbox.addFolder(32000, 'Projecten', boxType: 'outbox');
+
+    final text = await ok([511, 102, 501, 999, 201]);
+
+    expect(
+      text,
+      'Archived 1 of 5 messages; 1 was already in the archive, 3 could not '
+      'be archived.\n'
+      'Archived:\n'
+      '$_line102\n'
+      'Already in the archive:\n'
+      '$_line201\n'
+      'Not archived, in the folder inbox/Projecten/2026:\n'
+      '- id 511 | 2024-03-09 12:00 | from Tom Maes | Projectweek\n'
+      'Not archived, in the folder inbox/dartschool test:\n'
+      '- id 501 | 2024-03-10 09:00 | from Directie | Kalender\n'
+      'Not archived, not in the inbox:\n'
+      '- id 999\n'
+      'Note: only messages in the inbox itself are archived, not those in a '
+      'folder the user made in Smartschool: they stay in their folder. The '
+      'user can move them in Smartschool.\n'
+      'Note: only messages in the inbox can be archived. Take the ids from '
+      'list_messages on the inbox.',
+    );
+    // The folders of the inbox are listed until they are all looked in,
+    // as 999 is in none; only the inbox message is sent to be archived.
+    expect(server.mailbox.actions, [
+      _inboxListing,
+      _archiveListing,
+      listing(30650),
+      listing(31000),
+      listing(31001),
+      'archive msgIDs=102',
+    ]);
+    expect(_ids(mailbox.folders.first.messages), [501]);
+    expect(_ids(mailbox.folders[2].messages), [511]);
+
+    // Without ids outside the inbox and the archive, no folder is listed.
+    mailbox.actions.clear();
+    await ok([103, 201]);
+    expect(mailbox.actions, [
+      _inboxListing,
+      _archiveListing,
+      'archive msgIDs=103',
+    ]);
   });
 }

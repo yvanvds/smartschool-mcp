@@ -126,6 +126,17 @@ void main() {
       expect(tool.toolAnnotations?.destructiveHint, isNot(true));
     }
     expect(tools['list_messages']!.description, contains('call read_message'));
+    expect(
+      tools['list_messages']!.description,
+      contains('a folder the user made in Smartschool'),
+    );
+    expect(
+      tools['read_message']!.inputSchema.properties!['box'],
+      containsPair(
+        'description',
+        contains('For a message in a folder the user made, the box'),
+      ),
+    );
     expect(tools['read_message']!.description, contains('from list_messages'));
     expect(
       tools['read_message']!.description,
@@ -135,6 +146,7 @@ void main() {
     final listSchema = tools['list_messages']!.inputSchema;
     expect(listSchema.properties!.keys, [
       'box',
+      'folder',
       'query',
       'unread_only',
       'since',
@@ -712,6 +724,267 @@ void main() {
       expect(shown.length, inInclusiveRange(maxBodyLength - 10, maxBodyLength));
       expect(shown, startsWith('woord woord'));
       expect(shown, endsWith(' woord'));
+    });
+  });
+
+  group('a folder the user made in Smartschool (#131)', () {
+    String listing(int boxId, {String boxType = 'inbox'}) =>
+        'message list boxID=$boxId boxType=$boxType layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+    const header401 = 'id 401 | 2024-03-10 09:00 | from Directie | Kalender';
+    const header402 =
+        'id 402 | 2024-03-11 14:00 | from Els Wouters | Uitstap Brugge | '
+        'unread';
+    const header411 = 'id 411 | 2024-03-09 12:00 | from Tom Maes | Projectweek';
+    const header421 =
+        'id 421 | 2024-03-08 10:00 | to Els Wouters | Projectweek: planning';
+    const folders =
+        'inbox/dartschool test (id 30650), inbox/Projecten (id 31000), '
+        'inbox/Projecten/2026 (id 31001)';
+
+    // A folder in the inbox with two messages, an empty one with a folder
+    // in it, and a folder of the sent box with the same name.
+    setUp(() {
+      final mailbox = server.mailbox;
+      mailbox.addFolder(30650, 'dartschool test').messages.addAll([
+        FakeMessage(
+          id: 401,
+          sender: 'Directie',
+          subject: 'Kalender',
+          date: '2024-03-10 09:00',
+          to: ['Jan Peeters'],
+          body: '<p>De kalender van april.</p>',
+        ),
+        FakeMessage(
+          id: 402,
+          sender: 'Els Wouters',
+          subject: 'Uitstap Brugge',
+          date: '2024-03-11 14:00',
+          unread: true,
+        ),
+      ]);
+      final projects = mailbox.addFolder(31000, 'Projecten');
+      mailbox
+          .addFolder(31001, '2026', parent: projects)
+          .messages
+          .add(
+            FakeMessage(
+              id: 411,
+              sender: 'Tom Maes',
+              subject: 'Projectweek',
+              date: '2024-03-09 12:00',
+            ),
+          );
+      mailbox
+          .addFolder(32000, 'Projecten', boxType: 'outbox')
+          .messages
+          .add(
+            FakeMessage(
+              id: 421,
+              sender: 'Jan Peeters',
+              listedAs: 'Els Wouters',
+              subject: 'Projectweek: planning',
+              date: '2024-03-08 10:00',
+              to: ['Els Wouters'],
+              body: '<p>De planning.</p>',
+            ),
+          );
+    });
+
+    test('list_messages lists a folder by its path, its name or its id, and '
+        'says which folder it listed', () async {
+      expect(
+        await ok('list_messages', {'folder': 'dartschool test'}),
+        'Folder inbox/dartschool test: 2 messages, newest first.\n'
+        '- $header402\n'
+        '- $header401',
+      );
+      expect(server.mailbox.actions, [listing(30650)]);
+      expect(server.mailbox.folderTreeReads, 1);
+
+      // A folder in a folder: its path as the result shows it, its path
+      // from the box (ignoring case and spaces around /), its name or its
+      // id, also in quotes.
+      for (final folder in [
+        'inbox/Projecten/2026',
+        ' projecten / 2026 ',
+        '2026',
+        '31001',
+        '"Projecten/2026"',
+      ]) {
+        server.mailbox.actions.clear();
+        expect(
+          await ok('list_messages', {'folder': folder}),
+          'Folder inbox/Projecten/2026: 1 message, newest first.\n'
+          '- $header411',
+          reason: folder,
+        );
+        expect(server.mailbox.actions, [listing(31001)], reason: folder);
+      }
+
+      // An empty folder argument is none.
+      expect(
+        await ok('list_messages', {'folder': ' '}),
+        startsWith('Inbox: 3 messages, newest first.\n'),
+      );
+    });
+
+    test('a folder of the sent box is listed with the recipients, as the '
+        'sent box is', () async {
+      expect(
+        await ok('list_messages', {'box': 'sent', 'folder': 'Projecten'}),
+        'Folder sent/Projecten: 1 message, newest first.\n- $header421',
+      );
+      expect(server.mailbox.actions, [listing(32000, boxType: 'outbox')]);
+      expect(
+        await ok('list_messages', {'folder': 'sent/projecten'}),
+        startsWith('Folder sent/Projecten: 1 message, newest first.\n'),
+      );
+    });
+
+    test('a name two folders have is an error that names both, before '
+        'anything is listed; the box or the path picks one', () async {
+      final (result, text) = await call('list_messages', {
+        'folder': 'Projecten',
+      });
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'There is more than one folder "Projecten": inbox/Projecten (id '
+        '31000), sent/Projecten (id 32000). Pass the one you mean as folder, '
+        'by its path or its id.',
+      );
+      expect(server.mailbox.actions, isEmpty);
+
+      for (final arguments in [
+        {'box': 'inbox', 'folder': 'Projecten'},
+        {'folder': 'inbox/Projecten'},
+        {'folder': '31000'},
+      ]) {
+        expect(
+          await ok('list_messages', arguments),
+          'Folder inbox/Projecten: no messages.',
+          reason: '$arguments',
+        );
+      }
+    });
+
+    test('an unknown folder is an error that names the folders the user '
+        'made, and nothing is listed', () async {
+      final (result, text) = await call('list_messages', {'folder': 'Privé'});
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'There is no folder "Privé" in the inbox or the sent box. The '
+        'folders the user made are: $folders, sent/Projecten (id 32000). '
+        'Pass one of them as folder, by its path or its id.',
+      );
+      expect(server.mailbox.actions, isEmpty);
+
+      final (inSent, sentText) = await call('list_messages', {
+        'box': 'sent',
+        'folder': 'dartschool test',
+      });
+      expect(inSent.isError, isTrue);
+      expect(
+        sentText,
+        startsWith(
+          'There is no folder "dartschool test" in the sent box. The '
+          'folders the user made are: inbox/dartschool test (id 30650), ',
+        ),
+      );
+    });
+
+    test('without folders, an unknown folder says that the user has '
+        'none', () async {
+      server.mailbox.folders.clear();
+
+      final (result, text) = await call('list_messages', {'folder': 'Privé'});
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'There is no folder "Privé": the user has made no folders in '
+        "Smartschool's messages. Leave folder out and pass box (inbox, sent "
+        'or archive).',
+      );
+    });
+
+    test('folder with box archive is an error, before anything is '
+        'sent', () async {
+      final (result, text) = await call('list_messages', {
+        'box': 'archive',
+        'folder': 'dartschool test',
+      });
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'folder names a folder the user made in the inbox or the sent box, '
+        'not in the archive: pass box inbox or sent with it, or leave box '
+        'out.',
+      );
+      expect(server.requests, isEmpty);
+    });
+
+    test('when nothing matches in a box, the result names the folders the '
+        'user made in it, which were not listed', () async {
+      const look =
+          'To look there, pass one as folder, or use search_messages, which '
+          'searches the folders too.';
+      expect(
+        await ok('list_messages', {'box': 'archive', 'query': 'kalender'}),
+        'Archive: no messages match the filters (2 messages checked).\n'
+        'Not listed: the folders the user made in the inbox: $folders. '
+        '$look',
+      );
+      expect(
+        await ok('list_messages', {'query': 'uitstap'}),
+        'Inbox: no messages match the filters (3 messages checked).\n'
+        'Not listed: the folders the user made in the inbox: $folders. '
+        '$look',
+      );
+      expect(
+        await ok('list_messages', {'box': 'sent', 'query': 'projectweek'}),
+        'Sent: no messages match the filters (1 message checked).\n'
+        'Not listed: the folders the user made in the sent box: '
+        'sent/Projecten (id 32000). $look',
+      );
+
+      // Not when something matches, nor for a folder.
+      expect(
+        await ok('list_messages', {'query': 'oudercontact'}),
+        isNot(contains('Not listed')),
+      );
+      expect(
+        await ok('list_messages', {
+          'folder': 'dartschool test',
+          'query': 'zwembad',
+        }),
+        'Folder inbox/dartschool test: no messages match the filters (2 '
+        'messages checked).',
+      );
+    });
+
+    test('read_message reads a message in a folder with the box the folder '
+        'is in', () async {
+      expect(
+        await ok('read_message', {'message_id': 401}),
+        'Message 401 (Inbox)\n'
+        'From: Directie\n'
+        'Date: 2024-03-10 09:00\n'
+        'To: Jan Peeters\n'
+        'Subject: Kalender\n'
+        'Attachments: none\n'
+        '\n'
+        'De kalender van april.',
+      );
+      expect(
+        await ok('read_message', {'message_id': 421, 'box': 'sent'}),
+        startsWith('Message 421 (Sent)\nFrom: Jan Peeters\n'),
+      );
     });
   });
 

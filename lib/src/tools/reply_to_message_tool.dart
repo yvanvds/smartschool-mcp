@@ -72,7 +72,7 @@ ServerTool replyToMessageTool(
         'box': MessageBox.schema(
           description:
               'The box list_messages showed the message in: inbox '
-              '(default), sent or archive.',
+              '(default), sent or archive.$folderMessageBox',
         ),
         'attachments': messageAttachmentsSchema(),
       },

@@ -60,7 +60,7 @@ ServerTool saveMessageAttachmentTool(
         'box': MessageBox.schema(
           description:
               'The box list_messages showed the message in: inbox (default), '
-              'sent or archive.',
+              'sent or archive.$folderMessageBox',
         ),
       },
       required: ['message_id', 'attachment'],

@@ -41,7 +41,7 @@
     },
     {
       "name": "list_messages",
-      "description": "Toont de berichten in je postvak, verzonden berichten of archief, met filters op onderwerp, afzender, ongelezen en datum."
+      "description": "Toont de berichten in je postvak, verzonden berichten, archief of een map die je zelf maakte, met filters op onderwerp, afzender, ongelezen en datum."
     },
     {
       "name": "read_message",
@@ -53,15 +53,15 @@
     },
     {
       "name": "search_messages",
-      "description": "Zoekt woorden in de tekst, het onderwerp en de afzender van je berichten."
+      "description": "Zoekt woorden in de tekst, het onderwerp en de afzender van je berichten, ook in de mappen die je zelf maakte."
     },
     {
       "name": "archive_messages",
-      "description": "Verplaatst berichten uit je postvak naar het archief."
+      "description": "Verplaatst berichten uit je postvak naar het archief. Berichten in een map die je zelf maakte, blijven daar."
     },
     {
       "name": "mark_messages",
-      "description": "Markeert berichten in je postvak of archief als gelezen of ongelezen."
+      "description": "Markeert berichten in je postvak, je archief of een eigen map als gelezen of ongelezen."
     },
     {
       "name": "flag_messages",

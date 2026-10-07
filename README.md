@@ -240,58 +240,69 @@ client name. It also installs again while that copy runs.
   the rights for its tools (see *Opt-in tools* below), the download folder
   and whether it is writable, and whether a newer version is available,
   with its download link and what is new (see *Update check* below).
-- `list_messages`: the headers of the inbox, sent box or archive, newest
-  first, filtered by words in subject or sender, unread, and date range.
-  Smartschool lists a box 50 messages at a time; the tool asks for the next
-  50 only while they can change the result (more messages to show, or not
-  yet past `since`), and Claude reaches older messages with `until`.
+- `list_messages`: the headers of the inbox, sent box or archive, or of a
+  folder the user made in Smartschool (`folder`, see *Message folders*
+  below), newest first, filtered by words in subject or sender, unread, and
+  date range. Smartschool lists a box 50 messages at a time; the tool asks
+  for the next 50 only while they can change the result (more messages to
+  show, or not yet past `since`), and Claude reaches older messages with
+  `until`. When nothing matches in a box, the result names the folders the
+  user made in it, which were not listed.
 - `read_message`: one message with its recipients, its attachments
   (numbered, with name and size) and the body as plain text. It does not
-  mark the message as read.
+  mark the message as read. A message in a folder is read with the box the
+  folder is in: Smartschool finds it by its id.
 - `save_message_attachment`: saves one attachment of a message (by its
   number in `read_message`, or its file name) into the download folder and
   returns its full path, name and size (see *Saving files* below).
-- `search_messages`: searches the text, subject and sender of the messages
-  in the inbox and archive (or the boxes named) for words, ignoring case and
-  accents, optionally within a date range, and returns the matching messages
-  newest first with a snippet around the words. It downloads each message
-  text once (at most 100 per search, 4 at a time, newest first) and keeps it
-  in the message text cache (see below), so later searches are quick; the
-  result says when messages were left unsearched. It lists the whole of each
-  box searched (with `since`, only back to that date), so a search of a
-  large box takes a few searches the first time.
+- `search_messages`: searches the text, subject and sender of the messages in
+  the inbox and archive (or the boxes named), and in the folders the user made
+  in the inbox (in the sent box, when `sent` is named), for words, ignoring
+  case and accents, optionally within a date range, and returns the matching
+  messages newest first with their box or folder and a snippet around the
+  words. It downloads each message text once (at most 100 per search, 4 at a
+  time, newest first) and keeps it in the message text cache (see below), so
+  later searches are quick; the result says when messages were left
+  unsearched. It lists the whole of each box and folder searched (with
+  `since`, only back to that date), so a search of a large box takes a few
+  searches the first time.
 - `archive_messages`: moves up to 100 inbox messages (ids from
   `list_messages`) to the archive and reports per id whether it was
   archived, was already in the archive, or why not. It lists the inbox (and
-  the archive, for ids not in the inbox) until it has found every id. Claude
-  proposes candidates when asked for advice and archives when asked to.
-- `mark_messages`: marks up to 100 messages of the inbox or the archive
-  (ids from `list_messages`) as read or unread; the sent box has no read
-  state for the user. `read_message` leaves the read state alone: marking a
-  message as read is the user's choice. It lists the box until it has found
-  every id, changes the messages one at a time and reports per id the new
-  state Smartschool confirmed, that the message is not in the box, or that
-  Smartschool did not confirm the change. Claude proposes candidates when
-  asked for advice and marks them when asked to.
+  the archive, for ids not in the inbox) until it has found every id. An id
+  in neither is looked up in the folders the user made in the inbox, to
+  say which folder the message is in; it is not archived from there.
+  Whether Smartschool's archive request takes a message out of such a
+  folder has not been tried (#134), and the user may keep it there on
+  purpose. Claude proposes candidates when asked for advice and archives
+  when asked to.
+- `mark_messages`: marks up to 100 messages of the inbox, the archive or a
+  folder the user made in the inbox (ids from `list_messages`) as read or
+  unread; the sent box has no read state for the user. `read_message` leaves
+  the read state alone: marking a message as read is the user's choice. It
+  lists the box until it has found every id, changes the messages one at a
+  time and reports per id the new state Smartschool confirmed, that the
+  message is not in the box, or that Smartschool did not confirm the change.
+  Claude proposes candidates when asked for advice and marks them when asked
+  to.
 - `flag_messages`: sets the colour flag (green, yellow, red or blue) of up
-  to 100 messages of the inbox, the sent box or the archive, or clears it
-  (`none`), one message at a time and reporting per id, like
-  `mark_messages`.
-- `trash_messages`: moves up to 100 messages of the inbox, the sent box or
-  the archive to Smartschool's trash, one message at a time. A move, not a
-  deletion: the user can restore a message from the trash in Smartschool
-  until the trash is emptied, but the server cannot take it out again. So
-  the tool is marked destructive (Claude Desktop asks for approval every
-  time), and Claude is told to show the list and wait for the user's
+  to 100 messages of the inbox, the sent box, the archive or a folder the
+  user made, or clears it (`none`), one message at a time and reporting per
+  id, like `mark_messages`.
+- `trash_messages`: moves up to 100 messages of the inbox, the sent box, the
+  archive or a folder the user made to Smartschool's trash, one message at a
+  time. A move, not a deletion: the user can restore a message from the trash
+  in Smartschool until the trash is emptied, but the server cannot take it out
+  again. So the tool is marked destructive (Claude Desktop asks for approval
+  every time), and Claude is told to show the list and wait for the user's
   confirmation first. Each message is moved with the library's
-  `moveToTrashFrom`, which names its box (the archive with its box id),
-  never with `moveToTrash`, whose `quick delete` names no box and deletes a
-  copy in the trash for good. Smartschool answers a move the same whether
-  it moved the message or not, so each message is read back from its box
-  afterwards. The result says per id: moved, not in the box, or still in
-  the box after the move. A message the user sent to themselves has the
-  same id in the inbox and the sent box: only the copy in the box named is
-  moved.
+  `moveToTrashFrom`, which names its box (the archive or a folder with its box
+  id), never with `moveToTrash`, whose `quick delete` names no box and deletes
+  a copy in the trash for good. Smartschool answers a move the same whether it
+  moved the message or not, so each message is read back from its box
+  afterwards. The result says per id: moved, not in the box, or still in the
+  box after the move. A message the user sent to themselves has the same id in
+  the inbox and the sent box: only the copy in the box named is moved.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -1117,9 +1128,10 @@ registration per lesson (which `userCanRecord` seems to stand for) are not
 offered; #77 is the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
-(inbox / sent / archive, their headers and one message) and `withMessages`
-in `message_box.dart`, the HTML-to-text converter `htmlToText` in
-`html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
+(inbox / sent / archive and the folders the user made, their headers and one
+message), the `box` and `folder` arguments (`BoxArgument`, `folderSchema`) and
+`withMessages` in `message_box.dart`, the HTML-to-text converter `htmlToText`
+in `html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
 writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
 who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
 recipients of a new message (`searchRecipients`, `RecipientRequest`) in
@@ -1145,7 +1157,10 @@ how its outcome is reported (`notConfirmedResult`, `sendSummary`) in
 Messages module (`test/support/fake_messages.dart`) whose compose forms each
 open their `randomDir` in the fake upload step, bound to the session the
 form was loaded in (an upload into it from another session fails the test),
-and whose submit sends the files of that directory with the message.
+and whose submit sends the files of that directory with the message. Its
+folder tree (`requestmovelist`) holds the archive and the folders a test adds
+with `addFolder` (in the inbox, the sent box or another folder), each listed,
+read and changed as the archive is.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
@@ -1392,6 +1407,41 @@ the default `false` in the manifest's `user_config`, its variable in
 `mcp_config.env`, a hint in the installer's `settingHints`, and a row in both
 colleague guides), an `OptInTools` with its tools, rights and access check,
 and the group in the entry point's `optIns`.
+
+### Message folders
+
+Users make their own folders in Smartschool's messages ("Map toevoegen"),
+in the inbox and in the sent box, also inside another folder. Their
+messages are not in the box itself, so the message tools look in them
+separately, with the folder tree of the library's `getFolders`
+(`quickactions` / `requestmovelist`, flutter_smartschool 0.3.7,
+yvanvds/dartschool#136), read again at every call that needs it:
+
+- Tool output names a folder by its path after the name of its box, like
+  `inbox/Projecten/2026` or `sent/Projecten`: the box to pass to
+  `read_message`, `save_message_attachment` and `reply_to_message` (which
+  find a message in a folder by its id, as Smartschool does), then the
+  folder.
+- `list_messages`, `flag_messages`, `mark_messages` and `trash_messages`
+  take a `folder` next to `box`: that path, the path from the box
+  (`Projecten/2026`, ignoring case and the spaces around a `/`), the
+  folder's name, or its id. `box` (inbox or sent) narrows the lookup; with
+  the archive it is an error. A name two folders have, or an unknown
+  folder, is an error that names the user's folders, before anything is
+  listed. `mark_messages` looks only in the folders of the inbox.
+- The folder is then listed as the archive is: with its box type and its
+  id as `boxId`, a box of its own with its own paging position. Its tree,
+  its listing, a search and reading one of its messages were tried live by
+  the live test, on the test folder "dartschool test" (inbox folder 30650).
+  Marking unread and moving to the trash name its id, as for the archive;
+  marking read and flagging name the box type only. These requests are
+  documented by the library for a folder, tried live on the archive, not
+  yet on a folder the user made (#134).
+- `search_messages` searches the folders of a box with it: by default the
+  inbox and its folders and the archive; the sent box's folders with
+  `sent`. Their messages count toward the 100 texts downloaded per search.
+- `archive_messages` does not archive a message from a folder; it says
+  which folder the message is in.
 
 ### Message text cache
 

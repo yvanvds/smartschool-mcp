@@ -52,8 +52,8 @@ Future<ReplyRecipients> loadReplyRecipients(
   required bool replyAll,
 }) async {
   // The reply forms of a received message name no BCC recipients.
-  switch ((box, replyAll)) {
-    case (MessageBox.sent, _):
+  switch ((box.boxType, replyAll)) {
+    case (BoxType.sent, _):
       final (to, cc, _) = await messages.getSentMessageRecipients(id);
       return ReplyRecipients(to: to, cc: replyAll ? cc : const []);
     case (_, true):

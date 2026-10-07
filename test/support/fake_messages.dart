@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' show HttpHeaders;
 import 'dart:typed_data';
 
@@ -62,6 +63,26 @@ class FakeMessage {
 
   /// Whether Smartschool allows replies to the message (`canReply`).
   final bool canReply;
+}
+
+/// A folder the user made in Smartschool ("Map toevoegen") in a
+/// [FakeMailbox]: in the inbox or the sent box, or in another folder
+/// ([parent]), made with [FakeMailbox.addFolder].
+class FakeFolder {
+  FakeFolder._(this.id, this.name, this.boxType, this.parent);
+
+  /// Its box id, as the folder tree gives it.
+  final int id;
+  final String name;
+
+  /// The box it is in: `inbox` or `outbox` (the sent box).
+  final String boxType;
+
+  /// The folder it is in; null for one directly in its box.
+  final FakeFolder? parent;
+
+  /// The messages in it, listed with [boxType] and its [id] as `boxID`.
+  final List<FakeMessage> messages = [];
 }
 
 /// A user or a group that the search of a compose form finds, in
@@ -140,16 +161,16 @@ enum SubmitAnswer {
 /// state and the flag: `mark message read`, `mark message unread`,
 /// `save msglabel`, and moving a message to the trash: `quickmove
 /// messages`), attachment downloads, the archive endpoint, the folder tree
-/// the archive's box id is read from (`requestmovelist`, see
-/// [folderTreeReads]) and the module page that names it too (the library's
-/// fallback), and sending: the compose forms, searching recipients on a form
-/// (in the [directory]), adding recipients (users and groups) to a form and
-/// taking them off, and submitting it. The attachments of a message are uploaded with
-/// Smartschool's upload step ([uploads]) into the upload directory of its
-/// compose form (the form's hidden `randomDir`, which belongs to the session
-/// the form was loaded in), and the submit sends the files of that directory
-/// with the message, as the live platform did (dartschool's
-/// `messages_live_test.dart`).
+/// with the archive and the [folders] the user made (`requestmovelist`, see
+/// [folderTreeReads]), the module page that names the archive too (the
+/// library's fallback), and sending: the compose forms, searching
+/// recipients on a form (in the [directory]), adding recipients (users and
+/// groups) to a form and taking them off, and submitting it. The attachments
+/// of a message are uploaded with Smartschool's upload step ([uploads]) into
+/// the upload directory of its compose form (the form's hidden `randomDir`,
+/// which belongs to the session the form was loaded in), and the submit
+/// sends the files of that directory with the message, as the live platform
+/// did (dartschool's `messages_live_test.dart`).
 ///
 /// Responses have the shape of the dartschool fixtures under
 /// `test/fixtures/smartschool/requests/post/postboxes/`,
@@ -210,6 +231,29 @@ class FakeMailbox {
   /// The archive folder's box id, named in the folder tree and on the
   /// Messages module page.
   int archiveBoxId = 305;
+
+  /// The folders the user made, in the order of the folder tree
+  /// ([addFolder]). A folder is a box of its own, with its own paging
+  /// position, as the library documents (yvanvds/dartschool#136): listed,
+  /// read, flagged, marked and moved to the trash as the archive is, with
+  /// its box type and, where the request names one, its box id. The archive
+  /// endpoint does not take a message out of a folder, as it takes none out
+  /// of the archive; whether Smartschool's does has not been tried.
+  final List<FakeFolder> folders = [];
+
+  /// Adds a folder [name] with box id [id] to the box [boxType] (`inbox`, or
+  /// `outbox` for the sent box), or to the folder [parent] (in its box), and
+  /// returns it.
+  FakeFolder addFolder(
+    int id,
+    String name, {
+    String boxType = 'inbox',
+    FakeFolder? parent,
+  }) {
+    final folder = FakeFolder._(id, name, parent?.boxType ?? boxType, parent);
+    folders.add(folder);
+    return folder;
+  }
 
   /// How many times the folder tree (`quickactions` / `requestmovelist`)
   /// was read. The library reads the archive's box id from it once per
@@ -599,11 +643,22 @@ class FakeMailbox {
         ('inbox', '0') => inbox,
         ('inbox', final id) when id == '$archiveBoxId' => archive,
         ('outbox', '0') => sent,
-        _ => const [],
+        _ =>
+          folders
+                  .where((f) => f.boxType == boxType && '${f.id}' == boxId)
+                  .firstOrNull
+                  ?.messages ??
+              const [],
       };
 
+  /// Message [id] in the box [boxType] or one of its folders: `show
+  /// message`, `mark message read` and `save msglabel` name no folder.
   FakeMessage? _find(int id, String boxType) {
-    final boxes = boxType == 'outbox' ? [sent] : [inbox, archive];
+    final boxes = [
+      ...boxType == 'outbox' ? [sent] : [inbox, archive],
+      for (final folder in folders)
+        if (folder.boxType == boxType) folder.messages,
+    ];
     for (final box in boxes) {
       for (final message in box) {
         if (message.id == id) return message;
@@ -1129,23 +1184,65 @@ ${list('users', users)}
   /// The answer to `quickactions` / `requestmovelist`, the folder tree of
   /// the web client's "move messages" dialog, in the shape of the dartschool
   /// fixture `quickactions/requestmovelist.xml` (seen live 2026-10-07): the
-  /// inbox with the archive ([archiveBoxId], described `msg archive`), the
-  /// sent box and the trash, as XML-escaped JSON.
+  /// inbox with the archive ([archiveBoxId], described `msg archive`) and
+  /// the [folders] the user made in it, the sent box with those made there,
+  /// and the trash, as XML-escaped JSON. A folder's `postboxID` is a string
+  /// and its `parentID` `"-1"`, also in another folder (the nesting shows
+  /// only in `children`), as seen live.
   String _folderTree() {
-    const box =
-        '"postboxID":0,"parentID":-1,"postboxDescription":"","children":';
-    final tree =
-        '[{"postboxType":"inbox","postboxName":"Postvak in",$box['
-        '{"postboxID":"$archiveBoxId","postboxType":"inbox","parentID":"-1",'
-        '"postboxName":"Berichten archief","postboxDescription":"msg archive",'
-        '"children":[]}]},'
-        '{"postboxType":"outbox","postboxName":"Verzonden",$box[]},'
-        '{"postboxType":"trash","postboxName":"Prullenmand",$box[]}]';
+    Map<String, Object?> box(
+      String type,
+      String name,
+      List<Object?> children,
+    ) => {
+      'postboxID': 0,
+      'postboxType': type,
+      'parentID': -1,
+      'postboxName': name,
+      'postboxDescription': '',
+      'children': children,
+    };
+    Map<String, Object?> folder(
+      int id,
+      String name,
+      String type, {
+      String description = '',
+      FakeFolder? of,
+    }) => {
+      'postboxID': '$id',
+      'postboxType': type,
+      'parentID': '-1',
+      'postboxName': name,
+      'postboxDescription': description,
+      'children': [
+        for (final child in folders)
+          if (of != null && child.parent == of)
+            folder(child.id, child.name, type, of: child),
+      ],
+    };
+    List<Object?> topFolders(String type) => [
+      for (final f in folders)
+        if (f.boxType == type && f.parent == null)
+          folder(f.id, f.name, type, of: f),
+    ];
+    final tree = jsonEncode([
+      box('inbox', 'Postvak in', [
+        folder(
+          archiveBoxId,
+          'Berichten archief',
+          'inbox',
+          description: 'msg archive',
+        ),
+        ...topFolders('inbox'),
+      ]),
+      box('outbox', 'Verzonden', topFolders('outbox')),
+      box('trash', 'Prullenmand', []),
+    ]);
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         '<server><response><status>ok</status><actions><action>'
         '<subsystem>triggers</subsystem>'
         '<command>moveToPostboxFinnishTreeRequest</command>'
-        '<data>${tree.replaceAll('"', '&quot;')}</data>'
+        '<data>${_escape(tree).replaceAll('"', '&quot;')}</data>'
         '</action></actions></response></server>';
   }
 

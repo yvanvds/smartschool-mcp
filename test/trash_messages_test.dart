@@ -125,12 +125,19 @@ void main() {
     );
   });
 
-  Future<(CallToolResult, String)> trash(List<Object?> ids, {String? box}) =>
-      callTool(connection, 'trash_messages', {'message_ids': ids, 'box': ?box});
+  Future<(CallToolResult, String)> trash(
+    List<Object?> ids, {
+    String? box,
+    String? folder,
+  }) => callTool(connection, 'trash_messages', {
+    'message_ids': ids,
+    'box': ?box,
+    'folder': ?folder,
+  });
 
   /// Calls trash_messages and expects a result that is not an error.
-  Future<String> ok(List<Object?> ids, {String? box}) async {
-    final (result, text) = await trash(ids, box: box);
+  Future<String> ok(List<Object?> ids, {String? box, String? folder}) async {
+    final (result, text) = await trash(ids, box: box, folder: folder);
     expect(result.isError, isNot(true), reason: text);
     return text;
   }
@@ -179,7 +186,7 @@ void main() {
 
     final schema = tool.inputSchema;
     expect(schema.required, ['message_ids']);
-    expect(schema.properties!.keys, ['message_ids', 'box']);
+    expect(schema.properties!.keys, ['message_ids', 'box', 'folder']);
     expect(schema.properties!['message_ids'], {
       'type': 'array',
       'description': isA<String>(),
@@ -292,8 +299,8 @@ void main() {
       '- id 201\n'
       '- id 301\n'
       'Note: the messages under "Not moved, not in the inbox" are not in '
-      'the inbox. Take the ids from list_messages on the box the messages '
-      'are in, and pass that box.',
+      'the inbox. Take the ids from list_messages on the box or folder the '
+      'messages are in, and pass that box or folder.',
     );
     expect(server.mailbox.actions, [_inboxListing, _move(103), _show(103)]);
     expect(trashed(), [103]);
@@ -527,5 +534,115 @@ void main() {
         expect(trashed(), isEmpty);
       });
     }
+  });
+
+  group('a folder the user made in Smartschool (#131)', () {
+    String listing(int boxId, {String boxType = 'inbox'}) =>
+        'message list boxID=$boxId boxType=$boxType layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+    const header501 = 'id 501 | 2024-03-10 09:00 | from Directie | Kalender';
+    const header521 =
+        'id 521 | 2024-03-08 10:00 | to Els Wouters | Projectweek';
+
+    setUp(() {
+      server.mailbox
+          .addFolder(30650, 'dartschool test')
+          .messages
+          .add(
+            FakeMessage(
+              id: 501,
+              sender: 'Directie',
+              subject: 'Kalender',
+              date: '2024-03-10 09:00',
+              unread: true,
+            ),
+          );
+      server.mailbox
+          .addFolder(32000, 'Projecten', boxType: 'outbox')
+          .messages
+          .add(
+            FakeMessage(
+              id: 521,
+              sender: 'Jan Peeters',
+              listedAs: 'Els Wouters',
+              subject: 'Projectweek',
+              date: '2024-03-08 10:00',
+            ),
+          );
+    });
+
+    test('moves a message out of a folder of the inbox and one out of a '
+        'folder of the sent box, naming the folder\'s box id', () async {
+      expect(
+        await ok([501], folder: 'dartschool test'),
+        'Moved 1 message from the folder inbox/dartschool test to the '
+        'trash.\n'
+        'Moved to the trash:\n'
+        '- $header501 | unread',
+      );
+      expect(server.mailbox.actions, [
+        listing(30650),
+        _move(501, box: 30650),
+        _show(501),
+      ]);
+      expect(server.mailbox.folders.first.messages, isEmpty);
+      expect(server.mailbox.trash.map((m) => m.id), [501]);
+
+      server.mailbox.actions.clear();
+      expect(
+        await ok([521], folder: 'sent/Projecten'),
+        'Moved 1 message from the folder sent/Projecten to the trash.\n'
+        'Moved to the trash:\n'
+        '- $header521',
+      );
+      expect(server.mailbox.actions, [
+        listing(32000, boxType: 'outbox'),
+        _move(521, boxType: 'outbox', box: 32000),
+        _show(521, boxType: 'outbox'),
+      ]);
+      expect(server.mailbox.trash.map((m) => m.id), [501, 521]);
+    });
+
+    test('a message still in the folder after the move: the note says to '
+        'list the folder', () async {
+      server.mailbox.refuseToTrash.add(501);
+
+      final (result, text) = await trash([501], folder: 'dartschool test');
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'Moved 0 of 1 message from the folder inbox/dartschool test to the '
+        'trash; 1 could not be moved.\n'
+        'Not moved, still in the folder inbox/dartschool test:\n'
+        '- $header501 | unread\n'
+        'Note: the messages under "Not moved, still in the folder '
+        'inbox/dartschool test" were still in the folder inbox/dartschool '
+        'test after the move to the trash. Check with list_messages (folder '
+        'inbox/dartschool test) whether they are still there, then try '
+        'again or let the user move them to the trash in Smartschool.',
+      );
+    });
+
+    test('a message of the inbox named with a folder is not in it, and is '
+        'not moved', () async {
+      final (result, text) = await trash([102], folder: 'dartschool test');
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        startsWith(
+          'Moved 0 of 1 message from the folder inbox/dartschool test to the '
+          'trash; 1 could not be moved.\n'
+          'Not moved, not in the folder inbox/dartschool test:\n'
+          '- id 102\n',
+        ),
+      );
+      expect(
+        server.mailbox.actions.where((a) => a.startsWith('quickmove')),
+        isEmpty,
+      );
+      expect(server.mailbox.inbox.map((m) => m.id), contains(102));
+    });
   });
 }

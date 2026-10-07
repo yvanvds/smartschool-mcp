@@ -179,8 +179,8 @@ CallToolResult changesResult(
   if (any(ChangeOutcome.notInBox)) {
     lines.add(
       'Note: the messages under "${heading(ChangeOutcome.notInBox)}" are '
-      'not in ${box.phrase}. Take the ids from list_messages on the box the '
-      'messages are in, and pass that box.',
+      'not in ${box.phrase}. Take the ids from list_messages on the box or '
+      'folder the messages are in, and pass that box or folder.',
     );
   }
   if (any(ChangeOutcome.notConfirmed)) {
@@ -190,7 +190,7 @@ CallToolResult changesResult(
       '${wording.unconfirmed?.note(unconfirmed) ?? 'Smartschool did not '
               'confirm the change of the messages under "$unconfirmed"; '
               'they are shown as they were before. Check with list_messages '
-              '(box ${box.name}) whether they changed, then try again or let '
+              '(${box.argument}) whether they changed, then try again or let '
               'the user change them in Smartschool.'}',
     );
   }

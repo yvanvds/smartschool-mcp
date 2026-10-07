@@ -162,6 +162,10 @@ void main() {
     expect(tool.toolAnnotations?.readOnlyHint, isTrue);
     expect(tool.toolAnnotations?.destructiveHint, isNot(true));
     expect(tool.description, contains('call read_message with its id and box'));
+    expect(
+      tool.description,
+      contains('the folders the user made in the inbox'),
+    );
     expect(tool.description, contains('at most 100 are downloaded per search'));
     expect(tool.description, contains('keeps them on this PC'));
     expect(tool.description, isNot(contains('newest 50')));
@@ -669,5 +673,184 @@ void main() {
       ],
     );
     expect(downloads(), hasLength(20));
+  });
+
+  group('the folders the user made in Smartschool (#131)', () {
+    String listing(int boxId, {String boxType = 'inbox'}) =>
+        'message list boxID=$boxId boxType=$boxType layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+
+    // A folder in the inbox, an empty one with a folder in it, and a folder
+    // of the sent box, each with a message about the verlofdag.
+    setUp(() {
+      final mailbox = server.mailbox;
+      mailbox
+          .addFolder(30650, 'dartschool test')
+          .messages
+          .add(
+            FakeMessage(
+              id: 401,
+              sender: 'Directie',
+              subject: 'Studiedag',
+              date: '2024-03-01 09:00',
+              body: '<p>De facultatieve verlofdag is verplaatst.</p>',
+            ),
+          );
+      final projects = mailbox.addFolder(31000, 'Projecten');
+      mailbox
+          .addFolder(31001, '2026', parent: projects)
+          .messages
+          .add(
+            FakeMessage(
+              id: 411,
+              sender: 'Tom Maes',
+              subject: 'Projectweek',
+              date: '2024-02-01 12:00',
+              body:
+                  '<p>Na de facultatieve verlofdag begint de projectweek.</p>',
+            ),
+          );
+      mailbox
+          .addFolder(32000, 'Projecten', boxType: 'outbox')
+          .messages
+          .add(
+            FakeMessage(
+              id: 421,
+              sender: 'Jan Peeters',
+              listedAs: 'Els Wouters',
+              subject: "Verlofdag collega's",
+              date: '2024-01-05 10:00',
+              to: ['Els Wouters'],
+              body: '<p>Wie neemt de facultatieve verlofdag?</p>',
+            ),
+          );
+    });
+
+    test('by default the folders of the inbox are searched with it, also a '
+        'folder in a folder, and each hit names its folder', () async {
+      expect(
+        await ok({'query': 'facultatieve verlofdag'}),
+        'Inbox, Archive and 3 folders: 4 of the 7 messages searched contain '
+        'all of: facultatieve, verlofdag, newest first.\n'
+        '$_line101\n'
+        "  Beste collega's, De facultatieve verlofdag valt op maandag 3 juni.\n"
+        '- inbox/dartschool test | id 401 | 2024-03-01 09:00 | from Directie '
+        '| Studiedag\n'
+        '  De facultatieve verlofdag is verplaatst.\n'
+        '$_line201\n'
+        '  - Facultatieve verlofdag: 3 juni - Pedagogische studiedag: 12 '
+        'maart\n'
+        '- inbox/Projecten/2026 | id 411 | 2024-02-01 12:00 | from Tom Maes '
+        '| Projectweek\n'
+        '  Na de facultatieve verlofdag begint de projectweek.',
+      );
+      expect(
+        server.mailbox.actions.where((a) => a.startsWith('message list')),
+        [
+          listing(0),
+          listing(305),
+          listing(30650),
+          listing(31000),
+          listing(31001),
+        ],
+      );
+      expect(
+        downloads(),
+        unorderedEquals([
+          for (final id in [101, 102, 103, 201, 202, 401, 411])
+            'show message boxType=inbox limitList=true msgID=$id',
+        ]),
+      );
+    });
+
+    test('the folders of the sent box are searched with it, and only with '
+        'it', () async {
+      expect(
+        await ok({
+          'query': 'verlofdag',
+          'boxes': ['sent'],
+        }),
+        'Sent and 1 folder: 2 of the 2 messages searched contain all of: '
+        'verlofdag, newest first.\n'
+        '- sent | id 301 | 2024-03-12 11:00 | to Els Wouters | Verlofdag\n'
+        '  Ik neem de facultatieve verlofdag op.\n'
+        "- sent/Projecten | id 421 | 2024-01-05 10:00 | to Els Wouters | "
+        "Verlofdag collega's\n"
+        '  Wie neemt de facultatieve verlofdag?',
+      );
+      expect(
+        server.mailbox.actions.where((a) => a.startsWith('message list')),
+        [listing(0, boxType: 'outbox'), listing(32000, boxType: 'outbox')],
+      );
+      expect(downloads(), [
+        'show message boxType=outbox limitList=true msgID=301',
+        'show message boxType=outbox limitList=true msgID=421',
+      ]);
+
+      server.mailbox.actions.clear();
+      expect(
+        await ok({
+          'query': 'verlofdag',
+          'boxes': ['archive'],
+        }),
+        startsWith('Archive: 1 of the 2 messages searched contains all of: '),
+      );
+      expect(
+        server.mailbox.actions.where((a) => a.startsWith('message list')),
+        [listing(305)],
+      );
+    });
+
+    test('the cap of 100 downloads per search counts the messages of the '
+        'folders too', () async {
+      server.mailbox
+        ..inbox.clear()
+        ..archive.clear()
+        ..inbox.addAll(
+          hourlyMessages(60, firstId: 1000, newest: '2024-04-30 18:00'),
+        );
+      server.mailbox.folders.first.messages
+        ..clear()
+        ..addAll(
+          hourlyMessages(
+            60,
+            firstId: 2000,
+            newest: '2024-03-30 18:00',
+            subject: 'Map',
+          ),
+        )
+        ..add(
+          FakeMessage(
+            id: 2999,
+            sender: 'Directie',
+            subject: 'Zwembad',
+            date: '2024-01-01 08:00',
+            body: '<p>Het zwembad is dicht.</p>',
+          ),
+        );
+      server.mailbox.folders[2].messages.clear();
+
+      expect(
+        await ok({'query': 'zwembad'}),
+        'Inbox, Archive and 3 folders: none of the 100 messages searched '
+        'contains all of: zwembad.\n'
+        'Not searched: the 21 oldest messages, because at most 100 message '
+        'texts are downloaded per search. Search again to search them too: '
+        'downloaded texts are kept, so the next search only downloads the '
+        'rest.',
+      );
+      expect(downloads(), hasLength(100));
+      server.mailbox.actions.clear();
+
+      expect(
+        await ok({'query': 'zwembad'}),
+        'Inbox, Archive and 3 folders: 1 of the 121 messages searched '
+        'contains all of: zwembad, newest first.\n'
+        '- inbox/dartschool test | id 2999 | 2024-01-01 08:00 | from Directie '
+        '| Zwembad\n'
+        '  Het zwembad is dicht.',
+      );
+      expect(downloads(), hasLength(21));
+    });
   });
 }
