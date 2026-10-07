@@ -966,8 +966,8 @@ void main() {
     }
   });
 
-  test('checks the connection live on every call: logs in again when the '
-      'session expired in the meantime', () async {
+  test('checks the connection live on every call, with one request: logs in '
+      'again when the session expired in the meantime', () async {
     final session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
@@ -976,11 +976,28 @@ void main() {
     final (connection, _) = await connect(tools: [statusTool(session)]);
 
     await callTool(connection, 'smartschool_status');
+    server.requests.clear();
+    final (_, again) = await callTool(connection, 'smartschool_status');
+
+    expect(again, startsWith('Smartschool connection: working\n'));
+    expect(server.requests, [
+      'GET $fakeCourseListPath',
+    ], reason: 'one live request, also once the client checked the session');
+    expect(server.logins, 1);
+
     server.expireSession();
+    server.requests.clear();
     final (_, text) = await callTool(connection, 'smartschool_status');
 
     expect(text, startsWith('Smartschool connection: working\n'));
     expect(server.logins, 2);
+    expect(server.requests.first, 'GET $fakeCourseListPath');
+    expect(server.requests.where((r) => r == 'POST /login'), hasLength(1));
+    expect(
+      server.requests.last,
+      'GET $fakeCourseListPath',
+      reason: 'the request again, in the new session',
+    );
   });
 
   test('after a restart whose saved session expired: logs in once and '

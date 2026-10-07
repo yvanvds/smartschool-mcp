@@ -240,58 +240,69 @@ client name. It also installs again while that copy runs.
   the rights for its tools (see *Opt-in tools* below), the download folder
   and whether it is writable, and whether a newer version is available,
   with its download link and what is new (see *Update check* below).
-- `list_messages`: the headers of the inbox, sent box or archive, newest
-  first, filtered by words in subject or sender, unread, and date range.
-  Smartschool lists a box 50 messages at a time; the tool asks for the next
-  50 only while they can change the result (more messages to show, or not
-  yet past `since`), and Claude reaches older messages with `until`.
+- `list_messages`: the headers of the inbox, sent box or archive, or of a
+  folder the user made in Smartschool (`folder`, see *Message folders*
+  below), newest first, filtered by words in subject or sender, unread, and
+  date range. Smartschool lists a box 50 messages at a time; the tool asks
+  for the next 50 only while they can change the result (more messages to
+  show, or not yet past `since`), and Claude reaches older messages with
+  `until`. When nothing matches in a box, the result names the folders the
+  user made in it, which were not listed.
 - `read_message`: one message with its recipients, its attachments
   (numbered, with name and size) and the body as plain text. It does not
-  mark the message as read.
+  mark the message as read. A message in a folder is read with the box the
+  folder is in: Smartschool finds it by its id.
 - `save_message_attachment`: saves one attachment of a message (by its
   number in `read_message`, or its file name) into the download folder and
   returns its full path, name and size (see *Saving files* below).
-- `search_messages`: searches the text, subject and sender of the messages
-  in the inbox and archive (or the boxes named) for words, ignoring case and
-  accents, optionally within a date range, and returns the matching messages
-  newest first with a snippet around the words. It downloads each message
-  text once (at most 100 per search, 4 at a time, newest first) and keeps it
-  in the message text cache (see below), so later searches are quick; the
-  result says when messages were left unsearched. It lists the whole of each
-  box searched (with `since`, only back to that date), so a search of a
-  large box takes a few searches the first time.
+- `search_messages`: searches the text, subject and sender of the messages in
+  the inbox and archive (or the boxes named), and in the folders the user made
+  in the inbox (in the sent box, when `sent` is named), for words, ignoring
+  case and accents, optionally within a date range, and returns the matching
+  messages newest first with their box or folder and a snippet around the
+  words. It downloads each message text once (at most 100 per search, 4 at a
+  time, newest first) and keeps it in the message text cache (see below), so
+  later searches are quick; the result says when messages were left
+  unsearched. It lists the whole of each box and folder searched (with
+  `since`, only back to that date), so a search of a large box takes a few
+  searches the first time.
 - `archive_messages`: moves up to 100 inbox messages (ids from
   `list_messages`) to the archive and reports per id whether it was
   archived, was already in the archive, or why not. It lists the inbox (and
-  the archive, for ids not in the inbox) until it has found every id. Claude
-  proposes candidates when asked for advice and archives when asked to.
-- `mark_messages`: marks up to 100 messages of the inbox or the archive
-  (ids from `list_messages`) as read or unread; the sent box has no read
-  state for the user. `read_message` leaves the read state alone: marking a
-  message as read is the user's choice. It lists the box until it has found
-  every id, changes the messages one at a time and reports per id the new
-  state Smartschool confirmed, that the message is not in the box, or that
-  Smartschool did not confirm the change. Claude proposes candidates when
-  asked for advice and marks them when asked to.
+  the archive, for ids not in the inbox) until it has found every id. An id
+  in neither is looked up in the folders the user made in the inbox, to
+  say which folder the message is in; it is not archived from there.
+  Whether Smartschool's archive request takes a message out of such a
+  folder has not been tried (#134), and the user may keep it there on
+  purpose. Claude proposes candidates when asked for advice and archives
+  when asked to.
+- `mark_messages`: marks up to 100 messages of the inbox, the archive or a
+  folder the user made in the inbox (ids from `list_messages`) as read or
+  unread; the sent box has no read state for the user. `read_message` leaves
+  the read state alone: marking a message as read is the user's choice. It
+  lists the box until it has found every id, changes the messages one at a
+  time and reports per id the new state Smartschool confirmed, that the
+  message is not in the box, or that Smartschool did not confirm the change.
+  Claude proposes candidates when asked for advice and marks them when asked
+  to.
 - `flag_messages`: sets the colour flag (green, yellow, red or blue) of up
-  to 100 messages of the inbox, the sent box or the archive, or clears it
-  (`none`), one message at a time and reporting per id, like
-  `mark_messages`.
-- `trash_messages`: moves up to 100 messages of the inbox, the sent box or
-  the archive to Smartschool's trash, one message at a time. A move, not a
-  deletion: the user can restore a message from the trash in Smartschool
-  until the trash is emptied, but the server cannot take it out again. So
-  the tool is marked destructive (Claude Desktop asks for approval every
-  time), and Claude is told to show the list and wait for the user's
+  to 100 messages of the inbox, the sent box, the archive or a folder the
+  user made, or clears it (`none`), one message at a time and reporting per
+  id, like `mark_messages`.
+- `trash_messages`: moves up to 100 messages of the inbox, the sent box, the
+  archive or a folder the user made to Smartschool's trash, one message at a
+  time. A move, not a deletion: the user can restore a message from the trash
+  in Smartschool until the trash is emptied, but the server cannot take it out
+  again. So the tool is marked destructive (Claude Desktop asks for approval
+  every time), and Claude is told to show the list and wait for the user's
   confirmation first. Each message is moved with the library's
-  `moveToTrashFrom`, which names its box (the archive with its box id),
-  never with `moveToTrash`, whose `quick delete` names no box and deletes a
-  copy in the trash for good. Smartschool answers a move the same whether
-  it moved the message or not, so each message is read back from its box
-  afterwards. The result says per id: moved, not in the box, or still in
-  the box after the move. A message the user sent to themselves has the
-  same id in the inbox and the sent box: only the copy in the box named is
-  moved.
+  `moveToTrashFrom`, which names its box (the archive or a folder with its box
+  id), never with `moveToTrash`, whose `quick delete` names no box and deletes
+  a copy in the trash for good. Smartschool answers a move the same whether it
+  moved the message or not, so each message is read back from its box
+  afterwards. The result says per id: moved, not in the box, or still in the
+  box after the move. A message the user sent to themselves has the same id in
+  the inbox and the sent box: only the copy in the box named is moved.
 - `reply_to_message`: sends a reply (plain text or simple Markdown) to the
   sender of a message, or with `reply_all` to everyone on it, with one `Re:`
   before the subject. A reply to a sent message goes to its recipients,
@@ -359,19 +370,20 @@ client name. It also installs again while that copy runs.
   three tools that add to Intradesk are marked destructive, so Claude
   Desktop asks for approval every time, and Claude is told to show the user
   what goes where (the folder's path, from `search_intradesk`) and wait for
-  the user's confirmation first. Before sending, each reads the folder (its
-  listing, and, when the Intradesk index knows where it is, its entry in
-  the folder above, for its path and rights) and refuses a name the folder
-  holds already (any kind, ignoring case and spaces: Intradesk would not
-  refuse it, but rename the new item to `name (1)`), a folder the account
-  may not add to (`canAdd`, when the entry was read), and a folder of the
-  wrong kind for its parent (when known). The library reads the folder's
-  entry too before it sends a create (its parents and the listing of the
-  folder above, dartschool#138) and refuses those two itself, also without
-  the index; that refusal is reported in its words. The library sends a
-  create once, never again after logging in again; a create Intradesk does
-  not confirm
-  is reported as maybe made, with how to check it (`list_intradesk_folder`),
+  the user's confirmation first. Before sending, each reads the folder: its
+  path, with the library's `getFolderPath` (its parents, then the listing
+  of the top and of each folder above it, dartschool#132), and its listing,
+  and refuses a name the folder holds already (any kind, ignoring case and
+  spaces: Intradesk would not refuse it, but rename the new item to
+  `name (1)`). The library reads the folder's entry again right before it
+  sends a create (its parents and the listing of the folder above,
+  dartschool#138) and refuses, with nothing sent, a folder the account may
+  not add to (`canAdd`) and a folder of the wrong kind for its parent (only
+  a confidential folder inside a confidential one); the tool says so in its
+  own words, by the library's reason, with the folder's path. None of this
+  needs the Intradesk index. The library sends a create once, never again
+  after logging in again; a create Intradesk does not confirm is reported
+  as maybe made, with how to check it (`list_intradesk_folder`),
   and Claude is told not to call the tool again for it. The result is the
   item as Intradesk made it (its id, the name as stored, the folder's
   path); a name Intradesk changed anyway is pointed out. What was made goes
@@ -415,14 +427,18 @@ client name. It also installs again while that copy runs.
   kind. The items are moved one at a time, in order, each in a session call
   of its own (the library sends a move again after logging in again, which
   is harmless); at the first failure it stops, and the result lists what was
-  moved, the item that failed and what was not tried. A refusal (HTTP 400 to
-  499) is reported as not moved, with Intradesk's reasons; any other failure
-  as maybe moved, with the folder to list to check it, as for the writes
-  above. The library tells no unknown id apart (dartschool#133): Intradesk's
-  answer to one was not seen live, so it is reported as whatever the library
-  makes of it (#124). Items are named by their path when the index knows
-  them, and the result says what the index had in a folder that went along.
-  What was moved leaves the index at once (see *Intradesk index* below).
+  moved, the item that failed and what was not tried. An id Intradesk has no
+  item of that kind for (an unknown id, the id of an item of another kind,
+  also one in the trash, or of an item that does not exist any more) is
+  reported as no such item, not moved: Intradesk answers it with `404` and
+  moves nothing, which the library throws as
+  `SmartschoolIntradeskItemNotFoundError` (dartschool#133, #124). Any other
+  refusal (HTTP 400 to 499) is reported as not moved, with Intradesk's
+  reasons; any other failure as maybe moved, with the folder to list to
+  check it, as for the writes above. Items are named by their path when the
+  index knows them, and the result says what the index had in a folder that
+  went along. What was moved leaves the index at once (see *Intradesk index*
+  below).
 - `search_planners`: finds the planner of a class, a person or a room by
   name, with the planner's own search (the library's `searchCalendars`).
   Each hit is listed with its kind (class, person, room), its name, what
@@ -617,17 +633,16 @@ client name. It also installs again while that copy runs.
   lesfiche after the user's confirmation, a second call makes a second
   lesfiche, and it sends files from this PC; Claude Desktop and Codex ask
   for approval only for a tool marked destructive. Before sending, it
-  reads the user's lesfiches (for the note on namesakes below, and so that
-  the session's repeat of the call logs in again: the create goes out once
-  only, and is refused at once on an expired session, without a login,
-  dartschool#134),
-  the course list for the courses, and for an assignment the school's
-  types (read once per session). The library checks the courses and the
-  type again, uploads the files into a new upload directory, sends the
-  create once (`POST lessons/` or `assignments/`, answered `201` with the
-  id only) and reads the lesfiche back. A name that is taken is kept (the
-  module makes a second lesfiche, seen live), and the result names the
-  other lesfiches of that name and kind. The result is the lesfiche as
+  reads the user's lesfiches (for the note on namesakes below), the course
+  list for the courses, and for an assignment the school's types (read
+  once per session). The library checks the courses and the type again,
+  uploads the files into a new upload directory, sends the create once
+  (`POST lessons/` or `assignments/`, answered `201` with the id only) and
+  reads the lesfiche back. When Smartschool refuses the session for the
+  create, the session repeats the call, and the library logs in again
+  before the repeat's first request (dartschool#134). A name that is
+  taken is kept (the module makes a second lesfiche, seen live), and the
+  result names the other lesfiches of that name and kind. The result is the lesfiche as
   `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson),
   `read_lesfiche` and `edit_lesfiche`, the tools that change its weblinks
   and attachments, and `trash_lesfiches` to undo it (below). Labels are
@@ -688,11 +703,12 @@ client name. It also installs again while that copy runs.
   the icon and the visibility that are not given stay as the weblink has
   them. Marked destructive, and not idempotent: a second add adds a second
   weblink. The tool reads the lesfiche first, in the session action of the
-  write: the library takes it as read, a weblink id the lesfiche does not
-  have is refused before sending (with its weblinks and their ids), and,
-  since the library sends an add once only, never again after logging in
-  again, it is that read that logs in again when the session repeats the
-  call (dartschool#134). The result says what was added or changed, with
+  write: the library takes it as read, and a weblink id the lesfiche does
+  not have is refused before sending (with its weblinks and their ids).
+  The library sends an add once only, never again after logging in again:
+  when Smartschool refuses the session for it, the session repeats the
+  call, and the library logs in again before the repeat's first request
+  (dartschool#134). The result says what was added or changed, with
   the weblink's id, and gives the lesfiche as `read_lesfiche` shows it. A
   refusal by the module (a bare `400`) says that nothing changed; an add
   the module does not confirm is maybe added, with `read_lesfiche` to check
@@ -713,15 +729,24 @@ client name. It also installs again while that copy runs.
   (`changeAttachmentVisibility`): the module gives every new attachment
   `always`, and ignores the visibility sent with them (seen live). Marked
   destructive, and not idempotent: a second call adds the files a second
-  time. The tool reads the lesfiche first in the session action, as
-  `set_lesfiche_weblink` does (dartschool#134). The result lists the
-  attachments added with their ids, notes a name the lesfiche had already
-  (the module keeps both), and gives the lesfiche. A file the upload step
+  time. The tool reads the lesfiche first in the session action. When
+  Smartschool refuses the session for the take, the session repeats the
+  call, and the library logs in again before the repeat's first request,
+  as for an add of `set_lesfiche_weblink` (dartschool#134). The result
+  lists the attachments added with their ids, notes a name the lesfiche
+  had already (the module keeps both), and gives the lesfiche. A file the upload step
   refuses (in Smartschool's words), a refusal and a `404` say that nothing
-  changed. An add the module does not confirm cannot be told from one whose
-  files went in but whose visibility could not be set (both a
-  `SmartschoolLessonContentSaveUnconfirmedError`, dartschool#135, #126):
-  either says that the files may or may not have been added, or added with
+  changed. When the module took the files and only setting a visibility
+  failed (`SmartschoolLessonContentVisibilityNotSetError`, dartschool#135,
+  #126), the result is an error that lists the attachments added, with
+  their ids and their visibility as far as the library knows, says why the
+  visibility was not set (refused: not set; not confirmed: maybe set; the
+  session refused: not set), and gives each visibility not set (that one,
+  and those after it, which the library did not try) as a call of
+  `set_lesfiche_attachment_visibility`, without reading the lesfiche: the
+  files are on it, so not to call the tool again. A take the module does
+  not confirm (any other `SmartschoolLessonContentSaveUnconfirmedError`)
+  says that the files may or may not have been added, or added with
   `always`, and not to call again but to read the lesfiche and set a
   visibility with `set_lesfiche_attachment_visibility`.
 - `set_lesfiche_attachment_visibility`: sets when pupils see one
@@ -1103,9 +1128,10 @@ registration per lesson (which `userCanRecord` seems to stand for) are not
 offered; #77 is the live check.
 
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
-(inbox / sent / archive, their headers and one message) and `withMessages`
-in `message_box.dart`, the HTML-to-text converter `htmlToText` in
-`html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
+(inbox / sent / archive and the folders the user made, their headers and one
+message), the `box` and `folder` arguments (`BoxArgument`, `folderSchema`) and
+`withMessages` in `message_box.dart`, the HTML-to-text converter `htmlToText`
+in `html_to_text.dart`, the Markdown-to-HTML converter for message text Claude
 writes (`markdownToHtml`, which escapes all HTML) in `markdown_to_html.dart`,
 who a reply goes to (`loadReplyRecipients`) in `reply_recipients.dart`, the
 recipients of a new message (`searchRecipients`, `RecipientRequest`) in
@@ -1131,7 +1157,10 @@ how its outcome is reported (`notConfirmedResult`, `sendSummary`) in
 Messages module (`test/support/fake_messages.dart`) whose compose forms each
 open their `randomDir` in the fake upload step, bound to the session the
 form was loaded in (an upload into it from another session fails the test),
-and whose submit sends the files of that directory with the message.
+and whose submit sends the files of that directory with the message. Its
+folder tree (`requestmovelist`) holds the archive and the folders a test adds
+with `addFolder` (in the inbox, the sent box or another folder), each listed,
+read and changed as the archive is.
 
 Intradesk helpers live in `lib/src/intradesk/`: `withIntradesk`, the id
 argument (`intradeskIdArgument`) and listing-to-items conversion
@@ -1146,10 +1175,11 @@ in `intradesk_search.dart` and output lines in `intradesk_format.dart`. In
 `intradesk_writes.dart`, for the tools that add to Intradesk: the
 `folder_id` and `name` arguments (`intradeskFolderArgument`,
 `intradeskNameArgument`), the folder read before a write
-(`readIntradeskParent`, an `IntradeskParent` with its listing, path and
-entry, which refuses a taken name and a folder without `canAdd`),
-`withIntradeskWrite` (the library's refusals as `ToolError`s that say
-nothing was added), the result of a write Intradesk did not confirm
+(`readIntradeskParent`, an `IntradeskParent` with its path and listing,
+which refuses a taken name), `withIntradeskWrite` (the library's refusals
+as `ToolError`s that say nothing was added, among them its refusal of a
+folder without `canAdd` or of the wrong kind, worded by its reason), the
+result of a write Intradesk did not confirm
 (`intradeskWriteNotConfirmed`) and the index patch after a write
 (`addToIntradeskIndex`); a header note says why the session's repeat of a
 write cannot add twice. `trash_intradesk_items` reads nothing before its
@@ -1157,10 +1187,11 @@ moves but the index, and keeps its helpers to itself. The tests run against
 a fake Intradesk (`test/support/fake_intradesk.dart`) that carries out the
 creates, the upload and the moves to the trash of dartschool#128 as the
 live Intradesk did (renaming a taken name, the bare `500`s, the `400`s with
-`violations`, and a `204` for an item in the trash already), behind the
-fake upload step (`test/support/fake_uploads.dart`) that the attachments of
-lesfiches and messages share. It answers the move of an unknown id with
-`404`, an assumption until dartschool#133 captures Intradesk's answer.
+`violations`, a `204` for an item in the trash already, and a bare `404`
+for the move of an id it has no item of that kind for, as captured in
+dartschool#133), behind the fake upload step
+(`test/support/fake_uploads.dart`) that the attachments of lesfiches and
+messages share.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
@@ -1377,6 +1408,41 @@ the default `false` in the manifest's `user_config`, its variable in
 colleague guides), an `OptInTools` with its tools, rights and access check,
 and the group in the entry point's `optIns`.
 
+### Message folders
+
+Users make their own folders in Smartschool's messages ("Map toevoegen"),
+in the inbox and in the sent box, also inside another folder. Their
+messages are not in the box itself, so the message tools look in them
+separately, with the folder tree of the library's `getFolders`
+(`quickactions` / `requestmovelist`, flutter_smartschool 0.3.7,
+yvanvds/dartschool#136), read again at every call that needs it:
+
+- Tool output names a folder by its path after the name of its box, like
+  `inbox/Projecten/2026` or `sent/Projecten`: the box to pass to
+  `read_message`, `save_message_attachment` and `reply_to_message` (which
+  find a message in a folder by its id, as Smartschool does), then the
+  folder.
+- `list_messages`, `flag_messages`, `mark_messages` and `trash_messages`
+  take a `folder` next to `box`: that path, the path from the box
+  (`Projecten/2026`, ignoring case and the spaces around a `/`), the
+  folder's name, or its id. `box` (inbox or sent) narrows the lookup; with
+  the archive it is an error. A name two folders have, or an unknown
+  folder, is an error that names the user's folders, before anything is
+  listed. `mark_messages` looks only in the folders of the inbox.
+- The folder is then listed as the archive is: with its box type and its
+  id as `boxId`, a box of its own with its own paging position. Its tree,
+  its listing, a search and reading one of its messages were tried live by
+  the live test, on the test folder "dartschool test" (inbox folder 30650).
+  Marking unread and moving to the trash name its id, as for the archive;
+  marking read and flagging name the box type only. These requests are
+  documented by the library for a folder, tried live on the archive, not
+  yet on a folder the user made (#134).
+- `search_messages` searches the folders of a box with it: by default the
+  inbox and its folders and the archive; the sent box's folders with
+  `sent`. Their messages count toward the 100 texts downloaded per search.
+- `archive_messages` does not archive a message from a folder; it says
+  which folder the message is in.
+
 ### Message text cache
 
 `search_messages` keeps the plain text of every message it downloads, so each
@@ -1429,10 +1495,10 @@ What the server adds itself (`create_intradesk_folder`,
 `add_intradesk_weblink`, `upload_intradesk_files`) goes into the index at
 once, under the folder's path, in memory and in the file
 (`IntradeskIndexCache.patch`), so a search finds it without waiting for the
-next walk. Only an index that is loaded is patched, of any age, and only
-when it knows the folder; the patch keeps the time the index was built, so
-the next walk comes when it would have, and a walk that runs meanwhile gets
-the patch too. What `trash_intradesk_items` moved leaves the index the same
+next walk. Only an index that is loaded is patched, of any age, also when
+it does not know the folder yet; the patch keeps the time the index was
+built, so the next walk comes when it would have, and a walk that runs
+meanwhile gets the patch too. What `trash_intradesk_items` moved leaves the index the same
 way, a folder with everything in it; an item that may or may not have been
 moved stays until the next walk.
 

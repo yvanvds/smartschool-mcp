@@ -1,4 +1,5 @@
 import 'package:dart_mcp/server.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../messages/message_box.dart';
 import '../messages/message_format.dart';
@@ -6,8 +7,9 @@ import '../session.dart';
 import 'message_changes.dart';
 import 'server_tool.dart';
 
-/// The boxes whose messages `mark_messages` marks. A sent message has no
-/// read state for the user.
+/// The boxes whose messages `mark_messages` marks; it marks those of the
+/// folders the user made in the inbox too. A sent message has no read state
+/// for the user.
 const _boxes = [MessageBox.inbox, MessageBox.archive];
 
 /// `mark_messages`: marks messages in the inbox or the archive as read or
@@ -21,7 +23,8 @@ ServerTool markMessagesTool(SmartschoolSession session) => ServerTool(
         'Smartschool. Reading a message with read_message does not mark it '
         'as read; this tool does. Pass the ids from list_messages and the '
         'box the messages are in (inbox or archive; sent messages have no '
-        'read state for the user), at most $maxMessageIds per call. Marking '
+        'read state for the user), or the folder the user made in the inbox '
+        'that they are in, at most $maxMessageIds per call. Marking '
         'can be undone: mark the messages the other way. When the user asks '
         'you to mark messages ("Markeer alles van de directie van vorige '
         'week als gelezen"), mark them with this tool. Do not mark messages '
@@ -42,8 +45,17 @@ ServerTool markMessagesTool(SmartschoolSession session) => ServerTool(
         ),
         'box': MessageBox.schema(
           description:
-              'The box the messages are in: inbox (default) or archive.',
+              'The box the messages are in: inbox (default) or archive. With '
+              'folder: inbox, or leave it out.',
           boxes: _boxes,
+        ),
+        'folder': folderSchema(
+          description: folderDescription(
+            'mark',
+            box:
+                ' Only folders of the inbox: sent messages have no read '
+                'state.',
+          ),
         ),
       },
       required: ['message_ids', 'read'],
@@ -66,29 +78,37 @@ Future<CallToolResult> _mark(
   final ids = messageIdsArgument(arguments);
   // The input schema guarantees a bool, and a box of _boxes.
   final read = arguments['read'] as bool;
-  final box = MessageBox.parse(arguments['box']);
-  final results = await withMessages(
-    session,
-    (messages) => changeEach(messages, box, ids, (id) async {
-      // Marking unread names the folder of a message in the archive, as the
-      // library asks; marking read cannot. The library documents that
-      // Smartschool finds a message in the archive by its id alone, seen
-      // live (yvanvds/dartschool#94). Smartschool answers with the message's
-      // id and read state, 1 read or 0 unread. The library returns null for
-      // an answer without a usable id or state (yvanvds/dartschool#95); the
-      // check compares the id and the state with those asked.
-      final change = read
-          ? await messages.markRead(id, boxType: box.boxType)
-          : await messages.markUnread(
-              id,
-              boxType: box.boxType,
-              boxId: await box.folderId(messages),
-            );
-      return change != null &&
-          change.id == id &&
-          change.newValue == (read ? 1 : 0);
-    }),
+  final where = BoxArgument.parse(
+    arguments,
+    folderBoxTypes: const {BoxType.inbox},
   );
+  final (box, results) = await withMessages(session, (messages) async {
+    final box = await where.resolve(messages);
+    return (
+      box,
+      await changeEach(messages, box, ids, (id) async {
+        // Marking unread names the folder of a message in the archive or in
+        // a folder the user made, as the library asks; marking read cannot.
+        // The library documents that Smartschool finds a message in the
+        // archive by its id alone, seen live (yvanvds/dartschool#94), not
+        // yet in a folder the user made (#134). Smartschool answers with
+        // the message's id and read state, 1 read or 0 unread. The library
+        // returns null for an answer without a usable id or state
+        // (yvanvds/dartschool#95); the check compares the id and the state
+        // with those asked.
+        final change = read
+            ? await messages.markRead(id, boxType: box.boxType)
+            : await messages.markUnread(
+                id,
+                boxType: box.boxType,
+                boxId: await box.folderId(messages),
+              );
+        return change != null &&
+            change.id == id &&
+            change.newValue == (read ? 1 : 0);
+      }),
+    );
+  });
   final state = read ? 'read' : 'unread';
   return changesResult(
     results,

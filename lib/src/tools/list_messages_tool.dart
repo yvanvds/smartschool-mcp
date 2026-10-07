@@ -25,14 +25,19 @@ ServerTool listMessagesTool(SmartschoolSession session) => ServerTool(
         'and the sender name only, not the message text. The result says how '
         'many messages matched, so you can tell when the limit cut the list '
         'short; to see older messages, pass until (for example the date of '
-        'the oldest message shown).',
+        'the oldest message shown). Messages in a folder the user made in '
+        'Smartschool (in the inbox or the sent box) are not listed with the '
+        'box: pass folder to list one. When nothing matches, the result '
+        'names the folders of the box; search_messages searches them too.',
     inputSchema: Schema.object(
       properties: {
         'box': MessageBox.schema(
           description:
               'Which box to list: inbox (default), sent or archive (messages '
-              'the user archived).',
+              'the user archived). With folder: the box the folder is in '
+              '(inbox or sent), or leave it out.',
         ),
+        'folder': folderSchema(description: folderDescription('list')),
         'query': Schema.string(
           description:
               'Words to look for in the subject and the sender name, '
@@ -75,7 +80,7 @@ Future<CallToolResult> _list(
   SmartschoolSession session,
   Map<String, Object?> arguments,
 ) async {
-  final box = MessageBox.parse(arguments['box']);
+  final where = BoxArgument.parse(arguments);
   final query = (arguments['query'] as String?)?.trim();
   final (:since, :until) = dateRangeArguments(arguments);
   final filter = MessageFilter(
@@ -94,7 +99,10 @@ Future<CallToolResult> _list(
   // The box is listed newest first, page by page, until the pages listed
   // decide what to show. Like every session action, this may run more than
   // once.
-  final (:headers, :stop) = await withMessages(session, (messages) async {
+  final (:box, :headers, :stop, :folders) = await withMessages(session, (
+    messages,
+  ) async {
+    final box = await where.resolve(messages);
     var matching = 0;
     _Stop? stop;
     final headers = await box.headers(
@@ -109,7 +117,12 @@ Future<CallToolResult> _list(
         return stop != null;
       },
     );
-    return (headers: headers, stop: stop);
+    // When nothing matches in a box, the messages may be in a folder the
+    // user made in it: those are named, as they were not listed.
+    final folders = box.folder == null && filter.apply(headers).matching == 0
+        ? await MessageBox.userFolders(messages, boxTypes: {box.boxType})
+        : const <MessageBox>[];
+    return (box: box, headers: headers, stop: stop, folders: folders);
   });
   final (:shown, :matching) = filter.apply(headers);
 
@@ -142,6 +155,11 @@ Future<CallToolResult> _list(
   final lines = [
     summary,
     for (final message in shown) '- ${formatHeaderLine(message, box)}',
+    if (folders.isNotEmpty)
+      'Not listed: the folders the user made in '
+          '${box == MessageBox.sent ? box.phrase : MessageBox.inbox.phrase}: '
+          '${MessageBox.listFolders(folders)}. To look there, pass one as '
+          'folder, or use search_messages, which searches the folders too.',
   ];
   return CallToolResult(content: [TextContent(text: lines.join('\n'))]);
 }

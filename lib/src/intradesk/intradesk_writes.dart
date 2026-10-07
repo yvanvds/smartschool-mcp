@@ -13,11 +13,12 @@ import 'intradesk_index.dart';
 // Adding to Intradesk, shared by the tools that write there
 // (`create_intradesk_folder`, `add_intradesk_weblink`,
 // `upload_intradesk_files`): the folder a write adds to, read before sending
-// ([readIntradeskParent]) and checked ([IntradeskParent.refuseWithoutAdd],
-// [IntradeskParent.refuseTakenNames]); the write itself, with the library's
-// errors as ToolErrors ([withIntradeskWrite]); a write Intradesk did not
-// confirm ([intradeskWriteNotConfirmed]); and the index patched with what was
-// made ([addToIntradeskIndex]).
+// ([readIntradeskParent]) and checked for the names it holds
+// ([IntradeskParent.refuseTakenNames]); the write itself, with the library's
+// errors as ToolErrors ([withIntradeskWrite]), among them its refusal of a
+// folder the account may not add to, or of the wrong kind; a write Intradesk
+// did not confirm ([intradeskWriteNotConfirmed]); and the index patched with
+// what was made ([addToIntradeskIndex]).
 //
 // The library sends a create, and the last step of an upload, once: never
 // again after logging in again (yvanvds/dartschool#128), and throws a
@@ -89,44 +90,27 @@ String? renamedNote(String asked, String stored) => asked == stored
 final class IntradeskParent {
   const IntradeskParent({
     required this.id,
+    required this.path,
     required this.listing,
-    this.known,
-    this.entry,
   });
 
   /// The folder's id, in lowercase.
   final String id;
 
+  /// The folder's path, like `Vakken / Informatica`: the names of the
+  /// folders from the top of Intradesk down to it, as Intradesk lists them
+  /// now.
+  final String path;
+
   /// What the folder holds now.
   final IntradeskListing listing;
 
-  /// The folder as the index has it (its path), corrected with [entry] when
-  /// that was read; null when no index knows the folder, or it was not found
-  /// where the index has it (moved).
-  final IntradeskItem? known;
-
-  /// The folder as the listing of the folder above it has it, with its
-  /// capabilities; null when that was not read (no index knows where the
-  /// folder is) or could not be.
-  final IntradeskFolder? entry;
-
-  /// The folder's path, like `Vakken / Informatica`, when the index knows it.
-  String? get path => known?.path;
-
-  /// `Intradesk folder Vakken / Informatica (id …)`, or the folder with its
-  /// id only when its path is not known.
+  /// `Intradesk folder Vakken / Informatica (id …)`.
   String get title => intradeskFolderTitle(id, path);
 
-  /// Whether the folder is confidential, or in a confidential folder; null
-  /// when that is not known.
-  bool? get confidential => switch (entry) {
-    final entry? => entry.confidential || entry.inConfidentialFolder,
-    null => known?.confidential,
-  };
-
-  /// The items of [listing], named with the folder's path when it is known.
+  /// The items of [listing], named with the folder's path.
   List<IntradeskItem> get items =>
-      intradeskItems(listing, folderId: id, path: path ?? '');
+      intradeskItems(listing, folderId: id, path: path);
 
   /// The item in the folder whose name is [name], ignoring case and the
   /// white space around it, or null.
@@ -135,20 +119,6 @@ final class IntradeskParent {
     return items
         .where((item) => item.name.trim().toLowerCase() == wanted)
         .firstOrNull;
-  }
-
-  /// Throws a [ToolError] when the folder's entry says that the account may
-  /// not add to it ([IntradeskFolderCapabilities.canAdd]): Intradesk's web
-  /// client offers no folder, weblink or file there. Nothing is checked when
-  /// the entry was not read.
-  void refuseWithoutAdd() {
-    if (entry?.capabilities.canAdd ?? true) return;
-    throw ToolError(
-      'Your account may not add anything to the $title: Smartschool does not '
-      'give you that right for this folder, and Intradesk\'s own web client '
-      'offers no folder, weblink or file there. Choose another folder, or '
-      'ask someone who manages it. $nothingSent',
-    );
   }
 
   /// Throws a [ToolError] when the folder holds an item (a folder, a file or
@@ -181,88 +151,62 @@ String describeIntradeskItem(IntradeskItem item) =>
     'the ${item.kind.name} "${item.name}"'
     '${item.id.isEmpty ? '' : ' (id ${item.id})'}';
 
-/// Reads the folder [id] that a write is about to add to: its listing, and,
-/// when the index in [cache] knows where the folder is, the listing of the
-/// folder above it, for its own entry (its capabilities, whether it is
-/// confidential) and its path.
+/// Reads the folder [id] that a write is about to add to: its path, from
+/// the library's `getFolderPath` (its parents, then the listing of the top
+/// of Intradesk and of each folder above it, yvanvds/dartschool#132), and
+/// its listing, for the names it holds.
 ///
-/// Throws a [ToolError] when Intradesk has no folder [id]. A failure to list
-/// the folder above is logged, and leaves the entry unknown.
+/// Whether the account may add to the folder, and what kind of folder goes
+/// in it, is not checked here: the library's create reads the folder again
+/// and refuses those before sending (yvanvds/dartschool#138), which
+/// [withIntradeskWrite] words.
 ///
-/// A workaround: before flutter_smartschool 0.3.6 the library could not read
-/// a folder's own entry by its id (yvanvds/dartschool#132), so without an
-/// index that knows the folder its rights and kind are not checked here.
-/// Since 0.3.6 the library's create reads the folder itself and refuses
-/// those before sending (yvanvds/dartschool#138, see [withIntradeskWrite]).
-/// Its removal is #123.
+/// Throws a [ToolError] when Intradesk has no folder [id] (an unknown id, or
+/// that of a file or a weblink), or does not list it where its parents put
+/// it (a folder in Intradesk's trash, or one the account does not see).
 Future<IntradeskParent> readIntradeskParent(
   IntradeskService intradesk,
-  IntradeskIndexCache cache,
   String id,
 ) async {
-  final IntradeskListing listing;
   try {
-    listing = await intradesk.getFolderListing(id);
-  } on SmartschoolIntradeskFolderNotFoundError {
+    final folders = await intradesk.getFolderPath(id);
+    return IntradeskParent(
+      id: id,
+      path: [
+        for (final folder in folders) folder.name.trim(),
+      ].join(IntradeskItem.separator),
+      listing: await intradesk.getFolderListing(id),
+    );
+  } on SmartschoolIntradeskFolderNotFoundError catch (error) {
+    // 200: the listing of the folder above does not hold it.
     throw ToolError(
-      'Intradesk has no folder with id $id: it is the id of a file or a '
-      'weblink, or of a folder that does not exist (any more). Take the id '
-      'of a folder from list_intradesk_folder or search_intradesk. '
-      '$nothingSent',
+      error.statusCode == 200
+          ? 'Intradesk does not list the folder with id $id where it is: it '
+                'is in Intradesk\'s trash, or your account does not see it. '
+                'Take the id of a folder from list_intradesk_folder or '
+                'search_intradesk. $nothingSent'
+          : 'Intradesk has no folder with id $id: it is the id of a file or '
+                'a weblink, or of a folder that does not exist (any more). '
+                'Take the id of a folder from list_intradesk_folder or '
+                'search_intradesk. $nothingSent',
     );
   }
-  // Inside the session, as the cache folder is the logged-in user's.
-  final found = (await cache.saved())?.find(id);
-  if (found == null || found.kind != IntradeskItemKind.folder) {
-    return IntradeskParent(id: id, listing: listing);
-  }
-  final IntradeskListing above;
-  try {
-    above = found.parentId.isEmpty
-        ? await intradesk.getRootListing()
-        : await intradesk.getFolderListing(found.parentId);
-  } on SmartschoolDownloadError catch (error) {
-    log(
-      'intradesk write: the folder above could not be listed '
-      '(${error.runtimeType}, HTTP ${error.statusCode}); its rights are not '
-      'checked',
-    );
-    return IntradeskParent(id: id, listing: listing, known: found);
-  }
-  final entry = above.folders
-      .where((folder) => folder.id.toLowerCase() == id)
-      .firstOrNull;
-  if (entry == null) {
-    log(
-      'intradesk write: the folder is not where the index has it (moved); '
-      'its rights are not checked',
-    );
-    return IntradeskParent(id: id, listing: listing);
-  }
-  return IntradeskParent(
-    id: id,
-    listing: listing,
-    // Its name as it is now: it may have been renamed since the walk.
-    known: IntradeskItem.folder(
-      entry,
-      parentId: found.parentId,
-      parentPath: found.parentPath,
-    ),
-    entry: entry,
-  );
 }
 
 /// Runs the Intradesk write [write] on the session, for a tool that adds
 /// to Intradesk; [what] names what is added, where (like `the folder
-/// "Toetsen" in Intradesk folder …`), for the errors.
+/// "Toetsen" in the Intradesk folder …`), and [where] the folder it is
+/// added to (like `Intradesk folder Vakken / Informatica (id …)`,
+/// [IntradeskParent.title]), for the errors.
 ///
 /// The library's errors become [ToolError]s that say nothing was added:
+/// - [SmartschoolIntradeskAddRefusedError]: the library read the folder and
+///   refused the write before sending it (yvanvds/dartschool#138), worded by
+///   its reason ([_addRefusal]): the account may not add there, or the
+///   folder takes another kind of folder;
 /// - [SmartschoolIntradeskWriteRefusedError]: Intradesk refused the write
 ///   (HTTP `400` to `499`), with its reasons in its own words (Dutch) when
-///   it gave any; or, without a status, the library refused it after reading
-///   the folder, before sending it (a [SmartschoolIntradeskAddRefusedError]:
-///   the account may not add there, or the folder is of the wrong kind),
-///   with the library's message, which ends in "Nothing was sent.";
+///   it gave any;
 /// - [SmartschoolIntradeskFolderNotFoundError]: the folder is gone;
 /// - [SmartschoolAttachmentUploadError], and an [ArgumentError] about one of
 ///   [files]: a file was not uploaded ([uploadToolError]);
@@ -276,20 +220,15 @@ Future<T> withIntradeskWrite<T>(
   SmartschoolSession session,
   Future<T> Function(IntradeskService intradesk) write, {
   required String Function() what,
+  required String Function() where,
   Iterable<LocalFile> files = const [],
 }) async {
   try {
     return await withIntradesk(session, write);
+  } on SmartschoolIntradeskAddRefusedError catch (error) {
+    log('intradesk write: refused before sending (${error.reason.name})');
+    throw ToolError(_addRefusal(error.reason, where()));
   } on SmartschoolIntradeskWriteRefusedError catch (error) {
-    if (error.statusCode == null) {
-      // The library read the folder and refused the write before sending it
-      // (yvanvds/dartschool#138). Wording it by its reason is #123.
-      log('intradesk write: refused before sending (${error.runtimeType})');
-      throw ToolError(
-        '${_capitalised(what())} was refused before it was sent: '
-        '${error.message}',
-      );
-    }
     // The library's messages name the item: the log never shows a name.
     log(
       'intradesk write: refused (HTTP ${error.statusCode}, '
@@ -324,6 +263,34 @@ Future<T> withIntradeskWrite<T>(
   }
 }
 
+/// What a tool says when the library refused to add to [folder] (like
+/// `Intradesk folder Vakken / Informatica (id …)`) for [reason], after
+/// reading it and before sending anything (yvanvds/dartschool#138). These
+/// are the rules of Intradesk's web client, which offers nothing else.
+String _addRefusal(IntradeskAddRefusalReason reason, String folder) {
+  final why = switch (reason) {
+    IntradeskAddRefusalReason.cannotAdd =>
+      'Your account may not add anything to the $folder: Smartschool does '
+          'not give you that right for this folder, and Intradesk\'s own web '
+          'client offers no folder, weblink or file there. Choose another '
+          'folder, or ask someone who manages it.',
+    // Only at the top of Intradesk, which the tools do not offer.
+    IntradeskAddRefusalReason.cannotAddConfidentialFolder =>
+      'Your account may not add a confidential folder to the $folder: '
+          'Smartschool does not give you that right there. Leave confidential '
+          'out to add an ordinary folder.',
+    IntradeskAddRefusalReason.ordinaryParent =>
+      'The $folder is not confidential: Intradesk adds a confidential folder '
+          'only inside a confidential folder. Leave confidential out to add '
+          'an ordinary folder.',
+    IntradeskAddRefusalReason.confidentialParent =>
+      'The $folder is confidential: inside a confidential folder Intradesk '
+          'adds only confidential folders. Pass confidential: true, and tell '
+          'the user that the new folder will be confidential.',
+  };
+  return '$why $nothingSent';
+}
+
 /// The result of an Intradesk write that went out without Intradesk
 /// confirming it ([error]): [what] (like `The folder "Toetsen" in Intradesk
 /// folder …`) may or may not have been added to the folder [folderId].
@@ -356,24 +323,18 @@ CallToolResult intradeskWriteNotConfirmed({
   );
 }
 
-/// Adds [made], the items a write just made in [parent], to the index in
-/// [cache], so that `search_intradesk` finds them at once instead of after
-/// the next walk: when an index is loaded ([IntradeskIndexCache.patch]) and
-/// it knows [parent]'s path. [made] are named with that path
-/// ([IntradeskParent.items] does the same for its listing).
+/// Adds [made], the items a write just made, named with the path of the
+/// folder they were added to ([IntradeskParent.items] does the same for its
+/// listing), to the index in [cache], so that `search_intradesk` finds them
+/// at once instead of after the next walk: when an index is loaded
+/// ([IntradeskIndexCache.patch]).
 ///
-/// Returns how it went, for the log: `index patched`, `no index`, or
-/// `folder not in the index`.
+/// Returns how it went, for the log: `index patched` or `no index`.
 Future<String> addToIntradeskIndex(
   IntradeskIndexCache cache,
-  IntradeskParent parent,
   List<IntradeskItem> made,
-) async {
-  if (parent.known == null) {
-    return await cache.saved() == null ? 'no index' : 'folder not in the index';
-  }
-  return await cache.patch(added: made) == null ? 'no index' : 'index patched';
-}
+) async =>
+    await cache.patch(added: made) == null ? 'no index' : 'index patched';
 
 String _capitalised(String text) =>
     text.isEmpty ? text : '${text[0].toUpperCase()}${text.substring(1)}';

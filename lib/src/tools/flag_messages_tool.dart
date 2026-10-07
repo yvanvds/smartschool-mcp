@@ -24,8 +24,9 @@ ServerTool flagMessagesTool(SmartschoolSession session) => ServerTool(
         'Sets or clears the colour flag of Smartschool messages, the flag '
         'list_messages and read_message show: green, yellow, red or blue, '
         'or none to clear it. Pass the ids from list_messages and the box '
-        'the messages are in (inbox, sent or archive), at most '
-        '$maxMessageIds per call. A flag can be changed or cleared again at '
+        'the messages are in (inbox, sent or archive), or the folder the '
+        'user made that they are in, at most $maxMessageIds per call. A flag '
+        'can be changed or cleared again at '
         'any time. When the user asks you to flag messages ("Zet een rode '
         'vlag op de berichten waar ik nog op moet antwoorden"), flag them '
         'with this tool. When the user only asks which messages they could '
@@ -48,8 +49,10 @@ ServerTool flagMessagesTool(SmartschoolSession session) => ServerTool(
         'box': MessageBox.schema(
           description:
               'The box the messages are in: inbox (default), sent or '
-              'archive.',
+              'archive. With folder: the box the folder is in (inbox or '
+              'sent), or leave it out.',
         ),
+        'folder': folderSchema(description: folderDescription('flag')),
       },
       required: ['message_ids', 'flag'],
     ),
@@ -72,22 +75,27 @@ Future<CallToolResult> _flag(
   // The input schema guarantees one of the names.
   final name = arguments['flag'] as String;
   final label = flagLabels[name]!;
-  final box = MessageBox.parse(arguments['box']);
-  final results = await withMessages(
-    session,
-    (messages) => changeEach(messages, box, ids, (id) async {
-      // The request cannot name the folder of a message in the archive. The
-      // library documents that Smartschool finds the message there by its id
-      // alone, seen live (yvanvds/dartschool#94). Smartschool answers with
-      // the message's id and flag. The library returns null for an answer
-      // without a usable id or flag (yvanvds/dartschool#95); the check
-      // compares the id and the flag with those asked.
-      final change = await messages.setLabel(id, label, boxType: box.boxType);
-      return change != null &&
-          change.id == id &&
-          change.newValue == label.value;
-    }),
-  );
+  final where = BoxArgument.parse(arguments);
+  final (box, results) = await withMessages(session, (messages) async {
+    final box = await where.resolve(messages);
+    return (
+      box,
+      await changeEach(messages, box, ids, (id) async {
+        // The request cannot name the folder of a message in the archive or
+        // in a folder the user made. The library documents that Smartschool
+        // finds the message there by its id alone, seen live in the archive
+        // (yvanvds/dartschool#94), not yet in a folder the user made (#134).
+        // Smartschool answers with the message's id and flag. The library
+        // returns null for an answer without a usable id or flag
+        // (yvanvds/dartschool#95); the check compares the id and the flag
+        // with those asked.
+        final change = await messages.setLabel(id, label, boxType: box.boxType);
+        return change != null &&
+            change.id == id &&
+            change.newValue == label.value;
+      }),
+    );
+  });
   final clear = label == MessageLabel.noFlag;
   return changesResult(
     results,

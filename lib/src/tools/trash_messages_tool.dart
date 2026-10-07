@@ -7,8 +7,9 @@ import '../session.dart';
 import 'message_changes.dart';
 import 'server_tool.dart';
 
-/// `trash_messages`: moves messages of the inbox, the sent box or the
-/// archive to Smartschool's trash, and says per id what happened.
+/// `trash_messages`: moves messages of the inbox, the sent box, the archive
+/// or a folder the user made to Smartschool's trash, and says per id what
+/// happened.
 ///
 /// A move, not a deletion: the user can restore a message from the trash in
 /// Smartschool, until the trash is emptied. But this server cannot take a
@@ -32,8 +33,9 @@ ServerTool trashMessagesTool(SmartschoolSession session) => ServerTool(
         'trash in Smartschool itself, as long as the trash has not been '
         'emptied. This tool cannot take a message out of the trash again, '
         'nor empty the trash. Pass the ids from list_messages and the box '
-        'the messages are in (inbox, sent or archive), at most '
-        '$maxMessageIds per call. When the user asks you to throw messages '
+        'the messages are in (inbox, sent or archive), or the folder the '
+        'user made that they are in, at most $maxMessageIds per call. When '
+        'the user asks you to throw messages '
         'away or delete them ("Gooi die nieuwsbrieven weg"), first show the '
         'user the messages you will move to the trash (date, sender or '
         'recipients, subject), and only call this tool, with exactly those '
@@ -58,7 +60,11 @@ ServerTool trashMessagesTool(SmartschoolSession session) => ServerTool(
         'box': MessageBox.schema(
           description:
               'The box the messages are in: inbox (default), sent or '
-              'archive.',
+              'archive. With folder: the box the folder is in (inbox or '
+              'sent), or leave it out.',
+        ),
+        'folder': folderSchema(
+          description: folderDescription('move to the trash'),
         ),
       },
       required: ['message_ids'],
@@ -79,7 +85,7 @@ Future<CallToolResult> _trash(
   Map<String, Object?> arguments,
 ) async {
   final ids = messageIdsArgument(arguments);
-  final box = MessageBox.parse(arguments['box']);
+  final where = BoxArgument.parse(arguments);
   // Kept across the runs of the action, which withMessages may repeat after
   // some messages were moved (see changeEach): the messages passed to the
   // move, and those whose move went out. withMessages repeats the action
@@ -89,34 +95,41 @@ Future<CallToolResult> _trash(
   // was not made, so it is sent again.
   final started = <int, ShortMessage>{};
   final moved = <int>{};
-  final results = await withMessages(
-    session,
-    (messages) => changeEach(messages, box, ids, started: started, (id) async {
-      if (!moved.contains(id)) {
-        try {
-          // Returns what its own check after the move found: whether the
-          // box no longer holds the message, or null when Smartschool's
-          // answer said neither.
-          final left = await messages.moveToTrashFrom(
-            id,
-            boxType: box.boxType,
-            boxId: await box.folderId(messages),
-          );
-          moved.add(id);
-          if (left != null) return left;
-        } on SmartschoolMoveUncheckedError {
-          // The move went out and only the library's check after it failed:
-          // checked below, never moved again.
-          moved.add(id);
+  final (box, results) = await withMessages(session, (messages) async {
+    final box = await where.resolve(messages);
+    return (
+      box,
+      await changeEach(messages, box, ids, started: started, (id) async {
+        if (!moved.contains(id)) {
+          try {
+            // Names the folder of a message in the archive or in a folder
+            // the user made, as the library documents for a folder (tried
+            // live in the archive, yvanvds/dartschool#64, not yet in a
+            // folder the user made, #134). Returns what its own check
+            // after the move found: whether the box no longer holds the
+            // message, or null when Smartschool's answer said neither.
+            final left = await messages.moveToTrashFrom(
+              id,
+              boxType: box.boxType,
+              boxId: await box.folderId(messages),
+            );
+            moved.add(id);
+            if (left != null) return left;
+          } on SmartschoolMoveUncheckedError {
+            // The move went out and only the library's check after it
+            // failed: checked below, never moved again.
+            moved.add(id);
+          }
         }
-      }
-      // A move that went out in an earlier run, or whose check failed or
-      // said neither: getMessage returns null once the box no longer holds
-      // the message, also for a message just moved to the trash, as the
-      // library's docs of getMessage and SmartschoolMoveUncheckedError say.
-      return await box.message(messages, id, allRecipients: false) == null;
-    }),
-  );
+        // A move that went out in an earlier run, or whose check failed or
+        // said neither: getMessage returns null once the box (none of its
+        // folders) no longer holds the message, also for a message just
+        // moved to the trash, as the library's docs of getMessage and
+        // SmartschoolMoveUncheckedError say.
+        return await box.message(messages, id, allRecipients: false) == null;
+      }),
+    );
+  });
   return changesResult(
     results,
     box: box,
@@ -128,9 +141,9 @@ Future<CallToolResult> _trash(
         reason: 'still in ${box.phrase}',
         note: (heading) =>
             'the messages under "$heading" were still in ${box.phrase} '
-            'after the move to the trash. Check with list_messages (box '
-            '${box.name}) whether they are still there, then try again or '
-            'let the user move them to the trash in Smartschool.',
+            'after the move to the trash. Check with list_messages '
+            '(${box.argument}) whether they are still there, then try '
+            'again or let the user move them to the trash in Smartschool.',
       ),
     ),
     changedLine: (header) => formatHeaderLine(header, box),

@@ -23,7 +23,7 @@ String displaySubject(String subject) =>
     subject.trim().isEmpty ? '(no subject)' : subject.trim();
 
 /// One compact line describing [message] in [box]: id, date, sender (the
-/// recipients for [MessageBox.sent]), subject and markers.
+/// recipients in the sent box and its folders), subject and markers.
 ///
 /// For example `id 123 | 2024-03-15 14:30 | from Jan Peeters | Oudercontact |
 /// unread, attachments, flag red`.
@@ -37,14 +37,14 @@ String formatHeaderLine(
   int? flag,
 }) {
   final markers = [
-    if ((unread ?? message.unread) && box != MessageBox.sent) 'unread',
+    if ((unread ?? message.unread) && box.boxType != BoxType.sent) 'unread',
     if (message.attachment > 0) 'attachments',
     if (flagName(flag ?? message.coloredFlag) case final name?) 'flag $name',
   ];
   return [
     'id ${message.id}',
     formatMessageDate(message.date),
-    '${box == MessageBox.sent ? 'to' : 'from'} ${message.sender.trim()}',
+    '${box.boxType == BoxType.sent ? 'to' : 'from'} ${message.sender.trim()}',
     displaySubject(message.subject),
     if (markers.isNotEmpty) markers.join(', '),
   ].join(' | ');

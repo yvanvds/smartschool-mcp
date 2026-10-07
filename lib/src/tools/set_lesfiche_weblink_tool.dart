@@ -16,12 +16,13 @@ import 'server_tool.dart';
 ///
 /// Marked destructive, as `create_lesfiche` is (its doc comment says why),
 /// and not idempotent: a second add adds a second weblink. The library sends
-/// an add once, never again after logging in again; the tool reads the
-/// lesfiche first in the session action of the write (the library takes it
-/// as read, the tool finds the weblink to change in it), so that a repeat of
-/// the action logs in again with that read (yvanvds/dartschool#134). A
-/// change sends every value of the weblink: the icon and the visibility not
-/// given stay as they were.
+/// an add once, never again after logging in again; when Smartschool refused
+/// the session for it, the session repeats the action, and the library logs
+/// in again before the repeat's first request (yvanvds/dartschool#134). The
+/// tool reads the lesfiche first in the session action of the write: the
+/// library takes it as read, and the tool finds the weblink to change in it.
+/// A change sends every value of the weblink: the icon and the visibility
+/// not given stay as they were.
 ServerTool setLesficheWeblinkTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'set_lesfiche_weblink',
@@ -142,9 +143,6 @@ Future<CallToolResult> _set(
     weblink = await withLesficheWrite(
       session,
       (client) async {
-        // First, so that a repeat of the session logs in again with it: the
-        // add is refused at once on an expired session, without a login
-        // (yvanvds/dartschool#134).
         final read = lesfiche = (await readLesficheDetail(
           client,
           type,

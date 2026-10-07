@@ -452,18 +452,12 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
-      final repeat = server.requests.sublist(first + 1);
       expect(
-        repeat.first,
+        server.requests[first + 1],
         'GET /login',
         reason:
             'after a refused session the library logs in before the next '
             'request (yvanvds/dartschool#134)',
-      );
-      expect(
-        repeat.firstWhere((request) => request.contains('/lesson-content/')),
-        'GET $_lessonPath',
-        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'added once');
       expect(server.logins, 2);
@@ -736,9 +730,9 @@ void main() {
       expect(lesson().attachments, hasLength(1));
     });
 
-    test('an add the module does not confirm, or whose visibility it does '
-        'not set: maybe added, with how to check it, and not sent '
-        'again', () async {
+    test('a take of the files the module does not confirm: maybe added, or '
+        'added with always when another visibility was asked for, with how '
+        'to check it, and not sent again', () async {
       const maybe =
           'The addition of the file "recursie.txt" to the lesson lesfiche '
           '"Lussen" may or may not have been carried out: it was sent, but '
@@ -764,23 +758,9 @@ void main() {
       );
       expect(sentTo('$_lessonPath/attachments'), 1);
       expect(lesson().attachments, hasLength(2), reason: 'taken');
-
-      // The take goes through, the visibility after it does not.
-      planner.lostAnswers.clear();
-      planner.failing['$_lessonPath/attachments/${_partId('f', 2)}/'
-              'change-visibility'] =
-          500;
-      expect(
-        await refusedOnLesson('add_lesfiche_attachments', {
-          'attachments': attachments,
-        }),
-        maybe,
-      );
-      expect(sentTo('$_lessonPath/attachments'), 2, reason: 'one per call');
-      expect(lesson().attachments.last.option, 'always');
+      expect(lesson().attachments.last.option, 'always', reason: 'not set');
 
       // Without a visibility to set, nothing is said about it.
-      planner.lostAnswers.add('$_lessonPath/attachments');
       expect(
         await refusedOnLesson('add_lesfiche_attachments', {
           'attachments': [
@@ -797,6 +777,200 @@ void main() {
           isNot(contains('always')),
         ),
       );
+      expect(sentTo('$_lessonPath/attachments'), 2, reason: 'one per call');
+    });
+
+    test('the module takes the files, but does not confirm a visibility (a '
+        '500): the files were added, with their ids, and the visibility '
+        'not set as a call that sets it, without a read; the call it gives '
+        'sets it', () async {
+      final path = fakeLesficheDetailPath(_assignment);
+      final change = '$path/attachments/${_partId('f', 1)}/change-visibility';
+      planner.failing[change] = 500;
+      FakeLesfiche assignment() =>
+          planner.lesfiches.singleWhere((each) => each.id == _assignment.id);
+
+      final text = await error('add_lesfiche_attachments', {
+        'lesfiche': _assignment.id,
+        'type': 'assignment',
+        'attachments': [
+          {'path': file('recursie.txt'), 'visibility': 'never'},
+        ],
+      });
+
+      expect(
+        text,
+        'Added 1 attachment to the assignment lesfiche "Lussen", but not '
+        'every visibility asked for was set (each attachment with when '
+        'pupils see it as far as the server knows):\n'
+        '- recursie.txt | 16 bytes | text/plain | visible to pupils: always | '
+        'id ${_partId('f', 1)}\n'
+        'The module gives every new attachment the visibility always, and '
+        'the server sets the visibility asked for after that. Setting the '
+        'one of "recursie.txt" failed: it was sent, but the Lesfiches module '
+        'did not confirm it, so it may or may not have been set.\n'
+        'The file is on the lesfiche: do not call add_lesfiche_attachments '
+        'again for it, as a second call adds it a second time. Set the '
+        'visibility with set_lesfiche_attachment_visibility instead (setting '
+        'one that went through again is harmless), and tell the user:\n'
+        '- "recursie.txt": set_lesfiche_attachment_visibility (lesfiche '
+        '${_assignment.id}, type assignment, attachment_id '
+        '${_partId('f', 1)}, visibility never)',
+      );
+      expect(sentTo('$path/attachments'), 1, reason: 'taken once');
+      expect(sentTo(change), 1, reason: 'not sent again');
+      expect(server.requests.last, 'POST $change', reason: 'no read after it');
+      expect(assignment().attachments.last.option, 'always');
+
+      planner.failing.clear();
+      expect(
+        await ok('set_lesfiche_attachment_visibility', {
+          'lesfiche': _assignment.id,
+          'type': 'assignment',
+          'attachment_id': _partId('f', 1),
+          'visibility': 'never',
+        }),
+        startsWith(
+          'Pupils now see the attachment "recursie.txt" of the assignment '
+          'lesfiche "Lussen": never (before: always).\n',
+        ),
+      );
+      expect(assignment().attachments.last.option, 'never');
+      expect(sentTo('$path/attachments'), 1);
+    });
+
+    test('a visibility the module refuses (a bare 400): the attachments, '
+        'each with when pupils see it as far as known, and the visibilities '
+        'not set, that one and those after it, which were not tried, each as '
+        'a call that sets it', () async {
+      String change(int n) =>
+          '$_lessonPath/attachments/${_partId('f', n)}/change-visibility';
+      planner.failing[change(2)] = 400;
+
+      final text = await refusedOnLesson('add_lesfiche_attachments', {
+        'attachments': [
+          {'path': file('a.txt'), 'visibility': 'at_end'},
+          {'path': file('b.txt'), 'visibility': 'never'},
+          {'path': file('c.txt'), 'visibility': 'after_end:3'},
+        ],
+      });
+
+      expect(
+        text,
+        'Added 3 attachments to $_lussen, but not every visibility asked for '
+        'was set (each attachment with when pupils see it as far as the '
+        'server knows):\n'
+        '- a.txt | 16 bytes | text/plain | visible to pupils: from the end of '
+        'the lesson it is planned in | id ${_partId('f', 1)}\n'
+        '- b.txt | 16 bytes | text/plain | visible to pupils: always | id '
+        '${_partId('f', 2)}\n'
+        '- c.txt | 16 bytes | text/plain | visible to pupils: always | id '
+        '${_partId('f', 3)}\n'
+        'The module gives every new attachment the visibility always, and '
+        'the server sets the visibility asked for after that. Setting the '
+        'one of "b.txt" failed: the Lesfiches module refused it (HTTP 400), '
+        'without saying why, so it was not set. The server stopped there, '
+        'without setting the one of "c.txt".\n'
+        'The files are on the lesfiche: do not call add_lesfiche_attachments '
+        'again for them, as a second call adds them a second time. Set each '
+        'visibility with set_lesfiche_attachment_visibility instead (setting '
+        'one that went through again is harmless), and tell the user:\n'
+        '- "b.txt": set_lesfiche_attachment_visibility (lesfiche '
+        '${_lesson.id}, attachment_id ${_partId('f', 2)}, visibility never)\n'
+        '- "c.txt": set_lesfiche_attachment_visibility (lesfiche '
+        '${_lesson.id}, attachment_id ${_partId('f', 3)}, visibility '
+        'after_end:3)',
+      );
+      expect(planner.writes, [
+        'POST $_lessonPath/attachments',
+        'POST ${change(1)}',
+        'POST ${change(2)}',
+      ], reason: 'taken once, and the third visibility not tried');
+
+      planner.failing.clear();
+      for (final (n, visibility) in [(2, 'never'), (3, 'after_end:3')]) {
+        await onLesson('set_lesfiche_attachment_visibility', {
+          'attachment_id': _partId('f', n),
+          'visibility': visibility,
+        });
+      }
+      expect(
+        [
+          for (final attachment in lesson().attachments)
+            (attachment.fileName, attachment.option),
+        ],
+        [
+          ('lussen.txt', 'never'),
+          ('a.txt', 'at-end'),
+          ('b.txt', 'never'),
+          ('c.txt', 'days-after-end'),
+        ],
+      );
+    });
+
+    test('a visibility the module answers with 404: not set, as the lesfiche '
+        'went to the trash or the attachment was removed meanwhile', () async {
+      planner.failing['$_lessonPath/attachments/${_partId('f', 1)}/'
+              'change-visibility'] =
+          404;
+
+      expect(
+        await refusedOnLesson('add_lesfiche_attachments', {
+          'attachments': [
+            {'path': file('recursie.txt'), 'visibility': 'at_end'},
+          ],
+        }),
+        allOf(
+          startsWith('Added 1 attachment to $_lussen, but not every '),
+          contains(
+            'Setting the one of "recursie.txt" failed: the Lesfiches module '
+            'answered it with HTTP 404, so it was not set (the lesfiche was '
+            'moved to the trash, or the attachment removed, meanwhile).\n',
+          ),
+          endsWith('attachment_id ${_partId('f', 1)}, visibility at_end)'),
+        ),
+      );
+      expect(sentTo('$_lessonPath/attachments'), 1);
+    });
+
+    test('Smartschool refuses the session for a visibility, also after the '
+        'library logged in again: the files were added and the visibility '
+        'was not set; the session does not repeat the call', () async {
+      final take = '$_lessonPath/attachments';
+      final change = '$take/${_partId('f', 1)}/change-visibility';
+      planner.beforeAnswer = (method, path) {
+        if (method != 'POST' || path != take) return;
+        server
+          ..rejectsAfterLogin = 1
+          ..expireSessionBefore(
+            (RequestOptions request) =>
+                request.method == 'POST' && request.uri.path == change,
+          );
+      };
+
+      expect(
+        await refusedOnLesson('add_lesfiche_attachments', {
+          'attachments': [
+            {'path': file('recursie.txt'), 'visibility': 'at_start'},
+          ],
+        }),
+        allOf(
+          startsWith('Added 1 attachment to $_lussen, but not every '),
+          contains(
+            'Setting the one of "recursie.txt" failed: Smartschool did not '
+            'accept the session, so it was not set.\n',
+          ),
+          endsWith(
+            '- "recursie.txt": set_lesfiche_attachment_visibility (lesfiche '
+            '${_lesson.id}, attachment_id ${_partId('f', 1)}, visibility '
+            'at_start)',
+          ),
+        ),
+      );
+      expect(sentTo(take), 1, reason: 'taken once');
+      expect(planner.writes, ['POST $take'], reason: 'the change was refused');
+      expect(server.logins, 2, reason: 'the library logged in again once');
+      expect(lesson().attachments.last.option, 'always');
     });
 
     test('Smartschool refuses the session for the take of the files, which '
@@ -819,18 +993,12 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
-      final repeat = server.requests.sublist(first + 1);
       expect(
-        repeat.first,
+        server.requests[first + 1],
         'GET /login',
         reason:
             'after a refused session the library logs in before the next '
             'request (yvanvds/dartschool#134)',
-      );
-      expect(
-        repeat.firstWhere((request) => request.contains('/lesson-content/')),
-        'GET $_lessonPath',
-        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'taken once');
       expect(server.logins, 2);

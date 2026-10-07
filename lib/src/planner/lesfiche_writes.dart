@@ -40,16 +40,16 @@ import 'planner_access.dart';
 // action, as [SmartschoolSession.run] does when Smartschool refused the
 // session, cannot make a lesfiche, a weblink or an attachment twice: a
 // refused session means the write was not carried out, and an unconfirmed
-// write is not a refused session, so it is not repeated. The repeat reads
-// again what the action read before the write, and that read must come
-// first: a request that goes out once only is refused at once on an expired
-// session, without logging in, so it is a read of the repeat that logs in
-// again (yvanvds/dartschool#134). The module keeps a name that is taken
-// (seen live), and adds a second weblink or attachment for a second add, so
-// Claude is told never to call a create or an add again that may or may not
-// have been made. The edits, the removals and the move to the trash set or
-// name what they act on: the library retries them after logging in again,
-// as a read.
+// write is not a refused session, so it is not repeated. A write that goes
+// out once only is refused at once on an expired session, without logging
+// in, but after a refused session the library logs in again before its next
+// request (yvanvds/dartschool#134): the repeat goes out in a new session,
+// and reads again what the action read before the write. The module keeps
+// a name that is taken (seen live), and adds a second weblink or attachment
+// for a second add, so Claude is told never to call a create or an add
+// again that may or may not have been made. The edits, the removals and the
+// move to the trash set or name what they act on: the library retries them
+// after logging in again, as a read.
 
 /// What a tool that makes a lesfiche adds to an error that came before the
 /// module made it (after the arguments were checked and sent on).

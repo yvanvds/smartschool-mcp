@@ -394,7 +394,7 @@ void main() {
 
     test('Smartschool refuses the session for the move: the library logs in '
         'again and sends it once more, as a read, and the lesfiches are '
-        'moved once (dartschool#134 does not hold it back)', () async {
+        'moved once', () async {
       server.expireSessionBefore(
         (RequestOptions request) =>
             request.method == 'POST' &&

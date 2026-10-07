@@ -235,7 +235,7 @@ class FakeSmartschool implements HttpClientAdapter {
       _rejectsLeft--;
       return _followedTo('/login', _loginPage);
     }
-    if (path == SmartschoolSession.sessionCheckPath) {
+    if (path == fakeCourseListPath) {
       return planner.courseListAnswer();
     }
     return uploads.respond(options) ??

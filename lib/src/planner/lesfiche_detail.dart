@@ -214,6 +214,26 @@ LessonContentVisibility lesficheVisibilityArgument(
   );
 }
 
+/// [visibility] as a `visibility` argument gives it
+/// ([lesficheVisibilityArgument]): `always`, `never`, `at_start`, `at_end`
+/// or `after_end:N`; null for one that no argument gives (an option the
+/// library does not know, or days after the end without a number).
+///
+/// How a result tells Claude what to pass to set a visibility, like
+/// `add_lesfiche_attachments` when one was not set.
+String? lesficheVisibilityValue(LessonContentVisibility visibility) {
+  final days = visibility.daysAfterEnd;
+  return switch (visibility.option) {
+    LessonContentVisibilityOption.always => 'always',
+    LessonContentVisibilityOption.never => 'never',
+    LessonContentVisibilityOption.atStart => 'at_start',
+    LessonContentVisibilityOption.atEnd => 'at_end',
+    LessonContentVisibilityOption.daysAfterEnd =>
+      days == null ? null : 'after_end:$days',
+    LessonContentVisibilityOption.other => null,
+  };
+}
+
 /// One line describing [weblink]: its name, address, icon, when pupils see
 /// it ([formatLesficheVisibility]) and its id, like `Oefeningen |
 /// https://example.com/oefeningen | icon earth | visible to pupils: from

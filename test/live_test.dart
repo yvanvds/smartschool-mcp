@@ -25,6 +25,15 @@
 /// `--name search_messages`. It prints counts and timings, never the word or
 /// any message text.
 ///
+/// The folder test only reads as well: in one process, it names the folders
+/// the user made (through the error for an unknown folder), lists the test
+/// folder "dartschool test" (inbox folder 30650, which holds three messages,
+/// yvanvds/smartschool-mcp#131), searches the archive for a word that occurs
+/// nowhere (whose result names the folders), searches the day of a message
+/// in the folder for a word of its subject, and reads that message if it is
+/// read already. Run it on its own with `--name "a folder the user made"`.
+/// It prints counts, never a name or any message text.
+///
 /// The Intradesk test only reads as well (it downloads no file): it lists the
 /// top of Intradesk and a folder, and searches for a word of a name there
 /// with `refresh: true`, which walks all of Intradesk (minutes on a large
@@ -289,18 +298,20 @@ void main() {
         'since': since,
       });
 
+      // A hit in a folder the user made in the inbox starts with its path,
+      // like inbox/Projecten (#131).
       final hits = [
         for (final match in RegExp(
-          r'^- (inbox|archive) \| id (\d+) \| \d{4}-\d\d-\d\d \d\d:\d\d \| '
-          r'from ',
+          r'^- (inbox(?:/[^|]*)?|archive) \| id (\d+) \| '
+          r'\d{4}-\d\d-\d\d \d\d:\d\d \| from ',
           multiLine: true,
         ).allMatches(first))
           int.parse(match[2]!),
       ];
       expect(
         RegExp(
-          r'^Inbox and Archive: \d+ of the \d+ messages? searched contains? '
-          r'all of: ',
+          '^$_searchedBoxes: \\d+ of the \\d+ messages? searched contains? '
+          'all of: ',
         ).hasMatch(first),
         isTrue,
         reason: _mask(first),
@@ -309,8 +320,8 @@ void main() {
       expect(second == first, isTrue, reason: 'second: ${_mask(second)}');
       expect(
         RegExp(
-          r'^Inbox and Archive: none of the \d+ messages searched contains '
-          r'all of: qzxj\d+\.',
+          '^$_searchedBoxes: none of the \\d+ messages searched contains '
+          'all of: qzxj\\d+\\.',
         ).hasMatch(nothing),
         isTrue,
         reason: _mask(nothing),
@@ -329,6 +340,141 @@ void main() {
       expect(searches, hasLength(3));
       expect(searches[1], contains(', 0 downloaded,'));
       expect(searches[2], contains(', 0 downloaded,'));
+    },
+  );
+
+  test(
+    'list_messages, search_messages and read_message find the messages in a '
+    'folder the user made (the test folder "dartschool test"), read-only',
+    () async {
+      // The user's own cookie cache, as the message tests: one process, so
+      // at most one login. Only reads, and reads a message only when it is
+      // read already. The folder names and the messages are personal:
+      // failures show masked text only, and only counts are printed.
+      final server = await ServerProcess.start(
+        exePath,
+        args: ['--credentials', credentialsPath],
+        environment: environmentWithoutSmartschool(),
+      );
+      await server.initialize();
+      Future<String> call(
+        String tool,
+        Map<String, Object?> arguments, {
+        bool error = false,
+      }) async {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+          timeout: const Duration(minutes: 2),
+        );
+        expect(isError ?? false, error, reason: '$tool: ${_mask(text)}');
+        return text;
+      }
+
+      const folder = 'inbox/dartschool test';
+      final nowhere = 'qzxj${DateTime.now().microsecondsSinceEpoch}';
+
+      // The folders the user made, from the folder tree, as the error for an
+      // unknown folder names them; nothing is listed.
+      final folders = await call('list_messages', {
+        'folder': nowhere,
+      }, error: true);
+      expect(
+        folders.startsWith(
+          'There is no folder "$nowhere" in the inbox or the sent box. The '
+          'folders the user made are: ',
+        ),
+        isTrue,
+        reason: _mask(folders),
+      );
+      expect(
+        folders.contains('$folder (id 30650)'),
+        isTrue,
+        reason: _mask(folders),
+      );
+      final folderCount = RegExp(r' \(id \d+\)').allMatches(folders).length;
+
+      // The test folder, by its name: the three messages moved there.
+      final listed = await call('list_messages', {'folder': 'dartschool test'});
+      final headers = _expectListShape(listed, 'Folder $folder');
+      expect(
+        listed.split('\n').first,
+        'Folder $folder: 3 messages, newest first.',
+        reason: _mask(listed),
+      );
+
+      // Nothing in the archive matches: the result names the folders of the
+      // inbox, which were not listed.
+      final archive = await call('list_messages', {
+        'box': 'archive',
+        'query': nowhere,
+      });
+      expect(
+        archive.contains(
+          '\nNot listed: the folders the user made in the inbox: ',
+        ),
+        isTrue,
+        reason: _mask(archive),
+      );
+      expect(
+        archive.contains('$folder (id 30650)'),
+        isTrue,
+        reason: _mask(archive),
+      );
+
+      // A word of the subject of a message in the folder, searched for on
+      // the day of that message only (few texts to download): found in the
+      // folder.
+      final message = headers.first;
+      final word = RegExp(
+        r'\p{L}{4,}',
+        unicode: true,
+      ).firstMatch(message.subject)?[0];
+      expect(word, isNotNull, reason: 'subject: ${_mask(message.subject)}');
+      final day = message.date.substring(0, 10);
+      final found = await call('search_messages', {
+        'query': word!,
+        'since': day,
+        'until': day,
+        'limit': 100,
+      });
+      expect(
+        RegExp(
+          '^$_searchedBoxes: \\d+ of the \\d+ messages? searched contains? '
+          'all of: ',
+        ).hasMatch(found),
+        isTrue,
+        reason: _mask(found),
+      );
+      expect(
+        found.contains('\n- $folder | id ${message.id} | '),
+        isTrue,
+        reason: _mask(found),
+      );
+
+      // A message in the folder is read with the box the folder is in.
+      final read = headers.where((h) => !h.unread).firstOrNull;
+      if (read != null) {
+        final text = await call('read_message', {'message_id': read.id});
+        expect(
+          text.startsWith('Message ${read.id} (Inbox)\nFrom: '),
+          isTrue,
+          reason: _mask(text),
+        );
+      }
+
+      await server.stop();
+      // Counts only: the query, the names and the texts are personal.
+      final searches = (await server.stderr)
+          .split('\n')
+          .where((line) => line.contains('] search_messages: '));
+      stderr.writeln(
+        '--- folders: $folderCount '
+        'folder${folderCount == 1 ? '' : 's'} the user made, '
+        '${headers.length} messages in the test folder, '
+        '${read == null ? 'none' : 'one'} read ---\n'
+        '${searches.join('\n')}',
+      );
     },
   );
 
@@ -872,6 +1018,10 @@ String _mask(String text) => text
     .replaceAll(RegExp(r'\p{L}', unicode: true), 'x')
     .replaceAll(RegExp(r'\d'), '9');
 
+/// The summary of a search of the inbox and the archive: with the folders the
+/// user made in the inbox, when there are any (#131).
+const _searchedBoxes = r'Inbox(?:, Archive and \d+ folders?| and Archive)';
+
 typedef _Header = ({
   int id,
   String date,
@@ -897,6 +1047,8 @@ List<_Header> _expectListShape(String text, String label) {
   );
   final headers = <_Header>[];
   for (final line in lines.skip(1)) {
+    // When nothing matches, the folders the user made in the box (#131).
+    if (line.startsWith('Not listed: ')) continue;
     final match = _headerLine.firstMatch(line);
     expect(match, isNotNull, reason: 'line: ${_mask(line)}');
     headers.add((

@@ -159,6 +159,11 @@ void main() {
   int postsTo(String path) =>
       server.requests.where((r) => r == 'POST $_api/$path').length;
 
+  /// Whether [request], as [FakeSmartschool.requests] has it, asks for the
+  /// parents of a folder.
+  bool isParentsRequest(String request) =>
+      request.startsWith('GET $_api/folders/') && request.endsWith('/parents');
+
   group('the tools', () {
     test('are listed as writes Claude Desktop asks approval for, to be '
         'called only after the user confirmed, with their arguments', () async {
@@ -236,49 +241,52 @@ void main() {
   });
 
   group('create_intradesk_folder', () {
-    test(
-      'reads the folder, sends the create once with the name, the colour '
-      '(yellow by default), the parent and the platform, and answers with '
-      'the folder as Intradesk made it; without an index it builds none',
-      () async {
-        final text = await ok('create_intradesk_folder', {
-          'folder_id': informatica,
-          'name': ' Toetsen ',
-        });
+    test('reads the folder and its path, sends the create once with the name, '
+        'the colour (yellow by default), the parent and the platform, and '
+        'answers with the folder as Intradesk made it, named by its path; '
+        'without an index it builds none', () async {
+      final text = await ok('create_intradesk_folder', {
+        'folder_id': informatica,
+        'name': ' Toetsen ',
+      });
 
-        expect(
-          text,
-          'Added the folder "Toetsen" to the Intradesk folder $informatica, '
-          'with the colour yellow. Its id is '
-          'ffff0001-0000-4000-8000-000000000001.\n'
-          '- folder | Toetsen | id ffff0001-0000-4000-8000-000000000001 | '
-          'changed 2026-10-05',
-        );
-        expect(intradesk.writeRequests, hasLength(1));
-        expect(intradesk.writeRequests.single.path, 'folders/');
-        expect(intradesk.writeRequests.single.body, {
-          'name': 'Toetsen',
-          'color': 'yellow',
-          'parentFolderId': informatica,
-          'platform': {'id': 4069},
-        });
-        // The folder above is the library's: it reads the folder's entry
-        // before the create (yvanvds/dartschool#138).
-        expect(intradesk.listed, [informatica, vakken], reason: 'no walk');
-        expect(await cache.saved(), isNull);
-        expect(namesIn(informatica), ['Toetsen', 'Verslag.docx', 'Schoolsite']);
-        expect(
-          await ok('list_intradesk_folder', {'folder_id': informatica}),
-          contains(
-            '- folder | Toetsen | id ffff0001-0000-4000-8000-000000000001',
-          ),
-        );
-      },
-    );
+      expect(
+        text,
+        'Added the folder "Toetsen" to the Intradesk folder Vakken / '
+        'Informatica (id $informatica), with the colour yellow. Its id is '
+        'ffff0001-0000-4000-8000-000000000001.\n'
+        '- folder | Vakken / Informatica / Toetsen | id '
+        'ffff0001-0000-4000-8000-000000000001 | changed 2026-10-05',
+      );
+      expect(intradesk.writeRequests, hasLength(1));
+      expect(intradesk.writeRequests.single.path, 'folders/');
+      expect(intradesk.writeRequests.single.body, {
+        'name': 'Toetsen',
+        'color': 'yellow',
+        'parentFolderId': informatica,
+        'platform': {'id': 4069},
+      });
+      // The tool reads the folder's path (its parents, then the top and
+      // Vakken: yvanvds/dartschool#132) and its listing; the library reads
+      // its entry again (its parents, then Vakken) before the create
+      // (yvanvds/dartschool#138).
+      expect(intradesk.listed, ['', vakken, informatica, vakken]);
+      expect(server.requests.where(isParentsRequest), [
+        'GET $_api/folders/$informatica/parents',
+        'GET $_api/folders/$informatica/parents',
+      ]);
+      expect(await cache.saved(), isNull);
+      expect(namesIn(informatica), ['Toetsen', 'Verslag.docx', 'Schoolsite']);
+      expect(
+        await ok('list_intradesk_folder', {'folder_id': informatica}),
+        contains(
+          '- folder | Toetsen | id ffff0001-0000-4000-8000-000000000001',
+        ),
+      );
+    });
 
-    test('with an index: names the parent by its path, reads its entry in the '
-        'folder above, and patches the index, so that a search finds the new '
-        'folder at once, also in a new server process', () async {
+    test('with an index: patches it, so that a search finds the new folder at '
+        'once, also in a new server process', () async {
       await buildIndex();
 
       final text = await ok('create_intradesk_folder', {
@@ -296,9 +304,8 @@ void main() {
         'ffff0001-0000-4000-8000-000000000001 | changed 2026-10-05',
       );
       expect(intradesk.writeRequests.single.body['color'], 'green');
-      // The folder above twice: for the tool's read of the folder's entry and
-      // for the library's (yvanvds/dartschool#138).
-      final listed = [informatica, vakken, vakken];
+      // The same reads as without an index.
+      final listed = ['', vakken, informatica, vakken];
       expect(intradesk.listed, listed);
 
       expect(await found('toetsen'), ['Vakken / Informatica / Toetsen']);
@@ -309,6 +316,25 @@ void main() {
       expect(intradesk.listed, listed, reason: 'no walk');
     });
 
+    test('a folder the index does not know, made after the walk, is named by '
+        'its path too, and the new folder goes into the index', () async {
+      await buildIndex();
+      final nieuw = intradesk.addFolder('Nieuw', parent: vakken, canAdd: true);
+
+      expect(
+        await ok('create_intradesk_folder', {
+          'folder_id': nieuw,
+          'name': 'Toetsen',
+        }),
+        startsWith(
+          'Added the folder "Toetsen" to the Intradesk folder Vakken / Nieuw '
+          '(id $nieuw), ',
+        ),
+      );
+      expect(await found('toetsen'), ['Vakken / Nieuw / Toetsen']);
+      expect(intradesk.listed, ['', vakken, nieuw, vakken], reason: 'no walk');
+    });
+
     test('refuses a name the folder holds already, of any kind, ignoring case '
         'and spaces, and names the item; nothing is sent', () async {
       expect(
@@ -316,8 +342,9 @@ void main() {
           'folder_id': informatica,
           'name': ' verslag.DOCX',
         }),
-        'The Intradesk folder $informatica already holds an item with the '
-        'name of the new folder: the file "Verslag.docx" (id $verslag). '
+        'The Intradesk folder Vakken / Informatica (id $informatica) already '
+        'holds an item with the name of the new folder: the file '
+        '"Verslag.docx" (id $verslag). '
         'Intradesk does not refuse a second item with the same name, but adds '
         'the new one under another name (like "name (1)"). Choose another '
         'name, or ask the user what to do. Nothing was sent.',
@@ -332,82 +359,75 @@ void main() {
       expect(intradesk.writes, isEmpty);
     });
 
-    test('refuses a folder the account may not add to before sending: with an '
-        'index the tool does, without one the library, which reads the '
-        'folder too', () async {
+    test('a folder the account may not add to: the library reads it and '
+        'refuses the write before sending, also without an index, which each '
+        'tool reports in its own words, with the folder\'s path; an upload '
+        'uploads nothing', () async {
+      final refusal =
+          'Your account may not add anything to the Intradesk folder Archief '
+          '(id $archief): Smartschool does not give you that right for this '
+          'folder, and Intradesk\'s own web client offers no folder, weblink '
+          'or file there. Choose another folder, or ask someone who manages '
+          'it. Nothing was sent.';
+
       expect(
         await error('create_intradesk_folder', {
           'folder_id': archief,
           'name': 'Oud',
         }),
-        'The folder "Oud" in the Intradesk folder $archief was refused before '
-        'it was sent: createFolder: the user may not add to folder $archief '
-        '("Archief") (its canAdd is false), and Intradesk\'s web client '
-        'offers no folder, weblink or file there. Nothing was sent.',
+        refusal,
       );
-      expect(intradesk.listed, [archief, ''], reason: 'the top: the library');
-      expect(intradesk.writes, isEmpty);
-
-      await buildIndex();
-
+      // The tool's read of the path (the top) and of the folder, then the
+      // library's read of its entry (the top).
+      expect(intradesk.listed, ['', archief, '']);
       expect(
-        await error('create_intradesk_folder', {
+        await error('add_intradesk_weblink', {
           'folder_id': archief,
-          'name': 'Nieuw',
+          'name': 'Oud',
+          'url': 'https://example.com',
         }),
-        'Your account may not add anything to the Intradesk folder Archief '
-        '(id $archief): Smartschool does not give you that right for this '
-        'folder, and Intradesk\'s own web client offers no folder, weblink or '
-        'file there. Choose another folder, or ask someone who manages it. '
-        'Nothing was sent.',
+        refusal,
       );
+      expect(
+        await error('upload_intradesk_files', {
+          'folder_id': archief,
+          'paths': [file('oud.pdf')],
+        }),
+        refusal,
+      );
+      expect(server.uploads.directories, isEmpty, reason: 'no upload step');
       expect(intradesk.writes, isEmpty);
+      expect(namesIn(archief), isEmpty);
     });
 
     test('a confidential folder goes to folders/as-confidential inside a '
-        'confidential folder; the wrong kind is refused before sending: with '
-        'an index the tool does, without one the library', () async {
+        'confidential folder; the wrong kind is refused before sending, also '
+        'without an index: the library reads the folder and refuses it, '
+        'which the tool reports in its own words', () async {
       expect(
         await error('create_intradesk_folder', {
           'folder_id': informatica,
           'name': 'Geheim',
           'confidential': true,
         }),
-        'The confidential folder "Geheim" in the Intradesk folder '
-        '$informatica was refused before it was sent: createFolder: folder '
-        '$informatica ("Informatica") is an ordinary folder, which holds no '
-        'confidential folder: Intradesk refuses one there (HTTP 400), and its '
-        'web client offers none. Nothing was sent.',
-      );
-      expect(intradesk.writes, isEmpty);
-
-      await buildIndex();
-      intradesk.writeRequests.clear();
-      expect(
-        await error('create_intradesk_folder', {
-          'folder_id': informatica,
-          'name': 'Geheim',
-          'confidential': true,
-        }),
-        startsWith(
-          'The Intradesk folder Vakken / Informatica (id $informatica) is not '
-          'confidential: Intradesk adds a confidential folder only inside a '
-          'confidential folder.',
-        ),
+        'The Intradesk folder Vakken / Informatica (id $informatica) is not '
+        'confidential: Intradesk adds a confidential folder only inside a '
+        'confidential folder. Leave confidential out to add an ordinary '
+        'folder. Nothing was sent.',
       );
       expect(
         await error('create_intradesk_folder', {
           'folder_id': dossiers,
           'name': '2026',
         }),
-        startsWith(
-          'The Intradesk folder Leerlingendossiers (id $dossiers) is '
-          'confidential: inside a confidential folder Intradesk adds only '
-          'confidential folders. Pass confidential: true',
-        ),
+        'The Intradesk folder Leerlingendossiers (id $dossiers) is '
+        'confidential: inside a confidential folder Intradesk adds only '
+        'confidential folders. Pass confidential: true, and tell the user '
+        'that the new folder will be confidential. Nothing was sent.',
       );
       expect(intradesk.writes, isEmpty);
 
+      await buildIndex();
       expect(
         await ok('create_intradesk_folder', {
           'folder_id': dossiers,
@@ -429,7 +449,8 @@ void main() {
     test('refuses an empty name, a name Smartschool does not allow, a '
         'folder_id that is not a folder id, the top of Intradesk and a '
         'colour Intradesk does not have before reading anything; a folder '
-        'Intradesk does not have after reading it', () async {
+        'Intradesk does not have, or does not list (one in the trash), after '
+        'reading it', () async {
       Future<String> refused(Map<String, Object?> arguments) => error(
         'create_intradesk_folder',
         {'folder_id': informatica, 'name': 'Toetsen', ...arguments},
@@ -471,6 +492,23 @@ void main() {
         startsWith('Intradesk has no folder with id $verslag'),
       );
       expect(intradesk.writes, isEmpty);
+
+      // Smartschool answers the parents of a folder in the trash as those of
+      // a folder at the top, whose listing does not hold it.
+      await ok('trash_intradesk_items', {
+        'items': [
+          {'kind': 'folder', 'id': informatica},
+        ],
+      });
+      intradesk.writeRequests.clear();
+      expect(
+        await refused({}),
+        'Intradesk does not list the folder with id $informatica where it '
+        'is: it is in Intradesk\'s trash, or your account does not see it. '
+        'Take the id of a folder from list_intradesk_folder or '
+        'search_intradesk. Nothing was sent.',
+      );
+      expect(intradesk.writes, isEmpty);
     });
 
     test('a bare 500 is reported as maybe added, and the create is not sent '
@@ -482,8 +520,9 @@ void main() {
           'folder_id': informatica,
           'name': 'Toetsen',
         }),
-        'The folder "Toetsen" in the Intradesk folder $informatica may or may '
-        'not have been added: it was sent, but Intradesk did not confirm it. '
+        'The folder "Toetsen" in the Intradesk folder Vakken / Informatica (id '
+        '$informatica) may or may not have been added: it was sent, but '
+        'Intradesk did not confirm it. '
         'Do not call create_intradesk_folder again for it: Intradesk does not '
         'refuse a name that is taken, so a second call could add it twice. '
         'First list the folder with list_intradesk_folder (folder_id '
@@ -527,9 +566,10 @@ void main() {
       );
       expect(postsTo('folders/'), 2, reason: 'the refused one and the create');
       expect(intradesk.writes, ['POST folders/'], reason: 'made once');
-      // Each call lists the folder, and the library the folder above
-      // (yvanvds/dartschool#138).
-      expect(intradesk.listed, [informatica, vakken, informatica, vakken]);
+      // Each call reads the folder's path and the folder, and the library
+      // its entry (yvanvds/dartschool#138).
+      final call = ['', vakken, informatica, vakken];
+      expect(intradesk.listed, [...call, ...call]);
       expect(server.logins, 2);
       expect(namesIn(informatica).where((n) => n.startsWith('Toetsen')), [
         'Toetsen',
@@ -548,8 +588,8 @@ void main() {
         }),
         allOf(
           startsWith(
-            'Added the folder "Toetsen (1)" to the Intradesk folder '
-            '$informatica',
+            'Added the folder "Toetsen (1)" to the Intradesk folder Vakken / '
+            'Informatica (id $informatica)',
           ),
           contains(
             '\nNote: Intradesk stored it as "Toetsen (1)", not "Toetsen": it '
@@ -557,7 +597,7 @@ void main() {
             'named "Toetsen" was probably added there meanwhile. Tell the '
             'user.\n',
           ),
-          contains('- folder | Toetsen (1) | id ffff'),
+          contains('- folder | Vakken / Informatica / Toetsen (1) | id ffff'),
         ),
       );
     });
@@ -598,10 +638,12 @@ void main() {
       expect(await found('oefenplatform'), [
         'Vakken / Informatica / Oefenplatform',
       ]);
-      // The folder above twice: the tool's read and the library's.
+      // The tool's read of the path and of the folder, and the library's of
+      // its entry.
       expect(intradesk.listed, [
-        informatica,
+        '',
         vakken,
+        informatica,
         vakken,
       ], reason: 'no walk');
 
@@ -647,9 +689,9 @@ void main() {
           'url': 'https://example.com/oefenen',
         }),
         'Intradesk refused the weblink "Oefenplatform" '
-        '(https://example.com/oefenen) in the Intradesk folder $informatica '
-        '(HTTP 400): "${FakeIntradesk.urlRefusal}". Nothing was added to '
-        'Intradesk.',
+        '(https://example.com/oefenen) in the Intradesk folder Vakken / '
+        'Informatica (id $informatica) (HTTP 400): '
+        '"${FakeIntradesk.urlRefusal}". Nothing was added to Intradesk.',
       );
       expect(intradesk.writes, ['POST weblinks/']);
       expect(namesIn(informatica), ['Verslag.docx', 'Schoolsite']);
@@ -666,7 +708,8 @@ void main() {
         }),
         startsWith(
           'The weblink "Oefenplatform" (https://example.com/oefenen) in the '
-          'Intradesk folder $informatica may or may not have been added',
+          'Intradesk folder Vakken / Informatica (id $informatica) may or may '
+          'not have been added',
         ),
       );
       expect(postsTo('weblinks/'), 1);
@@ -706,10 +749,12 @@ void main() {
         'uploadDir': dir,
       });
       expect(await found('toets'), ['Vakken / Informatica / toets #1.pdf']);
-      // The folder above twice: the tool's read and the library's.
+      // The tool's read of the path and of the folder, and the library's of
+      // its entry.
       expect(intradesk.listed, [
-        informatica,
+        '',
         vakken,
+        informatica,
         vakken,
       ], reason: 'no walk');
     });
@@ -768,8 +813,9 @@ void main() {
       final taken = file('verslag.docx');
       expect(
         await refused([brief, taken]),
-        'The Intradesk folder $informatica already holds an item with the '
-        'name of some of the files: the file "Verslag.docx" (id $verslag). '
+        'The Intradesk folder Vakken / Informatica (id $informatica) already '
+        'holds an item with the name of some of the files: the file '
+        '"Verslag.docx" (id $verslag). '
         'Intradesk does not refuse a second item with the same name, but adds '
         'the new one under another name (like "name (1)"). Choose another '
         'name, or ask the user what to do. Nothing was sent.',
@@ -807,8 +853,13 @@ void main() {
       expect(
         text,
         allOf(
-          startsWith('Uploaded 1 file to the Intradesk folder $informatica.\n'),
-          contains('\n- file | brief.docx | id cccc0002-'),
+          startsWith(
+            'Uploaded 1 file to the Intradesk folder Vakken / Informatica (id '
+            '$informatica).\n',
+          ),
+          contains(
+            '\n- file | Vakken / Informatica / brief.docx | id cccc0002-',
+          ),
           endsWith(
             '\nIntradesk did not take 1 file, which was not added:\n'
             '- te groot.pdf: "Het bestand is te groot."',
@@ -833,7 +884,7 @@ void main() {
           'paths': [file('brief.docx')],
         }),
         allOf(
-          contains('\n- file | brief (1).docx | id '),
+          contains('\n- file | Vakken / Informatica / brief (1).docx | id '),
           contains(
             '\nNote: Intradesk stored "brief (1).docx" under another name '
             'than any file sent',
@@ -877,10 +928,10 @@ void main() {
             'paths': [brief],
           }),
           startsWith(
-            'The file "brief.docx" (21 bytes) for the Intradesk folder '
-            '$informatica may or may not have been added: it was sent, but '
-            'Intradesk did not confirm it. Do not call upload_intradesk_files '
-            'again for it',
+            'The file "brief.docx" (21 bytes) for the Intradesk folder Vakken / '
+            'Informatica (id $informatica) may or may not have been added: it '
+            'was sent, but Intradesk did not confirm it. Do not call '
+            'upload_intradesk_files again for it',
           ),
         );
         expect(postsTo('files/upload'), 1);
@@ -1062,10 +1113,10 @@ void main() {
       expect(intradesk.trashed, [informatica]);
     });
 
-    test('an id Intradesk has no item of that kind for: its refusal is '
-        'reported for that item, and the moves stop there, with what was '
-        'moved and what was not tried; the index loses only what was '
-        'moved', () async {
+    test('an id Intradesk has no item of that kind for: that item is '
+        'reported as no such item, not moved, and the moves stop there, with '
+        'what was moved and what was not tried; the index loses only what '
+        'was moved', () async {
       await buildIndex();
       const unknown = '00000000-0000-4000-8000-000000000000';
 
@@ -1088,10 +1139,10 @@ void main() {
         '- folder | id $unknown\n'
         'Not tried:\n'
         '- $schoolsiteLine\n'
-        'Intradesk refused the move of the folder with id $unknown to the '
-        'trash (HTTP 404), without saying why. It was not moved. Check its '
-        'kind and id with list_intradesk_folder or search_intradesk, and '
-        'tell the user.\n'
+        'Intradesk has no folder with id $unknown: it is the id of a file or '
+        'a weblink, or of an item that does not exist (any more). It was not '
+        'moved. Check its kind and id with list_intradesk_folder or '
+        'search_intradesk, and tell the user.\n'
         'Intradesk keeps its trash for 30 days: until then, the user can '
         'restore it from the trash in Intradesk itself.',
       );
@@ -1099,27 +1150,63 @@ void main() {
         'POST files/$verslag/trash',
         'POST folders/$unknown/trash',
       ]);
+      expect(intradesk.trashed, [verslag]);
       expect(namesIn(informatica), ['Schoolsite']);
       expect(await found('verslag'), isEmpty);
       expect(await found('schoolsite'), ['Vakken / Informatica / Schoolsite']);
 
-      // The id of a file the index does not know, passed as a folder's, is
-      // sent, and refused the same way.
+      // The id of an item the index does not know, passed as another kind,
+      // is sent, and Intradesk has no such item: a file as a folder, a
+      // folder as a weblink, a weblink as a file. Each stays where it is.
       final oud = intradesk.addFile('oud.pdf', parent: archief);
+      final map = intradesk.addFolder('Oude map', parent: archief);
+      const link = 'eeee7777-0000-4000-8000-000000007777';
+      intradesk.addWeblink({
+        'id': link,
+        'name': 'Oude link',
+        'url': 'https://example.com/oud',
+      }, parent: archief);
+      for (final (kind, id, others) in [
+        ('folder', oud, 'a file or a weblink'),
+        ('weblink', map, 'a folder or a file'),
+        ('file', link, 'a folder or a weblink'),
+      ]) {
+        expect(
+          await error('trash_intradesk_items', trash([(kind, id)])),
+          'Moving to Intradesk\'s trash stopped at item 1 of 1: nothing was '
+          'moved.\n'
+          'Not moved:\n'
+          '- $kind | id $id\n'
+          'Intradesk has no $kind with id $id: it is the id of $others, or of '
+          'an item that does not exist (any more). It was not moved. Check '
+          'its kind and id with list_intradesk_folder or search_intradesk, '
+          'and tell the user.',
+          reason: kind,
+        );
+      }
+      expect(namesIn(archief), ['Oude map', 'oud.pdf', 'Oude link']);
+
+      // The id of an item in the trash, passed as another kind: no such
+      // item either (seen live), while its own kind is moved again.
       expect(
-        await error('trash_intradesk_items', trash([('folder', oud)])),
-        allOf(
-          startsWith(
-            'Moving to Intradesk\'s trash stopped at item 1 of 1: nothing '
-            'was moved.\n'
-            'Not moved:\n'
-            '- folder | id $oud\n',
-          ),
-          contains('(HTTP 404)'),
-          isNot(contains('Intradesk keeps its trash')),
+        await error('trash_intradesk_items', trash([('weblink', verslag)])),
+        contains(
+          '\nIntradesk has no weblink with id $verslag: it is the id of a '
+          'folder or a file, or of an item that does not exist (any more).',
         ),
       );
-      expect(namesIn(archief), ['oud.pdf']);
+      expect(
+        await ok('trash_intradesk_items', trash([('file', verslag)])),
+        startsWith('Moved 1 item to Intradesk\'s trash.\n'),
+      );
+      expect(intradesk.trashed, [verslag]);
+      expect(intradesk.writes.skip(2), [
+        'POST folders/$oud/trash',
+        'POST weblinks/$map/trash',
+        'POST files/$link/trash',
+        'POST weblinks/$verslag/trash',
+        'POST files/$verslag/trash',
+      ]);
     });
 
     test('a refusal (HTTP 400 to 499) is reported with Intradesk\'s reasons, '

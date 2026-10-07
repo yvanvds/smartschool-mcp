@@ -24,7 +24,8 @@ const downloadConcurrency = 4;
 const defaultSearchLimit = 20;
 const maxSearchLimit = 100;
 
-/// The boxes searched when the call names none.
+/// The boxes searched when the call names none. The folders the user made
+/// in the inbox are searched with the inbox.
 const defaultSearchBoxes = [MessageBox.inbox, MessageBox.archive];
 
 /// `search_messages`: the messages whose text, subject or sender contains
@@ -47,10 +48,14 @@ ServerTool searchMessagesTool(
         'verlofdag?". Every word must occur, in any order; case and accents '
         'do not matter, and a word also matches inside a longer word '
         '("verlof" finds "verlofdag"). Searches the inbox and the archive '
-        'unless boxes says otherwise. Returns the matching messages newest '
-        'first, each with its box, id, date, sender (recipients for sent '
-        'messages) and subject, and a short snippet of the text around the '
-        'words; to read one in full, call read_message with its id and box. '
+        'unless boxes says otherwise, and the folders the user made in the '
+        'inbox (in the sent box, with sent). Returns the matching messages '
+        'newest first, each with its box or folder (a path that starts '
+        'with its box, like inbox/Projecten/2026), id, date, sender '
+        '(recipients for sent messages) and subject, and a short snippet of '
+        'the text around the words; to read one in full, call read_message '
+        'with its id and box (for a message in a folder, the box its path '
+        'starts with). '
         'The first search downloads the message texts and keeps them on this '
         'PC, so later searches are quick; at most $maxDownloadsPerSearch are '
         'downloaded per search, and the result says when messages were left '
@@ -65,7 +70,8 @@ ServerTool searchMessagesTool(
         'boxes': UntitledMultiSelectEnumSchema(
           description:
               'Which boxes to search: inbox, sent and/or archive. Default '
-              'inbox and archive.',
+              'inbox and archive. The folders the user made in the inbox or '
+              'the sent box are searched with that box.',
           values: [for (final box in MessageBox.values) box.name],
           defaultValue: [for (final box in defaultSearchBoxes) box.name],
           minItems: 1,
@@ -132,60 +138,72 @@ Future<CallToolResult> _search(
   var downloads = 0;
   // Like every session action, this may run more than once. A repeat lists
   // the boxes again and finds the texts an earlier run saved in the cache.
-  final (:listed, :candidates, :fromCache, :notSearched) = await withMessages(
-    session,
-    (messages) async {
-      var listed = 0;
-      final candidates = <_Candidate>[];
-      for (final box in boxes) {
-        final headers = await box.headers(
-          messages,
-          stopAfter: inRange.reachesPastSince,
-        );
-        listed += headers.length;
-        candidates.addAll([
-          for (final header in headers)
-            if (inRange.matches(header)) _Candidate(box, header),
-        ]);
-      }
-      candidates.sort((a, b) {
-        final byDate = b.header.date.compareTo(a.header.date);
-        return byDate != 0 ? byDate : b.header.id.compareTo(a.header.id);
-      });
-
-      await Future.wait([
-        for (final candidate in candidates)
-          cache
-              .read(candidate.box.boxType, candidate.header.id)
-              .then((text) => candidate.text = text),
-      ]);
-      final missing = [
-        for (final candidate in candidates)
-          if (candidate.text == null) candidate,
-      ];
-      // The newest ones first; the rest is left for a next search.
-      final download = missing.take(maxDownloadsPerSearch).toList();
-      await _forEachConcurrently(download, downloadConcurrency, (
-        candidate,
-      ) async {
-        final (box, id) = (candidate.box, candidate.header.id);
-        final message = await box.message(messages, id, allRecipients: false);
-        downloads++;
-        if (message == null) {
-          candidate.vanished = true;
-          return;
-        }
-        final text = candidate.text = htmlToText(message.body);
-        await cache.write(box.boxType, id, text);
-      });
-      return (
-        listed: listed,
-        candidates: candidates,
-        fromCache: candidates.length - missing.length,
-        notSearched: missing.length - download.length,
+  final (
+    :listed,
+    :candidates,
+    :fromCache,
+    :notSearched,
+    :folders,
+  ) = await withMessages(session, (messages) async {
+    // The folders the user made in a box are searched with it.
+    final folderBoxTypes = {
+      for (final box in boxes)
+        if (box != MessageBox.archive) box.boxType,
+    };
+    final folders = folderBoxTypes.isEmpty
+        ? const <MessageBox>[]
+        : await MessageBox.userFolders(messages, boxTypes: folderBoxTypes);
+    var listed = 0;
+    final candidates = <_Candidate>[];
+    for (final box in [...boxes, ...folders]) {
+      final headers = await box.headers(
+        messages,
+        stopAfter: inRange.reachesPastSince,
       );
-    },
-  );
+      listed += headers.length;
+      candidates.addAll([
+        for (final header in headers)
+          if (inRange.matches(header)) _Candidate(box, header),
+      ]);
+    }
+    candidates.sort((a, b) {
+      final byDate = b.header.date.compareTo(a.header.date);
+      return byDate != 0 ? byDate : b.header.id.compareTo(a.header.id);
+    });
+
+    await Future.wait([
+      for (final candidate in candidates)
+        cache
+            .read(candidate.box.boxType, candidate.header.id)
+            .then((text) => candidate.text = text),
+    ]);
+    final missing = [
+      for (final candidate in candidates)
+        if (candidate.text == null) candidate,
+    ];
+    // The newest ones first; the rest is left for a next search.
+    final download = missing.take(maxDownloadsPerSearch).toList();
+    await _forEachConcurrently(download, downloadConcurrency, (
+      candidate,
+    ) async {
+      final (box, id) = (candidate.box, candidate.header.id);
+      final message = await box.message(messages, id, allRecipients: false);
+      downloads++;
+      if (message == null) {
+        candidate.vanished = true;
+        return;
+      }
+      final text = candidate.text = htmlToText(message.body);
+      await cache.write(box.boxType, id, text);
+    });
+    return (
+      listed: listed,
+      candidates: candidates,
+      fromCache: candidates.length - missing.length,
+      notSearched: missing.length - download.length,
+      folders: folders.length,
+    );
+  });
 
   final hits = [
     for (final candidate in candidates)
@@ -201,13 +219,18 @@ Future<CallToolResult> _search(
   final vanished = candidates.where((c) => c.vanished).length;
   // Counts only: the query and the texts are personal.
   log(
-    'search_messages: $listed messages listed, ${candidates.length} to '
+    'search_messages: $listed messages listed in '
+    '${_count(boxes.length, 'box', 'boxes')} and '
+    '${_count(folders, 'folder')}, ${candidates.length} to '
     'search, $fromCache texts from the cache, $downloads downloaded, '
     '$notSearched left for a next search, ${hits.length} matching, '
     '${stopwatch.elapsedMilliseconds} ms',
   );
 
-  final where = _joinAnd([for (final box in boxes) box.label]);
+  final where = _joinAnd([
+    for (final box in boxes) box.label,
+    if (folders > 0) _count(folders, 'folder'),
+  ]);
   final words = query.terms.join(', ');
   final shown = hits.take(limit).toList();
   final cut = shown.length < hits.length
@@ -293,4 +316,5 @@ String _joinAnd(List<String> parts) => parts.length <= 1
     ? parts.join()
     : '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
 
-String _count(int count, String noun) => '$count $noun${count == 1 ? '' : 's'}';
+String _count(int count, String noun, [String? plural]) =>
+    '$count ${count == 1 ? noun : plural ?? '${noun}s'}';

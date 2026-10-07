@@ -18,10 +18,11 @@ import 'server_tool.dart';
 /// `create_intradesk_folder`. The address is sent as Intradesk's web client
 /// sends it ([IntradeskService.normalizeWeblinkUrl]: `http://` in front of an
 /// address without a scheme), and the result shows it so. Before sending,
-/// the tool reads the folder and refuses a name it holds already and a
-/// folder the account may not add to. A create that Intradesk does not
-/// confirm is reported as maybe made ([intradeskWriteNotConfirmed]). The new
-/// weblink goes into the index in [cache], when one is loaded.
+/// the tool reads the folder and its path and refuses a name it holds
+/// already; the library reads the folder too and refuses one the account may
+/// not add to. A create that Intradesk does not confirm is reported as maybe
+/// made ([intradeskWriteNotConfirmed]). The new weblink goes into the index
+/// in [cache], when one is loaded.
 ServerTool addIntradeskWeblinkTool(
   SmartschoolSession session,
   IntradeskIndexCache cache,
@@ -109,27 +110,27 @@ Future<CallToolResult> _add(
   String what() => 'the weblink "$name" ($address) in the ${where()}';
   final watch = Stopwatch()..start();
   try {
-    final weblink = await withIntradeskWrite(session, (intradesk) async {
-      final read = parent = await readIntradeskParent(
-        intradesk,
-        cache,
-        folderId,
-      );
-      read.refuseWithoutAdd();
-      read.refuseTakenNames([name], what: 'the new weblink');
-      return intradesk.createWeblink(
-        parentFolderId: folderId,
-        name: name,
-        url: address,
-        icon: iconName,
-      );
-    }, what: what);
+    final weblink = await withIntradeskWrite(
+      session,
+      (intradesk) async {
+        final read = parent = await readIntradeskParent(intradesk, folderId);
+        read.refuseTakenNames([name], what: 'the new weblink');
+        return intradesk.createWeblink(
+          parentFolderId: folderId,
+          name: name,
+          url: address,
+          icon: iconName,
+        );
+      },
+      what: what,
+      where: where,
+    );
     final made = intradeskItems(
       IntradeskListing(folders: const [], files: const [], weblinks: [weblink]),
       folderId: folderId,
-      path: parent!.path ?? '',
+      path: parent!.path,
     );
-    final index = await addToIntradeskIndex(cache, parent!, made);
+    final index = await addToIntradeskIndex(cache, made);
     log(
       'add_intradesk_weblink: made in ${watch.elapsedMilliseconds} ms '
       '($index)',
@@ -143,8 +144,7 @@ Future<CallToolResult> _add(
                 '$stored.${weblink.id.isEmpty ? '' : ' Its id is ${weblink.id}.'}',
             ?_sentAsNote(url, address),
             ?renamedNote(name, weblink.name),
-            for (final item in made)
-              '- ${formatIntradeskItem(item, fullPath: parent!.path != null)}',
+            for (final item in made) '- ${formatIntradeskItem(item)}',
           ].join('\n'),
         ),
       ],

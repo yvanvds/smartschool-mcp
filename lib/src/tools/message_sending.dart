@@ -69,10 +69,10 @@ List<LocalFile> messageAttachmentsArgument(
 /// in that session only (`retryAfterLogin: false`, `sameSessionAs: form`;
 /// yvanvds/dartschool#25, #38). An upload that Smartschool refuses the
 /// session for is not sent again in a new session: the repeat loads a new
-/// compose form, logging in first (a read, which the library retries after
-/// logging in, so yvanvds/dartschool#134 does not apply), and uploads the
-/// files again into its directory. The message goes with the files of the
-/// form it is submitted with only.
+/// compose form in a new session (after a refused session, the library logs
+/// in again before its next request, yvanvds/dartschool#134), and uploads
+/// the files again into its directory. The message goes with the files of
+/// the form it is submitted with only.
 ///
 /// Once the submit (the request that sends the message) has gone out, the
 /// library only returns normally when Smartschool answers it with its "sent"

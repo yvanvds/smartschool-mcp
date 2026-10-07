@@ -854,18 +854,12 @@ void main() {
       );
       expect(postsTo(_createLesson), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $_createLesson');
-      final repeat = server.requests.sublist(first + 1);
       expect(
-        repeat.first,
+        server.requests[first + 1],
         'GET /login',
         reason:
             'after a refused session the library logs in before the next '
             'request (yvanvds/dartschool#134)',
-      );
-      expect(
-        repeat.firstWhere((request) => request.contains('/lesson-content/')),
-        'GET $fakeLesfichesPath',
-        reason: 'the repeat reads the lesfiches first',
       );
       expect(planner.writes, ['POST $_createLesson'], reason: 'made once');
       expect(server.logins, 2);

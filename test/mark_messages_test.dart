@@ -99,10 +99,12 @@ void main() {
     List<Object?> ids, {
     required bool read,
     String? box,
+    String? folder,
   }) => callTool(connection, 'mark_messages', {
     'message_ids': ids,
     'read': read,
     'box': ?box,
+    'folder': ?folder,
   });
 
   /// Calls mark_messages and expects a result that is not an error.
@@ -110,8 +112,14 @@ void main() {
     List<Object?> ids, {
     required bool read,
     String? box,
+    String? folder,
   }) async {
-    final (result, text) = await mark(ids, read: read, box: box);
+    final (result, text) = await mark(
+      ids,
+      read: read,
+      box: box,
+      folder: folder,
+    );
     expect(result.isError, isNot(true), reason: text);
     return text;
   }
@@ -140,7 +148,7 @@ void main() {
 
     final schema = tool.inputSchema;
     expect(schema.required, ['message_ids', 'read']);
-    expect(schema.properties!.keys, ['message_ids', 'read', 'box']);
+    expect(schema.properties!.keys, ['message_ids', 'read', 'box', 'folder']);
     expect(schema.properties!['message_ids'], {
       'type': 'array',
       'description': isA<String>(),
@@ -245,8 +253,8 @@ void main() {
       '- id 201\n'
       '- id 301\n'
       'Note: the messages under "Not marked, not in the inbox" are not in '
-      'the inbox. Take the ids from list_messages on the box the messages '
-      'are in, and pass that box.',
+      'the inbox. Take the ids from list_messages on the box or folder the '
+      'messages are in, and pass that box or folder.',
     );
     expect(server.mailbox.actions, [_inboxListing, _read(103)]);
   });
@@ -294,8 +302,8 @@ void main() {
       'Not marked, not in the archive:\n'
       '- id 999\n'
       'Note: the messages under "Not marked, not in the archive" are not in '
-      'the archive. Take the ids from list_messages on the box the messages '
-      'are in, and pass that box.',
+      'the archive. Take the ids from list_messages on the box or folder the '
+      'messages are in, and pass that box or folder.',
     );
   });
 
@@ -382,5 +390,80 @@ void main() {
         expect(server.requests, isEmpty);
       });
     }
+  });
+
+  group('a folder the user made in Smartschool (#131)', () {
+    String listing(int boxId, {String boxType = 'inbox'}) =>
+        'message list boxID=$boxId boxType=$boxType layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+    const header501 = 'id 501 | 2024-03-10 09:00 | from Directie | Kalender';
+
+    setUp(() {
+      server.mailbox
+          .addFolder(30650, 'dartschool test')
+          .messages
+          .add(
+            FakeMessage(
+              id: 501,
+              sender: 'Directie',
+              subject: 'Kalender',
+              date: '2024-03-10 09:00',
+              unread: true,
+            ),
+          );
+      server.mailbox
+          .addFolder(32000, 'Projecten', boxType: 'outbox')
+          .messages
+          .add(
+            FakeMessage(
+              id: 521,
+              sender: 'Jan Peeters',
+              listedAs: 'Els Wouters',
+              subject: 'Projectweek',
+              date: '2024-03-08 10:00',
+            ),
+          );
+    });
+
+    test('marks a message in a folder read, and unread with the folder\'s '
+        'box id, which list_messages then shows', () async {
+      expect(
+        await ok([501], read: true, folder: 'dartschool test'),
+        'Marked 1 message as read.\nMarked as read:\n- $header501',
+      );
+      expect(server.mailbox.actions, [listing(30650), _read(501)]);
+      expect(server.mailbox.folders.first.messages.single.unread, isFalse);
+
+      server.mailbox.actions.clear();
+      expect(
+        await ok([501], read: false, folder: 'inbox/dartschool test'),
+        'Marked 1 message as unread.\n'
+        'Marked as unread:\n'
+        '- $header501 | unread',
+      );
+      expect(server.mailbox.actions, [
+        listing(30650),
+        _unread(501, box: 30650),
+      ]);
+      expect(
+        (await callTool(connection, 'list_messages', {'folder': '30650'})).$2,
+        'Folder inbox/dartschool test: 1 message, newest first.\n'
+        '- $header501 | unread',
+      );
+    });
+
+    test('only folders of the inbox: a folder of the sent box is not found, '
+        'and nothing is marked', () async {
+      final (result, text) = await mark([521], read: true, folder: 'Projecten');
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'There is no folder "Projecten" in the inbox. The folders the user '
+        'made are: inbox/dartschool test (id 30650), sent/Projecten (id '
+        '32000). Pass one of them as folder, by its path or its id.',
+      );
+      expect(server.mailbox.actions, isEmpty);
+    });
   });
 }

@@ -92,15 +92,22 @@ void main() {
     List<Object?> ids,
     String flag, {
     String? box,
+    String? folder,
   }) => callTool(connection, 'flag_messages', {
     'message_ids': ids,
     'flag': flag,
     'box': ?box,
+    'folder': ?folder,
   });
 
   /// Calls flag_messages and expects a result that is not an error.
-  Future<String> ok(List<Object?> ids, String name, {String? box}) async {
-    final (result, text) = await flag(ids, name, box: box);
+  Future<String> ok(
+    List<Object?> ids,
+    String name, {
+    String? box,
+    String? folder,
+  }) async {
+    final (result, text) = await flag(ids, name, box: box, folder: folder);
     expect(result.isError, isNot(true), reason: text);
     return text;
   }
@@ -138,7 +145,7 @@ void main() {
 
     final schema = tool.inputSchema;
     expect(schema.required, ['message_ids', 'flag']);
-    expect(schema.properties!.keys, ['message_ids', 'flag', 'box']);
+    expect(schema.properties!.keys, ['message_ids', 'flag', 'box', 'folder']);
     expect(schema.properties!['message_ids'], {
       'type': 'array',
       'description': isA<String>(),
@@ -239,8 +246,8 @@ void main() {
       '- $_header101 | unread, flag red\n'
       '- $_header102\n'
       'Note: the messages under "Not flagged, not in the inbox" are not in '
-      'the inbox. Take the ids from list_messages on the box the messages '
-      'are in, and pass that box.\n'
+      'the inbox. Take the ids from list_messages on the box or folder the '
+      'messages are in, and pass that box or folder.\n'
       'Note: Smartschool did not confirm the change of the messages under '
       '"Not flagged, Smartschool did not confirm it"; they are shown as they '
       'were before. Check with list_messages (box inbox) whether they '
@@ -263,8 +270,8 @@ void main() {
       'Not cleared, not in the inbox:\n'
       '- id 999\n'
       'Note: the messages under "Not cleared, not in the inbox" are not in '
-      'the inbox. Take the ids from list_messages on the box the messages '
-      'are in, and pass that box.',
+      'the inbox. Take the ids from list_messages on the box or folder the '
+      'messages are in, and pass that box or folder.',
     );
   });
 
@@ -309,5 +316,141 @@ void main() {
         expect(server.requests, isEmpty);
       });
     }
+  });
+
+  group('a folder the user made in Smartschool (#131)', () {
+    String listing(int boxId, {String boxType = 'inbox'}) =>
+        'message list boxID=$boxId boxType=$boxType layout=new poll=false '
+        'poll_ids= sortField=date sortKey=desc';
+    const header501 = 'id 501 | 2024-03-10 09:00 | from Directie | Kalender';
+    const header521 =
+        'id 521 | 2024-03-08 10:00 | to Els Wouters | Projectweek';
+
+    setUp(() {
+      server.mailbox
+          .addFolder(30650, 'dartschool test')
+          .messages
+          .add(
+            FakeMessage(
+              id: 501,
+              sender: 'Directie',
+              subject: 'Kalender',
+              date: '2024-03-10 09:00',
+              unread: true,
+            ),
+          );
+      server.mailbox
+          .addFolder(32000, 'Projecten', boxType: 'outbox')
+          .messages
+          .add(
+            FakeMessage(
+              id: 521,
+              sender: 'Jan Peeters',
+              listedAs: 'Els Wouters',
+              subject: 'Projectweek',
+              date: '2024-03-08 10:00',
+            ),
+          );
+    });
+
+    test('flags a message in a folder of the inbox and one in a folder of '
+        'the sent box (folder), which list_messages then shows', () async {
+      expect(
+        await ok([501], 'red', folder: 'dartschool test'),
+        'Flagged 1 message red.\n'
+        'Flagged red:\n'
+        '- $header501 | unread, flag red',
+      );
+      expect(server.mailbox.actions, [listing(30650), _label(501, 3)]);
+      expect(
+        (await callTool(connection, 'list_messages', {
+          'folder': 'inbox/dartschool test',
+        })).$2,
+        'Folder inbox/dartschool test: 1 message, newest first.\n'
+        '- $header501 | unread, flag red',
+      );
+
+      server.mailbox.actions.clear();
+      expect(
+        await ok([521], 'blue', box: 'sent', folder: 'Projecten'),
+        'Flagged 1 message blue.\nFlagged blue:\n- $header521 | flag blue',
+      );
+      expect(server.mailbox.actions, [
+        listing(32000, boxType: 'outbox'),
+        _label(521, 4, boxType: 'outbox'),
+      ]);
+    });
+
+    test('a message in a folder is not in its box, nor one of the box in the '
+        'folder: not flagged, and the note says to pass its box or '
+        'folder', () async {
+      final (result, text) = await flag([501], 'red');
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'Flagged 0 of 1 message red; 1 could not be flagged.\n'
+        'Not flagged, not in the inbox:\n'
+        '- id 501\n'
+        'Note: the messages under "Not flagged, not in the inbox" are not in '
+        'the inbox. Take the ids from list_messages on the box or folder the '
+        'messages are in, and pass that box or folder.',
+      );
+
+      final (inFolder, folderText) = await flag(
+        [101],
+        'green',
+        folder: '30650',
+      );
+      expect(inFolder.isError, isTrue);
+      expect(
+        folderText,
+        'Flagged 0 of 1 message green; 1 could not be flagged.\n'
+        'Not flagged, not in the folder inbox/dartschool test:\n'
+        '- id 101\n'
+        'Note: the messages under "Not flagged, not in the folder '
+        'inbox/dartschool test" are not in the folder inbox/dartschool test. '
+        'Take the ids from list_messages on the box or folder the messages '
+        'are in, and pass that box or folder.',
+      );
+      expect(
+        server.mailbox.actions.where((a) => a.startsWith('save')),
+        isEmpty,
+      );
+    });
+
+    test('an unconfirmed change: the note says to list the folder', () async {
+      server.mailbox.refuseToChange.add(501);
+
+      final (result, text) = await flag(
+        [501],
+        'red',
+        folder: 'dartschool test',
+      );
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        contains(
+          'Check with list_messages (folder inbox/dartschool test) whether '
+          'they changed',
+        ),
+      );
+    });
+
+    test('an unknown folder is an error that names the folders, and nothing '
+        'is flagged', () async {
+      final (result, text) = await flag([501], 'red', folder: 'Privé');
+
+      expect(result.isError, isTrue);
+      expect(
+        text,
+        'There is no folder "Privé" in the inbox or the sent box. The '
+        'folders the user made are: inbox/dartschool test (id 30650), '
+        'sent/Projecten (id 32000). Pass one of them as folder, by its path '
+        'or its id.',
+      );
+      expect(server.mailbox.actions, isEmpty);
+    });
   });
 }
