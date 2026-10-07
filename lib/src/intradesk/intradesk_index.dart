@@ -1,6 +1,11 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 /// What an [IntradeskItem] is.
+///
+/// flutter_smartschool has an enum of the same name since 0.3.6, with the
+/// kinds in another order (folder, weblink, file). This order is the one
+/// the tools list and count in, so files that import both hide the
+/// library's.
 enum IntradeskItemKind { folder, file, weblink }
 
 /// A folder, file or weblink on Intradesk, with the path of the folders

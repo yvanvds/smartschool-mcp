@@ -365,8 +365,12 @@ client name. It also installs again while that copy runs.
   holds already (any kind, ignoring case and spaces: Intradesk would not
   refuse it, but rename the new item to `name (1)`), a folder the account
   may not add to (`canAdd`, when the entry was read), and a folder of the
-  wrong kind for its parent (when known). The library sends a create once,
-  never again after logging in again; a create Intradesk does not confirm
+  wrong kind for its parent (when known). The library reads the folder's
+  entry too before it sends a create (its parents and the listing of the
+  folder above, dartschool#138) and refuses those two itself, also without
+  the index; that refusal is reported in its words. The library sends a
+  create once, never again after logging in again; a create Intradesk does
+  not confirm
   is reported as maybe made, with how to check it (`list_intradesk_folder`),
   and Claude is told not to call the tool again for it. The result is the
   item as Intradesk made it (its id, the name as stored, the folder's

@@ -1,5 +1,6 @@
 import 'package:dart_mcp/server.dart';
-import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart'
+    hide IntradeskItemKind;
 
 import '../downloads/download_folder.dart';
 import '../intradesk/intradesk_access.dart';

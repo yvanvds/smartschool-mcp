@@ -167,22 +167,20 @@ void main() {
       ]);
     });
 
-    test(
-      'lists the archive: its box id is read from the Messages page',
-      () async {
-        expect(
-          await ok('list_messages', {'box': 'archive'}),
-          'Archive: 2 messages, newest first.\n'
-          '- id 201 | 2024-02-20 12:00 | from Directie | Personeelsvergadering\n'
-          '- id 202 | 2024-01-10 09:15 | from Jan Peeters | Oudercontact '
-          'januari',
-        );
-        expect(
-          server.mailbox.actions.single,
-          startsWith('message list boxID=305 boxType=inbox '),
-        );
-      },
-    );
+    test('lists the archive: its box id is read from the folder tree', () async {
+      expect(
+        await ok('list_messages', {'box': 'archive'}),
+        'Archive: 2 messages, newest first.\n'
+        '- id 201 | 2024-02-20 12:00 | from Directie | Personeelsvergadering\n'
+        '- id 202 | 2024-01-10 09:15 | from Jan Peeters | Oudercontact '
+        'januari',
+      );
+      expect(
+        server.mailbox.actions.single,
+        startsWith('message list boxID=305 boxType=inbox '),
+      );
+      expect(server.mailbox.folderTreeReads, 1);
+    });
 
     test('lists the sent box with the recipients', () async {
       expect(

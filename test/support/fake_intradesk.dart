@@ -17,7 +17,9 @@ import 'fake_uploads.dart';
 /// [addFolder], a file with [addFile] and a weblink with [addWeblink]; each
 /// shows up in its parent's listing. A file added with content can be
 /// downloaded. The parents of a folder are served as Smartschool does, which
-/// the library asks for when a listing fails with a 500.
+/// the library asks for when a listing fails with a 500, and, with the
+/// listing of the folder above, to read the folder a create adds to before
+/// sending it (yvanvds/dartschool#138).
 ///
 /// The writes are carried out as the live Intradesk did on 2026-10-05, in
 /// the shape of dartschool's trimmed captures (`intradesk_write_test.dart`);
@@ -409,8 +411,8 @@ class FakeIntradesk {
   /// The parents of folder [id] as Smartschool answers them (seen live,
   /// yvanvds/dartschool#37): a 404 for an id that is not a folder (unknown,
   /// a file or a weblink), and the folders above a folder, `[]` at the top.
-  /// Here the folders above are their ids, from the top; the library reads
-  /// only the status.
+  /// Here the folders above are their ids, from the top, as live: the
+  /// library reads them to find a folder's entry (yvanvds/dartschool#132).
   ResponseBody _parents(String id) {
     if (id.isEmpty || !_listings.containsKey(id)) {
       return _json(

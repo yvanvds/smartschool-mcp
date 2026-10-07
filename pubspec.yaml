@@ -19,7 +19,7 @@ dependencies:
   # exception types and to add an interceptor to the library's client.
   dio: ^5.11.1
   # Smartschool client library (pure Dart despite the name).
-  flutter_smartschool: ^0.3.5
+  flutter_smartschool: ^0.3.7
   # HTML parser for turning message bodies into plain text. flutter_smartschool
   # already depends on it.
   html: ^0.15.7

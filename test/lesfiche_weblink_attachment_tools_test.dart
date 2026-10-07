@@ -434,8 +434,8 @@ void main() {
     });
 
     test('Smartschool refuses the session for an add, which the library does '
-        'not send again: the session repeats the call, whose read of the '
-        'lesfiche comes first and logs in again, and adds the weblink '
+        'not send again: the session repeats the call, which the library '
+        'sends in a new session, logging in first, and adds the weblink '
         'once', () async {
       final path = '$_lessonPath/weblinks';
       server.expireSessionBefore(
@@ -452,12 +452,18 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
+      final repeat = server.requests.sublist(first + 1);
       expect(
-        server.requests.sublist(first + 1).first,
-        'GET $_lessonPath',
+        repeat.first,
+        'GET /login',
         reason:
-            'the repeat reads the lesfiche first, which logs in again: the '
-            'add itself is refused at once on an expired session',
+            'after a refused session the library logs in before the next '
+            'request (yvanvds/dartschool#134)',
+      );
+      expect(
+        repeat.firstWhere((request) => request.contains('/lesson-content/')),
+        'GET $_lessonPath',
+        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'added once');
       expect(server.logins, 2);
@@ -813,10 +819,18 @@ void main() {
       );
       expect(sentTo(path), 2, reason: 'the refused one and one');
       final first = server.requests.indexOf('POST $path');
+      final repeat = server.requests.sublist(first + 1);
       expect(
-        server.requests.sublist(first + 1).first,
+        repeat.first,
+        'GET /login',
+        reason:
+            'after a refused session the library logs in before the next '
+            'request (yvanvds/dartschool#134)',
+      );
+      expect(
+        repeat.firstWhere((request) => request.contains('/lesson-content/')),
         'GET $_lessonPath',
-        reason: 'the repeat reads the lesfiche first, which logs in again',
+        reason: 'the repeat reads the lesfiche first',
       );
       expect(planner.writes, ['POST $path'], reason: 'taken once');
       expect(server.logins, 2);

@@ -139,11 +139,12 @@ enum SubmitAnswer {
 /// (`message list`, `show message`, `attachment list`, changing the read
 /// state and the flag: `mark message read`, `mark message unread`,
 /// `save msglabel`, and moving a message to the trash: `quickmove
-/// messages`), attachment downloads, the archive endpoint,
-/// the module page the archive's box id is read from, and sending: the
-/// compose forms, searching recipients on a form (in the [directory]), adding
-/// recipients (users and groups) to a form and taking them off, and
-/// submitting it. The attachments of a message are uploaded with
+/// messages`), attachment downloads, the archive endpoint, the folder tree
+/// the archive's box id is read from (`requestmovelist`, see
+/// [folderTreeReads]) and the module page that names it too (the library's
+/// fallback), and sending: the compose forms, searching recipients on a form
+/// (in the [directory]), adding recipients (users and groups) to a form and
+/// taking them off, and submitting it. The attachments of a message are uploaded with
 /// Smartschool's upload step ([uploads]) into the upload directory of its
 /// compose form (the form's hidden `randomDir`, which belongs to the session
 /// the form was loaded in), and the submit sends the files of that directory
@@ -206,8 +207,14 @@ class FakeMailbox {
   /// same id: its inbox copy and its sent-box copy.
   final List<FakeMessage> trash = [];
 
-  /// The archive folder's box id, shown on the Messages module page.
+  /// The archive folder's box id, named in the folder tree and on the
+  /// Messages module page.
   int archiveBoxId = 305;
+
+  /// How many times the folder tree (`quickactions` / `requestmovelist`)
+  /// was read. The library reads the archive's box id from it once per
+  /// service (yvanvds/dartschool#141). Not recorded in [actions].
+  int folderTreeReads = 0;
 
   /// Inbox messages the archive endpoint leaves where they are, leaving
   /// them out of its `success` list.
@@ -233,7 +240,8 @@ class FakeMailbox {
   /// move (yvanvds/dartschool#60).
   final Set<int> refuseToTrash = {};
 
-  /// Every dispatcher call, as `action param=value ...` (params sorted),
+  /// Every dispatcher call but the folder tree's ([folderTreeReads]), as
+  /// `action param=value ...` (params sorted),
   /// every archive request, as `archive msgIDs=1,2`, every recipient search
   /// on a compose form, as `search val=Sven`, and every message sent, as
   /// `send to=A,B cc=C bcc=D subject=S`, or for a reply submitted with the
@@ -449,6 +457,10 @@ class FakeMailbox {
       ).allMatches(command))
         match[1]!: match[2]!,
     };
+    if (action == 'requestmovelist') {
+      folderTreeReads++;
+      return _folderTree();
+    }
     actions.add(
       [
         action,
@@ -1113,6 +1125,29 @@ ${list('users', users)}
   <div class="postbox_ico_sub archive" boxtype="inbox" boxid="$archiveBoxId" boxname="Berichten archief"></div>
 </div>
 </body></html>''';
+
+  /// The answer to `quickactions` / `requestmovelist`, the folder tree of
+  /// the web client's "move messages" dialog, in the shape of the dartschool
+  /// fixture `quickactions/requestmovelist.xml` (seen live 2026-10-07): the
+  /// inbox with the archive ([archiveBoxId], described `msg archive`), the
+  /// sent box and the trash, as XML-escaped JSON.
+  String _folderTree() {
+    const box =
+        '"postboxID":0,"parentID":-1,"postboxDescription":"","children":';
+    final tree =
+        '[{"postboxType":"inbox","postboxName":"Postvak in",$box['
+        '{"postboxID":"$archiveBoxId","postboxType":"inbox","parentID":"-1",'
+        '"postboxName":"Berichten archief","postboxDescription":"msg archive",'
+        '"children":[]}]},'
+        '{"postboxType":"outbox","postboxName":"Verzonden",$box[]},'
+        '{"postboxType":"trash","postboxName":"Prullenmand",$box[]}]';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<server><response><status>ok</status><actions><action>'
+        '<subsystem>triggers</subsystem>'
+        '<command>moveToPostboxFinnishTreeRequest</command>'
+        '<data>${tree.replaceAll('"', '&quot;')}</data>'
+        '</action></actions></response></server>';
+  }
 
   static String _envelope(String subsystem, String data) =>
       '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
