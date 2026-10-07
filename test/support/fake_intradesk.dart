@@ -42,10 +42,10 @@ import 'fake_uploads.dart';
 ///   to the trash ([trashed]) and answers an empty `204`: it no longer shows
 ///   in its folder's listing, and a folder takes everything in it along. An
 ///   item in the trash already (also one in a folder in the trash) gets
-///   `204` again, as live. An id the fake has no item of that kind for gets
-///   `404` with Intradesk's problem answer: Intradesk's answer to that was
-///   not seen live (yvanvds/dartschool#133), so it is the answer
-///   `folders/{id}/parents` gives an unknown id.
+///   `204` again, as live. An id the fake has no item of that kind for (an
+///   unknown id, or the id of an item of another kind, also one in the
+///   trash) gets `404` with Intradesk's bare problem answer and moves
+///   nothing, as the live one did on 2026-10-07 (yvanvds/dartschool#133).
 ///
 /// A name that is taken is never refused: the new item is renamed to
 /// `name (1)` (`name (1).ext` for a file). A parent that is not a folder, a
@@ -612,7 +612,7 @@ class FakeIntradesk {
   /// Moves the item [id], listed under [key] (`folders`, `weblinks` or
   /// `files`), to the trash and answers `204`; see the class doc.
   ResponseBody _moveToTrash(String key, String id) {
-    if (_inTrash(id)) return ResponseBody.fromString('', 204);
+    if (_inTrash(key, id)) return ResponseBody.fromString('', 204);
     for (final listing in _listings.values) {
       final items = listing[key]!;
       final index = items.indexWhere((item) => (item as Map)['id'] == id);
@@ -625,16 +625,18 @@ class FakeIntradesk {
     return _problem(404);
   }
 
-  /// Whether the item [id] is in the trash, or in a folder that is.
-  bool _inTrash(String id) {
-    if (_trash.containsKey(id)) return true;
+  /// Whether the item [id], listed under [listing], is in the trash, or in a
+  /// folder that is: an item of another kind with that id is not.
+  bool _inTrash(String listing, String id) {
+    if (_trash[id] case final trashed?) return trashed == listing;
     final folders = [
       for (final MapEntry(:key, :value) in _trash.entries)
         if (value == 'folders') key,
     ];
     while (folders.isNotEmpty) {
       final folder = folders.removeLast();
-      if (itemsIn(folder).any((item) => item['id'] == id)) return true;
+      final items = _listings[folder]?[listing] ?? const [];
+      if (items.any((item) => (item as Map)['id'] == id)) return true;
       folders.addAll([
         for (final inside in _listings[folder]?['folders'] ?? const [])
           (inside as Map)['id']! as String,

@@ -44,11 +44,14 @@ const intradeskTrashDays = 30;
 /// ([IntradeskIndexCache.patch]); an item that may or may not have been
 /// moved stays in it.
 ///
-/// The library tells no unknown id apart for a move to the trash (no
-/// `SmartschoolIntradeskFolderNotFoundError`), and Intradesk's answer to one
-/// was not seen live (yvanvds/dartschool#133): whatever Intradesk answers is
-/// reported as it is, a refusal as not moved and any other failure as maybe
-/// moved. Saying that there is no such item, once the library can, is #124.
+/// Intradesk answers the move of an id it has no item of that kind for with
+/// `404`, and moves nothing (seen live, yvanvds/dartschool#133): a made-up
+/// id, the id of an item of another kind (also one in the trash), or of an
+/// item that does not exist any more. The library throws a
+/// [SmartschoolIntradeskItemNotFoundError] for it, which is reported as
+/// such for that item, as not moved (#124). Any other refusal (HTTP `400`
+/// to `499`) is reported as not moved with Intradesk's reasons, and any
+/// other failure as maybe moved.
 ServerTool trashIntradeskItemsTool(
   SmartschoolSession session,
   IntradeskIndexCache cache,
@@ -242,6 +245,23 @@ Future<_Stop?> _move(
       };
     });
     return null;
+  } on SmartschoolIntradeskItemNotFoundError {
+    // Before its superclass, the refusal. The library's message names the
+    // id: the log does not.
+    log('trash_intradesk_items: no such item (HTTP 404)');
+    final others = [
+      for (final other in IntradeskItemKind.values)
+        if (other != item.kind) 'a ${other.name}',
+    ].join(' or ');
+    return (
+      item: item,
+      maybeMoved: false,
+      reason:
+          'Intradesk has no ${item.kind.name} with id ${item.id}: it is the '
+          'id of $others, or of an item that does not exist (any more). It '
+          'was not moved. Check its kind and id with list_intradesk_folder '
+          'or search_intradesk, and tell the user.',
+    );
   } on SmartschoolIntradeskWriteRefusedError catch (error) {
     // The library's messages name the item: the log never shows a name.
     log(

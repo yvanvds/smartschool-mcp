@@ -1113,10 +1113,10 @@ void main() {
       expect(intradesk.trashed, [informatica]);
     });
 
-    test('an id Intradesk has no item of that kind for: its refusal is '
-        'reported for that item, and the moves stop there, with what was '
-        'moved and what was not tried; the index loses only what was '
-        'moved', () async {
+    test('an id Intradesk has no item of that kind for: that item is '
+        'reported as no such item, not moved, and the moves stop there, with '
+        'what was moved and what was not tried; the index loses only what '
+        'was moved', () async {
       await buildIndex();
       const unknown = '00000000-0000-4000-8000-000000000000';
 
@@ -1139,10 +1139,10 @@ void main() {
         '- folder | id $unknown\n'
         'Not tried:\n'
         '- $schoolsiteLine\n'
-        'Intradesk refused the move of the folder with id $unknown to the '
-        'trash (HTTP 404), without saying why. It was not moved. Check its '
-        'kind and id with list_intradesk_folder or search_intradesk, and '
-        'tell the user.\n'
+        'Intradesk has no folder with id $unknown: it is the id of a file or '
+        'a weblink, or of an item that does not exist (any more). It was not '
+        'moved. Check its kind and id with list_intradesk_folder or '
+        'search_intradesk, and tell the user.\n'
         'Intradesk keeps its trash for 30 days: until then, the user can '
         'restore it from the trash in Intradesk itself.',
       );
@@ -1150,27 +1150,63 @@ void main() {
         'POST files/$verslag/trash',
         'POST folders/$unknown/trash',
       ]);
+      expect(intradesk.trashed, [verslag]);
       expect(namesIn(informatica), ['Schoolsite']);
       expect(await found('verslag'), isEmpty);
       expect(await found('schoolsite'), ['Vakken / Informatica / Schoolsite']);
 
-      // The id of a file the index does not know, passed as a folder's, is
-      // sent, and refused the same way.
+      // The id of an item the index does not know, passed as another kind,
+      // is sent, and Intradesk has no such item: a file as a folder, a
+      // folder as a weblink, a weblink as a file. Each stays where it is.
       final oud = intradesk.addFile('oud.pdf', parent: archief);
+      final map = intradesk.addFolder('Oude map', parent: archief);
+      const link = 'eeee7777-0000-4000-8000-000000007777';
+      intradesk.addWeblink({
+        'id': link,
+        'name': 'Oude link',
+        'url': 'https://example.com/oud',
+      }, parent: archief);
+      for (final (kind, id, others) in [
+        ('folder', oud, 'a file or a weblink'),
+        ('weblink', map, 'a folder or a file'),
+        ('file', link, 'a folder or a weblink'),
+      ]) {
+        expect(
+          await error('trash_intradesk_items', trash([(kind, id)])),
+          'Moving to Intradesk\'s trash stopped at item 1 of 1: nothing was '
+          'moved.\n'
+          'Not moved:\n'
+          '- $kind | id $id\n'
+          'Intradesk has no $kind with id $id: it is the id of $others, or of '
+          'an item that does not exist (any more). It was not moved. Check '
+          'its kind and id with list_intradesk_folder or search_intradesk, '
+          'and tell the user.',
+          reason: kind,
+        );
+      }
+      expect(namesIn(archief), ['Oude map', 'oud.pdf', 'Oude link']);
+
+      // The id of an item in the trash, passed as another kind: no such
+      // item either (seen live), while its own kind is moved again.
       expect(
-        await error('trash_intradesk_items', trash([('folder', oud)])),
-        allOf(
-          startsWith(
-            'Moving to Intradesk\'s trash stopped at item 1 of 1: nothing '
-            'was moved.\n'
-            'Not moved:\n'
-            '- folder | id $oud\n',
-          ),
-          contains('(HTTP 404)'),
-          isNot(contains('Intradesk keeps its trash')),
+        await error('trash_intradesk_items', trash([('weblink', verslag)])),
+        contains(
+          '\nIntradesk has no weblink with id $verslag: it is the id of a '
+          'folder or a file, or of an item that does not exist (any more).',
         ),
       );
-      expect(namesIn(archief), ['oud.pdf']);
+      expect(
+        await ok('trash_intradesk_items', trash([('file', verslag)])),
+        startsWith('Moved 1 item to Intradesk\'s trash.\n'),
+      );
+      expect(intradesk.trashed, [verslag]);
+      expect(intradesk.writes.skip(2), [
+        'POST folders/$oud/trash',
+        'POST weblinks/$map/trash',
+        'POST files/$link/trash',
+        'POST weblinks/$verslag/trash',
+        'POST files/$verslag/trash',
+      ]);
     });
 
     test('a refusal (HTTP 400 to 499) is reported with Intradesk\'s reasons, '

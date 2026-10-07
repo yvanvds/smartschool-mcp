@@ -416,14 +416,18 @@ client name. It also installs again while that copy runs.
   kind. The items are moved one at a time, in order, each in a session call
   of its own (the library sends a move again after logging in again, which
   is harmless); at the first failure it stops, and the result lists what was
-  moved, the item that failed and what was not tried. A refusal (HTTP 400 to
-  499) is reported as not moved, with Intradesk's reasons; any other failure
-  as maybe moved, with the folder to list to check it, as for the writes
-  above. The library tells no unknown id apart (dartschool#133): Intradesk's
-  answer to one was not seen live, so it is reported as whatever the library
-  makes of it (#124). Items are named by their path when the index knows
-  them, and the result says what the index had in a folder that went along.
-  What was moved leaves the index at once (see *Intradesk index* below).
+  moved, the item that failed and what was not tried. An id Intradesk has no
+  item of that kind for (an unknown id, the id of an item of another kind,
+  also one in the trash, or of an item that does not exist any more) is
+  reported as no such item, not moved: Intradesk answers it with `404` and
+  moves nothing, which the library throws as
+  `SmartschoolIntradeskItemNotFoundError` (dartschool#133, #124). Any other
+  refusal (HTTP 400 to 499) is reported as not moved, with Intradesk's
+  reasons; any other failure as maybe moved, with the folder to list to
+  check it, as for the writes above. Items are named by their path when the
+  index knows them, and the result says what the index had in a folder that
+  went along. What was moved leaves the index at once (see *Intradesk index*
+  below).
 - `search_planners`: finds the planner of a class, a person or a room by
   name, with the planner's own search (the library's `searchCalendars`).
   Each hit is listed with its kind (class, person, room), its name, what
@@ -1159,10 +1163,11 @@ moves but the index, and keeps its helpers to itself. The tests run against
 a fake Intradesk (`test/support/fake_intradesk.dart`) that carries out the
 creates, the upload and the moves to the trash of dartschool#128 as the
 live Intradesk did (renaming a taken name, the bare `500`s, the `400`s with
-`violations`, and a `204` for an item in the trash already), behind the
-fake upload step (`test/support/fake_uploads.dart`) that the attachments of
-lesfiches and messages share. It answers the move of an unknown id with
-`404`, an assumption until dartschool#133 captures Intradesk's answer.
+`violations`, a `204` for an item in the trash already, and a bare `404`
+for the move of an id it has no item of that kind for, as captured in
+dartschool#133), behind the fake upload step
+(`test/support/fake_uploads.dart`) that the attachments of lesfiches and
+messages share.
 
 Planner helpers for later tools live in `lib/src/planner/`. In
 `planner_access.dart`: `withPlanner`, which runs an action on the session
