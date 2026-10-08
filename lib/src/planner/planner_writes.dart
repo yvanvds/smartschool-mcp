@@ -2,7 +2,6 @@ import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
-import '../messages/markdown_to_html.dart';
 import '../session.dart';
 import '../tools/server_tool.dart';
 import 'planner_access.dart';
@@ -39,10 +38,12 @@ const plannerListLagNote =
 /// editor makes: one `<p>` per paragraph (a blank line between two), and
 /// `<br />` for a single line break.
 ///
-/// Every character is escaped ([escapeHtml]: `&`, `<`, `>` and quotes), so
-/// HTML in [text] shows as text and never becomes markup. White space around
-/// a paragraph or a line is left out. Text that is empty or white space only
-/// is `""`: no info.
+/// `&`, `<` and `>` are escaped, so HTML in [text] shows as text and never
+/// becomes markup. Quotes are left as they are: they are not markup in text
+/// content, and the planner answers `&quot;` and `&#39;` as quotes, so the
+/// library would report the edit of an info with one as unconfirmed
+/// (dartschool#155, #137). White space around a paragraph or a line is left
+/// out. Text that is empty or white space only is `""`: no info.
 String plainTextToHtml(String text) {
   final paragraphs = text
       .replaceAll('\r\n', '\n')
@@ -55,7 +56,11 @@ String plainTextToHtml(String text) {
   ].join();
 }
 
-String _line(String line) => escapeHtml(line.trim());
+String _line(String line) => line
+    .trim()
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 
 /// [value], the argument [name] of a tool, as the id of an empty lesson
 /// hour as `list_planner` prints it: `planned-placeholders/4069/<id>`.

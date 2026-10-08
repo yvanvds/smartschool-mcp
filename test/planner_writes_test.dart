@@ -27,16 +27,27 @@ void main() {
       );
     });
 
-    test('escapes <, &, > and quotes, so that HTML shows as text', () {
+    test('escapes <, & and >, so that HTML shows as text', () {
       expect(
-        plainTextToHtml('<b>vet</b> & "citaat" \'n test'),
-        '<p>&lt;b&gt;vet&lt;/b&gt; &amp; &quot;citaat&quot; &#39;n test</p>',
+        plainTextToHtml('<b>vet</b> & mee <3'),
+        '<p>&lt;b&gt;vet&lt;/b&gt; &amp; mee &lt;3</p>',
       );
       expect(
         plainTextToHtml('<script>alert(1)</script>'),
         '<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>',
       );
       expect(plainTextToHtml('&amp;'), '<p>&amp;amp;</p>');
+    });
+
+    // The planner answers &quot; and &#39; as quotes, and the library
+    // compares the info literally, so an edit with an escaped quote is
+    // saved but reported as unconfirmed (dartschool#155, #137).
+    test('leaves quotes as they are', () {
+      expect(
+        plainTextToHtml('Breng "je" laptop & lader mee <3, \'t is nodig'),
+        '<p>Breng "je" laptop &amp; lader mee &lt;3, \'t is nodig</p>',
+      );
+      expect(plainTextToHtml('&quot;'), '<p>&amp;quot;</p>');
     });
 
     test('takes Windows and old Mac line ends, several blank lines, and '

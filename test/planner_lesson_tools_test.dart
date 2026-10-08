@@ -329,7 +329,7 @@ void main() {
 
     test('turns the plain text of the info into the HTML of the planner\'s '
         'editor: a paragraph per blank line, a line break per line, and '
-        '<, &, > and quotes escaped', () async {
+        '<, & and > escaped, quotes as they are', () async {
       await ok('plan_lesson', {
         'hour': fakeOwnSlot.ref,
         'name': 'Lussen',
@@ -346,8 +346,8 @@ void main() {
         _fillBody(
           name: 'Lussen',
           publicInfo:
-              '<p>Breng je &lt;laptop&gt; &amp; &quot;lader&quot; mee, '
-              '&#39;t is nodig.<br />Ook een pen.</p><p>Hoofdstuk 3</p>',
+              '<p>Breng je &lt;laptop&gt; &amp; "lader" mee, '
+              '\'t is nodig.<br />Ook een pen.</p><p>Hoofdstuk 3</p>',
           privateInfo: '<p>&lt;b&gt;niet vet&lt;/b&gt;</p>',
         ),
       ]);

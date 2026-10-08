@@ -516,8 +516,11 @@ client name. It also installs again while that copy runs.
   with a lesson: a `name`, and optionally `public_info` (what pupils see)
   and `private_info`, written as plain text (the library's `planLesson`,
   dartschool#87). The server turns the text into the HTML the planner's own
-  editor makes, escaping every character (`plainTextToHtml`: a `<p>` per
-  paragraph, `<br />` per line break). Pupils of the hour's classes see the
+  editor makes (`plainTextToHtml`: a `<p>` per paragraph, `<br />` per line
+  break), escaping `&`, `<` and `>`. Quotes stay as they are: the planner
+  answers `&quot;` and `&#39;` as quotes, and the library compares the info
+  of an edit literally, so an escaped quote made a saved edit unconfirmed
+  (seen live in #72; dartschool#155, until then #137). Pupils of the hour's classes see the
   name and public info at once. The tool is marked destructive, so Claude
   Desktop asks for approval every time, and Claude is told to show the user
   every hour (date and time, class, course, name and info) and wait for
