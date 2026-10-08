@@ -137,6 +137,12 @@ String formatSkoreEvaluation(SkoreEvaluation evaluation) {
   ].join(' | ');
 }
 
+/// An evaluation by its title and id, as a sentence or an error names it:
+/// `evaluation "Toets 1" (evaluation id 500003)`.
+String formatSkoreEvaluationName(SkoreEvaluation evaluation) =>
+    'evaluation "${skoreName(evaluation.title)}" (evaluation id '
+    '${evaluation.id})';
+
 /// Whether the pupils see an evaluation, and from when, in the time of this
 /// PC (Belgium): `not published: the pupils do not see it`, `SCHEDULED for
 /// 2026-10-09 08:00: from then on the pupils see it and its grades`,

@@ -36,6 +36,15 @@ import 'package:dio/dio.dart';
 //     was sent (`public` as sent, `short` null for `""`), and the answer is
 //     `{"state":1,"incumul":0,"evaluationID":<id>,"refID":<id>,
 //     "importData":null}`.
+//   - saveGrade(col, row, grade, userID, projectID, catID, courseID,
+//     catType, pathIds, evaluationID, ownerID) (#143, dartschool#151): the
+//     grade of one pupil's cell, as in dartschool's
+//     `test/skore_gradebook_grades_test.dart`, which it carries out as the
+//     live Skore did: a grade with a comma is kept with a point, `""`
+//     clears it, and one above the max gets HTTP 500 with Smartschool's
+//     error page and is not kept. The answer is `{"savedState":1,
+//     "postEvalData":null,"stream":[...],"grade":"15.5"}`: the pupil's cell
+//     and the averages.
 // The school year goes as `wy` (a string) in the session object; without
 // it, Skore answers for its current school year. Class, group, model,
 // course, gradebook and period ids and names are those of the captures;
@@ -50,10 +59,9 @@ import 'package:dio/dio.dart';
 // [fakeSkoreGradebookPlatform].
 //
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
-// HTTP 501. The later gradebook tools add theirs (saveGrade, the feedback
-// POST): a method of the library's allowlist
-// (`SkoreGradebookService.rpcMethods`) and an answer in the shape of
-// dartschool's capture for it.
+// HTTP 501. The later gradebook tools add theirs (the feedback POST): a
+// method of the library's allowlist (`SkoreGradebookService.rpcMethods`)
+// and an answer in the shape of dartschool's capture for it.
 
 /// Skore's gradebook RPC service, behind `/SkoreGradebook`.
 const fakeSkoreGradebookRpcPath = '/modules/Skore/backend/gradebook/rpc.php';
@@ -67,6 +75,7 @@ const fakeSkoreGradebookRpcMethods = {
   'getNewEvalDialogBox',
   'getPosComponents',
   'saveEvaluation',
+  'saveGrade',
 };
 
 /// Skore's REST API of the feedback of a pupil on an evaluation.
@@ -560,13 +569,17 @@ FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
 /// gradebooks.
 ///
 /// Every RPC request is recorded in [requests] (the saves of a new
-/// evaluation also in [evaluationSaves]), every feedback read in
-/// [feedbackReads]. A method in [answers] gets that answer instead (a save
-/// is then not carried out), and a feedback read [feedbackAnswer], for an
-/// answer the library cannot use; with [unusable], every call gets
-/// Smartschool's error page (with HTTP 200). A save of a new evaluation can
-/// lose its answer after it was carried out ([saveAnswerLost]), and
-/// [onEvaluationSaved] can change how Skore lists the new evaluation.
+/// evaluation also in [evaluationSaves], those of a grade in [gradeSaves]),
+/// every feedback read in [feedbackReads]. A method in [answers] gets that
+/// answer instead (a save is then not carried out), and a feedback read
+/// [feedbackAnswer], for an answer the library cannot use; with [unusable],
+/// every call gets Smartschool's error page (with HTTP 200). [beforeAnswer]
+/// sees every RPC call before it is answered, to change the gradebooks in
+/// between. A save of a new evaluation can lose its answer after it was
+/// carried out ([saveAnswerLost]), and [onEvaluationSaved] can change how
+/// Skore lists the new evaluation; the save of a pupil's grade can fail
+/// ([gradeSaveFails]), and [onGradeSaved] can change what Skore lists for
+/// it afterwards.
 class FakeSkoreGradebook {
   /// The school years Skore offers, in its order (newest first).
   final List<FakeSkoreWorkyear> workyears = [];
@@ -614,6 +627,36 @@ class FakeSkoreGradebook {
     for (final request in requests)
       if (request.rpc == 'saveEvaluation') request.params,
   ];
+
+  /// The pupils whose `saveGrade` is answered with HTTP 500 and
+  /// Smartschool's error page, as Skore answered a grade above the max live,
+  /// without being carried out: a save that failed.
+  final Set<int> gradeSaveFails = {};
+
+  /// Called with the gradebook, the evaluation and the pupil right after a
+  /// `saveGrade` was carried out (the grade in [FakeSkoreEvaluation.grades]
+  /// is listed from then on): to list another grade than the one saved, as
+  /// when Skore did not keep it.
+  void Function(
+    FakeSkoreOwnGradebook book,
+    FakeSkoreEvaluation evaluation,
+    int pupilId,
+  )?
+  onGradeSaved;
+
+  /// The parameters of every `saveGrade` that reached the fake, in order,
+  /// also those [answers] answered or [gradeSaveFails] failed (and that were
+  /// not carried out).
+  List<List<Object?>> get gradeSaves => [
+    for (final request in requests)
+      if (request.rpc == 'saveGrade') request.params,
+  ];
+
+  /// Called with the method and the parameters of every RPC call that
+  /// reaches the fake, after it is recorded and before it is answered: to
+  /// change the gradebooks between two calls, such as an evaluation that is
+  /// published between two reads.
+  void Function(String rpc, List<Object?> params)? beforeAnswer;
 
   /// The feedback reads of the REST API that reached the fake, in order:
   /// the evaluation and the pupil (from the path, null when it is not in the
@@ -743,6 +786,7 @@ class FakeSkoreGradebook {
     final session = (jsonDecode(form['rpc_sessionobj'] ?? '{}') as Map)
         .cast<String, Object?>();
     requests.add((rpc: method, params: params, session: session));
+    beforeAnswer?.call(method, params);
     if (answers[method] case (:final status, :final body)) {
       return _json(body, status: status);
     }
@@ -763,6 +807,7 @@ class FakeSkoreGradebook {
       'getNewEvalDialogBox' => _newEvaluationCourses(method, params, workyear),
       'getPosComponents' => _components(method, params, workyear),
       'saveEvaluation' => _saveEvaluation(method, params, workyear),
+      'saveGrade' => _saveGrade(method, params, workyear),
       _ => _context(method, params, workyear),
     };
   }
@@ -853,21 +898,98 @@ class FakeSkoreGradebook {
     );
     (book.evaluations[periodId] ??= []).insert(0, created);
     onEvaluationSaved?.call(book, created);
-    if (saveAnswerLost) {
-      return ResponseBody.fromString(
-        '{"message":"Internal Server Error"}$_errorPage',
-        500,
-        headers: {
-          Headers.contentTypeHeader: ['text/html; charset=UTF-8'],
-        },
-      );
-    }
+    if (saveAnswerLost) return _serverError();
     return _rpc(method, {
       'state': 1,
       'incumul': 0,
       'evaluationID': created.id,
       'refID': created.id,
       'importData': null,
+    });
+  }
+
+  /// `saveGrade(col, row, grade, userID, projectID, catID, courseID,
+  /// catType, pathIds, evaluationID, ownerID)` for the cell of a pupil in an
+  /// evaluation of the gradebook `ownerID` of [workyear], with the
+  /// parameters the web client sends for it (dartschool's `_saveParams` of
+  /// #151): `col` and `evaluationID` the evaluation's id, `row`
+  /// `pupil_<pupilId>_<classId>`, projectID, catID and courseID 0, catType
+  /// `"0"`, and the gradebook's model, group and class as `pathIds`.
+  ///
+  /// Carried out as the live Skore did: the grade is kept with a decimal
+  /// point (`"12,5"` as `"12.5"`), `""` clears it, and a grade above the max
+  /// is answered with HTTP 500 and Smartschool's error page, and not kept. A
+  /// save the fake cannot carry out (another gradebook, evaluation, class or
+  /// pupil, a cell Skore leaves out, other parameters, a grade that is not a
+  /// number) is answered with HTTP 400, which no test expects.
+  ResponseBody _saveGrade(
+    String method,
+    List<Object?> params,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final cannot = _json(
+      '{"error":"the fake cannot save $params"}',
+      status: 400,
+    );
+    if (params.length != 11) return cannot;
+    final ownerId = int.tryParse('${params[10]}');
+    final book = ownerId == null ? null : gradebookWithId(ownerId, workyear);
+    final evaluationId = int.tryParse('${params[0]}');
+    final evaluation = evaluationId == null
+        ? null
+        : book?.evaluationWithId(evaluationId);
+    final row = RegExp(r'^pupil_(\d+)_(\d+)$').firstMatch('${params[1]}');
+    final pupilId = int.tryParse(row?.group(1) ?? '');
+    final grade = params[2];
+    final path = params[8];
+    if (book == null ||
+        evaluation == null ||
+        pupilId == null ||
+        int.parse(row!.group(2)!) != book.classId ||
+        ![...book.pupils, ...book.cellsOnly].any((p) => p.id == pupilId) ||
+        evaluation.withoutCell.contains(pupilId) ||
+        grade is! String ||
+        params[0] != '${evaluation.id}' ||
+        params[3] != fakeSkoreGradebookUser ||
+        params[4] != 0 ||
+        params[5] != 0 ||
+        params[6] != 0 ||
+        params[7] != '0' ||
+        path is! List ||
+        path.join(',') != '${book.modelId},${book.groupId},${book.classId}' ||
+        params[9] != '${evaluation.id}') {
+      return cannot;
+    }
+    if (gradeSaveFails.contains(pupilId)) return _serverError();
+    final kept = grade.replaceAll(',', '.');
+    final number = num.tryParse(kept);
+    if (kept.isNotEmpty && number == null) return cannot;
+    final max = evaluation.max;
+    if (number != null && max is num && number > max) return _serverError();
+    if (kept.isEmpty) {
+      evaluation.grades.remove(pupilId);
+    } else {
+      evaluation.grades[pupilId] = kept;
+    }
+    onGradeSaved?.call(book, evaluation, pupilId);
+    final average = _gradeCell(_average(evaluation), const []);
+    return _rpc(method, {
+      'savedState': 1,
+      'postEvalData': null,
+      'stream': [
+        {
+          'c': evaluation.id,
+          'r': 'pupil_${pupilId}_${book.classId}',
+          'v': _gradeCell(
+            evaluation.grades[pupilId],
+            evaluation.feedback[pupilId] ?? const [],
+          ),
+          'p': [1, 0, '${evaluation.id}', '${book.id}'],
+        },
+        {'c': evaluation.id, 'r': 'clavg_${book.classId}', 'v': average},
+        {'c': evaluation.id, 'r': 'gravg_${book.groupId}', 'v': average},
+      ],
+      'grade': kept,
     });
   }
 
@@ -1529,6 +1651,16 @@ class FakeSkoreGradebook {
           Headers.contentTypeHeader: ['application/json; charset=utf-8'],
         },
       );
+
+  /// What Skore answered a grade above the max (seen live, dartschool#151):
+  /// HTTP 500 with a line of JSON and Smartschool's error page.
+  static ResponseBody _serverError() => ResponseBody.fromString(
+    '{"message":"Internal Server Error"}$_errorPage',
+    500,
+    headers: {
+      Headers.contentTypeHeader: ['text/html; charset=UTF-8'],
+    },
+  );
 
   static ResponseBody _html(String body) => ResponseBody.fromString(
     body,

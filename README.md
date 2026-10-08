@@ -866,11 +866,11 @@ meanwhile is gone, so nothing is sent).
 The gradebook tools work in the user's own gradebooks in Skore
 ("Puntenboek", `/SkoreGradebook`), as every teacher has them, with the
 library's `SkoreGradebookService` (dartschool#148, dartschool#149,
-dartschool#150). They need none of the rights of the Skore tools below, so
-they are offered to every account, without a switch, and no message of
-theirs speaks of "Skore-beheer" or of rights. The first four change
-nothing; `create_skore_evaluation` creates an evaluation, always
-unpublished:
+dartschool#150, dartschool#151). They need none of the rights of the Skore
+tools below, so they are offered to every account, without a switch, and no
+message of theirs speaks of "Skore-beheer" or of rights. The first four
+change nothing; `create_skore_evaluation` creates an evaluation, always
+unpublished, and `save_skore_grades` saves the grades of one:
 
 - `list_skore_gradebooks`: the user's own gradebooks of one school year
   (`getGradebookYear`), one line each in Skore's order: the class, the
@@ -964,6 +964,32 @@ unpublished:
   before anything is sent. The result is the evaluation as Skore lists it
   after the save: its evaluation id, title, date, max, component and that it
   is not published.
+- `save_skore_grades`: saves the grades of pupils in one evaluation of a
+  gradebook of Skore's current school year, or clears them (`gradebook_id`,
+  `evaluation_id`, `grades`: a list of `{pupil_id, grade}`, the grade a text
+  such as `"15"`, `"15.5"` or `"15,5"`, empty or null to clear it; optional
+  `period_id`, to find the evaluation with one read, and `allow_published`,
+  false by default; `saveGrades`): the whole list in one call, so one
+  approval for a list the user saw, rather than one per pupil. Marked
+  destructive, so Claude Desktop asks for approval before every call, and
+  idempotent: saving the same grades again gives the same state. Its
+  description tells Claude to read the evaluation with
+  `list_skore_evaluations` (with `evaluation_id`) first, to match the names
+  the user gave to pupil ids there and to ask rather than guess a pupil for
+  an ambiguous name, to show the full list (class number, name, current
+  grade and new grade, out of the max), and to call only after explicit
+  confirmation. Pupils go by id, not by name: names are ambiguous. An empty
+  list, a pupil given twice and a grade that is not a text or null are
+  errors before anything is sent; a pupil the gradebook does not list is an
+  error that names every such id, before the evaluations are read. An
+  evaluation that is published or scheduled is refused unless
+  `allow_published` is true: a grade there is visible to its pupils at once,
+  and the school sends them a notification, or from its publication time on.
+  The refusal says that, and that Claude passes `allow_published: true` only
+  after telling the user exactly that and getting their explicit yes; the
+  description says the same. The result lists each pupil (class number,
+  name, pupil id) with the grade as Skore lists it after the save, in the
+  order given, under the evaluation with its publication.
 
 The library checks a new evaluation before it saves it (`saveEvaluation`)
 and reads the period again afterwards to confirm it, and the tool reports
@@ -996,6 +1022,34 @@ again, and a session Smartschool refuses for it is a
 session then repeats the call (`SmartschoolSession.run`), which reads the
 gradebook again and saves once; an unconfirmed or public save is not a
 refused session, so it is not repeated.
+
+For `save_skore_grades`, the library reads the gradebook, the period and the
+evaluation again, checks every pupil and grade first, and refuses the whole
+list when one does not fit (`SmartschoolSkoreChangeRefusedError`: a grade
+that is not a number or is above the max, a pupil without a cell in the
+class, a closed or read-only period, an evaluation from the planner or not
+in points, a published or scheduled one without `allow_published`): nothing
+was saved, and the reason is passed on with what to read again
+(`list_skore_evaluations` with the `evaluation_id`, `read_skore_gradebook`).
+The server checks the publication itself first, from the evaluation it has
+just read, so that the refusal says what the pupils would see: the
+library's refusal cannot be told apart from its other ones
+(dartschool#157, removal tracked in #148). When the evaluation is published
+between the two reads, the library's own reason is passed on. Then the
+library sends `saveGrade` for each pupil in turn (a failed one does not stop
+the others) and reads the period again once. When it cannot confirm every
+grade (`SmartschoolSkoreGradeSaveUnconfirmedError`), the result lists by
+pupil the grades it confirmed, as Skore lists them, and the ones that may or
+may not have been saved, with the grade sent; saving a grade again is
+harmless, so it says to read the evaluation again with
+`list_skore_evaluations`, tell the user, and save only the grades that
+differ. The library's message, which says per pupil why, goes to the log
+only. A grade save gives the same state when sent again, so the library
+sends it again itself after a new login; when Smartschool refuses the
+session for the first save even then, nothing was saved, and the session
+repeats the call, which saves each grade once. When it refuses a later one,
+the pupils after it are not sent, and the result reports them as not
+confirmed; that is not repeated.
 
 The library takes an evaluation as `getEvaluations` lists it, so a
 gradebook tool that takes an `evaluation_id` looks it up in its period
@@ -1545,8 +1599,8 @@ method
 call with an error page (`unusable`); it answers any other RPC method with
 HTTP 501, and the later gradebook tools add theirs.
 
-The writes in a gradebook (`create_skore_evaluation`; the grades and the
-feedback after it) run with `withSkoreGradebookWrite` in
+The writes in a gradebook (`create_skore_evaluation`, `save_skore_grades`;
+the feedback after them) run with `withSkoreGradebookWrite` in
 `skore_gradebook_access.dart`: `withSkoreGradebook` with the reason of a
 change a check refused (`SmartschoolSkoreChangeRefusedError`, before the
 last case of `skoreGradebookToolError`) passed on with what to read again
@@ -1569,6 +1623,23 @@ every `saveEvaluation` that reached it (also those `answers` answered, which
 are not carried out); `saveAnswerLost` carries a save out and answers it
 with HTTP 500; `onEvaluationSaved` changes how the new evaluation is listed
 (public, or not at all).
+
+A write into an evaluation (the grades, and the feedback of #144) first
+calls `checkSkoreWritePublication` (in `skore_gradebook_access.dart`) with
+the evaluation as the tool read it, what it writes and its name: for one
+that is published or scheduled, without `allow_published`, a `ToolError`
+that says what the pupils would see and that `allow_published: true` comes
+only after the user said yes to exactly that (dartschool#157, #148).
+`formatSkoreEvaluationName` (in `skore_gradebook_format.dart`) names an
+evaluation in such a sentence. The fake gradebook carries out `saveGrade`
+as the live Skore did in dartschool#151: a grade with a comma is kept with
+a point, `""` clears it, and one above the max gets HTTP 500 and is not
+kept; a save whose parameters are not the web client's for that cell gets
+HTTP 400. `gradeSaves` holds the parameters of every `saveGrade` that
+reached it; `gradeSaveFails` answers the saves of some pupils with HTTP 500
+without carrying them out; `onGradeSaved` changes what Skore lists for a
+grade after it was saved; and `beforeAnswer` sees every RPC call before it
+is answered, to change the gradebooks between two reads.
 
 Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
 `withPresence`, which runs an action with a `PresenceService` on the session

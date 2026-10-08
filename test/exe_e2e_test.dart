@@ -123,6 +123,7 @@ void main() {
       'list_skore_evaluations',
       'read_skore_feedback',
       'create_skore_evaluation',
+      'save_skore_grades',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -438,8 +439,10 @@ void main() {
       ('plan_assignment', false),
       ('trash_assignment', false),
       // The gradebook's first write (#142): a create, so not idempotent;
-      // Claude Desktop asks approval for every call.
+      // Claude Desktop asks approval for every call. Saving the same grades
+      // again gives the same state (#143).
       ('create_skore_evaluation', false),
+      ('save_skore_grades', true),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -629,7 +632,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(59));
+    expect(tools, hasLength(60));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -694,7 +697,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(47));
+        expect(tools, hasLength(48));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -733,8 +736,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(55));
-      expect([for (final tool in tools.skip(47)) tool['name']], skoreTools);
+      expect(tools, hasLength(56));
+      expect([for (final tool in tools.skip(48)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -927,7 +930,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(47));
+        expect(tools, hasLength(48));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -967,8 +970,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(51));
-      expect([for (final tool in tools.skip(47)) tool['name']], presenceTools);
+      expect(tools, hasLength(52));
+      expect([for (final tool in tools.skip(48)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1164,10 +1167,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(59));
-      expect([for (final tool in tools.skip(55)) tool['name']], presenceTools);
+      expect(tools, hasLength(60));
+      expect([for (final tool in tools.skip(56)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(47).take(8)) tool['name'],
+        for (final tool in tools.skip(48).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2609,7 +2612,8 @@ void main() {
         'save_lesfiche_attachment',
         {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 2.0},
       ),
-      // The gradebook tools (#140, #141, #142), offered without a switch.
+      // The gradebook tools (#140, #141, #142, #143), offered without a
+      // switch.
       ('list_skore_gradebooks', {'workyear_id': 22.0}),
       ('read_skore_gradebook', {'gradebook_id': 32508.0, 'workyear_id': 22.0}),
       (
@@ -2639,6 +2643,19 @@ void main() {
           'title': 'Toets Python',
           'date': '2026-10-14',
           'max': 20.0,
+        },
+      ),
+      (
+        'save_skore_grades',
+        {
+          'gradebook_id': 32508.0,
+          'evaluation_id': 500003.0,
+          'period_id': 1704.0,
+          'grades': [
+            {'pupil_id': 1201.0, 'grade': '15,5'},
+            {'pupil_id': 1202.0, 'grade': null},
+          ],
+          'allow_published': false,
         },
       ),
     ]) {

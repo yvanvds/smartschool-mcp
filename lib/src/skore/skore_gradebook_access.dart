@@ -13,8 +13,9 @@ import 'skore_writes.dart';
 // memory per session, to find a gradebook by its id, and finding a period,
 // a pupil and an evaluation of a gradebook by their ids.
 //
-// The tools that change a gradebook (`create_skore_evaluation`, #142; the
-// grades and feedback of #143 and #144) run with [withSkoreGradebookWrite].
+// The tools that change a gradebook (`create_skore_evaluation`, #142;
+// `save_skore_grades`, #143; the feedback of #144) run with
+// [withSkoreGradebookWrite].
 // The library checks the gradebook, the period and the values before each
 // save, refusing a change that does not fit with a
 // `SmartschoolSkoreChangeRefusedError` (nothing saved), sends a save that
@@ -24,10 +25,17 @@ import 'skore_writes.dart';
 // [SmartschoolSession.run] does when Smartschool refused the session, makes
 // no change twice: a refused session means Skore did not handle the save,
 // and an unconfirmed save is not a refused session, so it is not repeated.
-// The write tools report an unconfirmed save themselves
-// (`skoreWriteNotConfirmed`), saying not to call them again but to check
-// with a read tool first; they write in Skore's current school year only,
-// as the library does ([SkoreGradebookYears.findInCurrentYear]).
+// The write tools report an unconfirmed save themselves: a create
+// (`skoreWriteNotConfirmed`) says not to call the tool again but to check
+// with a read tool first; grades, which give the same state when saved
+// again, say to read them again and save the ones that differ. The library
+// sends a grade again itself after a new login, as that is harmless; when
+// Smartschool refuses the session for the first grade even then, nothing
+// was saved, and the repeat saves every grade once. The write tools write
+// in Skore's current school year only, as the library does
+// ([SkoreGradebookYears.findInCurrentYear]), and into an evaluation its
+// pupils see only when the user said yes to that
+// ([checkSkoreWritePublication]).
 //
 // Unlike the Skore tools of `skore_access.dart` (`SkoreService`, the admin
 // side of Skore, behind the switch "Skore-beheer"), the gradebook needs no
@@ -540,5 +548,52 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
     'The $gradebook has no evaluation with evaluation id $evaluationId in '
     '$where. Take the evaluation id from list_skore_evaluations, with the '
     'period_id of its period.',
+  );
+}
+
+/// Refuses [what] (such as `the grades`), which [tool] would write into
+/// [evaluation] of [where] (its period and gradebook, as in `period DW1
+/// (period id 1704) of the gradebook of ...`), when Skore lists the
+/// evaluation as published or scheduled ([SkorePublication.isPublic]),
+/// unless [allowPublished]. What is written into a published evaluation is
+/// visible to its pupils at once, and the school sends them a notification;
+/// into a scheduled one, from its publication time on.
+///
+/// Throws a [ToolError] that says so, and that [tool] takes
+/// `allow_published: true` only after the user was told exactly that and
+/// said yes to it; nothing is sent. [evaluation] is as the tool read it
+/// right before the write.
+///
+/// The library refuses such a write as well (`allowPublished`), from the
+/// evaluation as it reads it right before the save, but with a
+/// `SmartschoolSkoreChangeRefusedError` that cannot be told apart from its
+/// other refusals, worded for a caller of the library. This check comes
+/// first, so that the refusal tells the user what the pupils would see
+/// (yvanvds/dartschool#157, removal tracked in yvanvds/smartschool-mcp#148).
+/// When the evaluation is published between the two reads, the library's
+/// refusal is passed on as any other.
+void checkSkoreWritePublication(
+  SkoreEvaluation evaluation, {
+  required String where,
+  required String what,
+  required String tool,
+  required bool allowPublished,
+}) {
+  final publication = evaluation.publication;
+  if (!publication.isPublic || allowPublished) return;
+  final at = publication.at;
+  final time = at == null ? null : formatSkoreTime(at);
+  final state = switch (publication.state) {
+    SkorePublicationState.scheduled =>
+      'SCHEDULED${time == null ? ' to be published' : ' for $time'}: its '
+          'pupils would see $what from then on',
+    _ =>
+      'PUBLISHED${time == null ? '' : ' since $time'}: its pupils would see '
+          '$what at once, and the school sends them a notification',
+  };
+  throw ToolError(
+    'The ${formatSkoreEvaluationName(evaluation)} in $where is $state. Tell '
+    'the user exactly that, and only if the user explicitly says yes to it, '
+    'call $tool again with allow_published: true.',
   );
 }
