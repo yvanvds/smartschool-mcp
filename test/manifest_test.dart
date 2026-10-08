@@ -1,5 +1,6 @@
 /// The Claude Desktop extension's `manifest.json` against the server: its
-/// settings, the environment variables they become, and its tool list.
+/// settings, the environment variables they become, and its tool list; and
+/// its long description against the summary of `docs/installatie.md`.
 /// `test/bundle_e2e_test.dart` starts the server from it; the release
 /// workflow validates it with `mcpb validate`.
 library;
@@ -152,6 +153,71 @@ void main() {
         );
       }
     }
+  });
+
+  test('sums up in its long description the parts the Claude Desktop guide '
+      'sums up, in its order, each part a switch turns on marked with that '
+      'switch, and the gradebook as the guide does (#150)', () {
+    final guide = File(
+      'docs/installatie.md',
+    ).readAsStringSync().replaceAll('\r\n', '\n');
+    final guideSummary = guide.substring(0, guide.indexOf('\n## Inhoud'));
+    final guideParts = [
+      for (final match in RegExp(
+        r'^- \*\*(.+?):?\*\*',
+        multiLine: true,
+      ).allMatches(guideSummary))
+        match.group(1),
+    ];
+    expect(guideParts, contains('Puntenboek'));
+
+    final longDescription = manifest['long_description'] as String;
+    final parts = {
+      for (final match in RegExp(
+        r'^- \*\*(.+?)(?: \(alleen met (.+?) aan\))?:\*\* (.*)$',
+        multiLine: true,
+      ).allMatches(longDescription))
+        match.group(1)!: (switchTitle: match.group(2), text: match.group(3)!),
+    };
+    expect(parts.keys, guideParts);
+    final switchTitles = {
+      for (final setting in Setting.switches) setting.formTitle,
+    };
+    expect(parts.keys, containsAll(switchTitles));
+    for (final MapEntry(key: name, value: part) in parts.entries) {
+      expect(
+        part.switchTitle,
+        switchTitles.contains(name) ? name : isNull,
+        reason: name,
+      );
+    }
+
+    // The guide's wrapped lines as one line, to find its sentences.
+    final guideText = guideSummary.replaceAll(RegExp(r'\s+'), ' ');
+    for (final (part, sentence) in [
+      ('Puntenboek', 'je eigen puntenboeken in Skore bekijken'),
+      (
+        'Puntenboek',
+        'Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf '
+            'in Smartschool.',
+      ),
+      (
+        'Puntenboek',
+        'Dit is er voor elke leerkracht: je hoeft er niets voor aan te '
+            'zetten.',
+      ),
+    ]) {
+      expect(guideText, contains(sentence));
+      expect(parts[part]!.text, contains(sentence), reason: part);
+    }
+    expect(
+      guideText,
+      contains('Voor je eigen puntenboek heb je het niet nodig.'),
+    );
+    expect(
+      parts['Skore-beheer']!.text,
+      contains('Voor je eigen puntenboek heb je Skore-beheer niet nodig.'),
+    );
   });
 
   test('lists the tools of the README, in its order', () {
