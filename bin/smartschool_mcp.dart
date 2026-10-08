@@ -20,6 +20,7 @@ import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_lesfiche_tool.dart';
+import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
@@ -28,6 +29,8 @@ import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
@@ -37,12 +40,16 @@ import 'package:smartschool_mcp/src/tools/read_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
@@ -158,6 +165,15 @@ Future<void> _serve(ServerOptions options) async {
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
+          // The user's own gradebooks in Skore: no switch, as they need no
+          // extra rights (#140, #141, #142, #143, #144).
+          listSkoreGradebooksTool(session),
+          readSkoreGradebookTool(session),
+          listSkoreEvaluationsTool(session),
+          readSkoreFeedbackTool(session),
+          createSkoreEvaluationTool(session),
+          saveSkoreGradesTool(session),
+          saveSkoreFeedbackTool(session),
           for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,

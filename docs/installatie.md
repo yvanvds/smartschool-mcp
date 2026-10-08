@@ -22,15 +22,22 @@ Je vraagt het gewoon in een gesprek:
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de
+  evaluaties met de punten van je leerlingen en of ze gepubliceerd zijn, en
+  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
+  invullen en een leerling feedback geven. Telkens pas nadat jij het
+  goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd: je
+  publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft
+  er niets voor aan te zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
-- **Skore**, alleen voor wie er de rechten voor puntenbeheer heeft, zoals een
-  Skore-beheerder: de klassen bekijken, de vakken van een klas met de
-  leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Een leerkracht
-  aan een vak van een klas koppelen, of een lesopdracht een andere
-  leerkracht geven. Een puntenboek delen met andere leerkrachten, of dat
-  delen stoppen. Telkens pas nadat jij het goedgekeurd hebt. Dat zet je aan
-  met **Skore-beheer**.
+- **Skore-beheer**, alleen voor wie er de rechten voor puntenbeheer heeft,
+  zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met
+  de leerkrachten die eraan gekoppeld zijn, en de leerkrachten. Een
+  leerkracht aan een vak van een klas koppelen, of een lesopdracht een
+  andere leerkracht geven. Een puntenboek delen met andere leerkrachten, of
+  dat delen stoppen. Telkens pas nadat jij het goedgekeurd hebt. Dat zet je
+  aan met **Skore-beheer**. Voor je eigen puntenboek heb je het niet nodig.
 - **Aanwezigheden**, alleen voor wie de halve-dagaanwezigheden van klassen
   registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat:
   per klas en dag zien wat er voor elke leerling 's morgens en 's middags
@@ -150,7 +157,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Wachtwoord** | Je wachtwoord voor Smartschool. |
    | **2FA-sleutel** (alleen met tweestapsverificatie) | De sleutel uit stap 2 (plak hem met Ctrl+V). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat dit veld dan leeg. |
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
-   | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore](#skore). De meeste leerkrachten en alle leerlingen laten het uit. |
+   | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore-beheer](#skore-beheer). De meeste leerkrachten en alle leerlingen laten het uit. Voor je eigen puntenboek heb je het niet nodig (zie [Puntenboek](#puntenboek)). |
    | **Aanwezigheden** (niet verplicht) | Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: zet het aan. Zie [Aanwezigheden](#aanwezigheden). De meeste leerkrachten en alle leerlingen laten het uit. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
@@ -366,14 +373,68 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   Claude verplaatst je toets of taak naar de prullenbak van de planner, na
   jouw akkoord. Daar kun je ze in Smartschool nog 30 dagen terugzetten.
 
-### Skore
+### Puntenboek
+
+Voor elke leerkracht: je hoeft er niets voor aan te zetten, ook niet
+**Skore-beheer**. Claude werkt in je eigen puntenboeken in Skore, zoals je ze
+in Smartschool ziet. Puntenboeken van vorige schooljaren kan Claude lezen.
+Iets aanpassen kan alleen in een puntenboek van dit schooljaar, in een
+periode die nog open is.
+
+- "Welke puntenboeken heb ik dit schooljaar?"
+- "Welke evaluaties staan er in DW1 van 5WW1?"
+  Claude toont per evaluatie de datum, op hoeveel punten ze staat, de punten
+  van je leerlingen, de gemiddelden en of ze gepubliceerd is.
+- "Wie heeft nog geen punten voor de toets Python in 5WW1?"
+- "Welke feedback kreeg Jan op de toets Python?"
+  Claude leest alle feedback die Jan op die evaluatie kreeg, ook die van
+  collega's.
+- "Maak een evaluatie 'Toets Python' op 14 oktober, op 20."
+  Claude kijkt eerst of die evaluatie er al is. Het toont het puntenboek
+  (klas en vak), de periode, de titel, de datum, op hoeveel punten ze staat
+  en waarvoor ze telt (bijvoorbeeld DW), en wacht op jouw akkoord. Daarna
+  vraagt Claude Desktop nog eens toestemming. Een nieuwe evaluatie is altijd
+  ongepubliceerd: je leerlingen zien ze pas als je ze zelf publiceert in
+  Smartschool.
+- "Zet deze punten in voor de toets Python: Jan 15, An 12,5, Pieter 17."
+  Claude zoekt de leerlingen in het puntenboek. Past een naam bij geen
+  enkele leerling, of bij meer dan één, dan vraagt Claude wie je bedoelt: het
+  kiest nooit zelf. Het toont de hele lijst, met per leerling het klasnummer,
+  de naam, het punt dat er nu staat en het nieuwe, en wacht op jouw akkoord.
+  Daarna vraagt Claude Desktop nog eens toestemming, één keer voor de hele
+  lijst. Past één punt niet, bijvoorbeeld omdat het hoger is dan het
+  maximum, dan vult Claude geen enkel punt in en zegt het waarom. Een punt
+  wissen kan ook.
+- "Geef Jan deze feedback bij de toets Python: ..."
+  Claude leest eerst de feedback die Jan daar al heeft. Gaf je hem er al
+  feedback, dan toont Claude de oude en de nieuwe tekst: de nieuwe vervangt
+  de oude. Het toont de leerling, de evaluatie en de tekst, en wacht op jouw
+  akkoord. Daarna vraagt Claude Desktop nog eens toestemming. Claude geeft
+  feedback aan één leerling per keer, want elke tekst is persoonlijk.
+
+> **Wat je invult bij een gepubliceerde evaluatie, zien je leerlingen
+> meteen.** Vult Claude punten of feedback in bij een evaluatie die al
+> gepubliceerd is, dan zien je leerlingen die meteen, en krijgen ze een
+> melding. Is de publicatie gepland, dan zien ze die vanaf dat moment. Claude
+> zegt je dat eerst uitdrukkelijk en vraagt of het toch mag. Pas na jouw ja
+> vult het iets in bij zo'n evaluatie.
+
+Claude verandert in je puntenboek alleen iets na jouw akkoord. Een evaluatie
+publiceren, verwijderen of verplaatsen, of haar titel of datum aanpassen, kan
+Claude niet: dat doe je zelf in Smartschool. De feedback van een collega
+verandert Claude nooit. Gaf je zelf twee keer feedback aan dezelfde leerling
+op dezelfde evaluatie, dan past Claude geen van beide aan: verwijder er dan
+zelf een in Smartschool.
+
+### Skore-beheer
 
 Alleen met **Skore-beheer** aan, en alleen voor wie in Skore de rechten heeft
 voor puntenbeheer: Rapporten > Modellen en Puntenboeken, zoals een
 Skore-beheerder. De meeste leerkrachten en alle leerlingen hebben die rechten
 niet. Zet je **Skore-beheer** aan zonder die rechten, dan zegt Claude dat je
 account ze niet heeft; vraag ze dan aan de Smartschool-beheerder van je
-school, of zet **Skore-beheer** weer uit.
+school, of zet **Skore-beheer** weer uit. Voor je eigen puntenboek heb je
+**Skore-beheer** niet nodig: zie [Puntenboek](#puntenboek).
 
 - "Wie geeft wiskunde in 3B1?"
 - "Welke vakken van 5WW1 hebben nog geen leerkracht?"
@@ -473,20 +534,23 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   wachtwoord, OpenDocument-bestanden (`.odt`, `.ods`, ...) en bestanden groter
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
-- De extensie werkt alleen met berichten, Intradesk, de planner, met
-  **Skore-beheer** aan Skore, en met **Aanwezigheden** aan de
-  halve-dagaanwezigheden. Andere onderdelen van Smartschool kent ze
-  niet. Op Intradesk maakt ze mappen en weblinks, zet ze bestanden van je
-  pc in een map en verplaatst ze mappen, bestanden en weblinks naar de
-  prullenbak: iets hernoemen of naar een andere map verplaatsen, een nieuwe
-  versie van een bestand zetten, iets uit de prullenbak terugzetten of voor
-  altijd verwijderen kan ze niet. In Skore leest ze de klassen, vakken, leerkrachten en gedeelde
-  puntenboeken, koppelt ze leerkrachten aan vakken en deelt ze puntenboeken:
-  een lesopdracht verwijderen kan ze niet. In de
-  planner
-  verandert ze alleen je eigen planner: ze vult je lesuren in, plant toetsen
-  en taken in je lesuren, past je eigen lessen, toetsen en taken aan, maakt
-  lesuren weer leeg en verplaatst je toetsen en taken naar de prullenbak.
+- De extensie werkt alleen met berichten, Intradesk, de planner, je
+  puntenboeken in Skore, met **Skore-beheer** aan het beheer van Skore, en
+  met **Aanwezigheden** aan de halve-dagaanwezigheden. Andere onderdelen van
+  Smartschool kent ze niet. Op Intradesk maakt ze mappen en weblinks, zet ze
+  bestanden van je pc in een map en verplaatst ze mappen, bestanden en
+  weblinks naar de prullenbak: iets hernoemen of naar een andere map
+  verplaatsen, een nieuwe versie van een bestand zetten, iets uit de
+  prullenbak terugzetten of voor altijd verwijderen kan ze niet. In je
+  puntenboeken leest ze de evaluaties, de punten en de feedback, maakt ze
+  evaluaties en vult ze punten en feedback in: een evaluatie publiceren,
+  verwijderen of verplaatsen kan ze niet. Met **Skore-beheer** leest ze de
+  klassen, vakken, leerkrachten en gedeelde puntenboeken, koppelt ze
+  leerkrachten aan vakken en deelt ze puntenboeken: een lesopdracht
+  verwijderen kan ze niet. In de planner verandert ze alleen je eigen
+  planner: ze vult je lesuren in, plant toetsen en taken in je lesuren, past
+  je eigen lessen, toetsen en taken aan, maakt lesuren weer leeg en
+  verplaatst je toetsen en taken naar de prullenbak.
   Een toets of taak aankondigen, ze uit de prullenbak terugzetten of voor
   altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
   module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in
@@ -679,6 +743,10 @@ in jouw naam in te loggen. Daarom:
   van Anthropic, het bedrijf achter Claude, net zoals alles wat je zelf in het
   gesprek typt. Daar horen ook namen en gegevens van collega's, leerlingen en
   ouders bij.
+- Vraag je Claude iets over je puntenboek, dan gaan ook de punten van je
+  leerlingen naar Claude, en de feedback die jij of collega's hun gaven. Ook
+  dat zijn gegevens over leerlingen, en feedback kan iets zeggen over hun
+  zorg of thuissituatie.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
@@ -699,8 +767,9 @@ in jouw naam in te loggen. Daarom:
 - De extensie handelt in jouw naam: een antwoord of een nieuw bericht
   vertrekt vanuit jouw account, en archiveren en weggooien verplaatsen jouw
   berichten. Claude vraagt je akkoord voordat het iets verstuurt of naar de
-  prullenbak verplaatst. Met **Aanwezigheden** aan registreert ze te laat en
-  aanwezig op jouw naam, telkens pas na jouw akkoord.
+  prullenbak verplaatst. In je puntenboek maakt ze evaluaties en vult ze
+  punten en feedback in op jouw naam. Met **Aanwezigheden** aan registreert
+  ze te laat en aanwezig op jouw naam. Ook dat telkens pas na jouw akkoord.
 
 ## 9. Verwijderen
 

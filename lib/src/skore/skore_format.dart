@@ -163,3 +163,16 @@ String skoreName(String name) {
 }
 
 final _whitespace = RegExp(r'\s+');
+
+/// The reason in [message], the message of a
+/// [SmartschoolSkoreChangeRefusedError]: without the name of the library's
+/// method in front (`addTeacher: `, `createEvaluation: `) and its closing
+/// `Nothing was saved.`, which the write tools say in their own words. Used
+/// by the Skore tools and the gradebook tools alike.
+String skoreRefusalReason(String message) {
+  final reason = message
+      .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
+      .replaceFirst(RegExp(r'\s*Nothing was saved\.\s*$'), '')
+      .trim();
+  return reason.endsWith('.') ? reason : '$reason.';
+}

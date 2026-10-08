@@ -19,10 +19,16 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/install.dart';
+import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
+import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
+import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -166,6 +172,185 @@ void main() {
     expect(text, contains('${DownloadFolder.defaultRetention.inDays} dagen'));
     expect(text, contains('${maxIntradeskFileBytes ~/ (1024 * 1024)} MB'));
     expect(text, contains('${maxSavedFileBytes ~/ (1024 * 1024)} MB'));
+  });
+
+  group('the gradebook (Puntenboek), as its tools are built (#145)', () {
+    final chatGpt = _read(_chatGptGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+    // Without the quote marks of the note on published evaluations; read in
+    // the first test that needs it, as _subsection expects.
+    late final section = _subsection(
+      text,
+      '### Puntenboek',
+    ).replaceAll(' > ', ' ');
+    final session = SmartschoolSession(const ExtensionSettings());
+    tearDownAll(session.close);
+    final create = createSkoreEvaluationTool(session).definition;
+    final grades = saveSkoreGradesTool(session).definition;
+    final feedback = saveSkoreFeedbackTool(session).definition;
+
+    test('is for every account, without a switch, unlike Skore-beheer', () {
+      final behindSwitch = {
+        for (final optIn in [
+          skoreOptIn(session, SwitchState.on),
+          presenceOptIn(session, SwitchState.on),
+        ])
+          for (final tool in optIn.tools) tool.definition.name,
+      };
+      for (final tool in [create, grades, feedback]) {
+        expect(behindSwitch, isNot(contains(tool.name)));
+      }
+      for (final guide in [text, chatGpt]) {
+        final summary = guide.substring(0, guide.indexOf('## Inhoud'));
+        expect(
+          summary,
+          allOf(
+            contains('- **Puntenboek:** je eigen puntenboeken in Skore'),
+            contains(
+              'Dit is er voor elke leerkracht: je hoeft er niets voor aan te '
+              'zetten.',
+            ),
+          ),
+        );
+      }
+      expect(
+        section,
+        contains(
+          'Voor elke leerkracht: je hoeft er niets voor aan te zetten, ook '
+          'niet **Skore-beheer**.',
+        ),
+      );
+      expect(
+        text,
+        contains('### Skore-beheer Alleen met **Skore-beheer** aan'),
+      );
+    });
+
+    test('says a new evaluation is always unpublished, as the tool, which '
+        'cannot publish, creates it', () {
+      expect(create.description, contains('It is always created unpublished'));
+      expect(create.description, contains('this tool cannot publish'));
+      expect(
+        create.inputSchema.properties!.keys,
+        isNot(anyElement(contains('publi'))),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(
+          guide,
+          contains(
+            'Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze '
+            'zelf in Smartschool.',
+          ),
+        );
+      }
+      expect(
+        section,
+        contains(
+          'Een nieuwe evaluatie is altijd ongepubliceerd: je leerlingen zien '
+          'ze pas als je ze zelf publiceert in Smartschool.',
+        ),
+      );
+    });
+
+    test('says pupils see grades and feedback in a published or scheduled '
+        'evaluation, and that Claude asks first, as allow_published '
+        'needs', () {
+      for (final tool in [grades, feedback]) {
+        expect(
+          tool.inputSchema.properties!.keys,
+          contains('allow_published'),
+          reason: tool.name,
+        );
+        expect(
+          tool.description,
+          allOf(
+            contains('the school sends them a notification'),
+            contains('from its publication time on'),
+            contains(
+              'Pass allow_published: true only after telling the user '
+              'exactly that and getting their explicit yes for it.',
+            ),
+          ),
+          reason: tool.name,
+        );
+      }
+      expect(
+        section,
+        contains(
+          'Vult Claude punten of feedback in bij een evaluatie die al '
+          'gepubliceerd is, dan zien je leerlingen die meteen, en krijgen ze '
+          'een melding. Is de publicatie gepland, dan zien ze die vanaf dat '
+          'moment. Claude zegt je dat eerst uitdrukkelijk en vraagt of het '
+          'toch mag.',
+        ),
+      );
+    });
+
+    test('says feedback goes to one pupil at a time, and that Claude never '
+        'changes a colleague\'s but reads it', () {
+      expect(feedback.description, contains('One pupil per call'));
+      expect(feedback.inputSchema.properties!['pupil_id'], {
+        'type': 'integer',
+        'description': isA<String>(),
+        'minimum': 1,
+      });
+      expect(
+        feedback.description,
+        contains('Feedback that others gave the pupil is never changed.'),
+      );
+      expect(
+        readSkoreFeedbackTool(session).definition.description,
+        contains('every feedback text on it, whoever wrote it'),
+      );
+      expect(
+        section,
+        allOf(
+          contains('Claude geeft feedback aan één leerling per keer'),
+          contains('De feedback van een collega verandert Claude nooit.'),
+          contains('ook die van collega\'s.'),
+        ),
+      );
+    });
+
+    test('says Claude cannot publish, delete or move an evaluation: no tool '
+        'does', () {
+      final manifest =
+          jsonDecode(_read('manifest.json')) as Map<String, Object?>;
+      expect(
+        [
+          for (final tool in manifest['tools'] as List)
+            if (((tool as Map)['name'] as String).contains('evaluation'))
+              tool['name'],
+        ],
+        ['list_skore_evaluations', 'create_skore_evaluation'],
+      );
+      expect(
+        section,
+        contains(
+          'Een evaluatie publiceren, verwijderen of verplaatsen, of haar '
+          'titel of datum aanpassen, kan Claude niet: dat doe je zelf in '
+          'Smartschool.',
+        ),
+      );
+    });
+
+    test('says under Veiligheid en privacy that the grades and feedback go '
+        'to the AI provider', () {
+      for (final (guide, assistant) in [
+        (text, 'Claude'),
+        (chatGpt, 'ChatGPT'),
+      ]) {
+        expect(
+          _section(guide, '## 8. Veiligheid en privacy'),
+          contains(
+            'Vraag je $assistant iets over je puntenboek, dan gaan ook de '
+            'punten van je leerlingen naar $assistant, en de feedback die '
+            'jij of collega\'s hun gaven. Ook dat zijn gegevens over '
+            'leerlingen',
+          ),
+          reason: assistant,
+        );
+      }
+    });
   });
 
   test('links only to headings on the page, or in the other guide, that '
@@ -338,6 +523,15 @@ String _section(String text, String heading) {
   final start = text.indexOf(heading);
   expect(start, isNonNegative, reason: heading);
   final end = text.indexOf(' ## ', start + heading.length);
+  return text.substring(start, end < 0 ? text.length : end);
+}
+
+/// The part of [text] (a guide with every run of white space as one space)
+/// from [heading], of level 3, up to the next heading of level 2 or 3.
+String _subsection(String text, String heading) {
+  final start = text.indexOf(heading);
+  expect(start, isNonNegative, reason: heading);
+  final end = text.indexOf(RegExp(' #{2,3} '), start + heading.length);
   return text.substring(start, end < 0 ? text.length : end);
 }
 
