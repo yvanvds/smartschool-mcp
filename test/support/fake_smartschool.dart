@@ -111,7 +111,8 @@ class FakeSmartschool implements HttpClientAdapter {
   final FakeSkore skore = FakeSkore(startPage: _homePage);
 
   /// The user's own gradebooks in Skore (`/SkoreGradebook`), served to
-  /// logged-in requests: empty until a test fills it
+  /// logged-in requests (its RPC POSTs, and the feedback GETs of Skore's
+  /// REST API): empty until a test fills it
   /// (`FakeSkoreGradebook.loadSchool`).
   final FakeSkoreGradebook skoreGradebook = FakeSkoreGradebook();
 
@@ -251,6 +252,7 @@ class FakeSmartschool implements HttpClientAdapter {
         intradesk.respond(options, cancelled: cancelled) ??
         planner.respond(options, cancelled: cancelled) ??
         skore.respond(options) ??
+        skoreGradebook.respond(options) ??
         _html(_homePage);
   }
 

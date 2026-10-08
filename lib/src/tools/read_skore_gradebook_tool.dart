@@ -64,16 +64,15 @@ Future<CallToolResult> _read(
   final gradebookId = requiredIntArgument(arguments, 'gradebook_id');
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
-  final (sheet, workyear) = await withSkoreGradebook(session, (
-    gradebooks,
-  ) async {
-    final found = await years.find(
+  final (:sheet, :workyear) = await withSkoreGradebook(
+    session,
+    (gradebooks) => readSkoreGradebook(
       gradebooks,
+      years,
       gradebookId,
       workyearId: workyearId,
-    );
-    return (await gradebooks.getGradebook(found.gradebook), found.workyear);
-  });
+    ),
+  );
   return CallToolResult(
     content: [TextContent(text: formatSkoreGradebookSheet(sheet, workyear))],
   );

@@ -212,6 +212,14 @@
       "description": "Leest een van je puntenboeken in Skore: de periodes (open of gesloten, tot wanneer), de leerlingen en of je het mag aanpassen."
     },
     {
+      "name": "list_skore_evaluations",
+      "description": "Toont de evaluaties van een periode in een van je puntenboeken in Skore, met of ze gepubliceerd zijn, de punten per leerling en de gemiddelden."
+    },
+    {
+      "name": "read_skore_feedback",
+      "description": "Leest de feedback van een leerling op een evaluatie in je puntenboek in Skore, van iedereen die feedback gaf."
+    },
+    {
       "name": "list_skore_classes",
       "description": "Alleen met Skore-beheer aan: toont de klassen in Skore, met hun groep en rapportmodel."
     },

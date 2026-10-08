@@ -28,6 +28,7 @@ import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
@@ -38,6 +39,7 @@ import 'package:smartschool_mcp/src/tools/read_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_weblink_tool.dart';
@@ -161,9 +163,11 @@ Future<void> _serve(ServerOptions options) async {
           planAssignmentTool(session),
           trashAssignmentTool(session),
           // The user's own gradebooks in Skore: no switch, as they need no
-          // extra rights (#140).
+          // extra rights (#140, #141).
           listSkoreGradebooksTool(session),
           readSkoreGradebookTool(session),
+          listSkoreEvaluationsTool(session),
+          readSkoreFeedbackTool(session),
           for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,

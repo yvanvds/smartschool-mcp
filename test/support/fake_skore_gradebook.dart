@@ -17,17 +17,32 @@ import 'package:dio/dio.dart';
 //     without a class number, a `gbc_hidden` span for an inactive pupil).
 //   - getGradebookContext(pathIds, courses, owners, userID, periodId, 0, wy):
 //     whether the user may change the gradebook.
+//   - getEvaluations(periodID, userID, courses, groupID, classID, pathIds)
+//     (#141, dartschool#149): the evaluations of a period (`head`) and a
+//     grade cell per pupil and evaluation (`details.stream`, HTML with the
+//     grade as `raw` and a `gbc_message` marker for feedback), with the
+//     class and group averages and the rows of another class of the group
+//     that Skore sends along, as in dartschool's
+//     `test/skore_gradebook_evaluations_test.dart`. A period without
+//     evaluations gets an empty `head` and the stream `1`, as live.
 // The school year goes as `wy` (a string) in the session object; without
 // it, Skore answers for its current school year. Class, group, model,
 // course, gradebook and period ids and names are those of the captures;
-// pupils and teachers are obvious fakes.
+// pupils, teachers, evaluations and feedback are obvious fakes.
+//
+// Next to the RPC service, it serves the feedback of a pupil on an
+// evaluation from Skore's REST API (#141), as the feedback panel reads it:
+// `GET /skore/api/v1/gradebook/feedback/{ss}_{evaluationId}/student/
+// {ss}_{pupilId}_0/class/{ss}_{classId}/teacher/{ss}_{userId}_0/context/
+// {modelId}_{groupId}_{classId}`, a list in the shape of dartschool's
+// captures (`test/skore_gradebook_feedback_test.dart`), `ss` being
+// [fakeSkoreGradebookPlatform].
 //
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
-// HTTP 501. The later gradebook tools add theirs (getEvaluations, the
-// feedback REST API, getPosComponents, getNewEvalDialogBox, saveEvaluation,
-// saveGrade): a method of the library's allowlist
-// (`SkoreGradebookService.rpcMethods`) and an answer in the shape of
-// dartschool's capture for it.
+// HTTP 501. The later gradebook tools add theirs (getPosComponents,
+// getNewEvalDialogBox, saveEvaluation, saveGrade, the feedback POST): a
+// method of the library's allowlist (`SkoreGradebookService.rpcMethods`)
+// and an answer in the shape of dartschool's capture for it.
 
 /// Skore's gradebook RPC service, behind `/SkoreGradebook`.
 const fakeSkoreGradebookRpcPath = '/modules/Skore/backend/gradebook/rpc.php';
@@ -37,11 +52,19 @@ const fakeSkoreGradebookRpcMethods = {
   'getNavigation',
   'init',
   'getGradebookContext',
+  'getEvaluations',
 };
+
+/// Skore's REST API of the feedback of a pupil on an evaluation.
+const fakeSkoreFeedbackPath = '/skore/api/v1/gradebook/feedback/';
 
 /// The Smartschool user id of the fake's account (`12_345_0` on the fake
 /// Smartschool's pages): the teacher of the gradebooks.
 const fakeSkoreGradebookUser = 345;
+
+/// The platform of the fake's account (`12` of `12_345_0`): Skore's `ss`
+/// in the ids of its REST API.
+const fakeSkoreGradebookPlatform = 12;
 
 /// A school year of Skore: `["24", "2026-2027"]`.
 class FakeSkoreWorkyear {
@@ -123,6 +146,107 @@ class FakeSkoreGradebookPupil {
   final bool active;
 }
 
+/// An evaluation (a column of grades) in a period of a gradebook, as
+/// `getEvaluations` gives it (#141): its `head` entry and the cells of the
+/// gradebook's pupils. Skore gives it the column letter of its place in the
+/// period (`A` for the first).
+class FakeSkoreEvaluation {
+  FakeSkoreEvaluation(
+    this.id,
+    this.title, {
+    required this.date,
+    this.short,
+    this.max = 20,
+    this.componentId = 2,
+    this.component = 'DW',
+    this.evaltype = 1,
+    this.planner = false,
+    this.public = '0',
+    this.publicDateTime = '',
+    Map<int, String>? grades,
+    Map<int, List<FakeSkoreFeedback>>? feedback,
+    Set<int>? withoutCell,
+  }) : grades = grades ?? {},
+       feedback = feedback ?? {},
+       withoutCell = withoutCell ?? {};
+
+  /// Skore's `refID` and `evaluationID`.
+  final int id;
+  final String title;
+
+  /// The short name, `null` for none (as Skore gives it).
+  final String? short;
+
+  /// The day, as Skore writes it (`2026-09-30`).
+  final String date;
+
+  /// The highest grade (`max`): a number, or null for none.
+  final Object? max;
+
+  /// The component: `componentID` 2 and `component` `DW` as captured, `0`
+  /// and `''` for none.
+  final int componentId;
+  final String component;
+
+  /// `evaltype`: 1 points, 2 a scale.
+  final int evaltype;
+
+  /// Whether it comes from the planner (`isPlannerEval` 1).
+  final bool planner;
+
+  /// Skore's `public` (`"1"` or `"0"`) and `publicdatetime` (a time in
+  /// Belgium without an offset, `2026-10-09T08:00:00`, or `""`).
+  String public;
+  String publicDateTime;
+
+  /// The grade of each pupil as Skore stores it (`79`, `15.5`), by pupil
+  /// id; a pupil without one has an empty cell.
+  final Map<int, String> grades;
+
+  /// The feedback on it per pupil id, in the order written: the REST API's
+  /// answer, and the cell's `gbc_message` marker when there is some.
+  final Map<int, List<FakeSkoreFeedback>> feedback;
+
+  /// The pupils of the gradebook whose cell Skore leaves out (not seen
+  /// live).
+  final Set<int> withoutCell;
+}
+
+/// A feedback text on an evaluation for a pupil, as Skore's REST API gives
+/// it (#141).
+class FakeSkoreFeedback {
+  const FakeSkoreFeedback(
+    this.id,
+    this.text, {
+    this.teacherId = fakeSkoreGradebookUser,
+    this.teacherName = 'Jan Peeters',
+    this.createdAt = '2026-10-08T09:49:36+02:00',
+    this.changedAt,
+    this.attachments = const [],
+    this.canEdit = true,
+  });
+
+  /// A UUID.
+  final String id;
+  final String text;
+
+  /// The Smartschool user id of the one who wrote it, and the name first
+  /// name first.
+  final int teacherId;
+  final String teacherName;
+
+  /// When it was written and last changed, with the offset
+  /// (`2026-10-08T09:49:36+02:00`); [changedAt] is [createdAt] when null.
+  final String createdAt;
+  final String? changedAt;
+
+  /// The file names of its attachments.
+  final List<String> attachments;
+
+  /// Skore's `capabilities.can_edit`.
+  final bool canEdit;
+}
+
 /// One of the user's gradebooks: a course of a class in a school year.
 class FakeSkoreOwnGradebook {
   FakeSkoreOwnGradebook({
@@ -143,8 +267,10 @@ class FakeSkoreOwnGradebook {
     List<FakeSkoreGradebookPupil>? pupils,
     this.writable = true,
     this.coordinator = false,
+    Map<int, List<FakeSkoreEvaluation>>? evaluations,
   }) : periods = periods ?? [],
-       pupils = pupils ?? [];
+       pupils = pupils ?? [],
+       evaluations = evaluations ?? {};
 
   final FakeSkoreWorkyear workyear;
 
@@ -176,18 +302,46 @@ class FakeSkoreOwnGradebook {
 
   final List<FakeSkoreGradebookPupil> pupils;
 
+  /// Pupils with a cell in `getEvaluations` but no row in `init` (not seen
+  /// live).
+  final List<FakeSkoreGradebookPupil> cellsOnly = [];
+
   /// Whether `getGradebookContext` answers `writable` 1.
   bool writable;
 
   /// Whether `getGradebookContext` answers `coordinator` 1.
   bool coordinator;
 
+  /// The evaluations of each period, by period id, in Skore's order (column
+  /// `A` first); a period without any has none here.
+  final Map<int, List<FakeSkoreEvaluation>> evaluations;
+
+  /// The evaluation with [id] in any period, or null.
+  FakeSkoreEvaluation? evaluationWithId(int id) => [
+    for (final list in evaluations.values) ...list,
+  ].where((e) => e.id == id).firstOrNull;
+
   /// The course as the left panel names it, with the grade.
   String get courseName => grade.isEmpty ? course : '$course ($grade)';
 }
 
+/// When the scheduled evaluation of [fakeSkoreGradebook6EWI] is published:
+/// a time in Belgium (CET) that stays to come, so that the library, which
+/// compares it with the clock, finds it scheduled.
+const fakeSkoreScheduledAt = '2099-01-11T08:00:00';
+
+/// A colleague's Smartschool user id, who wrote feedback in
+/// [fakeSkoreGradebook6EWI].
+const fakeSkoreColleague = 346;
+
 /// 6EWI's gradebook of 2026-2027 as captured: one open period, three
-/// pupils with a class number, writable.
+/// pupils with a class number, writable. Its period DW1 has three
+/// evaluations, in the shape of dartschool's captures of #149: `Toets 1`
+/// (column A, not published, no grades, feedback without a grade for Bart),
+/// `Python scripts schrijven` (B, scheduled for [fakeSkoreScheduledAt],
+/// grades 79, 15.5 and none; feedback for An, and for Bart from the user and
+/// from a colleague with an attachment) and `Lussen` (C, without a
+/// component, published since 2026-10-01 08:00, three grades).
 FakeSkoreOwnGradebook fakeSkoreGradebook6EWI() => FakeSkoreOwnGradebook(
   workyear: FakeSkoreWorkyear.y2026,
   id: 32508,
@@ -222,10 +376,74 @@ FakeSkoreOwnGradebook fakeSkoreGradebook6EWI() => FakeSkoreOwnGradebook(
       number: 3,
     ),
   ],
+  evaluations: {
+    1704: [
+      FakeSkoreEvaluation(
+        500003,
+        'Toets 1',
+        date: '2026-10-08',
+        feedback: {
+          1202: [
+            const FakeSkoreFeedback(
+              '00000000-0000-4000-8000-000000000003',
+              'Feedback zonder cijfer.',
+              createdAt: '2026-10-08T11:20:00+02:00',
+            ),
+          ],
+        },
+      ),
+      FakeSkoreEvaluation(
+        500001,
+        'Python scripts schrijven',
+        short: 'toets-python',
+        date: '2026-09-30',
+        max: 100,
+        public: '1',
+        publicDateTime: fakeSkoreScheduledAt,
+        grades: {1201: '79', 1202: '15.5'},
+        feedback: {
+          1201: [
+            const FakeSkoreFeedback(
+              '00000000-0000-4000-8000-000000000004',
+              'Goed gewerkt, ga zo door.',
+            ),
+          ],
+          1202: [
+            const FakeSkoreFeedback(
+              '00000000-0000-4000-8000-000000000001',
+              'Eerste opmerking.\nLet op de foutafhandeling.',
+            ),
+            const FakeSkoreFeedback(
+              '00000000-0000-4000-8000-000000000002',
+              'Tweede opmerking.',
+              teacherId: fakeSkoreColleague,
+              teacherName: 'Céline Dupré',
+              createdAt: '2026-10-08T10:02:11+02:00',
+              changedAt: '2026-10-08T10:15:00+02:00',
+              attachments: ['verbetering.pdf'],
+              canEdit: false,
+            ),
+          ],
+        },
+      ),
+      FakeSkoreEvaluation(
+        500002,
+        'Lussen',
+        date: '2026-09-23',
+        componentId: 0,
+        component: '',
+        public: '1',
+        publicDateTime: '2026-10-01T08:00:00',
+        grades: {1201: '14', 1202: '17', 1203: '12'},
+      ),
+    ],
+  },
 );
 
 /// 5BW's gradebook of 2025-2026 as captured: three closed periods, the last
 /// the active one, and two pupils without a class number, one inactive.
+/// DW1 has a published evaluation, DW4 none (as live), DW5 a published one
+/// from the planner.
 FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
   workyear: FakeSkoreWorkyear.y2025,
   id: 28998,
@@ -273,16 +491,53 @@ FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
       active: false,
     ),
   ],
+  evaluations: {
+    1446: [
+      FakeSkoreEvaluation(
+        400101,
+        'Databanken',
+        date: '2025-10-15',
+        public: '1',
+        publicDateTime: '2025-10-16T08:00:00',
+        grades: {1301: '14'},
+        feedback: {
+          1301: [
+            const FakeSkoreFeedback(
+              '00000000-0000-4000-8000-000000000101',
+              'Sterk verbeterd.',
+              createdAt: '2025-10-16T07:30:00+02:00',
+            ),
+          ],
+        },
+      ),
+    ],
+    1610: [
+      FakeSkoreEvaluation(
+        400201,
+        'Eindproject',
+        date: '2026-06-10',
+        max: 50,
+        planner: true,
+        public: '1',
+        publicDateTime: '2026-06-11T08:00:00',
+        grades: {1301: '41', 1302: '30'},
+      ),
+    ],
+  },
 );
 
 /// A fake of Skore's gradebook RPC service, served by `FakeSmartschool` to
 /// logged-in requests: the user's gradebooks per school year ([gradebooks],
 /// in the order of the left panel) and the school years Skore offers
-/// ([workyears], [currentWorkyear]).
+/// ([workyears], [currentWorkyear]); and of the feedback of Skore's REST API
+/// (`GET` [fakeSkoreFeedbackPath]...), from the evaluations of the
+/// gradebooks.
 ///
-/// Every request is recorded in [requests]. A method in [answers] gets that
-/// answer instead, for an answer the library cannot use; with [unusable],
-/// every call gets Smartschool's error page (with HTTP 200).
+/// Every RPC request is recorded in [requests], every feedback read in
+/// [feedbackReads]. A method in [answers] gets that answer instead, and a
+/// feedback read [feedbackAnswer], for an answer the library cannot use;
+/// with [unusable], every call gets Smartschool's error page (with HTTP
+/// 200).
 class FakeSkoreGradebook {
   /// The school years Skore offers, in its order (newest first).
   final List<FakeSkoreWorkyear> workyears = [];
@@ -298,6 +553,10 @@ class FakeSkoreGradebook {
   /// the body.
   final Map<String, ({int status, String body})> answers = {};
 
+  /// The answer that replaces the fake's own to every feedback read: the
+  /// HTTP status and the body.
+  ({int status, String body})? feedbackAnswer;
+
   /// When true, every call is answered with Smartschool's error page (with
   /// HTTP 200) instead of data.
   bool unusable = false;
@@ -306,6 +565,12 @@ class FakeSkoreGradebook {
   /// parameters and the session object.
   final List<({String rpc, List<Object?> params, Map<String, Object?> session})>
   requests = [];
+
+  /// The feedback reads of the REST API that reached the fake, in order:
+  /// the evaluation and the pupil (from the path, null when it is not in the
+  /// form the library sends), and the path.
+  final List<({int? evaluationId, int? pupilId, String path})> feedbackReads =
+      [];
 
   /// The calls, as `method` or, with a school year, `method wy=22`.
   List<String> get calls => [
@@ -412,8 +677,11 @@ class FakeSkoreGradebook {
           .firstOrNull;
 
   ResponseBody? respond(RequestOptions options) {
-    if (options.method != 'POST' ||
-        options.uri.path != fakeSkoreGradebookRpcPath) {
+    final path = options.uri.path;
+    if (options.method == 'GET' && path.startsWith(fakeSkoreFeedbackPath)) {
+      return _feedback(path);
+    }
+    if (options.method != 'POST' || path != fakeSkoreGradebookRpcPath) {
       return null;
     }
     final data = options.data;
@@ -442,9 +710,352 @@ class FakeSkoreGradebook {
     return switch (method) {
       'getNavigation' => _rpc(method, _navigation(workyear)),
       'init' => _init(method, params, workyear),
+      'getEvaluations' => _evaluations(method, params, workyear),
       _ => _context(method, params, workyear),
     };
   }
+
+  /// `getEvaluations(periodID, userID, courses, groupID, classID, pathIds)`
+  /// for the period of the gradebook of [workyear] with that course and
+  /// class: the evaluations of the period and the cells of its pupils, in
+  /// the shape of dartschool's capture. A period of another gradebook is
+  /// answered with HTTP 400, which no test expects: the tools send only a
+  /// period of the gradebook's own.
+  ResponseBody _evaluations(
+    String method,
+    List<Object?> params,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final periodId = params.isEmpty ? null : int.tryParse('${params[0]}');
+    final courses = params.length > 2 ? params[2] : null;
+    final courseId = courses is List && courses.length == 1
+        ? int.tryParse('${courses.single}')
+        : null;
+    final classId = params.length > 4 ? int.tryParse('${params[4]}') : null;
+    final book = gradebooks
+        .where(
+          (g) =>
+              g.workyear.id == workyear.id &&
+              g.courseId == courseId &&
+              g.classId == classId &&
+              g.periods.any((p) => p.id == periodId),
+        )
+        .firstOrNull;
+    if (book == null) {
+      return _json('{"error":"the fake cannot answer $params"}', status: 400);
+    }
+    final evaluations = book.evaluations[periodId] ?? const [];
+    const table = {'orientation': 'byColumn'};
+    if (evaluations.isEmpty) {
+      // A period without evaluations, as live: an empty head, the stream 1.
+      return _rpc(method, {
+        'head': <Object?>[],
+        'max': {
+          ...table,
+          'rowHeader': {
+            'sort': [0],
+          },
+          'colHeader': {'sort': <Object?>[]},
+          'stream': 1,
+        },
+        'details': {
+          ...table,
+          'rowHeader': {'sort': <Object?>[]},
+          'colHeader': {'sort': <Object?>[]},
+          'stream': 1,
+        },
+        'periodStatus': 1,
+        'evalType': 1,
+        'archive': <Object?>[],
+      });
+    }
+    final columns = {
+      for (final (index, evaluation) in evaluations.indexed)
+        evaluation.id: String.fromCharCode('A'.codeUnitAt(0) + index),
+    };
+    // A pupil of another class of the group, whose row Skore sends along
+    // with another gradebook, `p` [1, 0, 0, owner, -1] and no `raw`.
+    final otherRow = 'pupil_1999_${book.classId + 2}';
+    return _rpc(method, {
+      'head': [
+        for (final evaluation in evaluations)
+          _head(evaluation, book, periodId!, columns[evaluation.id]!),
+      ],
+      'max': {
+        ...table,
+        'rowHeader': {
+          'sort': [0],
+        },
+        'colHeader': {
+          'sort': [for (final evaluation in evaluations) '${evaluation.id}'],
+        },
+        'stream': [
+          for (final evaluation in evaluations)
+            {
+              'c': '${evaluation.id}',
+              'r': 0,
+              'v': [
+                evaluation.max,
+                '${evaluation.id}',
+                columns[evaluation.id],
+                evaluation.evaltype,
+                '',
+                '',
+                '',
+                evaluation.public,
+              ],
+              'w': 'maxcell',
+            },
+        ],
+      },
+      'details': {
+        ...table,
+        'rowHeader': {'sort': <Object?>[]},
+        'colHeader': {'sort': <Object?>[]},
+        'stream': [
+          for (final evaluation in evaluations) ...[
+            for (final pupil in [...book.pupils, ...book.cellsOnly])
+              if (!evaluation.withoutCell.contains(pupil.id))
+                {
+                  'c': '${evaluation.id}',
+                  'r': 'pupil_${pupil.id}_${book.classId}',
+                  'v': _gradeCell(
+                    evaluation.grades[pupil.id],
+                    evaluation.feedback[pupil.id] ?? const [],
+                  ),
+                  'p': [1, 0, '${evaluation.id}', '${book.id}', evaluation.id],
+                },
+            {
+              'c': '${evaluation.id}',
+              'r': 'clavg_${book.classId}',
+              'v': _gradeCell(_average(evaluation), const []),
+              'p': [0],
+            },
+            {
+              'c': '${evaluation.id}',
+              'r': 'gravg_${book.groupId}',
+              'v': _gradeCell(_average(evaluation), const []),
+              'p': [0],
+            },
+          ],
+          for (final evaluation in evaluations)
+            {
+              'c': '${evaluation.id}',
+              'r': otherRow,
+              'v':
+                  '<div class="gbc" ></div><div class="gbc_cell_header">'
+                  '$_noMessage</div>$_presence',
+              'p': [1, 0, 0, '${book.id - 4}', -1],
+            },
+        ],
+      },
+      'periodStatus': 1,
+      'evalType': 1,
+      'archive': <Object?>[],
+    });
+  }
+
+  /// The `head` entry of [evaluation] in period [periodId] of [book], in
+  /// column [column].
+  static Map<String, Object?> _head(
+    FakeSkoreEvaluation evaluation,
+    FakeSkoreOwnGradebook book,
+    int periodId,
+    String column,
+  ) => {
+    'formula': '',
+    'title': evaluation.title,
+    'short': evaluation.short,
+    'date': evaluation.date,
+    'componentID': evaluation.componentId,
+    'component': evaluation.component,
+    'periodID': periodId,
+    'courseID': '${book.courseId}',
+    'coursename': book.course,
+    'public': evaluation.public,
+    'publicdatetime': evaluation.publicDateTime,
+    'max': evaluation.max,
+    'catID': null,
+    'catDescr': null,
+    'etodID': '',
+    'refID': '${evaluation.id}',
+    'colID': column,
+    'evaltype': evaluation.evaltype,
+    'evaluationID': '${evaluation.id}',
+    'cumulate': '',
+    'cumulateGlobal': '',
+    'projectID': '',
+    'color': '#ffffff',
+    'virtual': '0',
+    'contentType': '',
+    'contentTypeName': '',
+    'ownerID': '${book.id}',
+    'externeUuid': '',
+    'isPlannerEval': evaluation.planner ? 1 : 0,
+    'plaId': '',
+    'pleType': '',
+    'realCourseID': book.courseId,
+    'posComps': [
+      [0, 'geen'],
+      ['2', 'DW'],
+    ],
+    'groupID': book.groupId,
+  };
+
+  /// The average of the numeric grades of [evaluation] with one decimal
+  /// (`47.3`), or null without any.
+  static String? _average(FakeSkoreEvaluation evaluation) {
+    final values = [
+      for (final grade in evaluation.grades.values) ?double.tryParse(grade),
+    ];
+    if (values.isEmpty) return null;
+    final sum = values.reduce((a, b) => a + b);
+    return (sum / values.length).toStringAsFixed(1);
+  }
+
+  /// A grade cell as Skore gives it: the grade as `raw` (with a decimal
+  /// point) and as text (with a decimal comma), and, when the pupil has
+  /// [feedback], the `gbc_message` marker whose tooltip joins the texts.
+  static String _gradeCell(String? grade, List<FakeSkoreFeedback> feedback) {
+    final raw = grade ?? '';
+    final tooltip = base64.encode(
+      utf8.encode(
+        '<ul style="text-align:left;margin:0px;padding:12px;"><li>'
+        '${_text.convert(feedback.map((f) => f.text).join(', '))}</li></ul>',
+      ),
+    );
+    final marker = feedback.isEmpty
+        ? _noMessage
+        : '<span onmousedown="skore.gbc.onCellMessage();" '
+              'class="gbc_message_place gbc_message" skoretooltip="true" '
+              'tooltip="$tooltip" encoding="base64">&nbsp;&nbsp;</span>';
+    return '<div class="gbc" raw="${_attribute.convert(raw)}">'
+        '${_text.convert(raw.replaceAll('.', ','))}</div>'
+        '<div class="gbc_cell_header">$marker</div>$_presence';
+  }
+
+  static const _noMessage =
+      '<span onmousedown="skore.gbc.onCellMessage();" '
+      'class="gbc_message_place" >&nbsp;&nbsp;</span>';
+
+  static const _presence =
+      '<div class="gbc_presence "><div></div><div></div></div>';
+
+  static final _feedbackRead = RegExp(
+    r'^/skore/api/v1/gradebook/feedback/(\d+)_(\d+)/student/(\d+)_(\d+)_0/'
+    r'class/(\d+)_(\d+)/teacher/(\d+)_(\d+)_0/context/(\d+)_(\d+)_(\d+)$',
+  );
+
+  /// The answer to a feedback read at [path]: the feedback of the pupil on
+  /// the evaluation, in the order written, as Skore's REST API lists it
+  /// (`[]` for none). A path of another platform, user, class or context
+  /// than the evaluation's is answered with HTTP 400, which no test
+  /// expects.
+  ResponseBody _feedback(String path) {
+    final match = _feedbackRead.firstMatch(path);
+    final ids = [
+      for (var i = 1; i <= (match?.groupCount ?? 0); i++)
+        int.parse(match!.group(i)!),
+    ];
+    feedbackReads.add((
+      evaluationId: ids.isEmpty ? null : ids[1],
+      pupilId: ids.isEmpty ? null : ids[3],
+      path: path,
+    ));
+    if (feedbackAnswer case (:final status, :final body)) {
+      return _json(body, status: status);
+    }
+    if (unusable) return _html(_errorPage);
+    if (ids.isEmpty) return _problem(400, 'the fake cannot read $path');
+    final [
+      ss1,
+      evaluationId,
+      ss2,
+      pupilId,
+      ss3,
+      classId,
+      ss4,
+      userId,
+      modelId,
+      groupId,
+      contextClassId,
+    ] = ids;
+    final book = gradebooks
+        .where(
+          (g) =>
+              g.classId == classId &&
+              g.modelId == modelId &&
+              g.groupId == groupId &&
+              g.classId == contextClassId &&
+              g.evaluationWithId(evaluationId) != null,
+        )
+        .firstOrNull;
+    if ({ss1, ss2, ss3, ss4}.single != fakeSkoreGradebookPlatform ||
+        userId != fakeSkoreGradebookUser ||
+        book == null) {
+      return _problem(400, 'the fake cannot read $path');
+    }
+    final evaluation = book.evaluationWithId(evaluationId)!;
+    final pupil = book.pupils.where((p) => p.id == pupilId).firstOrNull;
+    return _json(
+      jsonEncode([
+        for (final feedback in evaluation.feedback[pupilId] ?? const [])
+          _feedbackJson(feedback, evaluationId, pupilId, pupil),
+      ]),
+    );
+  }
+
+  /// [feedback] as Skore's REST API gives it.
+  static Map<String, Object?> _feedbackJson(
+    FakeSkoreFeedback feedback,
+    int evaluationId,
+    int pupilId,
+    FakeSkoreGradebookPupil? pupil,
+  ) {
+    const ss = fakeSkoreGradebookPlatform;
+    Map<String, Object?> person(int id, String firstNameFirst) {
+      final words = firstNameFirst.split(' ');
+      final lastNameFirst = [...words.skip(1), words.first].join(' ');
+      return {
+        'id': '${ss}_${id}_0',
+        'name': {
+          'startingWithFirstName': firstNameFirst,
+          'startingWithLastName': lastNameFirst,
+        },
+        'pictureHash': 'fake',
+        'pictureUrl': '/smsc/img/fake/initials.png',
+        'sort': lastNameFirst.toLowerCase(),
+        'deleted': false,
+      };
+    }
+
+    return {
+      'id': feedback.id,
+      'evaluationId': '${ss}_$evaluationId',
+      'student': person(pupilId, pupil?.displayName ?? 'Onbekende Leerling'),
+      'teacher': person(feedback.teacherId, feedback.teacherName),
+      'text': feedback.text,
+      'createdAt': feedback.createdAt,
+      'changedAt': feedback.changedAt ?? feedback.createdAt,
+      'attachments': [
+        for (final (index, name) in feedback.attachments.indexed)
+          {
+            'id': 'att-${index + 1}',
+            'name': name,
+            'type': 'OTHER',
+            'size': 1234,
+            'downloadUrl': '/fake/download',
+          },
+      ],
+      'capabilities': {'can_read': true, 'can_edit': feedback.canEdit},
+    };
+  }
+
+  /// An error answer of Skore's REST API.
+  static ResponseBody _problem(int status, String detail) => _json(
+    jsonEncode({'title': 'Bad Request', 'detail': detail}),
+    status: status,
+  );
 
   /// `getNavigation`'s result for [workyear]: the tree of its gradebooks, or
   /// an empty one for a school year Skore does not offer (as live for `wy`
@@ -744,6 +1355,7 @@ class FakeSkoreGradebook {
       'width="16" align="absmidle"/>&nbsp;${_text.convert(name)}';
 
   static const _text = HtmlEscape(HtmlEscapeMode.element);
+  static const _attribute = HtmlEscape(HtmlEscapeMode.attribute);
 
   /// An RPC answer of Skore to [method] with [result], as in the captures.
   static ResponseBody _rpc(String method, Object? result) => _json(

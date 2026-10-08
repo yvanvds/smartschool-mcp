@@ -120,6 +120,8 @@ void main() {
       'trash_assignment',
       'list_skore_gradebooks',
       'read_skore_gradebook',
+      'list_skore_evaluations',
+      'read_skore_feedback',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -149,9 +151,11 @@ void main() {
       'list_lesfiches',
       'read_lesfiche',
       'read_lesfiche_attachment',
-      // The user's own gradebooks in Skore, without a switch (#140).
+      // The user's own gradebooks in Skore, without a switch (#140, #141).
       'list_skore_gradebooks',
       'read_skore_gradebook',
+      'list_skore_evaluations',
+      'read_skore_feedback',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -621,7 +625,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(56));
+    expect(tools, hasLength(58));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -686,7 +690,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(44));
+        expect(tools, hasLength(46));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -725,8 +729,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(52));
-      expect([for (final tool in tools.skip(44)) tool['name']], skoreTools);
+      expect(tools, hasLength(54));
+      expect([for (final tool in tools.skip(46)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -919,7 +923,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(44));
+        expect(tools, hasLength(46));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -959,8 +963,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(48));
-      expect([for (final tool in tools.skip(44)) tool['name']], presenceTools);
+      expect(tools, hasLength(50));
+      expect([for (final tool in tools.skip(46)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1156,10 +1160,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(56));
-      expect([for (final tool in tools.skip(52)) tool['name']], presenceTools);
+      expect(tools, hasLength(58));
+      expect([for (final tool in tools.skip(54)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(44).take(8)) tool['name'],
+        for (final tool in tools.skip(46).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2601,9 +2605,28 @@ void main() {
         'save_lesfiche_attachment',
         {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 2.0},
       ),
-      // The gradebook tools (#140), offered without a switch.
+      // The gradebook tools (#140, #141), offered without a switch.
       ('list_skore_gradebooks', {'workyear_id': 22.0}),
       ('read_skore_gradebook', {'gradebook_id': 32508.0, 'workyear_id': 22.0}),
+      (
+        'list_skore_evaluations',
+        {
+          'gradebook_id': 32508.0,
+          'period_id': 1704.0,
+          'evaluation_id': 500001.0,
+          'workyear_id': 24.0,
+        },
+      ),
+      (
+        'read_skore_feedback',
+        {
+          'gradebook_id': 32508.0,
+          'evaluation_id': 500001.0,
+          'pupil_id': 1202.0,
+          'period_id': 1704.0,
+          'workyear_id': 24.0,
+        },
+      ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
 
