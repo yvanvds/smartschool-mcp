@@ -22,6 +22,13 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de
+  evaluaties met de punten van je leerlingen en of ze gepubliceerd zijn, en
+  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
+  invullen en een leerling feedback geven. Telkens pas nadat jij het
+  goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd: je
+  publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft
+  er niets voor aan te zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 
@@ -172,7 +179,7 @@ installatie. -->
    | `SMARTSCHOOL_PASSWORD` | Je wachtwoord voor Smartschool. |
    | `SMARTSCHOOL_MFA` | Alleen met tweestapsverificatie: je 2FA-sleutel uit [stap 2](#2-je-2fa-sleutel-opzoeken). Niet de code van zes cijfers. Spaties in de sleutel zijn geen probleem. Log je in met alleen je wachtwoord, laat deze regel dan weg. |
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
-   | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen laten deze regel weg. |
+   | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen laten deze regel weg. Voor je eigen puntenboek heb je deze regel niet nodig (zie [Puntenboek](installatie.md#puntenboek) in de gids voor Claude Desktop). |
    | `SMARTSCHOOL_PRESENCE` | Niet verplicht. Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: `true`. Dan kan ChatGPT per klas en dag zien wat er voor elke leerling 's morgens en 's middags geregistreerd is, en na jouw akkoord leerlingen als te laat of weer als aanwezig markeren. Een andere registratie, zoals een afwezigheid, overschrijft het nooit. De meeste leerkrachten en alle leerlingen laten deze regel weg. Meer uitleg staat bij [Aanwezigheden](installatie.md#aanwezigheden) in de gids voor Claude Desktop. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.
@@ -229,11 +236,12 @@ Claude Desktop. Wat daar over Claude staat, geldt hier voor ChatGPT. Een paar
 verschillen:
 
 - **Berichten versturen en weggooien, de planner invullen, iets op
-  Intradesk zetten of weggooien.** ChatGPT toont eerst de tekst en de
-  ontvangers, de berichten die naar de prullenbak gaan, de lessen die in je
-  planner komen of verdwijnen, of wat er in welke map op Intradesk komt of
-  naar de prullenbak gaat, en wacht op jouw akkoord. Daarna vraagt de app
-  nog eens toestemming. Kies daar niet om het
+  Intradesk zetten of weggooien, je puntenboek invullen.** ChatGPT toont
+  eerst de tekst en de ontvangers, de berichten die naar de prullenbak gaan,
+  de lessen die in je planner komen of verdwijnen, wat er in welke map op
+  Intradesk komt of naar de prullenbak gaat, of de evaluatie, de punten of
+  de feedback die in je puntenboek komen, en wacht op jouw akkoord. Daarna
+  vraagt de app nog eens toestemming. Kies daar niet om het
   altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
   (*Full access*): dan vraagt de app nergens meer toestemming voor.
 - **Afbeeldingen.** Een afbeelding van Intradesk (`.png`, `.jpg`) kan ChatGPT
@@ -350,6 +358,10 @@ Het programma zelf staat in
   Die gaat dan naar de servers van OpenAI, het bedrijf achter ChatGPT, net
   zoals alles wat je zelf in het gesprek typt. Daar horen ook namen en
   gegevens van collega's, leerlingen en ouders bij.
+- Vraag je ChatGPT iets over je puntenboek, dan gaan ook de punten van je
+  leerlingen naar ChatGPT, en de feedback die jij of collega's hun gaven. Ook
+  dat zijn gegevens over leerlingen, en feedback kan iets zeggen over hun
+  zorg of thuissituatie.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals
