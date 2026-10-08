@@ -8,6 +8,19 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.4.0
+
+- Lesfiches: een lesfiche volledig lezen, met zijn bijlagen. Nieuwe
+  lesfiches maken, ze aanpassen (ook hun weblinks en bijlagen) en naar de
+  prullenbak verplaatsen (telkens pas na jouw bevestiging).
+- Intradesk: mappen, weblinks en bestanden toevoegen aan een map, en ze naar
+  de prullenbak verplaatsen (pas na jouw bevestiging).
+- Berichten: bijlagen meesturen met een nieuw bericht of een antwoord.
+  Berichten in mappen die je zelf maakte, worden nu ook gevonden, en je kunt
+  ze markeren, een vlag geven en naar de prullenbak verplaatsen.
+- Aanwezigheden: bij een klasgroep zie je welke klassen erin zitten, en van
+  elke leerling de officiële klas.
+
 ## 0.3.0
 
 - Berichten: nu ook als gelezen of ongelezen markeren, een vlag geven, naar
