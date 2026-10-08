@@ -171,7 +171,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(54));
+    expect(readmeTools, hasLength(56));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

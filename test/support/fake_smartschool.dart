@@ -13,6 +13,7 @@ import 'fake_messages.dart';
 import 'fake_planner.dart';
 import 'fake_presence.dart';
 import 'fake_skore.dart';
+import 'fake_skore_gradebook.dart';
 import 'fake_uploads.dart';
 
 export 'fake_intradesk.dart';
@@ -20,6 +21,7 @@ export 'fake_messages.dart';
 export 'fake_planner.dart';
 export 'fake_presence.dart';
 export 'fake_skore.dart';
+export 'fake_skore_gradebook.dart';
 export 'fake_uploads.dart';
 
 const fakeHost = 'school.smartschool.be';
@@ -107,6 +109,11 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
   final FakeSkore skore = FakeSkore(startPage: _homePage);
+
+  /// The user's own gradebooks in Skore (`/SkoreGradebook`), served to
+  /// logged-in requests: empty until a test fills it
+  /// (`FakeSkoreGradebook.loadSchool`).
+  final FakeSkoreGradebook skoreGradebook = FakeSkoreGradebook();
 
   /// The Presence module, served to logged-in requests: empty until a test
   /// fills it (`FakePresence.loadSchool`).
@@ -220,6 +227,7 @@ class FakeSmartschool implements HttpClientAdapter {
           intradesk.respond(options) ??
           planner.respond(options) ??
           skore.respond(options) ??
+          skoreGradebook.respond(options) ??
           presence.respond(options) ??
           _html('<ok/>');
     }

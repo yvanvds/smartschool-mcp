@@ -863,6 +863,53 @@ clear, a create or a trash means the write was not carried out: the session
 repeats the call, which reads the element again (a lesson hour filled
 meanwhile is gone, so nothing is sent).
 
+The gradebook tools read the user's own gradebooks in Skore ("Puntenboek",
+`/SkoreGradebook`), as every teacher has them, with the library's
+`SkoreGradebookService` (dartschool#148). They need none of the rights of
+the Skore tools below, so they are offered to every account, without a
+switch, and no message of theirs speaks of "Skore-beheer" or of rights.
+They change nothing:
+
+- `list_skore_gradebooks`: the user's own gradebooks of one school year
+  (`getGradebookYear`), one line each in Skore's order: the class, the
+  course as Skore's left panel names it (with the grade, such as
+  `(6e j DO)`) and the gradebook id; then the school years Skore offers,
+  each with its workyear id. `workyear_id` asks for an earlier school year
+  (Skore's current one without it); `query` keeps the gradebooks whose class
+  or course holds every word, as for `list_skore_classes`. A school year
+  without gradebooks (also an account without any, such as a pupil's, if
+  Skore answers it with an empty list) gets a sentence that names the year,
+  not an error.
+- `read_skore_gradebook`: one gradebook (`gradebook_id`, optional
+  `workyear_id`; `getGradebook`): whether Skore lets the user change it
+  (`writable`; read-only in coordinator mode; not asked for a gradebook
+  without periods), and when it does but no period is open, that it takes
+  no grades now; its periods in Skore's order, each with its period id,
+  whether it is open, its closing time (in the time of this PC, Belgium),
+  whether Skore opens the gradebook on it (`activePeriod`) and Skore's note
+  on it (the period's `info` as one line, without the paragraphs that only
+  repeat its name or say `Gesloten!`: what is left is when it opened and the
+  school's note, such as which weeks it covers); and its pupils, each with
+  the class number (when Skore shows one), the name last name first, the
+  pupil id, and whether Skore greys the pupil out as inactive.
+
+The library's methods take a gradebook as `getGradebookYear` reads it, and
+that answer is big (some 270 KB for 22 gradebooks, 1.7 MB for 50). So the
+gradebooks of a school year are read once per session and kept in memory
+(`SkoreGradebookYears`), for both tools; a gradebook id that is not in
+memory reads its school year again (without `workyear_id`: Skore's current
+one, after looking in every school year read so far), and an id that is not
+there either is an error that says to take it from `list_skore_gradebooks`,
+with `workyear_id` for an earlier school year. A read that failed is tried
+again on the next call. A `workyear_id` Skore does not offer (Skore answers
+it with no gradebooks; the library refuses it with an `ArgumentError`) is
+an error that passes on the school years Skore offers. Any
+`SmartschoolSkoreError` is an answer the server could not use, reported
+with "try again in a moment" and the remark that an account without
+gradebooks of its own, such as a pupil's, may get it too: what Skore
+answers a pupil was not captured. The library's message goes to the log
+only, as it can quote Skore's answer.
+
 The Skore tools are offered only when the switch "Skore-beheer" is on (see
 *Opt-in tools* below): they need the rights for score management in Skore
 (Rapporten > Modellen and Puntenboeken), as a Skore administrator has, and
@@ -1329,6 +1376,36 @@ of the gradebooks service), and carries out the save of their shares
 answer to a save, answer it with an error page, or (`saveShared`) answer it
 as done without carrying it out, also for one save of several
 (`nextSaves`); it answers any other RPC method with HTTP 501.
+
+The gradebook helpers, for the user's own gradebooks
+(`SkoreGradebookService`, no switch), live next to them, apart from the
+helpers of the admin side. In `skore_gradebook_access.dart`:
+`withSkoreGradebook`, which runs an action with a `SkoreGradebookService`
+on the session and turns the library's errors into `ToolError`s
+(`skoreGradebookToolError`, a sibling of `skoreToolError` whose texts never
+speak of rights or "Skore-beheer": an `ArgumentError` for an argument it
+knows, passed on with the tool's name of the argument and what to correct;
+a user id the calls cannot be built from; an answer the server cannot use,
+whose details go to the log only. The writes add their own cases there:
+the change a check refused comes before the last one, and the saves Skore
+did not confirm and a new evaluation that came back public, which are not
+`SmartschoolSkoreError`s, come out for the write tools to report); and
+`SkoreGradebookYears`, the gradebooks per school year kept in memory per
+session (`read`), which finds a gradebook by its id (`find`, with its
+school year) and reads the school year again for an id that is not in
+memory. In `skore_gradebook_format.dart`: one line per gradebook, period
+and pupil, a gradebook in a sentence (`formatSkoreGradebookTitle`), the
+school years, Skore's note on a period (`skorePeriodNote`) and times in the
+time of this PC. The tests run against a fake gradebook
+(`test/support/fake_skore_gradebook.dart`, `FakeSmartschool.skoreGradebook`)
+that answers `getNavigation`, `init` and `getGradebookContext` in the shape
+of dartschool's captures of #148, from gradebooks per school year
+(`FakeSkoreOwnGradebook`, with periods, pupils, and whether it is writable
+or in coordinator mode), with the school years Skore offers; a school year
+it does not offer gets an empty tree, as live. A test can replace the
+answer to a method (`answers`) or answer every call with an error page
+(`unusable`); it answers any other RPC method with HTTP 501, and the later
+gradebook tools add theirs.
 
 Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
 `withPresence`, which runs an action with a `PresenceService` on the session
