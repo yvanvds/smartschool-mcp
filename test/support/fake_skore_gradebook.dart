@@ -25,6 +25,17 @@ import 'package:dio/dio.dart';
 //     that Skore sends along, as in dartschool's
 //     `test/skore_gradebook_evaluations_test.dart`. A period without
 //     evaluations gets an empty `head` and the stream `1`, as live.
+//   - The "new evaluation" dialog and its save (#142, dartschool#150), as in
+//     dartschool's `test/skore_gradebook_create_test.dart`:
+//     getNewEvalDialogBox(0, owners, groupID, periodID), the course
+//     (`[["2264", "Informaticawetenschappen (2 uur)"]]`);
+//     getPosComponents(0, periodID, groupID, courseID, pathIds), the
+//     components (`[[0, "geen"], ["2", "DW"]]`); and saveEvaluation with its
+//     20 parameters, which it carries out as the live Skore did: the new
+//     evaluation is listed from then on in column A of its period, with what
+//     was sent (`public` as sent, `short` null for `""`), and the answer is
+//     `{"state":1,"incumul":0,"evaluationID":<id>,"refID":<id>,
+//     "importData":null}`.
 // The school year goes as `wy` (a string) in the session object; without
 // it, Skore answers for its current school year. Class, group, model,
 // course, gradebook and period ids and names are those of the captures;
@@ -39,10 +50,10 @@ import 'package:dio/dio.dart';
 // [fakeSkoreGradebookPlatform].
 //
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
-// HTTP 501. The later gradebook tools add theirs (getPosComponents,
-// getNewEvalDialogBox, saveEvaluation, saveGrade, the feedback POST): a
-// method of the library's allowlist (`SkoreGradebookService.rpcMethods`)
-// and an answer in the shape of dartschool's capture for it.
+// HTTP 501. The later gradebook tools add theirs (saveGrade, the feedback
+// POST): a method of the library's allowlist
+// (`SkoreGradebookService.rpcMethods`) and an answer in the shape of
+// dartschool's capture for it.
 
 /// Skore's gradebook RPC service, behind `/SkoreGradebook`.
 const fakeSkoreGradebookRpcPath = '/modules/Skore/backend/gradebook/rpc.php';
@@ -53,6 +64,9 @@ const fakeSkoreGradebookRpcMethods = {
   'init',
   'getGradebookContext',
   'getEvaluations',
+  'getNewEvalDialogBox',
+  'getPosComponents',
+  'saveEvaluation',
 };
 
 /// Skore's REST API of the feedback of a pupil on an evaluation.
@@ -268,9 +282,16 @@ class FakeSkoreOwnGradebook {
     this.writable = true,
     this.coordinator = false,
     Map<int, List<FakeSkoreEvaluation>>? evaluations,
+    List<List<Object>>? components,
   }) : periods = periods ?? [],
        pupils = pupils ?? [],
-       evaluations = evaluations ?? {};
+       evaluations = evaluations ?? {},
+       components =
+           components ??
+           [
+             [0, 'geen'],
+             ['2', 'DW'],
+           ];
 
   final FakeSkoreWorkyear workyear;
 
@@ -315,6 +336,11 @@ class FakeSkoreOwnGradebook {
   /// The evaluations of each period, by period id, in Skore's order (column
   /// `A` first); a period without any has none here.
   final Map<int, List<FakeSkoreEvaluation>> evaluations;
+
+  /// The components a new evaluation can count for, in every period, as
+  /// `getPosComponents` gives them (and every evaluation's `posComps`): an
+  /// id (`0` as a number, the others as strings) and a short name.
+  final List<List<Object>> components;
 
   /// The evaluation with [id] in any period, or null.
   FakeSkoreEvaluation? evaluationWithId(int id) => [
@@ -533,11 +559,14 @@ FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
 /// (`GET` [fakeSkoreFeedbackPath]...), from the evaluations of the
 /// gradebooks.
 ///
-/// Every RPC request is recorded in [requests], every feedback read in
-/// [feedbackReads]. A method in [answers] gets that answer instead, and a
-/// feedback read [feedbackAnswer], for an answer the library cannot use;
-/// with [unusable], every call gets Smartschool's error page (with HTTP
-/// 200).
+/// Every RPC request is recorded in [requests] (the saves of a new
+/// evaluation also in [evaluationSaves]), every feedback read in
+/// [feedbackReads]. A method in [answers] gets that answer instead (a save
+/// is then not carried out), and a feedback read [feedbackAnswer], for an
+/// answer the library cannot use; with [unusable], every call gets
+/// Smartschool's error page (with HTTP 200). A save of a new evaluation can
+/// lose its answer after it was carried out ([saveAnswerLost]), and
+/// [onEvaluationSaved] can change how Skore lists the new evaluation.
 class FakeSkoreGradebook {
   /// The school years Skore offers, in its order (newest first).
   final List<FakeSkoreWorkyear> workyears = [];
@@ -565,6 +594,26 @@ class FakeSkoreGradebook {
   /// parameters and the session object.
   final List<({String rpc, List<Object?> params, Map<String, Object?> session})>
   requests = [];
+
+  /// The id the next new evaluation gets (Skore's `refID`).
+  int nextEvaluationId = 500100;
+
+  /// When true, a `saveEvaluation` is carried out, but answered with HTTP
+  /// 500 and Smartschool's error page, as a save whose answer was lost.
+  bool saveAnswerLost = false;
+
+  /// Called with the gradebook and the new evaluation right after a
+  /// `saveEvaluation` was carried out (it is listed from then on): to list
+  /// it otherwise than sent, such as public, or not at all.
+  void Function(FakeSkoreOwnGradebook book, FakeSkoreEvaluation created)?
+  onEvaluationSaved;
+
+  /// The parameters of every `saveEvaluation` that reached the fake, in
+  /// order, also those [answers] answered (and that were not carried out).
+  List<List<Object?>> get evaluationSaves => [
+    for (final request in requests)
+      if (request.rpc == 'saveEvaluation') request.params,
+  ];
 
   /// The feedback reads of the REST API that reached the fake, in order:
   /// the evaluation and the pupil (from the path, null when it is not in the
@@ -711,8 +760,115 @@ class FakeSkoreGradebook {
       'getNavigation' => _rpc(method, _navigation(workyear)),
       'init' => _init(method, params, workyear),
       'getEvaluations' => _evaluations(method, params, workyear),
+      'getNewEvalDialogBox' => _newEvaluationCourses(method, params, workyear),
+      'getPosComponents' => _components(method, params, workyear),
+      'saveEvaluation' => _saveEvaluation(method, params, workyear),
       _ => _context(method, params, workyear),
     };
+  }
+
+  /// `getNewEvalDialogBox(0, owners, groupID, periodID)` for the gradebook
+  /// in `owners` of [workyear]: its course, `[["2264",
+  /// "Informaticawetenschappen (2 uur)"]]` as captured.
+  ResponseBody _newEvaluationCourses(
+    String method,
+    List<Object?> params,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final book = _owner(params, 1, workyear);
+    if (book == null) {
+      return _json('{"error":"the fake cannot answer $params"}', status: 400);
+    }
+    return _rpc(method, [
+      ['${book.courseId}', book.course],
+    ]);
+  }
+
+  /// `getPosComponents(0, periodID, groupID, courseID, pathIds)` for the
+  /// period of the gradebook of [workyear] with that course and class (the
+  /// last of `pathIds`): its [FakeSkoreOwnGradebook.components].
+  ResponseBody _components(
+    String method,
+    List<Object?> params,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final periodId = params.length > 1 ? int.tryParse('${params[1]}') : null;
+    final courseId = params.length > 3 ? int.tryParse('${params[3]}') : null;
+    final path = params.length > 4 ? params[4] : null;
+    final classId = path is List && path.length == 3
+        ? int.tryParse('${path.last}')
+        : null;
+    final book = gradebooks
+        .where(
+          (g) =>
+              g.workyear.id == workyear.id &&
+              g.courseId == courseId &&
+              g.classId == classId &&
+              g.periods.any((p) => p.id == periodId),
+        )
+        .firstOrNull;
+    if (book == null) {
+      return _json('{"error":"the fake cannot answer $params"}', status: 400);
+    }
+    return _rpc(method, book.components);
+  }
+
+  /// `saveEvaluation(evaluationID, ownerID, userID, courseID, coursename,
+  /// title, short, periodID, date, max, compName, componentID, public,
+  /// chain, pathIds, contentType, contentTypeName, publicdatetime,
+  /// importParams, evalType)` for a new evaluation (`evaluationID` 0) in a
+  /// period of the gradebook `ownerID` of [workyear]: carried out as the
+  /// live Skore did, the new evaluation first in its period (column A). A
+  /// save the fake cannot carry out (another gradebook or period, an
+  /// evaluation that is not new) is answered with HTTP 400, which no test
+  /// expects.
+  ResponseBody _saveEvaluation(
+    String method,
+    List<Object?> params,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final ownerId = params.length == 20 ? int.tryParse('${params[1]}') : null;
+    final book = ownerId == null ? null : gradebookWithId(ownerId, workyear);
+    final periodId = params.length == 20 ? params[7] : null;
+    if (book == null ||
+        params[0] != 0 ||
+        periodId is! int ||
+        !book.periods.any((p) => p.id == periodId)) {
+      return _json('{"error":"the fake cannot save $params"}', status: 400);
+    }
+    final short = '${params[6]}';
+    final componentId = params[11] == 0 ? 0 : int.parse('${params[11]}');
+    final created = FakeSkoreEvaluation(
+      nextEvaluationId++,
+      '${params[5]}',
+      short: short.isEmpty ? null : short,
+      date: '${params[8]}',
+      max: int.parse('${params[9]}'),
+      componentId: componentId,
+      // What Skore lists for "geen" was not seen; the fake lists no
+      // component, as for an evaluation without one.
+      component: componentId == 0 ? '' : '${params[10]}',
+      public: '${params[12]}',
+      publicDateTime: '${params[17]}',
+    );
+    (book.evaluations[periodId] ??= []).insert(0, created);
+    onEvaluationSaved?.call(book, created);
+    if (saveAnswerLost) {
+      return ResponseBody.fromString(
+        '{"message":"Internal Server Error"}$_errorPage',
+        500,
+        headers: {
+          Headers.contentTypeHeader: ['text/html; charset=UTF-8'],
+        },
+      );
+    }
+    return _rpc(method, {
+      'state': 1,
+      'incumul': 0,
+      'evaluationID': created.id,
+      'refID': created.id,
+      'importData': null,
+    });
   }
 
   /// `getEvaluations(periodID, userID, courses, groupID, classID, pathIds)`
@@ -895,10 +1051,7 @@ class FakeSkoreGradebook {
     'plaId': '',
     'pleType': '',
     'realCourseID': book.courseId,
-    'posComps': [
-      [0, 'geen'],
-      ['2', 'DW'],
-    ],
+    'posComps': book.components,
     'groupID': book.groupId,
   };
 

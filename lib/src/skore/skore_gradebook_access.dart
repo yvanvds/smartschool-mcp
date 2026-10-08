@@ -5,12 +5,29 @@ import '../session.dart';
 import '../tools/server_tool.dart';
 import 'skore_format.dart';
 import 'skore_gradebook_format.dart';
+import 'skore_writes.dart';
 
 // Reaching the user's own gradebooks in Skore ("Puntenboek",
 // `/SkoreGradebook`) for the gradebook tools: the session runner, the
 // library's errors as ToolErrors, the gradebooks of a school year kept in
 // memory per session, to find a gradebook by its id, and finding a period,
 // a pupil and an evaluation of a gradebook by their ids.
+//
+// The tools that change a gradebook (`create_skore_evaluation`, #142; the
+// grades and feedback of #143 and #144) run with [withSkoreGradebookWrite].
+// The library checks the gradebook, the period and the values before each
+// save, refusing a change that does not fit with a
+// `SmartschoolSkoreChangeRefusedError` (nothing saved), sends a save that
+// must not go out twice once, never again after logging in again, and
+// throws a `SmartschoolSkoreSaveUnconfirmedError` when it cannot confirm a
+// save that went out. So repeating a write's action, as
+// [SmartschoolSession.run] does when Smartschool refused the session, makes
+// no change twice: a refused session means Skore did not handle the save,
+// and an unconfirmed save is not a refused session, so it is not repeated.
+// The write tools report an unconfirmed save themselves
+// (`skoreWriteNotConfirmed`), saying not to call them again but to check
+// with a read tool first; they write in Skore's current school year only,
+// as the library does ([SkoreGradebookYears.findInCurrentYear]).
 //
 // Unlike the Skore tools of `skore_access.dart` (`SkoreService`, the admin
 // side of Skore, behind the switch "Skore-beheer"), the gradebook needs no
@@ -63,14 +80,22 @@ Future<T> withSkoreGradebook<T>(
 ///   pupil's) was not captured: this is the message such an account gets
 ///   when it is not an empty list, so it says so.
 ///
-/// The writes of later tools add their own cases before the last one:
-/// `SmartschoolSkoreChangeRefusedError` (a check refused the change, nothing
-/// was saved; a [SmartschoolSkoreError], so it must come first). The save
-/// that Skore did not confirm (`SmartschoolSkoreSaveUnconfirmedError` and its
-/// subtypes) and a new evaluation that came back public
-/// (`SmartschoolSkoreEvaluationPublicError`) are not [SmartschoolSkoreError]s:
-/// they come out here as null, for the write tools to report themselves.
-ToolError? skoreGradebookToolError(Object error) {
+/// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
+///   save refused the change, so nothing was saved. A [SmartschoolSkoreError],
+///   so it comes before the last case. Its message, which the library writes
+///   from what it read (ids, a period's name, an evaluation's title) and
+///   quotes nothing else of Skore's answers, is the reason passed on, with
+///   [reread] (what to read again), so that Claude can correct the call.
+///
+/// The save that Skore did not confirm
+/// (`SmartschoolSkoreSaveUnconfirmedError` and its subtypes) and a new
+/// evaluation that came back public (`SmartschoolSkoreEvaluationPublicError`)
+/// are not [SmartschoolSkoreError]s: they come out here as null, for the
+/// write tools to report themselves.
+ToolError? skoreGradebookToolError(
+  Object error, {
+  String reread = rereadSkoreGradebookContents,
+}) {
   switch (error) {
     case ArgumentError(:final String name, :final invalidValue)
         when _arguments.containsKey(name):
@@ -87,6 +112,12 @@ ToolError? skoreGradebookToolError(Object error) {
         'Skore\'s gradebook needs, so the gradebook could not be read. Try '
         'again in a moment; the technical details are in the server log.',
       );
+    case SmartschoolSkoreChangeRefusedError(:final message):
+      log('skore gradebook: $error');
+      return ToolError(
+        'Skore refused the change before saving it: '
+        '${skoreRefusalReason(message)} $reread to correct the call.',
+      );
     case SmartschoolSkoreError():
       log('skore gradebook: $error');
       return const ToolError(
@@ -97,6 +128,45 @@ ToolError? skoreGradebookToolError(Object error) {
       );
   }
   return null;
+}
+
+/// What a gradebook write passes on with a change Skore refused, by
+/// default: what to read again to correct the call.
+const rereadSkoreGradebookContents =
+    'Read the gradebook again with read_skore_gradebook (its periods) and '
+    'list_skore_evaluations (a period\'s evaluations)';
+
+/// Runs the gradebook write [write] with a [SkoreGradebookService] on the
+/// session's logged-in client, for a tool that changes one of the user's
+/// gradebooks.
+///
+/// Like [withSkoreGradebook], with the library's errors as [ToolError]s
+/// ([skoreGradebookToolError]); a change a check refused is passed on with
+/// [reread], what to read again to correct the call. Every [ToolError], also
+/// one of [write] itself (an unknown id, an argument it refuses before
+/// anything is sent), says that nothing was changed: from the writes, every
+/// [SmartschoolSkoreError] means that nothing was saved. A
+/// `SmartschoolSkoreSaveUnconfirmedError` (the change may or may not have
+/// been saved) and a `SmartschoolSkoreEvaluationPublicError` (a new
+/// evaluation was created, but shows as public) are thrown as they are, for
+/// the tool to report: `skoreWriteNotConfirmed` for the first.
+///
+/// [write] may run twice, when Smartschool refuses the session: see the
+/// comment at the top of this file for why that makes no change twice.
+Future<T> withSkoreGradebookWrite<T>(
+  SmartschoolSession session,
+  Future<T> Function(SkoreGradebookService gradebooks) write, {
+  String reread = rereadSkoreGradebookContents,
+}) async {
+  try {
+    return await session.run((client) => write(SkoreGradebookService(client)));
+  } on ToolError catch (error) {
+    throw ToolError('${error.message} $nothingChangedInSkore');
+  } catch (error) {
+    final toolError = skoreGradebookToolError(error, reread: reread);
+    if (toolError == null) rethrow;
+    throw ToolError('${toolError.message} $nothingChangedInSkore');
+  }
 }
 
 /// The arguments of [SkoreGradebookService]'s methods whose [ArgumentError]
@@ -218,6 +288,46 @@ final class SkoreGradebookYears {
     );
   }
 
+  /// The user's gradebook with [gradebookId] of Skore's current school year,
+  /// the only one the library changes a gradebook in: from memory, or when
+  /// it is not there, read again with [gradebooks].
+  ///
+  /// Throws a [ToolError] that says to take the id from
+  /// `list_skore_gradebooks` without `workyear_id` when that read does not
+  /// hold it either; for a gradebook of an earlier school year in memory,
+  /// that only one of the current school year can be changed.
+  Future<FoundSkoreGradebook> findInCurrentYear(
+    SkoreGradebookService gradebooks,
+    int gradebookId,
+  ) async {
+    if (_years[null] case final known?) {
+      try {
+        if (_found(await known, gradebookId) case final found?) return found;
+      } catch (_) {
+        // read() forgets it; it is read again below.
+      }
+    }
+    final year = await read(gradebooks, again: true);
+    if (_found(year, gradebookId) case final found?) return found;
+    final current =
+        'Skore\'s current school year, ${formatSkoreWorkyear(year.workyear)}';
+    for (final other in await _inMemory(null)) {
+      if (_found(other, gradebookId) case (:final workyear, gradebook: _)) {
+        throw ToolError(
+          'Gradebook id $gradebookId is of school year '
+          '${formatSkoreWorkyear(workyear)}, not of $current: only a '
+          'gradebook of the current school year can be changed.',
+        );
+      }
+    }
+    throw ToolError(
+      'None of the user\'s own gradebooks of $current, has gradebook id '
+      '$gradebookId. Take the gradebook id from list_skore_gradebooks, '
+      'without workyear_id: only a gradebook of the current school year can '
+      'be changed.',
+    );
+  }
+
   /// The school years in memory to look in for a gradebook of [workyearId]:
   /// that one, or without it every one, Skore's current school year first.
   /// A read that is still running is waited for; one that failed is left
@@ -334,6 +444,25 @@ SkoreGradebookPupil skoreGradebookPupil(
     'pupil id from list_skore_evaluations or read_skore_gradebook for this '
     'gradebook.',
   );
+}
+
+/// The component [SkoreGradebookService.createEvaluation] gives a new
+/// evaluation when it is called without a `componentId`, of the
+/// [components] Skore offers for the period
+/// ([SkoreGradebookService.getComponents]): the second when Skore offers
+/// exactly two (`geen` and the period's component, such as `DW`), else
+/// `geen`. Null when it offers no `geen` either: the library then refuses a
+/// new evaluation without a component.
+///
+/// The library's rule, as its doc comment states it, repeated here because
+/// the library keeps it private (`_component`): yvanvds/dartschool#156.
+/// Remove it for the library's own once that is released
+/// (yvanvds/smartschool-mcp#147).
+SkoreEvaluationComponent? skoreDefaultComponent(
+  List<SkoreEvaluationComponent> components,
+) {
+  if (components.length == 2) return components[1];
+  return components.where((c) => c.isNone).firstOrNull;
 }
 
 /// An evaluation of a gradebook found by its id ([findSkoreEvaluation]):

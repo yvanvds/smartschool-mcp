@@ -122,6 +122,7 @@ void main() {
       'read_skore_gradebook',
       'list_skore_evaluations',
       'read_skore_feedback',
+      'create_skore_evaluation',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -436,6 +437,9 @@ void main() {
       ('plan_lesfiche', false),
       ('plan_assignment', false),
       ('trash_assignment', false),
+      // The gradebook's first write (#142): a create, so not idempotent;
+      // Claude Desktop asks approval for every call.
+      ('create_skore_evaluation', false),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -625,7 +629,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(58));
+    expect(tools, hasLength(59));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll(['list_presence_classes', 'set_pupils_late']),
@@ -690,7 +694,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(46));
+        expect(tools, hasLength(47));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -729,8 +733,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(54));
-      expect([for (final tool in tools.skip(46)) tool['name']], skoreTools);
+      expect(tools, hasLength(55));
+      expect([for (final tool in tools.skip(47)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -923,7 +927,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(46));
+        expect(tools, hasLength(47));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -963,8 +967,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(50));
-      expect([for (final tool in tools.skip(46)) tool['name']], presenceTools);
+      expect(tools, hasLength(51));
+      expect([for (final tool in tools.skip(47)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1160,10 +1164,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(58));
-      expect([for (final tool in tools.skip(54)) tool['name']], presenceTools);
+      expect(tools, hasLength(59));
+      expect([for (final tool in tools.skip(55)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(46).take(8)) tool['name'],
+        for (final tool in tools.skip(47).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2605,7 +2609,7 @@ void main() {
         'save_lesfiche_attachment',
         {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 2.0},
       ),
-      // The gradebook tools (#140, #141), offered without a switch.
+      // The gradebook tools (#140, #141, #142), offered without a switch.
       ('list_skore_gradebooks', {'workyear_id': 22.0}),
       ('read_skore_gradebook', {'gradebook_id': 32508.0, 'workyear_id': 22.0}),
       (
@@ -2625,6 +2629,16 @@ void main() {
           'pupil_id': 1202.0,
           'period_id': 1704.0,
           'workyear_id': 24.0,
+        },
+      ),
+      (
+        'create_skore_evaluation',
+        {
+          'gradebook_id': 34826.0,
+          'period_id': 1704.0,
+          'title': 'Toets Python',
+          'date': '2026-10-14',
+          'max': 20.0,
         },
       ),
     ]) {

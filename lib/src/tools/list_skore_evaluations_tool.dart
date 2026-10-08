@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../log.dart';
 import '../session.dart';
 import '../skore/skore_format.dart';
 import '../skore/skore_gradebook_access.dart';
@@ -24,6 +25,12 @@ import 'server_tool.dart';
 /// ids are listed once. With `evaluation_id`, only that evaluation, one line
 /// per pupil with the pupil id: the view to match names to pupil ids, as the
 /// tools that save grades and feedback need.
+///
+/// For an open period, it also lists the components a new evaluation in it
+/// can count for ([SkoreGradebookService.getComponents], one small request),
+/// with the one `create_skore_evaluation` takes without a component (#142):
+/// the period's list is what Claude reads before it creates an evaluation,
+/// so the user sees the component before confirming.
 ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'list_skore_evaluations',
@@ -47,8 +54,10 @@ ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
         'are listed once, after the evaluations. With evaluation_id, only '
         'that evaluation, one line per pupil with the pupil id; without '
         'period_id, it is looked for in every period. A period without '
-        'evaluations gets a sentence saying so. Reading changes nothing in '
-        'Skore.',
+        'evaluations gets a sentence saying so. For an open period, it also '
+        'lists the components a new evaluation in it can count for (such as '
+        'DW, or geen for none) and the default, for '
+        'create_skore_evaluation. Reading changes nothing in Skore.',
     inputSchema: Schema.object(
       properties: {
         'gradebook_id': Schema.int(
@@ -124,25 +133,66 @@ Future<CallToolResult> _list(
     if (period == null) {
       return '$title\nIt has no periods yet, so it has no evaluations.';
     }
+    final evaluations = await gradebooks.getEvaluations(
+      sheet.gradebook,
+      period.id,
+    );
     return formatSkorePeriodEvaluations(
       sheet,
       period,
-      await gradebooks.getEvaluations(sheet.gradebook, period.id),
+      evaluations,
       title: title,
+      components: period.isOpen
+          ? await _components(gradebooks, sheet.gradebook, period)
+          : null,
     );
   });
   return CallToolResult(content: [TextContent(text: text)]);
 }
 
+/// The line about the components a new evaluation in the open [period] of
+/// [gradebook] can count for, and the default (`skoreDefaultComponent`).
+///
+/// An answer the library cannot use is logged, and the line says the
+/// components could not be read: the evaluations are what was asked for,
+/// and `create_skore_evaluation` reads the components again.
+Future<String> _components(
+  SkoreGradebookService gradebooks,
+  SkoreGradebook gradebook,
+  SkoreGradebookPeriod period,
+) async {
+  final List<SkoreEvaluationComponent> components;
+  try {
+    components = await gradebooks.getComponents(gradebook, period.id);
+  } on SmartschoolSkoreError catch (error) {
+    log('skore gradebook: the components of period ${period.id}: $error');
+    return 'The components a new evaluation in this period can count for '
+        'could not be read; the technical details are in the server log.';
+  }
+  if (components.isEmpty) {
+    return 'Skore offers no components for a new evaluation in this period.';
+  }
+  final byDefault = skoreDefaultComponent(components);
+  return 'Components a new evaluation in this period can count for '
+      '(create_skore_evaluation\'s component): '
+      '${formatSkoreComponents(components)}. '
+      '${switch (byDefault) {
+        null => 'No default: pass one as component.',
+        final component => 'Default: ${skoreName(component.name)}.',
+      }}';
+}
+
 /// What `list_skore_evaluations` answers for a period: [title], the period,
 /// its [evaluations] in Skore's order, each with its averages and its
-/// grades on one line, the pupils with their ids, and the gradebook's other
-/// periods.
+/// grades on one line, the pupils with their ids, the line about the
+/// [components] a new evaluation can count for (for an open period), and
+/// the gradebook's other periods.
 String formatSkorePeriodEvaluations(
   SkoreGradebookSheet sheet,
   SkoreGradebookPeriod period,
   List<SkoreEvaluation> evaluations, {
   required String title,
+  String? components,
 }) {
   final pupils = sheet.pupils;
   final count = evaluations.length;
@@ -171,6 +221,7 @@ String formatSkorePeriodEvaluations(
       else
         'Pupils: ${[for (final pupil in pupils) _pupilWithId(pupil)].join('; ')}.',
     ],
+    ?components,
     if (others.isNotEmpty)
       'Other periods of the gradebook: ${others.join(', ')}. Pass period_id '
           'for one of them.',

@@ -9,6 +9,7 @@ library;
 import 'dart:convert';
 
 import 'package:dart_mcp/client.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/skore/skore_gradebook_access.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
@@ -67,6 +68,13 @@ final _lussen =
     'Lussen | evaluation id 500002 | column C | 2026-09-23 | max 20 | no '
     'component | points | PUBLISHED since '
     '${_time('2026-10-01T08:00:00+0200')}: the pupils see it and its grades';
+
+/// The line about the components of 6EWI's DW1, an open period: the two
+/// Skore offers, and DW, the second of the two, by default.
+const _components =
+    'Components a new evaluation in this period can count for '
+    '(create_skore_evaluation\'s component): geen (component id 0: none), DW '
+    '(component id 2). Default: DW.';
 
 /// The general error of an answer the server cannot use.
 const _unusable =
@@ -218,8 +226,10 @@ void main() {
     test('the active period by default: each evaluation with its id, column, '
         'date, max, component, type and publication, its averages and the '
         'grade of every pupil by name, marked when the pupil has feedback; '
-        'then the pupil ids. The gradebook, then one getEvaluations for the '
-        'period, as the user, for its school year', () async {
+        'then the pupil ids and, for an open period, the components a new '
+        'evaluation can count for. The gradebook, then one getEvaluations '
+        'and one getPosComponents for the period, as the user, for its '
+        'school year', () async {
       expect(
         await list({'gradebook_id': 32508}),
         '$_ewiTitle\n'
@@ -240,15 +250,25 @@ void main() {
         '  grades: 1. Aerts, An: 14; 2. Claes, Bart: 17; 3. Dupont, Chloé: '
         '12\n'
         'Pupils: 1. Aerts, An (pupil id 1201); 2. Claes, Bart (pupil id '
-        '1202); 3. Dupont, Chloé (pupil id 1203).',
+        '1202); 3. Dupont, Chloé (pupil id 1203).\n'
+        '$_components',
       );
       expect(skore.calls, [
         'getNavigation',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
+        'getPosComponents wy=24',
       ]);
-      final read = skore.requests.last;
+      // As Skore's "new evaluation" dialog asks for them.
+      expect(skore.requests.last.params, [
+        0,
+        1704,
+        '472',
+        '2264',
+        ['176', '472', '2440'],
+      ]);
+      final read = skore.requests[3];
       expect(read.params, [
         1704,
         fakeSkoreGradebookUser,
@@ -547,10 +567,85 @@ void main() {
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
+        'getPosComponents wy=24',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
+        'getPosComponents wy=24',
       ]);
+    });
+
+    test('the components of an open period, with the default '
+        'create_skore_evaluation takes: geen when Skore offers more than two, '
+        'none without geen; a closed period gets no line, and they are not '
+        'read', () async {
+      final components = book(32508).components;
+      components.add(['4', 'PW']);
+      expect(
+        await list({'gradebook_id': 32508}),
+        endsWith(
+          '\nComponents a new evaluation in this period can count for '
+          '(create_skore_evaluation\'s component): geen (component id 0: '
+          'none), DW (component id 2), PW (component id 4). Default: geen.',
+        ),
+      );
+      components
+        ..clear()
+        ..add(['2', 'DW']);
+      expect(
+        await list({'gradebook_id': 32508}),
+        endsWith(
+          '\nComponents a new evaluation in this period can count for '
+          '(create_skore_evaluation\'s component): DW (component id 2). No '
+          'default: pass one as component.',
+        ),
+      );
+      components.clear();
+      expect(
+        await list({'gradebook_id': 32508}),
+        endsWith(
+          '\nSkore offers no components for a new evaluation in this period.',
+        ),
+      );
+      // A period without evaluations, open: the components after the
+      // sentence.
+      expect(
+        await list({'gradebook_id': 34826}),
+        endsWith('\nIt has no evaluations.\n$_components'),
+      );
+      // 5BW's periods are closed.
+      skore.requests.clear();
+      for (final periodId in [1446, 1608]) {
+        expect(
+          await list({
+            'gradebook_id': 28998,
+            'workyear_id': 22,
+            'period_id': periodId,
+          }),
+          isNot(contains('omponents')),
+        );
+      }
+      expect(skore.calls, isNot(contains(startsWith('getPosComponents'))));
+    });
+
+    test('components Skore\'s gradebook gives in a shape the library does '
+        'not know: the evaluations are listed, with a line that says the '
+        'components could not be read', () async {
+      skore.answers['getPosComponents'] = (
+        status: 200,
+        body: '{"result":{"comps":"DW"},"session":1}',
+      );
+      expect(
+        await list({'gradebook_id': 32508}),
+        allOf(
+          contains('\n- Lussen | evaluation id 500002 | column C |'),
+          endsWith(
+            '(pupil id 1203).\nThe components a new evaluation in this period '
+            'can count for could not be read; the technical details are in '
+            'the server log.',
+          ),
+        ),
+      );
     });
 
     test('an unknown gradebook id: the error of the gradebook tools', () async {
@@ -862,6 +957,47 @@ void main() {
   });
 
   group('skoreGradebookToolError', () {
+    test('a change a check of a write refused: its reason, without the '
+        'library\'s method and closing sentence, with what to read again; '
+        'not taken for an answer the server cannot use', () {
+      const refused = SmartschoolSkoreChangeRefusedError(
+        'saveGrade: evaluation 500001 ("Python scripts schrijven") in period '
+        'DW1 (1704) of gradebook 32508 is scheduled to be published. Nothing '
+        'was saved.',
+      );
+      expect(
+        skoreGradebookToolError(refused)?.message,
+        'Skore refused the change before saving it: evaluation 500001 '
+        '("Python scripts schrijven") in period DW1 (1704) of gradebook 32508 '
+        'is scheduled to be published. Read the gradebook again with '
+        'read_skore_gradebook (its periods) and list_skore_evaluations (a '
+        'period\'s evaluations) to correct the call.',
+      );
+      expect(
+        skoreGradebookToolError(
+          refused,
+          reread: 'Read the evaluation with list_skore_evaluations',
+        )?.message,
+        endsWith(
+          'is scheduled to be published. Read the evaluation with '
+          'list_skore_evaluations to correct the call.',
+        ),
+      );
+      // A save Skore did not confirm, and a new evaluation that came back
+      // public, are for the write tools to report.
+      expect(
+        skoreGradebookToolError(
+          const SmartschoolSkoreEvaluationCreateUnconfirmedError(
+            'createEvaluation: ...',
+            gradebookId: 32508,
+            periodId: 1704,
+            title: 'Toets 1',
+          ),
+        ),
+        isNull,
+      );
+    });
+
     test('a period id, a pupil id or an evaluation the library refuses: '
         'passed on with the tool\'s name of the argument and where to take '
         'it from', () {

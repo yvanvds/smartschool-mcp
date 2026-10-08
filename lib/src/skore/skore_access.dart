@@ -110,8 +110,8 @@ ToolError? skoreToolError(
     case SmartschoolSkoreChangeRefusedError(:final message):
       log('skore: $error');
       return ToolError(
-        'Skore refused the change before saving it: ${_refusal(message)} '
-        '$reread to correct the call.',
+        'Skore refused the change before saving it: '
+        '${skoreRefusalReason(message)} $reread to correct the call.',
       );
     case SmartschoolSkoreError():
       log('skore: $error');
@@ -121,18 +121,6 @@ ToolError? skoreToolError(
       );
   }
   return null;
-}
-
-/// The reason in [message], the message of a
-/// [SmartschoolSkoreChangeRefusedError]: without the name of the library's
-/// method in front (`addTeacher: `) and its closing `Nothing was saved.`,
-/// which the write tools say in their own words.
-String _refusal(String message) {
-  final reason = message
-      .replaceFirst(RegExp(r'^[A-Za-z]+: '), '')
-      .replaceFirst(RegExp(r'\s*Nothing was saved\.\s*$'), '')
-      .trim();
-  return reason.endsWith('.') ? reason : '$reason.';
 }
 
 /// What the Skore tools say when Skore refused [area] to the account.

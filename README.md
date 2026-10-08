@@ -863,12 +863,14 @@ clear, a create or a trash means the write was not carried out: the session
 repeats the call, which reads the element again (a lesson hour filled
 meanwhile is gone, so nothing is sent).
 
-The gradebook tools read the user's own gradebooks in Skore ("Puntenboek",
-`/SkoreGradebook`), as every teacher has them, with the library's
-`SkoreGradebookService` (dartschool#148, dartschool#149). They need none of
-the rights of the Skore tools below, so they are offered to every account,
-without a switch, and no message of theirs speaks of "Skore-beheer" or of
-rights. They change nothing:
+The gradebook tools work in the user's own gradebooks in Skore
+("Puntenboek", `/SkoreGradebook`), as every teacher has them, with the
+library's `SkoreGradebookService` (dartschool#148, dartschool#149,
+dartschool#150). They need none of the rights of the Skore tools below, so
+they are offered to every account, without a switch, and no message of
+theirs speaks of "Skore-beheer" or of rights. The first four change
+nothing; `create_skore_evaluation` creates an evaluation, always
+unpublished:
 
 - `list_skore_gradebooks`: the user's own gradebooks of one school year
   (`getGradebookYear`), one line each in Skore's order: the class, the
@@ -920,7 +922,17 @@ rights. They change nothing:
   one line per pupil per evaluation. A period without evaluations, and a
   gradebook without periods, get a sentence; a `period_id` that is not one
   of the gradebook's is an error that lists its periods, before any
-  evaluations are read.
+  evaluations are read. For an open period, a last line lists the
+  components a new evaluation in it can count for (`getComponents`, one
+  small request: `geen` for none and, for instance, `DW`), each with its
+  component id, and the default `create_skore_evaluation` takes without a
+  component: the library's rule, the second when Skore offers exactly two,
+  else `geen` (none when it offers no `geen`). The library keeps that rule
+  private, so the server repeats it (`skoreDefaultComponent`,
+  dartschool#156, to be removed in #147). Components Skore gives in a shape
+  the library does not know leave the evaluations listed, with a line that
+  says the components could not be read. A closed period gets no line, and
+  its components are not read: no evaluation can be created in it.
 - `read_skore_feedback`: the feedback of one pupil on one evaluation
   (`gradebook_id`, `evaluation_id`, `pupil_id`, optional `period_id` and
   `workyear_id`; `getFeedback`, one `GET` of Skore's REST API as the
@@ -933,6 +945,57 @@ rights. They change nothing:
   pupils see the feedback on a published one) and the pupil with the grade.
   No feedback is a sentence. The pupil is looked up in the gradebook first,
   so an unknown pupil is an error before anything else is read.
+- `create_skore_evaluation`: creates an evaluation (a column of grades) in a
+  period of a gradebook of Skore's current school year (`gradebook_id`,
+  `title`, `date` as a day like `2026-10-14`, `max` a positive whole number;
+  optional `period_id`, else the period Skore opens the gradebook on,
+  `short_name` and `component`; `createEvaluation`), **always unpublished**:
+  the library sends `public` 0 and no publication time, and has no way to
+  publish; the user publishes it in Smartschool. Marked destructive and not
+  idempotent, so Claude Desktop asks for approval before every call; its
+  description tells Claude to read the period with `list_skore_evaluations`
+  first (not to make an evaluation with the same title and date twice), to
+  show the user the gradebook (class and course), the period, title, short
+  name, date, max and component, to say it will be unpublished, and to call
+  only after explicit confirmation. `component` is a name (ignoring case) or
+  a component id of those `getComponents` gives for the period; one Skore
+  does not offer is an error that lists them and the default, before the
+  library is asked. A blank title or a date that is not a day is an error
+  before anything is sent. The result is the evaluation as Skore lists it
+  after the save: its evaluation id, title, date, max, component and that it
+  is not published.
+
+The library checks a new evaluation before it saves it (`saveEvaluation`)
+and reads the period again afterwards to confirm it, and the tool reports
+each outcome with what to do next:
+
+- A check that refused the change (`SmartschoolSkoreChangeRefusedError`: a
+  gradebook that is not one of the user's own of the current school year, a
+  closed or read-only period, a date outside the school year, a course or
+  component Skore does not offer) is passed on with the library's reason
+  and what to read again to correct the call (`read_skore_gradebook`,
+  `list_skore_evaluations`), and that nothing was changed. So is an answer
+  the server cannot use before the save. A gradebook of an earlier school
+  year (when it is in memory) or an unknown one is an error that says only a
+  gradebook of the current school year can be changed, before the library is
+  asked.
+- A save Skore did not confirm (`SmartschoolSkoreEvaluationCreateUnconfirmedError`)
+  may or may not have created the evaluation: the result says not to call
+  the tool again, but to read the period with `list_skore_evaluations` and
+  look for the title on that day (or the evaluation id, when Skore answered
+  one), and tell the user.
+- An evaluation that was created but that Skore shows as public anyway
+  (`SmartschoolSkoreEvaluationPublicError`, not seen live) is reported as
+  created, published or scheduled: the user must check its publication in
+  Smartschool now, and Claude must not create it again. Nothing is sent to
+  undo it: the library never touches a publication.
+
+The save is sent once: the library never sends it again after logging in
+again, and a session Smartschool refuses for it is a
+`SmartschoolSessionExpiredError` at once (Skore did not handle it). The
+session then repeats the call (`SmartschoolSession.run`), which reads the
+gradebook again and saves once; an unconfirmed or public save is not a
+refused session, so it is not repeated.
 
 The library takes an evaluation as `getEvaluations` lists it, so a
 gradebook tool that takes an `evaluation_id` looks it up in its period
@@ -1481,6 +1544,31 @@ method
 (`answers`) or to the feedback reads (`feedbackAnswer`), or answer every
 call with an error page (`unusable`); it answers any other RPC method with
 HTTP 501, and the later gradebook tools add theirs.
+
+The writes in a gradebook (`create_skore_evaluation`; the grades and the
+feedback after it) run with `withSkoreGradebookWrite` in
+`skore_gradebook_access.dart`: `withSkoreGradebook` with the reason of a
+change a check refused (`SmartschoolSkoreChangeRefusedError`, before the
+last case of `skoreGradebookToolError`) passed on with what to read again
+(`reread`, `rereadSkoreGradebookContents` by default), and every
+`ToolError`, also one of the write itself, ending in `nothingChangedInSkore`.
+A save Skore did not confirm and a new evaluation that came back public are
+thrown as they are, for the tool to report: the first with
+`skoreWriteNotConfirmed` of `skore_writes.dart`. `skoreRefusalReason` (in
+`skore_format.dart`) takes the library's method name and closing sentence
+off a refusal, for the Skore tools and the gradebook tools alike.
+`SkoreGradebookYears.findInCurrentYear` finds a gradebook of Skore's current
+school year, the only one the library writes in, and `skoreDefaultComponent`
+repeats the library's default component (dartschool#156, #147). The fake
+gradebook answers the "new evaluation" dialog (`getNewEvalDialogBox`, the
+gradebook's course; `getPosComponents`, a gradebook's `components`) and
+carries out `saveEvaluation` as the live Skore did in dartschool#150: the
+new evaluation is listed from then on in column A of its period, with what
+was sent, under `nextEvaluationId`. `evaluationSaves` holds the parameters of
+every `saveEvaluation` that reached it (also those `answers` answered, which
+are not carried out); `saveAnswerLost` carries a save out and answers it
+with HTTP 500; `onEvaluationSaved` changes how the new evaluation is listed
+(public, or not at all).
 
 Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
 `withPresence`, which runs an action with a `PresenceService` on the session

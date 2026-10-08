@@ -220,6 +220,10 @@
       "description": "Leest de feedback van een leerling op een evaluatie in je puntenboek in Skore, van iedereen die feedback gaf."
     },
     {
+      "name": "create_skore_evaluation",
+      "description": "Maakt een nieuwe evaluatie aan in een periode van een van je puntenboeken in Skore, altijd ongepubliceerd: je publiceert ze zelf in Smartschool. Pas na jouw bevestiging."
+    },
+    {
       "name": "list_skore_classes",
       "description": "Alleen met Skore-beheer aan: toont de klassen in Skore, met hun groep en rapportmodel."
     },

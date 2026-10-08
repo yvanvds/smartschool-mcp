@@ -276,6 +276,15 @@ final _whitespace = RegExp(r'\s+');
 String _sentence(String text) =>
     RegExp(r'[.!?:;]$').hasMatch(text) ? text : '$text.';
 
+/// The components a new evaluation in a period can count for, in Skore's
+/// order, each with its component id, `geen` marked as none: `geen
+/// (component id 0: none), DW (component id 2)`.
+String formatSkoreComponents(List<SkoreEvaluationComponent> components) => [
+  for (final component in components)
+    '${skoreName(component.name)} (component id ${component.id}'
+        '${component.isNone ? ': none' : ''})',
+].join(', ');
+
 /// One pupil of a gradebook: the class number (when Skore shows one), the
 /// name as the gradebook lists it (last name first), the pupil id, and
 /// whether Skore greys the pupil out as inactive.
