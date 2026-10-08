@@ -1074,10 +1074,114 @@ void main() {
         }),
       );
       expect(text, contains('\nLabels: JAAR 6\n'));
-      expect(text, contains('\nAttachments: rubriek.docx\n'));
       expect(
         text,
-        contains('\nWeblinks: https://example.com/a, Zonder adres\n'),
+        contains(
+          '\nAttachments:\n- rubriek.docx | visible to pupils: always\n',
+        ),
+      );
+      expect(
+        text,
+        contains('\nWeblinks:\n- https://example.com/a\n- Zonder adres\n'),
+      );
+    });
+
+    // As the planner gave them for a planned lesfiche, and the web client
+    // showed them (#117).
+    test('says when pupils see each attachment and weblink, counted from '
+        'the lesson or the assignment', () {
+      Map<String, Object?> visibility(String option, [int? days]) => {
+        'option': option,
+        'daysAfterEnd': days,
+      };
+      final lesson = formatElementDetail(
+        detail({
+          'attachments': [
+            {
+              'id': 1,
+              'fileName': 'test-a.txt',
+              'visibility': visibility('at-start'),
+            },
+            {
+              'id': 2,
+              'fileName': 'test-b.txt',
+              'visibility': visibility('at-end'),
+            },
+            {
+              'id': 3,
+              'fileName': 'test-c.txt',
+              'visibility': visibility('days-after-end', 1),
+            },
+            {
+              'id': 4,
+              'fileName': 'test-d.txt',
+              'visibility': visibility('days-after-end', 3),
+            },
+            {
+              'id': 5,
+              'fileName': 'test-e.txt',
+              'visibility': visibility('days-after-end'),
+            },
+            {
+              'id': 6,
+              'fileName': 'test-f.txt',
+              'visibility': visibility('never'),
+            },
+            {
+              'id': 7,
+              'fileName': 'test-g.txt',
+              'visibility': visibility('later', 2),
+            },
+          ],
+          'weblinks': [
+            {
+              'id': 1,
+              'name': 'Opdracht',
+              'url': 'http://example.com/opdracht',
+              'visibility': visibility('always'),
+            },
+          ],
+        }),
+      );
+      expect(
+        lesson,
+        contains(
+          '\nAttachments:\n'
+          '- test-a.txt | visible to pupils: from the start of the lesson\n'
+          '- test-b.txt | visible to pupils: from the end of the lesson\n'
+          '- test-c.txt | visible to pupils: from 1 day after the end of the '
+          'lesson\n'
+          '- test-d.txt | visible to pupils: from 3 days after the end of the '
+          'lesson\n'
+          '- test-e.txt | visible to pupils: some days after the end of the '
+          'lesson (the planner gave no number)\n'
+          '- test-f.txt | visible to pupils: never\n'
+          '- test-g.txt | visible to pupils: as the planner\'s option "later" '
+          'with 2 days, which this server does not know\n'
+          'Weblinks:\n'
+          '- Opdracht (http://example.com/opdracht) | visible to pupils: '
+          'always\n',
+        ),
+      );
+
+      final assignment = formatElementDetail(
+        PlannedElementDetail.fromJson({
+          ...fakeAssignment.detailJson(),
+          'attachments': [
+            {
+              'id': 1,
+              'fileName': 'opgave.pdf',
+              'visibility': visibility('at-end'),
+            },
+          ],
+        }),
+      );
+      expect(
+        assignment,
+        contains(
+          '\nAttachments:\n'
+          '- opgave.pdf | visible to pupils: from the end of the assignment\n',
+        ),
       );
     });
 
