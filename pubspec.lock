@@ -173,10 +173,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_smartschool
-      sha256: "231094fd8a7384464954a1f9f51eb192bf3cca573d8a5247a8d6056d8ffe74ad"
+      sha256: "1507b3d047fc0332c0ad69e432400452749d83f5975deebf44c61b98e4059785"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.7"
+    version: "0.3.8"
   frontend_server_client:
     dependency: transitive
     description:
