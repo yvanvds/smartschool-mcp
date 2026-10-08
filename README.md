@@ -487,12 +487,14 @@ client name. It also installs again while that copy runs.
   planner, or fails too, the planner's error stays.
 - `read_planned_element`: one element in full, by its id: what its list
   line says, plus its public and private info as plain text (through
-  `htmlToText`, never raw HTML), its labels, the names of its attachments
-  and its weblinks, and for an assignment from when pupils see it, whether
-  it was announced and its status. Private info is hidden from pupils, but
+  `htmlToText`, never raw HTML), its labels, its attachments and weblinks
+  (one line each, with when pupils see it, counted from the lesson or the
+  assignment), and for an assignment from when pupils see it, whether it
+  was announced and its status. Private info is hidden from pupils, but
   colleagues who can see the element read it too (dartschool#84). The
   labels, attachments and weblinks are the library's typed lists
-  (dartschool#98), and every element is read by its type name, also one of
+  (dartschool#98; seen live with a planned lesfiche's attachments and
+  weblink, #117), and every element is read by its type name, also one of
   a type the library does not know (`getPlannedElement` with `typeName`,
   dartschool#99).
 - `list_class_assignments`: the assignments (tests and tasks) of 1 to 10
@@ -778,8 +780,8 @@ client name. It also installs again while that copy runs.
   write. A move, not a deletion: the user restores a lesfiche from the
   trash in the module itself, and the library neither restores nor deletes
   for good (`delete/bulk` is left out on purpose). A lesson planned from a
-  lesfiche earlier stays in the planner, which copied the lesfiche (#117
-  checks how much); the description says so. Marked destructive, for
+  lesfiche earlier stays in the planner, which copied the lesfiche (its
+  info, attachments and weblinks, #117); the description says so. Marked destructive, for
   Claude Desktop and Codex to ask approval: Claude shows each lesfiche by
   name and kind, and calls once after the user's confirmation. Idempotent,
   as `remove_lesfiche_attachment`: a second call finds the lesfiches no
@@ -797,9 +799,13 @@ client name. It also installs again while that copy runs.
   `list_lesfiches`) into an empty lesson hour of the user's own planner
   (`hour`, as `plan_lesson`) with the library's `planLessonContent`
   (dartschool#88): the planner names the lesson after the lesfiche and
-  takes over its content (seen live: its labels and goals; the info of the
-  lesfiche tried was empty, and whether attachments and weblinks come along
-  was not checked). It works as `plan_lesson` does: marked destructive, Claude shows the
+  takes over its content. Seen live: its labels and goals (dartschool#88),
+  and its public and private info, attachments and weblinks, each
+  attachment and weblink with the visibility it has in the lesfiche (#117:
+  one from the start of the lesson, one from its end, a weblink always, as
+  the web client showed). The lesson keeps the course of the hour, not the
+  lesfiche's. The description says what is copied. It works as
+  `plan_lesson` does: marked destructive, Claude shows the
   mapping of lesfiches onto hours (date and time, class, course, lesfiche)
   and plans after the user's confirmation, one call per hour, in order;
   the result gives the lesson as saved and its new id. The library reads

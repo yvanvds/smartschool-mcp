@@ -19,8 +19,9 @@ const maxLesficheTrashItems = 20;
 /// A move, not a deletion: the lesfiches leave the list, and the user
 /// restores them from the trash in the module itself; the library neither
 /// restores a lesfiche nor deletes one for good. A lesson planned from one
-/// of them earlier stays in the planner, which copied the lesfiche (how
-/// much it copies is #117). Still the lesfiches leave the user's library,
+/// of them earlier stays in the planner, which copied the lesfiche (its
+/// info, attachments and weblinks, #117). Still the lesfiches leave the
+/// user's library,
 /// so the tool is marked destructive (for Claude Desktop to ask for
 /// approval), and Claude is told to show the user each lesfiche by name and
 /// kind and to call once after the user's confirmation. A second call

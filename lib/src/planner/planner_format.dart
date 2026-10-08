@@ -290,7 +290,8 @@ String plannerInfoText(String html) {
 }
 
 /// [detail] as text: what its list line says, one field per line, then its
-/// labels, attachments and weblinks, and its public and private info as
+/// labels, its attachments and weblinks (one line each, with when pupils
+/// see it: [formatPlannerVisibility]), and its public and private info as
 /// plain text.
 String formatElementDetail(PlannedElementDetail detail) {
   final placeholder = detail.type == PlannedElementType.placeholder;
@@ -301,14 +302,21 @@ String formatElementDetail(PlannedElementDetail detail) {
     detail.labels ?? const <PlannerLabel>[],
     (label) => label.text,
   );
-  final attachments = _names(
-    detail.attachments ?? const <PlannerAttachment>[],
-    (attachment) => attachment.name,
-  );
-  final weblinks = _names(
-    detail.weblinks ?? const <PlannerWeblink>[],
-    _weblink,
-  );
+  String visible(String text, PlannerVisibility? visibility) =>
+      visibility == null
+      ? text
+      : '$text | visible to pupils: '
+            '${formatPlannerVisibility(visibility, detail)}';
+  final attachments = [
+    for (final attachment in detail.attachments ?? const <PlannerAttachment>[])
+      if (attachment.name.trim() case final name when name.isNotEmpty)
+        visible(name, attachment.visibility),
+  ];
+  final weblinks = [
+    for (final weblink in detail.weblinks ?? const <PlannerWeblink>[])
+      if (_weblink(weblink) case final text when text.isNotEmpty)
+        visible(text, weblink.visibility),
+  ];
   String info(String html) {
     final text = plannerInfoText(html);
     return text.isEmpty ? '(none)' : text;
@@ -337,8 +345,14 @@ String formatElementDetail(PlannedElementDetail detail) {
       if (detail.resolvedStatus case final status?) 'Status: $status',
     ],
     if (labels.isNotEmpty) 'Labels: $labels',
-    if (attachments.isNotEmpty) 'Attachments: $attachments',
-    if (weblinks.isNotEmpty) 'Weblinks: $weblinks',
+    if (attachments.isNotEmpty) ...[
+      'Attachments:',
+      for (final attachment in attachments) '- $attachment',
+    ],
+    if (weblinks.isNotEmpty) ...[
+      'Weblinks:',
+      for (final weblink in weblinks) '- $weblink',
+    ],
     if (!placeholder) ...[
       '',
       'Public info (what pupils see):',
@@ -349,6 +363,38 @@ String formatElementDetail(PlannedElementDetail detail) {
       info(detail.privateInfo),
     ],
   ].join('\n');
+}
+
+/// When pupils see an attachment or a weblink of [element] ([visibility]),
+/// counted from [element] itself: `always`, `never`, `from the start of the
+/// lesson`, `from the end of the lesson`, `from 3 days after the end of the
+/// lesson` (`the assignment` for an assignment); an option the library does
+/// not know by the planner's name for it.
+String formatPlannerVisibility(
+  PlannerVisibility visibility,
+  PlannedElement element,
+) {
+  final of = switch (element.type) {
+    PlannedElementType.lesson => 'the lesson',
+    PlannedElementType.assignment => 'the assignment',
+    _ => 'the element',
+  };
+  final days = visibility.daysAfterEnd;
+  return switch (visibility.option) {
+    PlannerVisibilityOption.always => 'always',
+    PlannerVisibilityOption.never => 'never',
+    PlannerVisibilityOption.atStart => 'from the start of $of',
+    PlannerVisibilityOption.atEnd => 'from the end of $of',
+    PlannerVisibilityOption.daysAfterEnd => switch (days) {
+      null => 'some days after the end of $of (the planner gave no number)',
+      1 => 'from 1 day after the end of $of',
+      _ => 'from $days days after the end of $of',
+    },
+    PlannerVisibilityOption.other =>
+      'as the planner\'s option "${visibility.optionName}"'
+          '${days == null ? '' : ' with $days days'}, which this server does '
+          'not know',
+  };
 }
 
 /// [weblink] as `name (url)`, or the one of the two it has; empty when it
