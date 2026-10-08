@@ -228,6 +228,10 @@
       "description": "Vult de punten van je leerlingen in voor een evaluatie in een van je puntenboeken in Skore, of wist ze. In een gepubliceerde evaluatie alleen als je dat uitdrukkelijk toestaat, want je leerlingen zien de punten dan meteen. Pas na jouw bevestiging."
     },
     {
+      "name": "save_skore_feedback",
+      "description": "Geeft een leerling jouw schriftelijke feedback op een evaluatie in een van je puntenboeken in Skore, of past de feedback aan die je eerder gaf. De feedback van collega's blijft onaangeroerd. Bij een gepubliceerde evaluatie alleen als je dat uitdrukkelijk toestaat, want de leerling ziet de feedback dan meteen. Pas na jouw bevestiging."
+    },
+    {
       "name": "list_skore_classes",
       "description": "Alleen met Skore-beheer aan: toont de klassen in Skore, met hun groep en rapportmodel."
     },

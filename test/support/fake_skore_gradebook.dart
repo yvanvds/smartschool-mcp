@@ -56,12 +56,22 @@ import 'package:dio/dio.dart';
 // {ss}_{pupilId}_0/class/{ss}_{classId}/teacher/{ss}_{userId}_0/context/
 // {modelId}_{groupId}_{classId}`, a list in the shape of dartschool's
 // captures (`test/skore_gradebook_feedback_test.dart`), `ss` being
-// [fakeSkoreGradebookPlatform].
+// [fakeSkoreGradebookPlatform]. And it carries out the two feedback POSTs
+// of the feedback panel (#144, dartschool#152), with a JSON body, as the
+// live Skore did in dartschool's capture of #152:
+//   - create: `POST /skore/api/v1/gradebook/feedback` with `{evaluation:
+//     {evaluationId: "{ss}_{refID}", classGroupId: "{ss}_{classId}",
+//     teacherId: "{ss}_{userId}_0", context: "{modelId}_{groupId}_{classId}"},
+//     studentId: "{ss}_{pupilId}_0", text, attachments: []}`: a new feedback
+//     of that teacher, after the pupil's others, also when the teacher has
+//     one already (a create is not an upsert), answered with it in the shape
+//     of the GET's items (a new UUID, `createdAt` = `changedAt`);
+//   - change: `POST .../feedback/{id}` with `{id, evaluation, studentId,
+//     text, attachments}`: the text of that feedback, `changedAt` the save's
+//     time, `createdAt` kept, answered with the feedback.
 //
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
-// HTTP 501. The later gradebook tools add theirs (the feedback POST): a
-// method of the library's allowlist (`SkoreGradebookService.rpcMethods`)
-// and an answer in the shape of dartschool's capture for it.
+// HTTP 501.
 
 /// Skore's gradebook RPC service, behind `/SkoreGradebook`.
 const fakeSkoreGradebookRpcPath = '/modules/Skore/backend/gradebook/rpc.php';
@@ -80,6 +90,10 @@ const fakeSkoreGradebookRpcMethods = {
 
 /// Skore's REST API of the feedback of a pupil on an evaluation.
 const fakeSkoreFeedbackPath = '/skore/api/v1/gradebook/feedback/';
+
+/// The `POST` of a new feedback on Skore's REST API (#144); a change goes to
+/// `$fakeSkoreFeedbackCreatePath/{id}`.
+const fakeSkoreFeedbackCreatePath = '/skore/api/v1/gradebook/feedback';
 
 /// The Smartschool user id of the fake's account (`12_345_0` on the fake
 /// Smartschool's pages): the teacher of the gradebooks.
@@ -268,7 +282,31 @@ class FakeSkoreFeedback {
 
   /// Skore's `capabilities.can_edit`.
   final bool canEdit;
+
+  /// This feedback with [text] instead, changed at [at] (as a change of the
+  /// REST API keeps it): the rest as it was.
+  FakeSkoreFeedback changed(String text, {required String at}) =>
+      FakeSkoreFeedback(
+        id,
+        text,
+        teacherId: teacherId,
+        teacherName: teacherName,
+        createdAt: createdAt,
+        changedAt: at,
+        attachments: attachments,
+        canEdit: canEdit,
+      );
 }
+
+/// A feedback `POST` of Skore's REST API that reached the fake (#144): its
+/// path (the create's, or a change's with the feedback's id), its JSON body,
+/// its content type and its `X-Requested-With` header.
+typedef FakeSkoreFeedbackSave = ({
+  String path,
+  Map<String, Object?> body,
+  String? contentType,
+  Object? xRequestedWith,
+});
 
 /// One of the user's gradebooks: a course of a class in a school year.
 class FakeSkoreOwnGradebook {
@@ -579,7 +617,10 @@ FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
 /// carried out ([saveAnswerLost]), and [onEvaluationSaved] can change how
 /// Skore lists the new evaluation; the save of a pupil's grade can fail
 /// ([gradeSaveFails]), and [onGradeSaved] can change what Skore lists for
-/// it afterwards.
+/// it afterwards. Every feedback `POST` is recorded in [feedbackSaves]; one
+/// can get [feedbackSaveAnswer] instead (and is then not carried out), or
+/// lose its answer after it was carried out ([feedbackSaveAnswerLost]), and
+/// [onFeedbackSaved] can change what the feedback reads show afterwards.
 class FakeSkoreGradebook {
   /// The school years Skore offers, in its order (newest first).
   final List<FakeSkoreWorkyear> workyears = [];
@@ -663,6 +704,37 @@ class FakeSkoreGradebook {
   /// form the library sends), and the path.
   final List<({int? evaluationId, int? pupilId, String path})> feedbackReads =
       [];
+
+  /// The feedback `POST`s of the REST API that reached the fake (a create,
+  /// or a change of one feedback), in order, also those
+  /// [feedbackSaveAnswer] answered (and that were not carried out).
+  final List<FakeSkoreFeedbackSave> feedbackSaves = [];
+
+  /// The answer that replaces the fake's own to every feedback `POST`, which
+  /// is then not carried out: the HTTP status and the body.
+  ({int status, String body})? feedbackSaveAnswer;
+
+  /// When true, a feedback `POST` is carried out, but answered with HTTP 500
+  /// and Smartschool's error page, as a save whose answer was lost.
+  bool feedbackSaveAnswerLost = false;
+
+  /// The time of a feedback save, as Skore writes it: the `createdAt` of a
+  /// new feedback, the `changedAt` of a changed one.
+  String feedbackSavedAt = '2026-10-08T12:30:00+02:00';
+
+  /// The number of the next new feedback, in its fake UUID
+  /// (`00000000-0000-4000-8000-000000000201` for the first).
+  int nextFeedbackNumber = 201;
+
+  /// Called with the evaluation, the pupil and the feedback right after a
+  /// feedback `POST` was carried out (the feedback reads show it from then
+  /// on): to show something else, as when Skore did not keep it.
+  void Function(
+    FakeSkoreEvaluation evaluation,
+    int pupilId,
+    FakeSkoreFeedback saved,
+  )?
+  onFeedbackSaved;
 
   /// The calls, as `method` or, with a school year, `method wy=22`.
   List<String> get calls => [
@@ -772,6 +844,11 @@ class FakeSkoreGradebook {
     final path = options.uri.path;
     if (options.method == 'GET' && path.startsWith(fakeSkoreFeedbackPath)) {
       return _feedback(path);
+    }
+    if (options.method == 'POST' &&
+        (path == fakeSkoreFeedbackCreatePath ||
+            path.startsWith(fakeSkoreFeedbackPath))) {
+      return _saveFeedback(options);
     }
     if (options.method != 'POST' || path != fakeSkoreGradebookRpcPath) {
       return null;
@@ -1325,6 +1402,128 @@ class FakeSkoreGradebook {
       'capabilities': {'can_read': true, 'can_edit': feedback.canEdit},
     };
   }
+
+  static final _feedbackChange = RegExp(
+    r'^/skore/api/v1/gradebook/feedback/([0-9a-f-]+)$',
+  );
+
+  /// A feedback `POST` of the feedback panel (#144): a create at
+  /// [fakeSkoreFeedbackCreatePath], a change at `.../feedback/{id}`,
+  /// carried out as the live Skore did in dartschool's capture of #152 and
+  /// answered with the feedback as saved.
+  ///
+  /// A `POST` the fake cannot carry out is answered with an error of the
+  /// REST API, which no test expects: another body than the web client's
+  /// (its keys in its order, the evaluation's reference with the user as
+  /// the teacher, a pupil and an evaluation of the same gradebook, a create
+  /// with attachments, a change that does not send the feedback's
+  /// attachments back as they are), another content type or no
+  /// `X-Requested-With` (HTTP 400); a change of a feedback the pupil does not
+  /// have (HTTP 404, as in dartschool's fake); a change of another
+  /// teacher's feedback (HTTP 403: what the live Skore answers it was not
+  /// captured, as the library never sends it).
+  ResponseBody _saveFeedback(RequestOptions options) {
+    final path = options.uri.path;
+    final data = options.data;
+    final body = switch (data) {
+      Map() => {for (final entry in data.entries) '${entry.key}': entry.value},
+      String() => (jsonDecode(data) as Map).cast<String, Object?>(),
+      _ => <String, Object?>{},
+    };
+    feedbackSaves.add((
+      path: path,
+      body: body,
+      contentType: options.contentType,
+      xRequestedWith: options.headers[_xRequestedWith],
+    ));
+    if (feedbackSaveAnswer case (:final status, :final body)) {
+      return _json(body, status: status);
+    }
+    if (unusable) return _html(_errorPage);
+
+    final cannot = _problem(
+      400,
+      'the fake cannot save $path ${jsonEncode(body)}',
+    );
+    final change = _feedbackChange.firstMatch(path)?.group(1);
+    final isCreate = path == fakeSkoreFeedbackCreatePath;
+    if (!isCreate && change == null) return cannot;
+    const ss = fakeSkoreGradebookPlatform;
+    final reference = body['evaluation'];
+    final keys = [
+      if (!isCreate) 'id',
+      'evaluation',
+      'studentId',
+      'text',
+      'attachments',
+    ];
+    final text = body['text'];
+    final attachments = body['attachments'];
+    if (!'${options.contentType}'.startsWith('application/json') ||
+        options.headers[_xRequestedWith] != 'XMLHttpRequest' ||
+        body.keys.join(',') != keys.join(',') ||
+        (!isCreate && body['id'] != change) ||
+        reference is! Map ||
+        reference.keys.join(',') !=
+            'evaluationId,classGroupId,teacherId,context' ||
+        reference['teacherId'] != '${ss}_${fakeSkoreGradebookUser}_0' ||
+        text is! String ||
+        attachments is! List) {
+      return cannot;
+    }
+    int? id(Object? value, String pattern) => int.tryParse(
+      RegExp('^$pattern\$').firstMatch('$value')?.group(1) ?? '',
+    );
+    final evaluationId = id(reference['evaluationId'], '${ss}_(\\d+)');
+    final classId = id(reference['classGroupId'], '${ss}_(\\d+)');
+    final pupilId = id(body['studentId'], '${ss}_(\\d+)_0');
+    final book = gradebooks
+        .where(
+          (g) =>
+              g.classId == classId &&
+              reference['context'] ==
+                  '${g.modelId}_${g.groupId}_${g.classId}' &&
+              evaluationId != null &&
+              g.evaluationWithId(evaluationId) != null,
+        )
+        .firstOrNull;
+    final pupil = book?.pupils.where((p) => p.id == pupilId).firstOrNull;
+    if (book == null || pupil == null) return cannot;
+    final evaluation = book.evaluationWithId(evaluationId!)!;
+    final list = evaluation.feedback[pupil.id] ??= [];
+
+    final FakeSkoreFeedback saved;
+    if (isCreate) {
+      if (attachments.isNotEmpty) return cannot;
+      saved = FakeSkoreFeedback(
+        '00000000-0000-4000-8000-'
+        '${(nextFeedbackNumber++).toString().padLeft(12, '0')}',
+        text,
+        createdAt: feedbackSavedAt,
+      );
+      list.add(saved);
+    } else {
+      final index = list.indexWhere((f) => f.id == change);
+      if (index < 0) return _problem(404, 'Unknown feedback');
+      final existing = list[index];
+      if (existing.teacherId != fakeSkoreGradebookUser) {
+        return _problem(403, 'the fake does not change feedback $change');
+      }
+      final kept = _feedbackJson(existing, evaluation.id, pupil.id, pupil);
+      if (jsonEncode(attachments) != jsonEncode(kept['attachments'])) {
+        return cannot;
+      }
+      saved = existing.changed(text, at: feedbackSavedAt);
+      list[index] = saved;
+    }
+    onFeedbackSaved?.call(evaluation, pupil.id, saved);
+    if (feedbackSaveAnswerLost) return _serverError();
+    return _json(
+      jsonEncode(_feedbackJson(saved, evaluation.id, pupil.id, pupil)),
+    );
+  }
+
+  static const _xRequestedWith = 'X-Requested-With';
 
   /// An error answer of Skore's REST API.
   static ResponseBody _problem(int status, String detail) => _json(

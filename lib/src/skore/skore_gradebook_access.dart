@@ -14,7 +14,7 @@ import 'skore_writes.dart';
 // a pupil and an evaluation of a gradebook by their ids.
 //
 // The tools that change a gradebook (`create_skore_evaluation`, #142;
-// `save_skore_grades`, #143; the feedback of #144) run with
+// `save_skore_grades`, #143; `save_skore_feedback`, #144) run with
 // [withSkoreGradebookWrite].
 // The library checks the gradebook, the period and the values before each
 // save, refusing a change that does not fit with a
@@ -28,10 +28,15 @@ import 'skore_writes.dart';
 // The write tools report an unconfirmed save themselves: a create
 // (`skoreWriteNotConfirmed`) says not to call the tool again but to check
 // with a read tool first; grades, which give the same state when saved
-// again, say to read them again and save the ones that differ. The library
-// sends a grade again itself after a new login, as that is harmless; when
+// again, say to read them again and save the ones that differ; feedback, to
+// read it and, when it is not there, that calling again is safe, as the
+// library reads the pupil's feedback first and changes the user's one
+// rather than adding a second. The library sends a grade and a change of
+// feedback again itself after a new login, as that is harmless; when
 // Smartschool refuses the session for the first grade even then, nothing
-// was saved, and the repeat saves every grade once. The write tools write
+// was saved, and the repeat saves every grade once. A new feedback is sent
+// once, like a new evaluation: a refused session for it is repeated, which
+// reads the pupil's feedback again first. The write tools write
 // in Skore's current school year only, as the library does
 // ([SkoreGradebookYears.findInCurrentYear]), and into an evaluation its
 // pupils see only when the user said yes to that

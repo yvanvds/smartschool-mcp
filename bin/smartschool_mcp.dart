@@ -48,6 +48,7 @@ import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
@@ -165,13 +166,14 @@ Future<void> _serve(ServerOptions options) async {
           planAssignmentTool(session),
           trashAssignmentTool(session),
           // The user's own gradebooks in Skore: no switch, as they need no
-          // extra rights (#140, #141, #142, #143).
+          // extra rights (#140, #141, #142, #143, #144).
           listSkoreGradebooksTool(session),
           readSkoreGradebookTool(session),
           listSkoreEvaluationsTool(session),
           readSkoreFeedbackTool(session),
           createSkoreEvaluationTool(session),
           saveSkoreGradesTool(session),
+          saveSkoreFeedbackTool(session),
           for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,

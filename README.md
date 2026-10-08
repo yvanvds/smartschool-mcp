@@ -866,11 +866,12 @@ meanwhile is gone, so nothing is sent).
 The gradebook tools work in the user's own gradebooks in Skore
 ("Puntenboek", `/SkoreGradebook`), as every teacher has them, with the
 library's `SkoreGradebookService` (dartschool#148, dartschool#149,
-dartschool#150, dartschool#151). They need none of the rights of the Skore
-tools below, so they are offered to every account, without a switch, and no
-message of theirs speaks of "Skore-beheer" or of rights. The first four
-change nothing; `create_skore_evaluation` creates an evaluation, always
-unpublished, and `save_skore_grades` saves the grades of one:
+dartschool#150, dartschool#151, dartschool#152). They need none of the
+rights of the Skore tools below, so they are offered to every account,
+without a switch, and no message of theirs speaks of "Skore-beheer" or of
+rights. The first four change nothing; `create_skore_evaluation` creates an
+evaluation, always unpublished, `save_skore_grades` saves the grades of one,
+and `save_skore_feedback` gives a pupil the user's feedback on one:
 
 - `list_skore_gradebooks`: the user's own gradebooks of one school year
   (`getGradebookYear`), one line each in Skore's order: the class, the
@@ -990,6 +991,31 @@ unpublished, and `save_skore_grades` saves the grades of one:
   description says the same. The result lists each pupil (class number,
   name, pupil id) with the grade as Skore lists it after the save, in the
   order given, under the evaluation with its publication.
+- `save_skore_feedback`: gives one pupil the user's written feedback on one
+  evaluation of a gradebook of Skore's current school year, or changes the
+  text of the feedback the user gave them there (`gradebook_id`,
+  `evaluation_id`, `pupil_id`, `text`; optional `period_id`, to find the
+  evaluation with one read, and `allow_published`, false by default;
+  `saveFeedback`). One pupil per call: each text is personal, and the user
+  should see each one, rather than skim past one in a list. The text is plain
+  text, trimmed, with its line breaks kept (as the library sends it and Skore
+  lists it); a blank text is an error before anything is sent. Marked
+  destructive, so Claude Desktop asks for approval before every call, and
+  not idempotent: a first call creates the feedback. A second call changes
+  that feedback rather than adding one, as the library reads the pupil's
+  feedback first; the description says so instead of claiming idempotence.
+  Its description tells Claude to read the pupil's feedback with
+  `read_skore_feedback` first, and when the user already gave feedback there,
+  to show the old text and the new one, as this replaces it; to show the
+  pupil (class number, name), the evaluation and the text; and to call only
+  after explicit confirmation. Feedback that others gave the pupil is never
+  sent: the library keeps to the user's own. A published or scheduled
+  evaluation is refused without `allow_published`, as for the grades: the
+  pupil sees the feedback at once (and the school sends a notification), or
+  from its publication time on. The result is the feedback as Skore lists it
+  after the save: whether it is new or a change of the user's feedback, its
+  times (written, changed) and its text, under the evaluation with its
+  publication.
 
 The library checks a new evaluation before it saves it (`saveEvaluation`)
 and reads the period again afterwards to confirm it, and the tool reports
@@ -1050,6 +1076,40 @@ session for the first save even then, nothing was saved, and the session
 repeats the call, which saves each grade once. When it refuses a later one,
 the pupils after it are not sent, and the result reports them as not
 confirmed; that is not repeated.
+
+For `save_skore_feedback`, the server reads the gradebook, the pupil, the
+evaluation (refusing a published or scheduled one without
+`allow_published`, as for the grades) and the pupil's feedback
+(`getFeedback`) before the library is asked, and keeps the user's own
+feedback (by the gradebook's teacher, the user). Two cases get their own
+words, and nothing is sent: the user has **more than one** feedback of their
+own for the pupil there (the library changes none of them, as it cannot tell
+which one is meant: the user keeps one in Smartschool), and feedback Skore
+does not let the user change (`can_edit` false: no second feedback is added
+next to it). The library refuses both too, right before the save, but with a
+`SmartschoolSkoreChangeRefusedError` that cannot be told apart from its
+other refusals, and its result does not say whether it created or changed
+the feedback; the server's own read tells both (dartschool#158, removal
+tracked in #149). Then the library reads the gradebook, the evaluation and
+the pupil's feedback again and creates the user's feedback (`POST
+/skore/api/v1/gradebook/feedback`) or changes its text (`POST
+.../feedback/{id}`, its attachments sent back as they are). A refusal of its
+checks (also when the feedback changed between the two reads) is passed on
+with what to read again (`read_skore_feedback`, `read_skore_gradebook`); a
+`SmartschoolSkoreError` from the save (Skore refused it with a `4xx`, whose
+`title` and `detail` can quote the text, or a read before it gave an answer
+the library cannot use) means nothing was saved: the library's message goes
+to the log only, and the result says Skore did not save it. A save Skore did
+not confirm (`SmartschoolSkoreFeedbackSaveUnconfirmedError`) may or may not
+have gone through: the result says to read the pupil's feedback with
+`read_skore_feedback` and tell the user, and that calling the tool again with
+the text is safe when it is not there: a change sends the whole text again
+(`isUpdate`), and after a create the library reads first and changes the
+feedback that create made rather than adding a second. A create is sent once:
+a session Smartschool refuses for it is a `SmartschoolSessionExpiredError` at
+once, not handled, and the session repeats the call, which reads the pupil's
+feedback again first and creates it once. A change is sent again by the
+library after a new login, as it sends the whole text.
 
 The library takes an evaluation as `getEvaluations` lists it, so a
 gradebook tool that takes an `evaluation_id` looks it up in its period
@@ -1597,10 +1657,10 @@ account's platform is 12 (`12_345_0`). A test can replace the answer to a
 method
 (`answers`) or to the feedback reads (`feedbackAnswer`), or answer every
 call with an error page (`unusable`); it answers any other RPC method with
-HTTP 501, and the later gradebook tools add theirs.
+HTTP 501.
 
-The writes in a gradebook (`create_skore_evaluation`, `save_skore_grades`;
-the feedback after them) run with `withSkoreGradebookWrite` in
+The writes in a gradebook (`create_skore_evaluation`, `save_skore_grades`,
+`save_skore_feedback`) run with `withSkoreGradebookWrite` in
 `skore_gradebook_access.dart`: `withSkoreGradebook` with the reason of a
 change a check refused (`SmartschoolSkoreChangeRefusedError`, before the
 last case of `skoreGradebookToolError`) passed on with what to read again
@@ -1624,8 +1684,7 @@ are not carried out); `saveAnswerLost` carries a save out and answers it
 with HTTP 500; `onEvaluationSaved` changes how the new evaluation is listed
 (public, or not at all).
 
-A write into an evaluation (the grades, and the feedback of #144) first
-calls `checkSkoreWritePublication` (in `skore_gradebook_access.dart`) with
+A write into an evaluation (the grades, the feedback) first calls `checkSkoreWritePublication` (in `skore_gradebook_access.dart`) with
 the evaluation as the tool read it, what it writes and its name: for one
 that is published or scheduled, without `allow_published`, a `ToolError`
 that says what the pupils would see and that `allow_published: true` comes
@@ -1639,7 +1698,22 @@ HTTP 400. `gradeSaves` holds the parameters of every `saveGrade` that
 reached it; `gradeSaveFails` answers the saves of some pupils with HTTP 500
 without carrying them out; `onGradeSaved` changes what Skore lists for a
 grade after it was saved; and `beforeAnswer` sees every RPC call before it
-is answered, to change the gradebooks between two reads.
+is answered, to change the gradebooks between two reads. It carries out the
+feedback `POST`s of Skore's REST API as the live Skore did in
+dartschool#152 (`_saveFeedback`): a create (`fakeSkoreFeedbackCreatePath`)
+adds the teacher's feedback after the pupil's others, under a new fake UUID
+(`nextFeedbackNumber`), also next to one of theirs (a create is not an
+upsert); a change (`.../feedback/{id}`) replaces the text and sets
+`changedAt` (`feedbackSavedAt`); both answer with the feedback. A body other
+than the web client's (its keys in order, the user as the teacher, a pupil
+and an evaluation of the gradebook, the attachments sent back as they are),
+another content type or no `X-Requested-With` gets HTTP 400, a change of
+feedback the pupil does not have HTTP 404, and one of another teacher's
+HTTP 403. `feedbackSaves` records every `POST` with its body and headers (the
+tests check that none is about another teacher's feedback);
+`feedbackSaveAnswer` answers them without carrying them out (a `4xx`);
+`feedbackSaveAnswerLost` carries one out and answers it with HTTP 500; and
+`onFeedbackSaved` changes what the feedback reads show after a save.
 
 Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
 `withPresence`, which runs an action with a `PresenceService` on the session
