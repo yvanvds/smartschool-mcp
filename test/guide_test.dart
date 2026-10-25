@@ -8,7 +8,9 @@
 /// installer shows, and where ChatGPT keeps the settings, as the server's
 /// messages say. The links within and between the guides must work, and
 /// the README, the release notes and the extension manifest must link to
-/// them.
+/// them. What the guides say about the pupil tracking system (LVS) must
+/// agree with its tools, and the bug template and the README must keep
+/// pupil data out of issues (#158).
 library;
 
 import 'dart:convert';
@@ -19,6 +21,10 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/install.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_access.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_notes.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_results.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -33,6 +39,7 @@ import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
 import '../tool/release_notes.dart';
 import 'support/fake_github.dart';
@@ -349,6 +356,398 @@ void main() {
           ),
           reason: assistant,
         );
+      }
+    });
+  });
+
+  group('the pupil tracking system (Leerlingvolgsysteem), as its tools are '
+      'built (#158)', () {
+    final chatGpt = _read(_chatGptGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+    // Read in the first test that needs them, as _subsection expects.
+    late final section = _subsection(text, '### Leerlingvolgsysteem');
+    late final privacy = _subsection(text, '### Het leerlingvolgsysteem');
+    late final chatGptSection = _subsection(chatGpt, '### Leerlingvolgsysteem');
+    late final chatGptPrivacy = _subsection(
+      chatGpt,
+      '### Het leerlingvolgsysteem',
+    );
+    final session = SmartschoolSession(const ExtensionSettings());
+    tearDownAll(session.close);
+    final optIn = lvsOptIn(session, SwitchState.on);
+    final tools = {
+      for (final tool in optIn.tools) tool.definition.name: tool.definition,
+    };
+
+    test('is behind a switch that is off by default, which both guides '
+        'explain and send to the privacy section first', () {
+      expect(optIn.setting, Setting.lvs);
+      expect(Setting.lvs.isSwitch, isTrue);
+      expect(tools.keys, [
+        'search_lvs_pupils',
+        'read_lvs_pupil',
+        'read_lvs_notes',
+        'read_lvs_results',
+        'read_lvs_support_plan',
+        'read_lvs_absences',
+      ]);
+      expect(
+        text.substring(0, text.indexOf('## Inhoud')),
+        contains(
+          '- **Leerlingvolgsysteem**, alleen als jij en je school dat willen',
+        ),
+      );
+      expect(
+        section,
+        allOf(
+          contains(
+            '### Leerlingvolgsysteem Alleen met **Leerlingvolgsysteem** aan. '
+            'Het staat standaard uit, en dat is bewust',
+          ),
+          contains(
+            'lees eerst [Veiligheid en privacy](#8-veiligheid-en-privacy)',
+          ),
+        ),
+      );
+      expect(
+        chatGptSection,
+        allOf(
+          contains(
+            '### Leerlingvolgsysteem Alleen met `${Setting.lvs.envVar}` op '
+            '`true`',
+          ),
+          contains('Het staat standaard uit, en dat is bewust'),
+          contains('[Het leerlingvolgsysteem](#het-leerlingvolgsysteem)'),
+          contains('(installatie.md#leerlingvolgsysteem)'),
+        ),
+      );
+      // The link of the switch's description and of smartschool_status's
+      // caution goes to the section that holds the LVS's privacy part.
+      const heading = '8. Veiligheid en privacy';
+      expect(lvsPrivacyGuideUrl, '$_guideUrl#${_gitHubAnchor(heading)}');
+      expect(lvsCaution, contains(lvsPrivacyGuideUrl));
+      expect(
+        _section(text, '## $heading'),
+        contains('### Het leerlingvolgsysteem'),
+      );
+    });
+
+    test('says Claude only reads, one pupil per call: every tool is '
+        'read-only, and every tool about a pupil takes one pupil_id', () {
+      for (final MapEntry(key: name, value: tool) in tools.entries) {
+        expect(tool.toolAnnotations?.readOnlyHint, isTrue, reason: name);
+        expect(tool.description, contains(lvsPrivacyRules), reason: name);
+        if (name == 'search_lvs_pupils') continue;
+        expect(tool.inputSchema.properties!['pupil_id'], {
+          'type': 'integer',
+          'description': isA<String>(),
+          'minimum': 1,
+        }, reason: name);
+        expect(tool.inputSchema.required, contains('pupil_id'), reason: name);
+      }
+      final manifest =
+          jsonDecode(_read('manifest.json')) as Map<String, Object?>;
+      expect(
+        [
+          for (final tool in manifest['tools'] as List)
+            if (((tool as Map)['name'] as String).contains('lvs')) tool['name'],
+        ],
+        tools.keys,
+        reason: 'no LVS tool but the ones that read',
+      );
+      expect(
+        section,
+        allOf(
+          contains('Claude kan in het LVS niets veranderen: het leest alleen.'),
+          contains(
+            'Claude leest één leerling per keer, nooit de notities of '
+            'resultaten van een hele klas tegelijk.',
+          ),
+        ),
+      );
+      for (final (part, assistant) in [
+        (privacy, 'Claude'),
+        (chatGptPrivacy, 'ChatGPT'),
+      ]) {
+        expect(
+          part,
+          allOf(
+            contains('$assistant kan in het LVS niets veranderen'),
+            contains('**Vraag naar één leerling per keer,**'),
+          ),
+          reason: assistant,
+        );
+      }
+      expect(chatGptSection, contains('ChatGPT kan in het LVS niets'));
+    });
+
+    test('says what is left out unless asked, and how to get it, as the '
+        'arguments of the tools do', () {
+      final notes = tools['read_lvs_notes']!;
+      final absences = tools['read_lvs_absences']!;
+      for (final (tool, argument, sentence) in [
+        (
+          notes,
+          'include_confidential',
+          'Confidential notes (vertrouwelijk) are left out and only counted, '
+              'unless include_confidential is true',
+        ),
+        (
+          absences,
+          'with_motivation',
+          'motivations are left out and only counted, unless with_motivation '
+              'is true',
+        ),
+      ]) {
+        expect(tool.description, contains(sentence), reason: tool.name);
+        expect(tool.inputSchema.properties![argument], {
+          'type': 'boolean',
+          'description': contains('Default false'),
+        }, reason: tool.name);
+        expect(tool.inputSchema.required, isNot(contains(argument)));
+      }
+      expect(
+        section,
+        allOf(
+          contains(
+            '**Vertrouwelijke notities laat Claude weg:** het zegt alleen '
+            'hoeveel er zijn. Wil je ze toch, vraag er dan uitdrukkelijk '
+            'naar.',
+          ),
+          contains('**De motivering van een afwezigheid laat Claude weg**'),
+          contains('Claude leest ze alleen als je vraagt waarom Jan afwezig'),
+          // The defaults the guide names, as the tools apply them.
+          contains(
+            'Per keer leest Claude er standaard $lvsNotesDefaultLimit; vraag '
+            'gerust meer (tot $lvsNotesMaxLimit)',
+          ),
+          contains('Heeft een vak $lvsResultsSummaryFrom of meer evaluaties'),
+        ),
+      );
+      for (final (guide, assistant) in [
+        (text, 'Claude'),
+        (chatGpt, 'ChatGPT'),
+      ]) {
+        expect(
+          guide,
+          contains(
+            'Vertrouwelijke notities en de motivering van afwezigheden laat '
+            '$assistant weg, tenzij je erom vraagt.',
+          ),
+          reason: assistant,
+        );
+      }
+      for (final (part, assistant) in [
+        (privacy, 'Claude'),
+        (chatGptPrivacy, 'ChatGPT'),
+      ]) {
+        expect(
+          part,
+          contains(
+            '**Vertrouwelijke notities en de motivering van afwezigheden '
+            'laat $assistant weg,** tenzij je er uitdrukkelijk om vraagt.',
+          ),
+          reason: assistant,
+        );
+      }
+    });
+
+    test('says what is not read yet, as the descriptions do', () {
+      expect(
+        tools['read_lvs_support_plan']!.description,
+        contains(
+          "Not read yet: the plan's evaluation and its report, and the "
+          'earlier versions of its items.',
+        ),
+      );
+      expect(
+        tools['read_lvs_results']!.description,
+        contains(
+          'Not read: the comments on reports, and the older Skore part some '
+          'schools still show instead of Resultaten.',
+        ),
+      );
+      expect(
+        tools['read_lvs_notes']!.description,
+        allOf(
+          contains('the server sends nothing that marks a note as seen'),
+          contains('is not known yet'),
+        ),
+      );
+      expect(
+        section,
+        allOf(
+          contains(
+            'Van een handelingsplan de evaluatie, het rapport en de vroegere '
+            'versies.',
+          ),
+          contains(
+            'Van de resultaten de commentaren op de rapporten, en het oudere '
+            'onderdeel Skore, dat sommige scholen nog tonen in plaats van '
+            'Resultaten.',
+          ),
+          contains(
+            'daarna niet meer als nieuw toont voor jou, is nog niet '
+            'nagegaan. De extensie stuurt in elk geval niets wat een '
+            'notitie als gelezen markeert.',
+          ),
+        ),
+      );
+    });
+
+    test('says under Veiligheid en privacy what goes to the AI provider, '
+        'that nothing stays on the PC, and what a colleague can do: no new '
+        'advice to ask the DPO (#108)', () {
+      for (final (guide, part, assistant, company) in [
+        (text, privacy, 'Claude', 'Anthropic'),
+        (chatGpt, chatGptPrivacy, 'ChatGPT', 'OpenAI'),
+      ]) {
+        expect(
+          _section(guide, '## 8. Veiligheid en privacy'),
+          contains('[Het leerlingvolgsysteem](#het-leerlingvolgsysteem)'),
+          reason: assistant,
+        );
+        expect(
+          part,
+          allOf([
+            contains(
+              'in het leerlingvolgsysteem (LVS) leest naar de servers van '
+              '$company',
+            ),
+            contains('de gevoeligste gegevens over leerlingen'),
+            contains('iets zeggen over hun gezondheid, zorg of thuissituatie'),
+            contains('**Het staat standaard uit.**'),
+            contains('het privacybeleid van je school'),
+            contains('**Gebruik het alleen met een betalend'),
+            contains('bewaart niets uit het LVS op je pc'),
+            isNot(contains('DPO')),
+          ]),
+          reason: assistant,
+        );
+      }
+      expect(privacy, contains('(in het Engels: *Help improve Claude*)'));
+      expect(
+        chatGptPrivacy,
+        contains('(#eerst-openai-niet-laten-trainen-met-je-gesprekken)'),
+      );
+      expect(
+        _subsection(text, '### Wat bewaart de extensie, en waar?'),
+        contains(
+          '**Uit het leerlingvolgsysteem bewaart de extensie niets op je '
+          'pc:**',
+        ),
+      );
+    });
+
+    test('names in its example questions only pupils of the fakes of the '
+        'LVS fixtures', () {
+      final fakes = _read('test/fixtures/lvs/FAKES.md');
+      final people = fakes.substring(
+        fakes.indexOf('## People'),
+        fakes.indexOf('## Schools'),
+      );
+      final names = [
+        for (final match in RegExp(
+          r'^- `(.+?)`',
+          multiLine: true,
+        ).allMatches(people))
+          match.group(1)!,
+      ];
+      expect(names, containsAll(['Jan Janssens', 'Marie Peeters']));
+      final fakeWords = {for (final name in names) ...name.split(' ')};
+      final questions = [
+        for (final match in RegExp(r'(?:^| )- "([^"]+)"').allMatches(section))
+          match.group(1)!,
+        for (final match in RegExp(r'"([^"]+\?)"').allMatches(chatGptSection))
+          match.group(1)!,
+      ];
+      expect(questions, hasLength(8));
+      expect(questions, contains('Hoe doet Jan Janssens het dit trimester?'));
+      for (final question in questions) {
+        // Every capitalised word but the first is a name of a fake.
+        final words = question.replaceAll(RegExp(r'[?,.!]'), '').split(' ');
+        for (final word in words.skip(1)) {
+          if (word.startsWith(RegExp('[A-Z]'))) {
+            expect(fakeWords, contains(word), reason: question);
+          }
+        }
+      }
+    });
+
+    test('asks for no pupil data, LVS answers or log lines with names in a '
+        'bug report: in the bug template and under Hulp nodig?', () {
+      final template =
+          loadYaml(_read('.github/ISSUE_TEMPLATE/bug.yml')) as YamlMap;
+      const sentence =
+          'pupil data, LVS answers or log lines with names: describe what '
+          'happened instead.';
+      expect(
+        template['description'],
+        contains(
+          'Never paste pupil data, answers from the pupil tracking system '
+          '(LVS) or log lines with names: describe what happened instead.',
+        ),
+      );
+      final logs =
+          [
+                for (final field in template['body'] as YamlList)
+                  if ((field as YamlMap)['id'] == 'notes') field['attributes'],
+              ].single
+              as YamlMap;
+      expect(
+        logs['description'],
+        allOf(startsWith('Logs'), contains(sentence)),
+      );
+      for (final (guide, assistant) in [
+        (text, 'Claude'),
+        (chatGpt, 'ChatGPT'),
+      ]) {
+        expect(
+          _section(guide, '## 10. Hulp nodig?'),
+          allOf(
+            contains(
+              'gegevens over leerlingen in een melding of een '
+              'schermafbeelding',
+            ),
+            contains(
+              'ook geen antwoord van $assistant uit het leerlingvolgsysteem, '
+              'en geen regels uit een logboek met namen erin. Beschrijf '
+              'liever wat er gebeurde.',
+            ),
+          ),
+          reason: assistant,
+        );
+      }
+    });
+
+    test('gives contributors the rules of the library\'s doc/lvs-privacy.md '
+        'in the README, and names every LVS helper file', () {
+      const rules =
+          'https://github.com/yvanvds/dartschool/blob/main/doc/lvs-privacy.md';
+      final readme = _read('README.md');
+      final development = readme.substring(
+        readme.indexOf('## Development'),
+        readme.indexOf('### Build'),
+      );
+      expect(
+        development,
+        allOf(
+          contains('### Pupil tracking system (LVS) data'),
+          contains('[`doc/lvs-privacy.md`]($rules)'),
+          contains('(yvanvds/dartschool#159)'),
+          contains('`test/fixtures/lvs/FAKES.md`'),
+          contains('`test/lvs_fixtures_guard_test.dart`'),
+        ),
+      );
+      expect(_read('test/fixtures/lvs/FAKES.md'), contains('($rules)'));
+      expect(readme, contains('LVS helpers live in `lib/src/lvs/`.'));
+      final helpers = [
+        for (final file in Directory('lib/src/lvs').listSync())
+          if (file is File && file.path.endsWith('.dart'))
+            file.uri.pathSegments.last,
+      ];
+      expect(helpers, isNotEmpty);
+      for (final helper in helpers) {
+        expect(readme, contains('`$helper`'), reason: helper);
       }
     });
   });

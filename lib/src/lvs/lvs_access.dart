@@ -43,7 +43,8 @@ const lvsRights =
     'LVS), as most teachers have';
 
 /// The privacy section of the colleague guide, which the switch's
-/// description and [lvsCaution] link to (#158 adds the LVS to it).
+/// description and [lvsCaution] link to; its part on the LVS is
+/// "Het leerlingvolgsysteem" (#158).
 const lvsPrivacyGuideUrl =
     'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
     'installatie.md#8-veiligheid-en-privacy';

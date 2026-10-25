@@ -134,17 +134,26 @@ void main() {
       ),
     );
     // Not rights but a choice: the most sensitive data about pupils, with
-    // the privacy section of the guide (#153; #158 adds the LVS to it).
+    // the privacy section of the guide and what is left out unless asked
+    // (#153, #158).
     final lvs = fields[Setting.lvs.fileKey]!;
     expect(
       lvs['description'],
-      allOf(
+      allOf([
         startsWith('Alleen als jij en je school dat willen'),
         contains('leerlingvolgsysteem (LVS)'),
         contains('de gevoeligste gegevens over leerlingen'),
+        contains(
+          'de notities, de resultaten, het handelingsplan en de afwezigheden',
+        ),
+        contains('Alleen lezen, één leerling per keer'),
+        contains(
+          'vertrouwelijke notities en de motivering van afwezigheden alleen '
+          'als je erom vraagt',
+        ),
         contains(lvsPrivacyGuideUrl),
         contains('laat het dan uit'),
-      ),
+      ]),
     );
     final session = SmartschoolSession(const ExtensionSettings());
     final optIns = <OptInTools>[
@@ -175,7 +184,8 @@ void main() {
 
   test('sums up in its long description the parts the Claude Desktop guide '
       'sums up, in its order, each part a switch turns on marked with that '
-      'switch, and the gradebook as the guide does (#150)', () {
+      'switch, and the gradebook and the pupil tracking system as the guide '
+      'does (#150, #158)', () {
     final guide = File(
       'docs/installatie.md',
     ).readAsStringSync().replaceAll('\r\n', '\n');
@@ -201,10 +211,7 @@ void main() {
     final switchTitles = {
       for (final setting in Setting.switches) setting.formTitle,
     };
-    // "Leerlingvolgsysteem" (#153) comes into the guide's summary and the
-    // long description with its privacy section, in #158.
-    final pending = {Setting.lvs.formTitle};
-    expect(parts.keys, containsAll(switchTitles.difference(pending)));
+    expect(parts.keys, containsAll(switchTitles));
     for (final MapEntry(key: name, value: part) in parts.entries) {
       expect(
         part.switchTitle,
@@ -227,6 +234,24 @@ void main() {
         'Dit is er voor elke leerkracht: je hoeft er niets voor aan te '
             'zetten.',
       ),
+      // The pupil tracking system (#158): read-only, one pupil at a time,
+      // and what is left out unless asked.
+      (
+        'Leerlingvolgsysteem',
+        'in het leerlingvolgsysteem (LVS) een leerling opzoeken en zijn '
+            'dossier lezen: de notities, de resultaten in alle vakken, het '
+            'handelingsplan en de afwezigheden.',
+      ),
+      (
+        'Leerlingvolgsysteem',
+        'Eén leerling per keer, en alleen lezen: Claude kan in het LVS niets '
+            'veranderen.',
+      ),
+      (
+        'Leerlingvolgsysteem',
+        'Vertrouwelijke notities en de motivering van afwezigheden laat '
+            'Claude weg, tenzij je erom vraagt.',
+      ),
     ]) {
       expect(guideText, contains(sentence));
       expect(parts[part]!.text, contains(sentence), reason: part);
@@ -238,6 +263,25 @@ void main() {
     expect(
       parts['Skore-beheer']!.text,
       contains('Voor je eigen puntenboek heb je Skore-beheer niet nodig.'),
+    );
+    expect(
+      parts['Leerlingvolgsysteem']!.text,
+      allOf(
+        startsWith('alleen als jij en je school dat willen'),
+        contains('het staat standaard uit'),
+        contains('gaat naar Anthropic'),
+        contains('Lees eerst Veiligheid en privacy in de gids.'),
+      ),
+    );
+    expect(
+      guideText,
+      contains(
+        '- **Leerlingvolgsysteem**, alleen als jij en je school dat willen',
+      ),
+    );
+    expect(
+      longDescription,
+      contains('Uit het leerlingvolgsysteem bewaart ze niets.'),
     );
   });
 

@@ -96,6 +96,43 @@ second copy get a name of its own) into a temporary download folder that is
 deleted afterwards, checks their sizes and first bytes, and prints
 extensions, sizes and timings only; run it with `--name save_intradesk_file`.
 
+### Pupil tracking system (LVS) data
+
+The LVS tools read the most sensitive data Smartschool has (care, behaviour,
+educational needs, sometimes health). **No LVS data from a live school ever
+goes into this repository or onto GitHub.** The rules are the library's,
+in flutter_smartschool's
+[`doc/lvs-privacy.md`](https://github.com/yvanvds/dartschool/blob/main/doc/lvs-privacy.md)
+(yvanvds/dartschool#159), and hold here too, for every contributor and every
+coding agent:
+
+- The fixtures of the fake LVS (`test/fixtures/lvs/`) are written by hand,
+  in the shapes the library's research found, and never derived from a live
+  answer by trimming it: an LVS answer is mostly free text about a pupil, and
+  a forgotten sentence is a leak. They name only the fakes of
+  `test/fixtures/lvs/FAKES.md` (a copy of the library's list: add a fake
+  there and here alike), hold ids in 900000–999999 only and free text that
+  says "test". `test/lvs_fixtures_guard_test.dart`, a copy of the library's
+  guard, checks them, and names a file and a field when it fails, never a
+  value.
+- Issues, PRs, commit messages, code comments and docs describe an LVS
+  answer by its shape: field names, types, nesting and placeholders
+  (`<pupil id>`, `<text>`, "Jan Janssens"). Never a value from a live
+  answer: no names, no pupil, class or note ids, no dates or texts of a note,
+  no category names a school made itself. Example questions in the guides
+  use the fakes too.
+- A coding agent does not open a pupil's data, and makes no live LVS calls.
+  The live check of the tools on a real pupil is the developer's (#159), and
+  reports only what worked, shapes and counts, never values. Raw answers
+  from research go to a temp folder outside the repository, never to
+  `dev_dumps/` or another git-ignored folder in the working tree.
+- A bug report holds no pupil data, no LVS answers and no log lines with
+  names (the bug template and both guides say so): it describes what
+  happened.
+
+The tools themselves only read, keep nothing on disk and log nothing but an
+error's type: see the LVS tools under *Tools* and `lib/src/lvs/` below.
+
 ### Build
 
 ```
@@ -1966,6 +2003,39 @@ did live (dartschool#104): every class it knows with its pupils, also one
 the account may only view, and a class without pupils, a class ID it does
 not know and a day after `today` without pupils, with `saveIsAllowed:
 false` and the module's reason.
+
+LVS helpers live in `lib/src/lvs/`. In `lvs_access.dart`: `withLvs`, which
+runs an action with an `LvsService` on the session and turns the LVS's
+errors into `ToolError`s that say what to do (`lvsToolError`, with `lvsFix`
+for an account without access); `lvsTool`, which every LVS tool is, so that
+nothing of an error reaches the log but its type and HTTP status
+(`lvsLogDescription`); the sentences every description ends with
+(`lvsPrivacyRules`); what turning the switch on means, for
+`smartschool_status` (`lvsRights`, and `lvsCaution` with
+`lvsPrivacyGuideUrl`, the guide's privacy section); the arguments the tools
+share (`lvsPupilArguments` with `lvsPupilIdSchema` and `lvsClassIdSchema`,
+`lvsSchoolYearArgument` and `lvsSchoolYearSchema`, and an id or a name with
+`lvsIdOrNameArgument`, `lvsIdIn`, `lvsNameKey` and `lvsNamed`); and
+`checkLvsAccess`, the access check of `smartschool_status`. In
+`lvs_format.dart`: the lines of `search_lvs_pupils` and `read_lvs_pupil`
+(`formatLvsMatches`, `formatLvsPupilFile`, with `lvsSectionReaders`, the
+tool that reads each part), a school year (`formatLvsSchoolYear`) and a
+Belgian day (`lvsDay`). Each part of the file the tools read has a file of
+its own, which reads it, picks from it and writes the answer:
+`lvs_notes.dart` (`readLvsNotes`, `selectLvsNotes`, `formatLvsNotes`),
+`lvs_results.dart` (`readLvsResults`, `formatLvsResults`),
+`lvs_support_plan.dart` (`readLvsSupportPlan`, `formatLvsSupportPlan`) and
+`lvs_absences.dart` (`readLvsAbsences`, `formatLvsAbsences`). In
+`lvs_opt_in.dart`: the LVS tools behind their switch (`lvsOptIn`). The tests
+run against a fake LVS (`test/support/fake_lvs.dart`,
+`FakeSmartschool.lvs`) that answers the reads of `LvsService` with the
+hand-written fixtures of `test/fixtures/lvs/`, with the fakes of
+`test/fixtures/lvs/FAKES.md` only (see *Pupil tracking system (LVS) data*
+above). `test/support/lvs_tool_harness.dart` calls the LVS tools over MCP
+on the real server and library against that fake, and gives each test the
+requests the fake LVS got, the server's log of a call
+(`test/support/log_capture.dart`) and the cache folder, to check that
+nothing of a pupil reaches either.
 
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message and lesfiche attachments can use it too: `readDocument(bytes,
