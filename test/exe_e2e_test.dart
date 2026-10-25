@@ -637,7 +637,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(66));
+    expect(tools, hasLength(67));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -648,6 +648,7 @@ void main() {
         'read_lvs_notes',
         'read_lvs_results',
         'read_lvs_support_plan',
+        'read_lvs_absences',
       ]),
       reason: 'the presence and LVS tools are checked too',
     );
@@ -1197,6 +1198,7 @@ void main() {
       'read_lvs_notes',
       'read_lvs_results',
       'read_lvs_support_plan',
+      'read_lvs_absences',
     ];
 
     Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
@@ -1245,6 +1247,7 @@ void main() {
           'read_lvs_notes',
           'read_lvs_results',
           'read_lvs_support_plan',
+          'read_lvs_absences',
         ]) {
           final (isError, text) = await server.callTool(name);
           expect(isError, isTrue, reason: name);
@@ -1270,7 +1273,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(54));
+      expect(tools, hasLength(55));
       expect([for (final tool in tools.skip(49)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
@@ -1349,6 +1352,27 @@ void main() {
           contains('read with read_lvs_notes'),
         ),
       );
+      // The absences (#157): of one pupil and a school year; motivations
+      // only when the user asks why the pupil was absent.
+      final absences = byName['read_lvs_absences']!['inputSchema'] as Map;
+      expect(absences['required'], ['pupil_id', 'class_id']);
+      expect((absences['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'school_year',
+        'with_motivation',
+      ]);
+      expect(
+        ((absences['properties'] as Map)['with_motivation'] as Map)['type'],
+        'boolean',
+      );
+      expect(
+        byName['read_lvs_absences']!['description'],
+        allOf(
+          contains('the current one unless school_year is given'),
+          contains('set it only when the user asks why the pupil was absent'),
+        ),
+      );
 
       final (statusError, status) = await server.callTool('smartschool_status');
       expect(statusError, isNot(true));
@@ -1384,6 +1408,15 @@ void main() {
             'course': 'Testvak',
           },
         ),
+        (
+          'read_lvs_absences',
+          {
+            'pupil_id': 900003,
+            'class_id': 900103,
+            'school_year': '2030-2031',
+            'with_motivation': true,
+          },
+        ),
       ]) {
         final (isError, text) = await server.callTool(
           tool,
@@ -1400,12 +1433,14 @@ void main() {
 
       await server.stop();
       final log = await server.stderr;
-      expect(log, contains('Leerlingvolgsysteem: on, 5 tools offered'));
+      expect(log, contains('Leerlingvolgsysteem: on, 6 tools offered'));
       expect(log.toLowerCase(), isNot(contains('testcategorie')));
       expect(log.toLowerCase(), isNot(contains('testvak')));
       expect(log.toLowerCase(), isNot(contains('testperiode')));
       expect(log.toLowerCase(), isNot(contains('janssens')));
       expect(log, isNot(contains('900002')));
+      expect(log, isNot(contains('900003')));
+      expect(log, isNot(contains('2030-2031')));
     });
 
     test('with "Skore-beheer" and "Aanwezigheden" on too: the Skore tools, '
@@ -1422,7 +1457,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(66));
+      expect(tools, hasLength(67));
       expect([for (final tool in tools.skip(61)) tool['name']], lvsTools);
       expect(
         [for (final tool in tools.skip(57).take(4)) tool['name']],

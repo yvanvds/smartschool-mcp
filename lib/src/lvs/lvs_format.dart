@@ -18,6 +18,8 @@ const lvsSectionReaders = <String, String>{
   LvsSectionType.results: 'read_lvs_results',
   // The support plans, "handelingsplannen" (#156).
   LvsSectionType.supportPlans: 'read_lvs_support_plan',
+  // The absences, "Afwezigheden" (#157).
+  LvsSectionType.absences: 'read_lvs_absences',
 };
 
 /// [schoolYear] as the LVS labels a school year, `2030-2031`; another range

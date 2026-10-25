@@ -34,9 +34,8 @@
 // [LvsFixtureKind] for that folder to [lvsFixtureKinds], with the fields of
 // its answers that hold names, ids or free text beyond the common ones
 // ([commonNameFields], [commonIdFields], [commonTextFields]), and, for fields
-// known by position only, an [LvsFixtureKind.extraFields] function. The
-// library's guard has the kind of the other LVS read (`absences`) with its
-// extra fields, to copy with its fixtures.
+// known by position only, an [LvsFixtureKind.extraFields] function (see the
+// `notes` and `absences` kinds).
 import 'dart:convert';
 import 'dart:io';
 
@@ -206,8 +205,8 @@ class LvsFixtureKind {
 }
 
 /// The kinds of LVS fixtures: those of the fake LVS
-/// (`test/support/fake_lvs.dart`). The LVS tools that follow #153 add
-/// theirs, as the library's guard has them.
+/// (`test/support/fake_lvs.dart`), one per read of the LVS tools (#153 to
+/// #157), as the library's guard has them.
 const lvsFixtureKinds = <LvsFixtureKind>[
   LvsFixtureKind(
     folder: 'spotlight',
@@ -306,7 +305,43 @@ const lvsFixtureKinds = <LvsFixtureKind>[
       'fileName',
     },
   ),
+  LvsFixtureKind(
+    folder: 'absences',
+    about:
+        'Answers of POST /LVS/Pupilpresences (yvanvds/dartschool#164, #157): '
+        "a pupil's absences per school year (a list of days each), as the "
+        "file's absences section lists them.",
+    // As the library's guard has them: `codeDescr` is the description of a
+    // school's absence code (a label), `codeKey` the key of the code (ids:
+    // `<n>` or `<n>-<n>`); the motivation is `motivation` (common). The keys
+    // of `presences` are school years (`2030-2031`, no label) or labels of
+    // periods: absencePeriodLabels. Not checked: `formattedDate` (a day,
+    // made up as FAKES.md says; no field type tells a made-up day), and
+    // `partOfDay`, `lng_months`, `lng_days` and `lng_noresults`, words of
+    // Smartschool itself.
+    nameFields: {'codeDescr'},
+    idFields: {'codeKey'},
+    extraFields: absencePeriodLabels,
+  ),
 ];
+
+/// The labels of the periods of an `absences` fixture, copied from the
+/// library's guard (yvanvds/dartschool#164): the keys of its `presences`
+/// that are not a school year `YYYY-YYYY` (a school's own labels), which no
+/// field name finds. A school year, as the LVS keys the periods of a
+/// pupil's file (yvanvds/dartschool#176), is no label.
+Iterable<LvsField> absencePeriodLabels(Object? document) sync* {
+  if (document is! Map) return;
+  final presences = document['presences'];
+  if (presences is! Map) return;
+  for (final (i, label) in presences.keys.indexed) {
+    if (_schoolYearKey.hasMatch('$label')) continue;
+    yield LvsField('presences key [$i]', LvsFieldType.name, '$label');
+  }
+}
+
+/// A key of an `absences` fixture's `presences` that is a school year.
+final _schoolYearKey = RegExp(r'^\d{4}-\d{4}$');
 
 /// The fields of the notes of a `notes` fixture by their position, as the
 /// library reads them (the names of the elements in a note are not
@@ -1371,6 +1406,76 @@ void main() {
       for (final value in ['12345', 'Gesprek', 'Onbekend', 'verslag']) {
         expect(found, isNot(contains(value)));
       }
+    });
+
+    // The two tests of the library's guard for the absences kind
+    // (yvanvds/dartschool#164, #176), copied with it (#157).
+    test('checks the labels of the periods and of the codes of the absences '
+        '(#157), and their motivation, without the values', () {
+      final kind = lvsFixtureKinds.singleWhere((k) => k.folder == 'absences');
+      Map<String, Object?> answer(String period, String code, String text) => {
+        'presences': {
+          period: {
+            '2030-09-16': {
+              'full': {'code': 'TA', 'codeDescr': code, 'motivation': text},
+            },
+          },
+        },
+        'year_label': '2030 - 2031',
+      };
+
+      expect(
+        jsonProblems(
+          answer('Testcategorie', 'Testcategorie', 'Testmotivatie.'),
+          kind: kind,
+        ),
+        isEmpty,
+      );
+      final problems = jsonProblems(
+        answer('Onbekende periode', 'Onbekende code', 'Ziek thuis.'),
+        kind: kind,
+      );
+      expect(problems, hasLength(3));
+      expect(problems.join('\n'), contains('presences key [0]'));
+      expect(problems.join('\n'), contains('codeDescr'));
+      expect(problems.join('\n'), contains('motivation'));
+      expect(problems.join('\n'), isNot(contains('Onbekende')));
+      expect(problems.join('\n'), isNot(contains('Ziek')));
+    });
+
+    test('takes a school year as a key of the absences for no label, and '
+        'checks their code key as an id (#157), without the values', () {
+      final kind = lvsFixtureKinds.singleWhere((k) => k.folder == 'absences');
+      Map<String, Object?> answer(String period, String codeKey) => {
+        'presences': {
+          period: [
+            {
+              'am': {
+                'codeKey': codeKey,
+                'code': 'TA',
+                'codeDescr': 'Testcategorie',
+                'formattedDate': 'ma 16 september 2030',
+              },
+            },
+          ],
+        },
+        'year_label': '2030-2031',
+      };
+
+      expect(jsonProblems(answer('2030-2031', '900501'), kind: kind), isEmpty);
+      expect(
+        jsonProblems(answer('2030-2031', '900502-900503'), kind: kind),
+        isEmpty,
+      );
+      final problems = [
+        ...jsonProblems(answer('2030-2031', '12345-900503'), kind: kind),
+        ...jsonProblems(answer('2030-2031 Onbekend', '900501'), kind: kind),
+      ];
+      expect(problems, hasLength(2));
+      expect(problems.join('\n'), contains('codeKey'));
+      expect(problems.join('\n'), contains('presences key [0]'));
+      expect(problems.join('\n'), isNot(contains('12345')));
+      expect(problems.join('\n'), isNot(contains('Onbekend')));
     });
 
     test('reads HTML: attributes, classes, name="key"', () {

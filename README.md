@@ -1425,7 +1425,7 @@ The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
 not about rights: the LVS holds the most sensitive data about pupils (care,
 behaviour, educational needs, sometimes health), and the user and their
 school must choose to let an AI assistant read it. The tools use the
-library's `LvsService` (yvanvds/dartschool#160 to #163), which sends only its
+library's `LvsService` (yvanvds/dartschool#160 to #164), which sends only its
 reads, by an allowlist; all of them only read:
 
 - `search_lvs_pupils`: the pupils whose name matches `query`, among those the
@@ -1447,7 +1447,8 @@ reads, by an allowlist; all of them only read:
   is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`):
   `read_lvs_notes` for the note categories and their headings,
   `read_lvs_results` for the results (Resultaten), `read_lvs_support_plan`
-  for the support plans (handelingsplannen). The LVS
+  for the support plans (handelingsplannen), `read_lvs_absences` for the
+  absences (Afwezigheden). The LVS
   answers a pupil it does not know in that class with a placeholder pupil,
   which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
   says to take both ids from one line of the search.
@@ -1585,6 +1586,34 @@ reads, by an allowlist; all of them only read:
   plan was captured (yvanvds/dartschool#168): the fixtures are in the shapes
   of the LVS's JavaScript. The file's read takes today's attendance along,
   unused: the workaround of #160.
+- `read_lvs_absences`: one pupil's absences (`pupil_id`, `class_id`), the
+  "Afwezigheden" part of the file: the half-days the school registered with
+  an absence code (`getAbsences`, one read). The library sends no school
+  year: the LVS answers with the school years it picks, each a period of its
+  answer. `school_year` (as for `read_lvs_notes`; by default the current one
+  in Belgian time) picks the periods labelled with it; for those, the total
+  per code (its description and code, in half-days, a whole day counting
+  two: the library's `totalsByCode`), then each absence day after day in the
+  LVS's order, with its day (`YYYY-MM-DD`) and day of the week, morning,
+  afternoon or whole day, and its code; a day the library could not read
+  (`date` null) is shown as the LVS shows it, said so. Then the other school
+  years the LVS gives, each with its totals (a period whose label is not a
+  school year by its label, said so). The codes are the school's own. A
+  motivation can hold health information: by default the answer says only
+  how many absences have one, never what they say; `with_motivation` (the
+  description says to set it only when the user asks why the pupil was
+  absent) shows each under its absence, as plain text with its lines. No
+  absences is a sentence: none in the school year asked for (with the school
+  years the LVS gives), none at all, or none and no part of absences in the
+  file. The LVS answered a made-up pupil with HTTP 500 and an error page, a
+  plain `SmartschoolLvsError` that the library cannot tell from an answer
+  it cannot read (yvanvds/dartschool#190, tracked in #164): so after such an
+  error, and when there are no absences at all, the file is read too, and
+  the error says when the LVS does not know the pupil. A refusal with HTTP
+  403 is "no access to the absences" in a sentence, without reading the
+  file. The absences are read and written in `lib/src/lvs/lvs_absences.dart`.
+  The file's read takes today's attendance along, unused: the workaround of
+  #160.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's

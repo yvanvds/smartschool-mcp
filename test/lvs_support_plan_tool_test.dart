@@ -248,7 +248,7 @@ void main() {
     });
 
     test('after the results, read-only and idempotent', () {
-      expect(names, [
+      expect(names.take(5), [
         'search_lvs_pupils',
         'read_lvs_pupil',
         'read_lvs_notes',

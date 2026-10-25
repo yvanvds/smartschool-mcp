@@ -20,7 +20,10 @@ import 'package:xml/xml.dart';
 // `_commands` too (the notes of #154 are those). The results of #155 are
 // GETs of the results app, answered only with its headers, as the LVS
 // does. The support plans of #156 are form POSTs to the LVS's JSON
-// dispatchers, answered with JSON as text, as the LVS does.
+// dispatchers, answered with JSON as text, as the LVS does. The absences of
+// #157 are a form POST answered with JSON, and a pupil the fake has none of
+// with HTTP 500 and Smartschool's error page, as the LVS answered a made-up
+// pupil.
 
 /// The folder of the fixtures the fake answers with.
 const fakeLvsFixtures = 'test/fixtures/lvs';
@@ -30,13 +33,14 @@ typedef FakeLvsPupil = ({int pupilId, int classId});
 
 /// Jan Janssens of class 1A: the one pupil a search for "janssens" finds,
 /// with a file whose notes hold something (sub-categories, a heading, new
-/// notes) and results, and attendance in the morning and the afternoon.
+/// notes) and results, and attendance in the morning and the afternoon; no
+/// part of absences in his file, and none in the LVS's answer (#157).
 const fakeLvsJan = (pupilId: 900001, classId: 900101);
 
 /// Marie Peeters of class 2B: found with Lars by "peeters", with a file
 /// without form tutors whose support plans and absences hold something (the
 /// absences something new), but not its note category, and attendance in
-/// the morning only.
+/// the morning only; absences in two school years (#157).
 const fakeLvsMarie = (pupilId: 900002, classId: 900102);
 
 /// Lars Peeters of class 3C: found by "peeters", but the LVS answers his
@@ -113,6 +117,10 @@ enum FakeLvsRead {
   /// `POST /?module=LVS&file=jqDispatcher_hp&function=getProfielSchets`
   /// with `pupilID`, `classID`, `periodID` and `exportID`.
   profileSketch,
+
+  /// A pupil's absences (`getAbsences`, #157): `POST /LVS/Pupilpresences`
+  /// with `pupilID` and `groupID`.
+  absences,
 }
 
 /// The fixtures of a pupil's support plan in one period (#156): the plan
@@ -334,6 +342,18 @@ class FakeLvs {
       ),
   };
 
+  /// The fixture of each pupil's absences, by pupil id (#157), in
+  /// `test/fixtures/lvs/absences/`: Marie Peeters has absences in two school
+  /// years (2030-2031 and 2031-2032, the library's own fixture); Jan
+  /// Janssens has none. Any other pupil, or a pupil asked for in another
+  /// class than their file's, gets HTTP 500 with Smartschool's error page,
+  /// as the LVS answered a made-up pupil in a made-up class (seen live,
+  /// yvanvds/dartschool#164).
+  final Map<int, String> absences = {
+    fakeLvsMarie.pupilId: 'absences/absences.json',
+    fakeLvsJan.pupilId: 'absences/none.json',
+  };
+
   /// Whether the fake keeps the evaluations of the `courseIds` and
   /// `periodIds` asked for, as the results app expects; when false, it
   /// sends all of them, as the LVS might (not captured,
@@ -424,6 +444,7 @@ class FakeLvs {
           form['periodID'],
         ).sketch,
       ),
+      FakeLvsRead.absences => _absences(form['pupilID'], form['groupID']),
     };
   }
 
@@ -454,6 +475,15 @@ class FakeLvs {
     final period = int.tryParse(periodId ?? '');
     if (!_isInClass(pupilId, classId) || period == null) return _noSupportPlan;
     return supportPlans[(int.parse(pupilId!), period)] ?? _noSupportPlan;
+  }
+
+  /// The absences of [pupilId] in [classId] ([absences]), or HTTP 500 with
+  /// Smartschool's error page for a pupil without them or in another class.
+  ResponseBody _absences(String? pupilId, String? classId) {
+    final fixture = _isInClass(pupilId, classId)
+        ? absences[int.parse(pupilId!)]
+        : null;
+    return fixture == null ? _html(_errorPage, status: 500) : _fixture(fixture);
   }
 
   /// The fixtures of the results the [query] of a read asks for.
@@ -653,6 +683,10 @@ class FakeLvs {
       ('POST', '/LVS/Pupilxhr/getStatusInfo')
           when query.isEmpty && only(form, {'pupilID'}) =>
         FakeLvsRead.todayStatus,
+      // The absences (#157): both form fields, and no other.
+      ('POST', '/LVS/Pupilpresences')
+          when query.isEmpty && exactly(form, {'pupilID', 'groupID'}) =>
+        FakeLvsRead.absences,
       _ => null,
     };
   }

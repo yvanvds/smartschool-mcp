@@ -108,7 +108,7 @@ void main() {
         final optIn = lvsOptIn(session, state);
         expect(optIn.setting, Setting.lvs);
         expect(optIn.offered, isEmpty, reason: state.name);
-        expect(optIn.tools, hasLength(5));
+        expect(optIn.tools, hasLength(6));
       }
     });
 
@@ -144,14 +144,15 @@ void main() {
     });
 
     test('finding a pupil first, then their file, then the parts of it (the '
-        'notes, #154; the results, #155; the support plan, #156); all '
-        'read-only', () {
+        'notes, #154; the results, #155; the support plan, #156; the '
+        'absences, #157); all read-only', () {
       expect(tools.keys, [
         'search_lvs_pupils',
         'read_lvs_pupil',
         'read_lvs_notes',
         'read_lvs_results',
         'read_lvs_support_plan',
+        'read_lvs_absences',
       ]);
       for (final tool in tools.values) {
         final annotations = tool.toolAnnotations!;
@@ -301,7 +302,8 @@ void main() {
         "The parts of the file that hold something, in the LVS's order (2). "
         'What they hold is not shown here.\n'
         '- Testsectie: support plans, read it with read_lvs_support_plan\n'
-        '- Testsectie: absences, with something new\n'
+        '- Testsectie: absences, with something new, read it with '
+        'read_lvs_absences\n'
         'Parts that hold nothing for this pupil: Testcategorie (note '
         'category), Testsectie (reports in Skore).',
       );
@@ -715,12 +717,13 @@ void main() {
         );
 
     test('names the tool that reads a part, once there is one: the notes '
-        '(#154), the results (#155) and the support plans (#156; the absences '
-        'follow in #157)', () {
+        '(#154), the results (#155), the support plans (#156) and the '
+        'absences (#157)', () {
       expect(lvsSectionReaders, {
         LvsSectionType.items: 'read_lvs_notes',
         LvsSectionType.results: 'read_lvs_results',
         LvsSectionType.supportPlans: 'read_lvs_support_plan',
+        LvsSectionType.absences: 'read_lvs_absences',
       });
       final text = formatLvsPupilFile(
         file([

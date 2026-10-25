@@ -1,0 +1,67 @@
+{
+  "lng_noresults": "Geen resultaten",
+  "lng_months": [
+    "januari",
+    "februari",
+    "maart",
+    "april",
+    "mei",
+    "juni",
+    "juli",
+    "augustus",
+    "september",
+    "oktober",
+    "november",
+    "december"
+  ],
+  "lng_days": [
+    "zondag",
+    "maandag",
+    "dinsdag",
+    "woensdag",
+    "donderdag",
+    "vrijdag",
+    "zaterdag"
+  ],
+  "presences": {
+    "2031-2032": [
+      {
+        "am": {
+          "partOfDay": "Voormiddag",
+          "codeKey": "900501",
+          "code": "TA",
+          "codeColor": "red",
+          "codeDescr": "Testcode",
+          "motivation": "",
+          "formattedDate": "Testdag"
+        }
+      },
+      {
+        "full": {
+          "partOfDay": "Volledige dag",
+          "codeKey": "900502-900503",
+          "code": "TB",
+          "codeColor": "yellow",
+          "codeDescr": "",
+          "motivation": "",
+          "formattedDate": ""
+        }
+      }
+    ],
+    "Testperiode": [
+      {
+        "pm": {
+          "partOfDay": "Namiddag",
+          "codeKey": "900502-900503",
+          "code": "TB",
+          "codeColor": "yellow",
+          "codeDescr": "Testcode 2",
+          "motivation": "Testmotivatie.",
+          "formattedDate": "di 3 december"
+        }
+      }
+    ],
+    "2029-2030": []
+  },
+  "year_label": "2031-2032"
+}

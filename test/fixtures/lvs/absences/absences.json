@@ -1,0 +1,86 @@
+{
+  "lng_noresults": "Geen resultaten",
+  "lng_months": [
+    "januari",
+    "februari",
+    "maart",
+    "april",
+    "mei",
+    "juni",
+    "juli",
+    "augustus",
+    "september",
+    "oktober",
+    "november",
+    "december"
+  ],
+  "lng_days": [
+    "zondag",
+    "maandag",
+    "dinsdag",
+    "woensdag",
+    "donderdag",
+    "vrijdag",
+    "zaterdag"
+  ],
+  "presences": {
+    "2030-2031": [
+      {
+        "full": {
+          "partOfDay": "Volledige dag",
+          "codeKey": "900501",
+          "code": "TA",
+          "codeColor": "red",
+          "codeDescr": "Testcode",
+          "motivation": "<p>Testmotivatie: <b>thuis</b> gebleven.</p>",
+          "formattedDate": "ma 16 september 2030"
+        }
+      },
+      {
+        "am": {
+          "partOfDay": "Voormiddag",
+          "codeKey": "900502-900503",
+          "code": "TB",
+          "codeColor": "yellow",
+          "codeDescr": "Testcode 2",
+          "motivation": "",
+          "formattedDate": "wo 2 oktober 2030"
+        },
+        "pm": {
+          "partOfDay": "Namiddag",
+          "codeKey": "900501",
+          "code": "TA",
+          "codeColor": "red",
+          "codeDescr": "Testcode",
+          "motivation": "Testmotivatie in platte tekst.",
+          "formattedDate": "wo 2 oktober 2030"
+        }
+      }
+    ],
+    "2031-2032": [
+      {
+        "pm": {
+          "partOfDay": "Namiddag",
+          "codeKey": "900502-900503",
+          "code": "TB",
+          "codeColor": "yellow",
+          "codeDescr": "Testcode 2",
+          "motivation": "<p>Testmotivatie met <i>opmaak</i> &amp; een teken.</p>",
+          "formattedDate": "do 18 september 2031"
+        }
+      },
+      {
+        "full": {
+          "partOfDay": "Volledige dag",
+          "codeKey": "900501",
+          "code": "TA",
+          "codeColor": "red",
+          "codeDescr": "Testcode",
+          "motivation": null,
+          "formattedDate": "di 20 januari 2032"
+        }
+      }
+    ]
+  },
+  "year_label": "2031-2032"
+}
