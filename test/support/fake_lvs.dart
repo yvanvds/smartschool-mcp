@@ -17,7 +17,9 @@ import 'package:xml/xml.dart';
 // folder of its own under `test/fixtures/lvs/`, registered in that guard's
 // `lvsFixtureKinds`, and gets a [FakeLvsRead] and a case in
 // [FakeLvs.respond]; a command of the XML dispatcher gets an entry in
-// `_commands` too (the notes of #154 are those).
+// `_commands` too (the notes of #154 are those). The results of #155 are
+// GETs of the results app, answered only with its headers, as the LVS
+// does.
 
 /// The folder of the fixtures the fake answers with.
 const fakeLvsFixtures = 'test/fixtures/lvs';
@@ -65,7 +67,51 @@ enum FakeLvsRead {
   /// All of a pupil's notes, the "all items" view (`getAllNotes`, #154):
   /// the XML dispatcher with the one command `lvs_pupils/getUserData`.
   allNotes,
+
+  /// What the results app may show (`getResultsConfiguration`, #155):
+  /// `GET /LVS/Results/getConfiguration?pupilId&groupId`.
+  resultsConfiguration,
+
+  /// The periods of a pupil's results (`getResultsPeriods`, #155):
+  /// `GET /LVS/Results/getperiods?pupilId&groupId&startDate&endDate`.
+  resultsPeriods,
+
+  /// The courses of a pupil's results (`getResultsCourses`, #155):
+  /// `GET /LVS/Results/getcourses`, with the same query.
+  resultsCourses,
+
+  /// A page of a pupil's evaluations (`getEvaluations`, #155):
+  /// `GET /LVS/Results/getevaluationsofuser`, with `pageNumber`,
+  /// `itemsOnPage` and, when given, `courseIds` and `periodIds` too.
+  evaluations,
+
+  /// The feedback on a pupil's results (`getFeedback`, #155):
+  /// `GET /LVS/Results/getfeedback`.
+  resultsFeedback,
+
+  /// A pupil's reports (`getReports`, #155): `GET /LVS/Results/getreports`.
+  reports,
 }
+
+/// The fixtures of a pupil's results in one school year (#155), one per read
+/// of the results app; all in `test/fixtures/lvs/results/`.
+typedef FakeLvsResults = ({
+  String periods,
+  String courses,
+  String evaluations,
+  String feedback,
+  String reports,
+});
+
+/// The results of a pupil the fake has none of, as the LVS answers a
+/// made-up pupil (yvanvds/dartschool#162): empty lists.
+const _noResults = (
+  periods: 'results/empty.json',
+  courses: 'results/empty.json',
+  evaluations: 'results/empty.json',
+  feedback: 'results/empty.json',
+  reports: 'results/empty.json',
+);
 
 /// The command of a request to the LVS's XML dispatcher: its subsystem,
 /// its action and its params with their values.
@@ -187,6 +233,44 @@ class FakeLvs {
   /// asked for), as the LVS answers a pupil it does not know.
   final Map<int, String> allNotes = {fakeLvsJan.pupilId: 'notes/all_notes.xml'};
 
+  /// The fixtures of a pupil's results (#155), by pupil id and the first
+  /// day of the school year asked for (`startDate`): Jan Janssens's in
+  /// 2030-2031 (an active period, every kind of score and feedback) and in
+  /// 2029-2030 (no active period, two periods of the same name). Any other
+  /// pupil or school year, or a pupil asked for in another class than their
+  /// file's, gets empty lists ([_noResults]), as the LVS answers a made-up
+  /// pupil.
+  final Map<(int, String), FakeLvsResults> results = {
+    (fakeLvsJan.pupilId, '2030-09-01'): (
+      periods: 'results/periods.json',
+      courses: 'results/courses.json',
+      evaluations: 'results/evaluations.json',
+      feedback: 'results/feedback.json',
+      reports: 'results/reports.json',
+    ),
+    (fakeLvsJan.pupilId, '2029-09-01'): (
+      periods: 'results/periods_past.json',
+      courses: 'results/courses.json',
+      evaluations: 'results/evaluations_past.json',
+      feedback: 'results/empty.json',
+      reports: 'results/empty.json',
+    ),
+  };
+
+  /// The fixture of what the results app may show, for every pupil.
+  String resultsConfiguration = 'results/configuration.json';
+
+  /// Whether the fake keeps the evaluations of the `courseIds` and
+  /// `periodIds` asked for, as the results app expects; when false, it
+  /// sends all of them, as the LVS might (not captured,
+  /// yvanvds/dartschool#168).
+  bool appliesResultFilters = true;
+
+  /// How many evaluations the fake adds to a pupil's own, copies of the
+  /// first with ids of their own, to fill more pages than the library
+  /// reads.
+  int extraEvaluations = 0;
+
   /// When set, the reads of [refusedReads] (all of them when that is null)
   /// are answered this way.
   FakeLvsRefusal? refusal;
@@ -214,7 +298,14 @@ class FakeLvs {
     final command = query['file'] == 'dispatcher'
         ? _commandOf(form['command'])
         : null;
-    final read = _readOf(options.method, path, query, form, command);
+    final read = _readOf(
+      options.method,
+      path,
+      query,
+      form,
+      command,
+      fromResultsApp: _fromResultsApp(options.headers),
+    );
     requests.add((
       method: options.method,
       path: path,
@@ -237,7 +328,69 @@ class FakeLvs {
       ),
       FakeLvsRead.categoryNotes => _categoryNotes(command!.params),
       FakeLvsRead.allNotes => _allNotes(command!.params),
+      FakeLvsRead.resultsConfiguration => _fixture(resultsConfiguration),
+      FakeLvsRead.resultsPeriods => _fixture(_resultsOf(query).periods),
+      FakeLvsRead.resultsCourses => _fixture(_resultsOf(query).courses),
+      FakeLvsRead.evaluations => _evaluations(query),
+      FakeLvsRead.resultsFeedback => _fixture(_resultsOf(query).feedback),
+      FakeLvsRead.reports => _fixture(_resultsOf(query).reports),
     };
+  }
+
+  /// Whether [headers] are those the results app sends
+  /// (`X-Requested-With: XMLHttpRequest`, yvanvds/dartschool#175): without
+  /// them, the LVS answers its reads with HTTP 500 (seen live).
+  static bool _fromResultsApp(Map<String, Object?> headers) =>
+      headers.entries.any(
+        (header) =>
+            header.key.toLowerCase() == 'x-requested-with' &&
+            header.value == 'XMLHttpRequest',
+      );
+
+  /// The fixtures of the results the [query] of a read asks for.
+  FakeLvsResults _resultsOf(Map<String, String> query) {
+    final pupilId = int.parse(query['pupilId']!);
+    final classId = int.tryParse(query['groupId']!);
+    if (_classOf(pupilId) != classId) return _noResults;
+    return results[(pupilId, query['startDate']!)] ?? _noResults;
+  }
+
+  /// A page of evaluations: those of the pupil's fixture (with
+  /// [extraEvaluations]), of the courses and periods asked for unless
+  /// [appliesResultFilters] is off, page `pageNumber` of `itemsOnPage`.
+  ResponseBody _evaluations(Map<String, String> query) {
+    final all = (jsonDecode(_read(_resultsOf(query).evaluations)) as List)
+        .cast<Map<String, Object?>>();
+    if (all.isNotEmpty) {
+      final first = all.first;
+      for (var i = 0; i < extraEvaluations; i++) {
+        all.add({
+          ...first,
+          'identifier': '900000_900001_0_normal_${910000 + i}',
+        });
+      }
+    }
+    Set<int> ids(String? list) => {
+      for (final id in (list ?? '').split(',')) ?int.tryParse(id),
+    };
+    final courseIds = ids(query['courseIds']);
+    final periodIds = ids(query['periodIds']);
+    bool asked(Map<String, Object?> evaluation) {
+      final courses = (evaluation['courses'] as List? ?? const []).map(
+        (course) => (course as Map)['id'],
+      );
+      final period = (evaluation['period'] as Map?)?['id'];
+      return (courseIds.isEmpty || courses.any(courseIds.contains)) &&
+          (periodIds.isEmpty || periodIds.contains(period));
+    }
+
+    final kept = [
+      for (final evaluation in all)
+        if (!appliesResultFilters || asked(evaluation)) evaluation,
+    ];
+    final page = int.parse(query['pageNumber']!);
+    final size = int.parse(query['itemsOnPage']!);
+    return _json(jsonEncode(kept.skip((page - 1) * size).take(size).toList()));
   }
 
   /// The params of each command of the XML dispatcher the fake answers,
@@ -294,10 +447,33 @@ class FakeLvs {
     String path,
     Map<String, String> query,
     Map<String, String> form,
-    FakeLvsCommand? command,
-  ) {
+    FakeLvsCommand? command, {
+    required bool fromResultsApp,
+  }) {
     bool only(Map<String, String> fields, Set<String> names) =>
         fields.keys.toSet().difference(names).isEmpty;
+    bool exactly(Map<String, String> fields, Set<String> names) =>
+        only(fields, names) && fields.keys.toSet().containsAll(names);
+    // The reads of the results app (#155): GETs with its headers only, each
+    // with its own query fields.
+    const year = {'pupilId', 'groupId', 'startDate', 'endDate'};
+    const page = {...year, 'pageNumber', 'itemsOnPage'};
+    if (method == 'GET' && path.startsWith('/LVS/Results/')) {
+      if (!fromResultsApp || form.isNotEmpty) return null;
+      return switch (path.substring('/LVS/Results/'.length)) {
+        'getConfiguration' when exactly(query, {'pupilId', 'groupId'}) =>
+          FakeLvsRead.resultsConfiguration,
+        'getperiods' when exactly(query, year) => FakeLvsRead.resultsPeriods,
+        'getcourses' when exactly(query, year) => FakeLvsRead.resultsCourses,
+        'getevaluationsofuser'
+            when query.keys.toSet().containsAll(page) &&
+                only(query, {...page, 'courseIds', 'periodIds'}) =>
+          FakeLvsRead.evaluations,
+        'getfeedback' when exactly(query, year) => FakeLvsRead.resultsFeedback,
+        'getreports' when exactly(query, year) => FakeLvsRead.reports,
+        _ => null,
+      };
+    }
     return switch ((method, path)) {
       ('POST', '/')
           when query['module'] == 'LVS' &&

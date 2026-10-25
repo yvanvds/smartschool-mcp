@@ -59,7 +59,7 @@ const _janFile =
     'read it with read_lvs_notes\n'
     '    - Testsubcategorie: note category (category_id 900404), read it with '
     'read_lvs_notes\n'
-    '- Testsectie: results\n'
+    '- Testsectie: results, read it with read_lvs_results\n'
     'Parts that hold nothing for this pupil: Testsectie (support plans), '
     'Testsectie (a part of type "testsection").';
 
@@ -108,7 +108,7 @@ void main() {
         final optIn = lvsOptIn(session, state);
         expect(optIn.setting, Setting.lvs);
         expect(optIn.offered, isEmpty, reason: state.name);
-        expect(optIn.tools, hasLength(3));
+        expect(optIn.tools, hasLength(4));
       }
     });
 
@@ -144,11 +144,12 @@ void main() {
     });
 
     test('finding a pupil first, then their file, then the parts of it (the '
-        'notes, #154); all read-only', () {
+        'notes, #154; the results, #155); all read-only', () {
       expect(tools.keys, [
         'search_lvs_pupils',
         'read_lvs_pupil',
         'read_lvs_notes',
+        'read_lvs_results',
       ]);
       for (final tool in tools.values) {
         final annotations = tool.toolAnnotations!;
@@ -712,8 +713,12 @@ void main() {
         );
 
     test('names the tool that reads a part, once there is one: the notes '
-        '(#154; the other parts follow in #155 to #157)', () {
-      expect(lvsSectionReaders, {LvsSectionType.items: 'read_lvs_notes'});
+        '(#154) and the results (#155; the other parts follow in #156 and '
+        '#157)', () {
+      expect(lvsSectionReaders, {
+        LvsSectionType.items: 'read_lvs_notes',
+        LvsSectionType.results: 'read_lvs_results',
+      });
       final text = formatLvsPupilFile(
         file([
           section(900401, LvsSectionType.items),

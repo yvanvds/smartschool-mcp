@@ -637,7 +637,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(64));
+    expect(tools, hasLength(65));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -646,6 +646,7 @@ void main() {
         'search_lvs_pupils',
         'read_lvs_pupil',
         'read_lvs_notes',
+        'read_lvs_results',
       ]),
       reason: 'the presence and LVS tools are checked too',
     );
@@ -1189,7 +1190,12 @@ void main() {
   });
 
   group('the opt-in switch "Leerlingvolgsysteem" (#153)', () {
-    const lvsTools = ['search_lvs_pupils', 'read_lvs_pupil', 'read_lvs_notes'];
+    const lvsTools = [
+      'search_lvs_pupils',
+      'read_lvs_pupil',
+      'read_lvs_notes',
+      'read_lvs_results',
+    ];
 
     Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
         ((await server.request('tools/list'))['tools'] as List)
@@ -1232,7 +1238,11 @@ void main() {
             'installatie.md#8-veiligheid-en-privacy\n',
           ),
         );
-        for (final name in ['read_lvs_pupil', 'read_lvs_notes']) {
+        for (final name in [
+          'read_lvs_pupil',
+          'read_lvs_notes',
+          'read_lvs_results',
+        ]) {
           final (isError, text) = await server.callTool(name);
           expect(isError, isTrue, reason: name);
           expect(text, contains(name));
@@ -1257,7 +1267,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(52));
+      expect(tools, hasLength(53));
       expect([for (final tool in tools.skip(49)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
@@ -1303,6 +1313,21 @@ void main() {
           'set it only when the user explicitly asks for confidential notes',
         ),
       );
+      // The results (#155): of one pupil, one school year and a period, in
+      // every course or some.
+      final results = byName['read_lvs_results']!['inputSchema'] as Map;
+      expect(results['required'], ['pupil_id', 'class_id']);
+      expect((results['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'school_year',
+        'period',
+        'course',
+      ]);
+      expect(
+        byName['read_lvs_results']!['description'],
+        contains('a summary line computed from the scores given'),
+      );
 
       final (statusError, status) = await server.callTool('smartschool_status');
       expect(statusError, isNot(true));
@@ -1320,6 +1345,15 @@ void main() {
           'read_lvs_notes',
           {'pupil_id': 900001, 'class_id': 900101, 'category': 'Testcategorie'},
         ),
+        (
+          'read_lvs_results',
+          {
+            'pupil_id': 900001,
+            'class_id': 900101,
+            'period': 'Testperiode',
+            'course': 'Testvak',
+          },
+        ),
       ]) {
         final (isError, text) = await server.callTool(
           tool,
@@ -1336,8 +1370,10 @@ void main() {
 
       await server.stop();
       final log = await server.stderr;
-      expect(log, contains('Leerlingvolgsysteem: on, 3 tools offered'));
+      expect(log, contains('Leerlingvolgsysteem: on, 4 tools offered'));
       expect(log.toLowerCase(), isNot(contains('testcategorie')));
+      expect(log.toLowerCase(), isNot(contains('testvak')));
+      expect(log.toLowerCase(), isNot(contains('testperiode')));
       expect(log.toLowerCase(), isNot(contains('janssens')));
     });
 
@@ -1355,7 +1391,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(64));
+      expect(tools, hasLength(65));
       expect([for (final tool in tools.skip(61)) tool['name']], lvsTools);
       expect(
         [for (final tool in tools.skip(57).take(4)) tool['name']],

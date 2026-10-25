@@ -35,9 +35,8 @@
 // its answers that hold names, ids or free text beyond the common ones
 // ([commonNameFields], [commonIdFields], [commonTextFields]), and, for fields
 // known by position only, an [LvsFixtureKind.extraFields] function. The
-// library's guard has the kinds of the other LVS reads (`notes`, `results`,
-// `supportplan`, `absences`) with their extra fields, to copy with their
-// fixtures.
+// library's guard has the kinds of the other LVS reads (`supportplan`,
+// `absences`) with their extra fields, to copy with their fixtures.
 import 'dart:convert';
 import 'dart:io';
 
@@ -256,6 +255,23 @@ const lvsFixtureKinds = <LvsFixtureKind>[
     idFields: {'dates'},
     textFields: {'title', 'keyword', 'fileName'},
     extraFields: dispatcherNoteFields,
+  ),
+  LvsFixtureKind(
+    folder: 'results',
+    about:
+        "Answers of the results app's GETs, /LVS/Results/* "
+        '(yvanvds/dartschool#162, #155): what it may show (getConfiguration), '
+        'the periods (getperiods), courses (getcourses), a page of '
+        'evaluations (getevaluationsofuser), the feedback (getfeedback) and '
+        'the reports (getreports) of a pupil.',
+    // As the library's guard has them: `abbreviation` is a component's (a
+    // school's own label); `sort` of a teacher is their name as a sort key
+    // (a number elsewhere); `goalId` and `leerplanId` are UUIDs;
+    // `leerplanKey` names a curriculum. The texts of the feedback are
+    // `text` (common).
+    nameFields: {'abbreviation', 'sort'},
+    idFields: {'goalId', 'leerplanId'},
+    textFields: {'leerplanKey'},
   ),
 ];
 

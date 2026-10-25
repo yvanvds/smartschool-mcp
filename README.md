@@ -1425,8 +1425,8 @@ The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
 not about rights: the LVS holds the most sensitive data about pupils (care,
 behaviour, educational needs, sometimes health), and the user and their
 school must choose to let an AI assistant read it. The tools use the
-library's `LvsService` (yvanvds/dartschool#160, #161), which sends only its
-reads, by an allowlist; all of them only read:
+library's `LvsService` (yvanvds/dartschool#160, #161, #162), which sends only
+its reads, by an allowlist; all of them only read:
 
 - `search_lvs_pupils`: the pupils whose name matches `query`, among those the
   account may see (`searchPupils`), one line each with name, class,
@@ -1445,7 +1445,8 @@ reads, by an allowlist; all of them only read:
   "with new notes" or "with something new" (`hasNewItems`); then the parts
   that hold nothing. A part's line names the tool that reads it, once there
   is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`):
-  `read_lvs_notes` for the note categories and their headings. The LVS
+  `read_lvs_notes` for the note categories and their headings,
+  `read_lvs_results` for the results (Resultaten). The LVS
   answers a pupil it does not know in that class with a placeholder pupil,
   which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
   says to take both ids from one line of the search.
@@ -1485,6 +1486,59 @@ reads, by an allowlist; all of them only read:
   `lib/src/lvs/lvs_notes.dart`; `lvsSchoolYearArgument` and
   `lvsSchoolYearSchema` in `lvs_access.dart` are the `school_year` argument
   of the LVS tools that read a school year.
+- `read_lvs_results`: one pupil's results (`pupil_id`, `class_id`), the
+  "Resultaten" part of the file: the results app pupils and parents see, in
+  every course, not only the user's own gradebooks (`getResultsPeriods`,
+  `getResultsCourses`, `getAllEvaluations`, `getFeedback`, `getReports`,
+  which the library sends with the app's headers). Of one school year
+  (`school_year`, as for `read_lvs_notes`; for another than the current one
+  the app's configuration is read first, `getResultsConfiguration`, and an
+  account it lets see the current school year only, `canSeeAll` false, gets
+  an error), by default of its active period (`isActive`; all periods when
+  none is, which the answer says). `period` takes a `period_id` or a name
+  (ignoring case, or else the period whose name holds it; several matches
+  are an error that lists them with their ids), or `all`. `course` is a
+  filter: the course with that `course_id`, or those with that name
+  (ignoring case), or else those whose name holds it, with their parts
+  (`parentCourseId`, at any depth); a course the results do not have is an
+  error that lists them. Both go to the LVS as ids, and the server keeps
+  only the evaluations of the periods and courses chosen, also when the LVS
+  sends others (whether it applies the ids was not captured). Per course, in
+  the LVS's order, its teachers and count, then its evaluations newest first
+  by their Belgian day, each with its name, the score as given
+  (`formatLvsScore`: points with their percentage, a text with its
+  description, a symbol by its icon, an image, a rubric, a type the server
+  does not know, or none; nothing computed), whether it counts, whether it
+  is not published to the pupil, its component, its period when several are
+  shown, the other courses it is for, and whether it has feedback. A course
+  with 5 or more evaluations gets a summary line computed from the scores
+  given (`formatLvsResultsSummary`): how many are below half, of those whose
+  score is a number (`LvsScore.percentage`), and how many could not be
+  counted; the line says it is computed, not the LVS's. Then the courses
+  without evaluations; the feedback, newest first (day, teacher, what it is
+  on, its text as plain text, attachments by name only), of the periods and
+  courses chosen (feedback on an evaluation by its evaluation, a remark per
+  course on a report by its course; the class council's remarks are about
+  no one course and left out with `course`), with what was left out
+  counted; the reports of the school year by name and day (nothing is
+  downloaded); and the periods to ask for. Evaluations are read 100 a page,
+  at most 10 pages: when the cap stops at a full page, the answer says the
+  LVS may have more. A refusal with HTTP 403 is "no access to the results"
+  in a sentence (`withLvs`'s `part`). As the LVS answers a pupil it does not
+  know with empty lists, the file is read too when no evaluation, feedback
+  or report came, or before saying that there is no period or course to
+  pick from: the error then says the LVS does not know the pupil, and a file
+  that shows the older Skore part instead of Resultaten, which the library
+  does not read, is said so. The comments on reports (`/LVS/Skorecomments`)
+  are not read: the library does not read them, nor that older part
+  (yvanvds/dartschool#169). The library gives the feedback's text as HTML,
+  unlike its other LVS texts, so the server makes it plain text with its own
+  `htmlToText` (yvanvds/dartschool#187, tracked in #161). The results are
+  read and written in `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
+  `lvsIdIn` and `lvsNameKey` in `lvs_access.dart` are an argument that
+  names a part of the file by its id or name (the notes' `category` too).
+  The file's read takes today's attendance along, unused, and the Belgian
+  day is `lvsDay`'s: the workarounds of #160.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's

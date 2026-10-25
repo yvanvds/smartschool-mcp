@@ -3,6 +3,7 @@ import '../session.dart';
 import '../settings.dart';
 import '../tools/read_lvs_notes_tool.dart';
 import '../tools/read_lvs_pupil_tool.dart';
+import '../tools/read_lvs_results_tool.dart';
 import '../tools/search_lvs_pupils_tool.dart';
 import 'lvs_access.dart';
 
@@ -15,9 +16,9 @@ import 'lvs_access.dart';
 /// must choose to let an AI assistant read it ([lvsCaution]). The tools
 /// only read, one pupil at a time, and keep nothing on disk or in the log
 /// (`lvs_access.dart`): finding a pupil first, then the overview of their
-/// file, then the parts of it: the notes (#154). The tools that read the
-/// other parts (#155 to #157) come after these. [now] gives today, for the
-/// default school year.
+/// file, then the parts of it: the notes (#154) and the results (#155). The
+/// tools that read the other parts (#156, #157) come after these. [now]
+/// gives today, for the default school year.
 OptInTools lvsOptIn(
   SmartschoolSession session,
   SwitchState state, {
@@ -31,6 +32,7 @@ OptInTools lvsOptIn(
     searchLvsPupilsTool(session),
     readLvsPupilTool(session),
     readLvsNotesTool(session, now: now),
+    readLvsResultsTool(session, now: now),
   ],
   checkAccess: () => checkLvsAccess(session),
 );

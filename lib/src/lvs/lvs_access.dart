@@ -122,17 +122,23 @@ String lvsLogDescription(Object error) {
 /// LVS's reads are. What the session logs of a refused session or a
 /// problem is the error's type ([lvsLogDescription]): its message names
 /// the request, with the pupil's id.
+///
+/// [part] names the part of the pupil's file [action] reads, such as `the
+/// results (Resultaten)` (#155), for a refusal with HTTP 403: the LVS's
+/// apps answer that for an account without access to that part
+/// ([lvsToolError]).
 Future<T> withLvs<T>(
   SmartschoolSession session,
-  Future<T> Function(LvsService lvs) action,
-) async {
+  Future<T> Function(LvsService lvs) action, {
+  String? part,
+}) async {
   try {
     return await session.run(
       (client) => action(LvsService(client)),
       describeError: lvsLogDescription,
     );
   } on SmartschoolLvsError catch (error) {
-    throw lvsToolError(error, session.source);
+    throw lvsToolError(error, session.source, part: part);
   }
 }
 
@@ -140,9 +146,25 @@ Future<T> withLvs<T>(
 /// the server's words; [source] is where the user turns
 /// "Leerlingvolgsysteem" off. The error is logged by type and HTTP status
 /// only ([lvsLogDescription]).
-ToolError lvsToolError(SmartschoolLvsError error, CredentialSource source) {
+///
+/// With [part] (the part of the file that was read, see [withLvs]), a
+/// refusal with HTTP 403 says that the account has no access to that part:
+/// what the results app takes a 403 for (yvanvds/dartschool#162). A
+/// refusal by a redirect to the start page keeps the general sentence.
+ToolError lvsToolError(
+  SmartschoolLvsError error,
+  CredentialSource source, {
+  String? part,
+}) {
   log('lvs: ${lvsLogDescription(error)}');
   return ToolError(switch (error) {
+    SmartschoolLvsAccessDeniedError(statusCode: 403) when part != null =>
+      "The account has no access to $part of this pupil's file: "
+          "Smartschool's pupil tracking system (LVS) refused that read (HTTP "
+          '403), as it does for an account without access to that part. '
+          'Other parts of the file may still be readable: read_lvs_pupil '
+          'lists them. If the account should have access, ask the '
+          "school's Smartschool administrator.",
     // Not captured live: what the LVS answers an account without access,
     // or a pupil the account may not see (yvanvds/dartschool#168).
     SmartschoolLvsAccessDeniedError() =>
@@ -234,6 +256,53 @@ Schema lvsClassIdSchema() => Schema.int(
 
   return (pupilId: positive('pupil_id'), classId: positive('class_id'));
 }
+
+/// An argument that names one thing of a pupil's file by its id or its
+/// name, as text: a name, or an id (digits, or `<id name> <digits>` as the
+/// tools print it, see [lvsIdIn]); `null` when it is absent or empty. Used
+/// for a note category (#154) and a period and a course of the results
+/// (#155).
+///
+/// Throws a [ToolError] for a number that is not a whole number, or a value
+/// of another type, saying that [name] must be [what].
+String? lvsIdOrNameArgument(
+  Map<String, Object?> arguments,
+  String name, {
+  required String what,
+}) {
+  switch (arguments[name]) {
+    case null:
+      return null;
+    case final String text:
+      final trimmed = text.trim().replaceAll(_quotes, '').trim();
+      return trimmed.isEmpty ? null : trimmed;
+    case final num number when number == number.truncate():
+      return '${number.toInt()}';
+    case final value:
+      throw ToolError('$name must be $what; $value is not.');
+  }
+}
+
+/// Double quotes around a name.
+final _quotes = RegExp(r'^"|"$');
+
+/// The id that [which], the text of an [lvsIdOrNameArgument], names: its
+/// digits, also written `<idName> <digits>` as the tools print an id
+/// (`category_id 900401`, `period_id 900401`; with or without the
+/// underscore, any case); `null` for any other text.
+int? lvsIdIn(String which, String idName) {
+  final prefix = RegExp.escape(idName).replaceAll('_', '_?');
+  final match = RegExp(
+    '^(?:$prefix\\s*)?(\\d+)\$',
+    caseSensitive: false,
+  ).firstMatch(which.trim());
+  return match == null ? null : int.parse(match[1]!);
+}
+
+/// [name] to compare names by: in lower case, each run of white space one
+/// space, trimmed.
+String lvsNameKey(String name) =>
+    name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
 /// The `school_year` argument of the LVS tools that read one school year
 /// (#154): two years with a dash, as the LVS labels them.

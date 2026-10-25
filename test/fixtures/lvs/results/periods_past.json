@@ -1,0 +1,30 @@
+[
+  {
+    "id": 900403,
+    "name": "Testperiode",
+    "icon": "cal_purple_generic_week",
+    "class": {"id": 900101, "name": "1A", "type": "K", "icon": "briefcase"},
+    "skoreWorkYear": {
+      "id": 900802,
+      "dateRange": {
+        "start": "2029-09-01T00:00:00+02:00",
+        "end": "2030-08-31T23:59:59+02:00"
+      }
+    },
+    "isActive": false
+  },
+  {
+    "id": 900404,
+    "name": "Testperiode",
+    "icon": "cal_purple_generic_trimester",
+    "class": {"id": 900101, "name": "1A", "type": "K", "icon": "briefcase"},
+    "skoreWorkYear": {
+      "id": 900802,
+      "dateRange": {
+        "start": "2029-09-01T00:00:00+02:00",
+        "end": "2030-08-31T23:59:59+02:00"
+      }
+    },
+    "isActive": false
+  }
+]

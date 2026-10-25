@@ -1,0 +1,108 @@
+[
+  {
+    "identifier": "900000_900001_0_normal_900611",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "green",
+      "value": 60,
+      "description": "6/10"
+    },
+    "date": "2029-10-15T00:00:00+02:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900403,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900612",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "text",
+      "color": "green",
+      "value": "B",
+      "description": ""
+    },
+    "date": "2030-03-10T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900404,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  }
+]

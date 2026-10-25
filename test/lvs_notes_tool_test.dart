@@ -150,7 +150,11 @@ void main() {
     });
 
     test('after the overview of the file, read-only and idempotent', () {
-      expect(names, ['search_lvs_pupils', 'read_lvs_pupil', 'read_lvs_notes']);
+      expect(names.take(3), [
+        'search_lvs_pupils',
+        'read_lvs_pupil',
+        'read_lvs_notes',
+      ]);
       final annotations = tool.toolAnnotations!;
       expect(annotations.readOnlyHint, isTrue);
       expect(annotations.idempotentHint, isTrue);

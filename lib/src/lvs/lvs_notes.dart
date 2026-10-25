@@ -1,6 +1,7 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../tools/server_tool.dart';
+import 'lvs_access.dart';
 import 'lvs_format.dart';
 
 // The notes of a pupil's file in the LVS, for `read_lvs_notes` (#154): what
@@ -83,25 +84,18 @@ Future<LvsNotesRead> readLvsNotes(
 }
 
 /// The `category` argument as text: a name, or a `category_id` (also
-/// written `category_id 900401`); `null` when it is absent or empty.
+/// written `category_id 900401`); `null` when it is absent or empty
+/// ([lvsIdOrNameArgument]).
 ///
 /// Throws a [ToolError] for a number that is not a whole number.
-String? lvsCategoryArgument(Map<String, Object?> arguments) {
-  switch (arguments['category']) {
-    case null:
-      return null;
-    case final String text:
-      final trimmed = text.trim().replaceAll(_quotes, '').trim();
-      return trimmed.isEmpty ? null : trimmed;
-    case final num number when number == number.truncate():
-      return '${number.toInt()}';
-    case final value:
-      throw ToolError(
-        'category must be a category_id or the name of a note category, as '
-        'read_lvs_pupil lists them; $value is not.',
-      );
-  }
-}
+String? lvsCategoryArgument(Map<String, Object?> arguments) =>
+    lvsIdOrNameArgument(
+      arguments,
+      'category',
+      what:
+          'a category_id or the name of a note category, as read_lvs_pupil '
+          'lists them',
+    );
 
 /// The note category of [categories] (the file's, with their
 /// sub-categories) that [which] names: its `category_id` (digits, or
@@ -119,16 +113,15 @@ LvsCategory pickLvsCategory(List<LvsCategory> categories, String which) {
       'read all notes of the pupil.',
     );
   }
-  if (_idText.firstMatch(which) case final match?) {
-    final id = int.parse(match[1]!);
+  if (lvsIdIn(which, 'category_id') case final id?) {
     for (final (category, _) in all) {
       if (category.id == id) return category;
     }
   }
-  final key = _key(which);
+  final key = lvsNameKey(which);
   final named = [
     for (final entry in all)
-      if (_key(entry.$1.name) == key) entry,
+      if (lvsNameKey(entry.$1.name) == key) entry,
   ];
   if (named.length == 1) return named.single.$1;
   if (named.length > 1) {
@@ -144,17 +137,6 @@ LvsCategory pickLvsCategory(List<LvsCategory> categories, String which) {
     'or its name, or leave category out to read all notes.',
   );
 }
-
-/// A category id as `category` takes it: digits, or `category_id <digits>`
-/// as the tools print it.
-final _idText = RegExp(r'^(?:category_?id\s*)?(\d+)$', caseSensitive: false);
-
-/// Double quotes around a name.
-final _quotes = RegExp(r'^"|"$');
-
-/// [name] to compare: in lower case, each run of white space one space.
-String _key(String name) =>
-    name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
 /// Every category of [categories], at any depth, depth first, with its path
 /// from the top (`Testcategorie / Testsubcategorie`).

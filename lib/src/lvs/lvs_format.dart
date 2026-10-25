@@ -14,6 +14,8 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 const lvsSectionReaders = <String, String>{
   // The note categories, and their headings (#154).
   LvsSectionType.items: 'read_lvs_notes',
+  // The results app's part, "Resultaten" (#155); not the older Skore part.
+  LvsSectionType.results: 'read_lvs_results',
 };
 
 /// [schoolYear] as the LVS labels a school year, `2030-2031`; another range
