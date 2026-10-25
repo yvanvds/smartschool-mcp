@@ -19,7 +19,8 @@ import 'package:xml/xml.dart';
 // [FakeLvs.respond]; a command of the XML dispatcher gets an entry in
 // `_commands` too (the notes of #154 are those). The results of #155 are
 // GETs of the results app, answered only with its headers, as the LVS
-// does.
+// does. The support plans of #156 are form POSTs to the LVS's JSON
+// dispatchers, answered with JSON as text, as the LVS does.
 
 /// The folder of the fixtures the fake answers with.
 const fakeLvsFixtures = 'test/fixtures/lvs';
@@ -41,6 +42,11 @@ const fakeLvsMarie = (pupilId: 900002, classId: 900102);
 /// Lars Peeters of class 3C: found by "peeters", but the LVS answers his
 /// file with its placeholder pupil, as for a pupil it does not know.
 const fakeLvsLars = (pupilId: 900005, classId: 900103);
+
+/// Noor Van den Broeck of class 3C: found by no search, with a file without
+/// a part of support plans, as at a school that keeps educational needs in
+/// its note categories instead (#156).
+const fakeLvsNoor = (pupilId: 900003, classId: 900103);
 
 /// The reads of `LvsService` the fake answers.
 enum FakeLvsRead {
@@ -91,7 +97,40 @@ enum FakeLvsRead {
 
   /// A pupil's reports (`getReports`, #155): `GET /LVS/Results/getreports`.
   reports,
+
+  /// The periods of a pupil's support plans (`getSupportPlanPeriods`,
+  /// #156): `POST /?module=LVS&file=jqDispatcher_settings&function=`
+  /// `getLVSspecificTitles` with `groupID`, `pupilID`, `type`, `activeID`,
+  /// `color` and `archiveID`.
+  supportPlanPeriods,
+
+  /// A pupil's support plan in a period (`getSupportPlan`, #156):
+  /// `POST /?module=LVS&file=jqDispatcher_hp&function=getIHP` with
+  /// `groupID`, `pupilID`, `periodID` and `exportID`.
+  supportPlan,
+
+  /// A pupil's profile sketch in a period (`getProfileSketch`, #156):
+  /// `POST /?module=LVS&file=jqDispatcher_hp&function=getProfielSchets`
+  /// with `pupilID`, `classID`, `periodID` and `exportID`.
+  profileSketch,
 }
+
+/// The fixtures of a pupil's support plan in one period (#156): the plan
+/// and the profile sketch, in `test/fixtures/lvs/supportplan/`.
+typedef FakeLvsSupportPlan = ({String plan, String sketch});
+
+/// The period menu of the support plans of a pupil the fake has none of:
+/// none, as the LVS answered a made-up pupil in a made-up class (seen live,
+/// yvanvds/dartschool#163).
+const _noSupportPlanPeriods = 'supportplan/periods_none.json';
+
+/// The support plan and profile sketch of a pupil the fake has none of: a
+/// period error, as the LVS answered a made-up pupil in a made-up class
+/// (seen live, yvanvds/dartschool#163).
+const _noSupportPlan = (
+  plan: 'supportplan/plan_no_period.json',
+  sketch: 'supportplan/profile_no_period.json',
+);
 
 /// The fixtures of a pupil's results in one school year (#155), one per read
 /// of the results app; all in `test/fixtures/lvs/results/`.
@@ -204,6 +243,7 @@ class FakeLvs {
   final Map<int, String> pupilFiles = {
     fakeLvsJan.pupilId: 'spotlight/pupil_file.json',
     fakeLvsMarie.pupilId: 'spotlight/pupil_file_parts.json',
+    fakeLvsNoor.pupilId: 'spotlight/pupil_file_no_plans.json',
   };
 
   /// The fixture of each pupil's attendance today, by pupil id; none for
@@ -259,6 +299,40 @@ class FakeLvs {
 
   /// The fixture of what the results app may show, for every pupil.
   String resultsConfiguration = 'results/configuration.json';
+
+  /// The fixture of the period menu of each pupil's support plans, by pupil
+  /// id (#156). A pupil without one, or asked for in another class than
+  /// their file's, gets no menu ([_noSupportPlanPeriods]).
+  final Map<int, String> supportPlanPeriods = {
+    fakeLvsJan.pupilId: 'supportplan/periods.json',
+    fakeLvsMarie.pupilId: 'supportplan/periods.json',
+  };
+
+  /// The fixtures of each pupil's support plan, by pupil id and the
+  /// `periodID` asked for (`0` for the current period) (#156): Marie
+  /// Peeters has a plan in both periods (the current one with every kind of
+  /// item; the second closed, with items for other courses, an item of an
+  /// unknown kind and an empty one), each with a profile sketch; Jan
+  /// Janssens has no plan and no sketch in the current period. Any other
+  /// pupil or period, or a pupil asked for in another class than their
+  /// file's, gets a period error ([_noSupportPlan]), as the LVS answered a
+  /// made-up pupil.
+  final Map<(int, int), FakeLvsSupportPlan> supportPlans = {
+    for (final period in [0, 900501])
+      (fakeLvsMarie.pupilId, period): (
+        plan: 'supportplan/plan.json',
+        sketch: 'supportplan/profile.json',
+      ),
+    (fakeLvsMarie.pupilId, 900502): (
+      plan: 'supportplan/plan_other.json',
+      sketch: 'supportplan/profile_lines.json',
+    ),
+    for (final period in [0, 900501])
+      (fakeLvsJan.pupilId, period): (
+        plan: 'supportplan/plan_none.json',
+        sketch: 'supportplan/profile_none.json',
+      ),
+  };
 
   /// Whether the fake keeps the evaluations of the `courseIds` and
   /// `periodIds` asked for, as the results app expects; when false, it
@@ -334,6 +408,22 @@ class FakeLvs {
       FakeLvsRead.evaluations => _evaluations(query),
       FakeLvsRead.resultsFeedback => _fixture(_resultsOf(query).feedback),
       FakeLvsRead.reports => _fixture(_resultsOf(query).reports),
+      FakeLvsRead.supportPlanPeriods => _dispatcherJson(
+        _isInClass(form['pupilID'], form['groupID'])
+            ? supportPlanPeriods[int.parse(form['pupilID']!)] ??
+                  _noSupportPlanPeriods
+            : _noSupportPlanPeriods,
+      ),
+      FakeLvsRead.supportPlan => _dispatcherJson(
+        _supportPlanOf(form['pupilID'], form['groupID'], form['periodID']).plan,
+      ),
+      FakeLvsRead.profileSketch => _dispatcherJson(
+        _supportPlanOf(
+          form['pupilID'],
+          form['classID'],
+          form['periodID'],
+        ).sketch,
+      ),
     };
   }
 
@@ -346,6 +436,25 @@ class FakeLvs {
             header.key.toLowerCase() == 'x-requested-with' &&
             header.value == 'XMLHttpRequest',
       );
+
+  /// Whether the pupil [pupilId] is in the class [classId] by their file's
+  /// fixture (both form fields, as digits).
+  bool _isInClass(String? pupilId, String? classId) {
+    final pupil = int.tryParse(pupilId ?? '');
+    return pupil != null && _classOf(pupil) == int.tryParse(classId ?? '');
+  }
+
+  /// The fixtures of the support plan that a read's form fields ask for:
+  /// [pupilId] in [classId], in the period [periodId].
+  FakeLvsSupportPlan _supportPlanOf(
+    String? pupilId,
+    String? classId,
+    String? periodId,
+  ) {
+    final period = int.tryParse(periodId ?? '');
+    if (!_isInClass(pupilId, classId) || period == null) return _noSupportPlan;
+    return supportPlans[(int.parse(pupilId!), period)] ?? _noSupportPlan;
+  }
 
   /// The fixtures of the results the [query] of a read asks for.
   FakeLvsResults _resultsOf(Map<String, String> query) {
@@ -471,6 +580,42 @@ class FakeLvs {
           FakeLvsRead.evaluations,
         'getfeedback' when exactly(query, year) => FakeLvsRead.resultsFeedback,
         'getreports' when exactly(query, year) => FakeLvsRead.reports,
+        _ => null,
+      };
+    }
+    // The reads of the support plans (#156): form POSTs to the LVS's JSON
+    // dispatchers, each with all of its own form fields and no other.
+    if (method == 'POST' &&
+        path == '/' &&
+        query['module'] == 'LVS' &&
+        exactly(query, {'module', 'file', 'function'})) {
+      return switch ((query['file'], query['function'])) {
+        ('jqDispatcher_settings', 'getLVSspecificTitles')
+            when exactly(form, {
+              'groupID',
+              'pupilID',
+              'type',
+              'activeID',
+              'color',
+              'archiveID',
+            }) =>
+          FakeLvsRead.supportPlanPeriods,
+        ('jqDispatcher_hp', 'getIHP')
+            when exactly(form, {
+              'groupID',
+              'pupilID',
+              'periodID',
+              'exportID',
+            }) =>
+          FakeLvsRead.supportPlan,
+        ('jqDispatcher_hp', 'getProfielSchets')
+            when exactly(form, {
+              'pupilID',
+              'classID',
+              'periodID',
+              'exportID',
+            }) =>
+          FakeLvsRead.profileSketch,
         _ => null,
       };
     }
@@ -643,6 +788,12 @@ class FakeLvs {
       Headers.contentTypeHeader: [type],
     },
   );
+
+  /// An answer of the LVS's JSON dispatchers (#156): the JSON of [fixture]
+  /// as text, `text/html`, as the LVS sends it (seen live,
+  /// yvanvds/dartschool#163).
+  static ResponseBody _dispatcherJson(String fixture) =>
+      _json(_read(fixture), type: 'text/html; charset=UTF-8');
 
   /// An answer of the XML dispatcher.
   static ResponseBody _xml(String body) => ResponseBody.fromString(

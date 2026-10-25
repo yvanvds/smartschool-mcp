@@ -1,0 +1,55 @@
+{
+  "categories": [
+    {
+      "id": 900401,
+      "parentID": 0,
+      "name": "Testcategorie",
+      "sort": 1,
+      "icon": "",
+      "isTitle": 0,
+      "type": "items",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": true,
+      "hasNewItems": false
+    },
+    {
+      "id": 0,
+      "parentID": 0,
+      "name": "Testsectie",
+      "sort": 14,
+      "icon": "results",
+      "isTitle": 0,
+      "type": "results",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": false,
+      "hasNewItems": false
+    }
+  ],
+  "pupil": {
+    "pupilID": 900003,
+    "name": "Van den Broeck Noor",
+    "keyword": "",
+    "keywordShow": false,
+    "pictureShow": true,
+    "pictureUrl": "/smsc/img/fake/initials_NV.png",
+    "class": "3C",
+    "classDesc": "",
+    "classID": 900103,
+    "teachers": [],
+    "classtituShow": 2,
+    "userIsPupil": false,
+    "userIsCanEdit": 0,
+    "birthday": "03/09/2015",
+    "age": "15",
+    "presences": [],
+    "picUrl": "/smsc/img/fake/initials_NV.png",
+    "classPupils": [],
+    "ssID": 49,
+    "following": false,
+    "hasSasData": false
+  }
+}

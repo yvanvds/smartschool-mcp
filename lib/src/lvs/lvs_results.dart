@@ -248,7 +248,7 @@ LvsPeriodChoice pickLvsResultsPeriods(
       }
     }
   }
-  final named = _named(periods, which, (period) => period.name);
+  final named = lvsNamed(periods, which, (period) => period.name);
   if (named.length == 1) {
     return (scope: LvsPeriodScope.chosen, periods: named);
   }
@@ -295,7 +295,7 @@ List<LvsResultsCourse> pickLvsResultsCourses(
   ];
   final picked = byId.isNotEmpty
       ? byId
-      : _named(courses, which, (course) => course.name);
+      : lvsNamed(courses, which, (course) => course.name);
   if (picked.isEmpty) {
     throw ToolError(
       "This pupil's results in school year $year have no course \"$which\". "
@@ -317,21 +317,6 @@ List<LvsResultsCourse> pickLvsResultsCourses(
   return [
     for (final course in courses)
       if (ids.contains(course.id)) course,
-  ];
-}
-
-/// The items of [items] named [which] by [name] (ignoring case and runs of
-/// white space), or, when none is, those whose name holds it.
-List<T> _named<T>(List<T> items, String which, String Function(T) name) {
-  final key = lvsNameKey(which);
-  final exact = [
-    for (final item in items)
-      if (lvsNameKey(name(item)) == key) item,
-  ];
-  if (exact.isNotEmpty) return exact;
-  return [
-    for (final item in items)
-      if (lvsNameKey(name(item)).contains(key)) item,
   ];
 }
 

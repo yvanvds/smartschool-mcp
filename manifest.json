@@ -295,6 +295,10 @@
     {
       "name": "read_lvs_results",
       "description": "Alleen met Leerlingvolgsysteem aan: leest de resultaten van één leerling in het leerlingvolgsysteem, in alle vakken: per vak de evaluaties met hun score zoals gegeven en of ze meetellen, bij veel evaluaties een berekende samenvatting, daarna de feedback, de rapporten (alleen naam en datum) en de periodes. Standaard de actieve periode van het huidige schooljaar. Leest alleen en verandert niets."
+    },
+    {
+      "name": "read_lvs_support_plan",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest het handelingsplan van één leerling in het leerlingvolgsysteem: de ondersteuningsnoden, hoofd- en werkdoelen en de aanpak, met de vakken waarvoor ze gelden, de doelen en de profielschets, van de huidige of een gekozen periode, eventueel alleen wat één vak aangaat. Een geüpload plan alleen bij naam. De evaluatie van het plan leest het nog niet. Leest alleen en verandert niets."
     }
   ],
   "keywords": [

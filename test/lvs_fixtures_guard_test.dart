@@ -35,8 +35,8 @@
 // its answers that hold names, ids or free text beyond the common ones
 // ([commonNameFields], [commonIdFields], [commonTextFields]), and, for fields
 // known by position only, an [LvsFixtureKind.extraFields] function. The
-// library's guard has the kinds of the other LVS reads (`supportplan`,
-// `absences`) with their extra fields, to copy with their fixtures.
+// library's guard has the kind of the other LVS read (`absences`) with its
+// extra fields, to copy with its fixtures.
 import 'dart:convert';
 import 'dart:io';
 
@@ -272,6 +272,39 @@ const lvsFixtureKinds = <LvsFixtureKind>[
     nameFields: {'abbreviation', 'sort'},
     idFields: {'goalId', 'leerplanId'},
     textFields: {'leerplanKey'},
+  ),
+  LvsFixtureKind(
+    folder: 'supportplan',
+    about:
+        "Answers of the LVS's JSON dispatchers for the support plans "
+        '(yvanvds/dartschool#163, #156): the menu of periods '
+        '(jqDispatcher_settings, getLVSspecificTitles), the individual plan '
+        '(jqDispatcher_hp, getIHP) and the profile sketch (jqDispatcher_hp, '
+        'getProfielSchets).',
+    // As the library's guard has them: `titleText` names a period or a
+    // heading of the menu, `title` the menu's current title and a course of
+    // a plan; `className_teacher` is the pupil's class. The plan's support
+    // needs, goals, objectives, approach and planning (`ondName`,
+    // `doelName`, `parentName`, `aanpakName`, `occName`), its theme, start
+    // situation and comment (`themeName`, `beginsituatie`, `aanpakcomment`),
+    // a goal's domain (`path`), the sketch (`content`, `lastrevision`), a
+    // period's `message` and an uploaded plan's `fileName` are free text.
+    nameFields: {'titleText', 'title', 'className_teacher'},
+    textFields: {
+      'ondName',
+      'doelName',
+      'parentName',
+      'aanpakName',
+      'occName',
+      'themeName',
+      'beginsituatie',
+      'aanpakcomment',
+      'path',
+      'content',
+      'lastrevision',
+      'message',
+      'fileName',
+    },
   ),
 ];
 

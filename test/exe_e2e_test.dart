@@ -637,7 +637,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(65));
+    expect(tools, hasLength(66));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -647,6 +647,7 @@ void main() {
         'read_lvs_pupil',
         'read_lvs_notes',
         'read_lvs_results',
+        'read_lvs_support_plan',
       ]),
       reason: 'the presence and LVS tools are checked too',
     );
@@ -1195,6 +1196,7 @@ void main() {
       'read_lvs_pupil',
       'read_lvs_notes',
       'read_lvs_results',
+      'read_lvs_support_plan',
     ];
 
     Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
@@ -1242,6 +1244,7 @@ void main() {
           'read_lvs_pupil',
           'read_lvs_notes',
           'read_lvs_results',
+          'read_lvs_support_plan',
         ]) {
           final (isError, text) = await server.callTool(name);
           expect(isError, isTrue, reason: name);
@@ -1267,7 +1270,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(53));
+      expect(tools, hasLength(54));
       expect([for (final tool in tools.skip(49)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
@@ -1328,6 +1331,24 @@ void main() {
         byName['read_lvs_results']!['description'],
         contains('a summary line computed from the scores given'),
       );
+      // The support plan (#156): of one pupil and a period, with the items
+      // of every course or of one; its evaluation is not read yet.
+      final plan = byName['read_lvs_support_plan']!['inputSchema'] as Map;
+      expect(plan['required'], ['pupil_id', 'class_id']);
+      expect((plan['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'period',
+        'course',
+      ]);
+      expect(
+        byName['read_lvs_support_plan']!['description'],
+        allOf(
+          contains("Not read yet: the plan's evaluation"),
+          contains("The server cannot tell which courses are the user's own"),
+          contains('read with read_lvs_notes'),
+        ),
+      );
 
       final (statusError, status) = await server.callTool('smartschool_status');
       expect(statusError, isNot(true));
@@ -1354,6 +1375,15 @@ void main() {
             'course': 'Testvak',
           },
         ),
+        (
+          'read_lvs_support_plan',
+          {
+            'pupil_id': 900002,
+            'class_id': 900102,
+            'period': 'Testperiode 2',
+            'course': 'Testvak',
+          },
+        ),
       ]) {
         final (isError, text) = await server.callTool(
           tool,
@@ -1370,11 +1400,12 @@ void main() {
 
       await server.stop();
       final log = await server.stderr;
-      expect(log, contains('Leerlingvolgsysteem: on, 4 tools offered'));
+      expect(log, contains('Leerlingvolgsysteem: on, 5 tools offered'));
       expect(log.toLowerCase(), isNot(contains('testcategorie')));
       expect(log.toLowerCase(), isNot(contains('testvak')));
       expect(log.toLowerCase(), isNot(contains('testperiode')));
       expect(log.toLowerCase(), isNot(contains('janssens')));
+      expect(log, isNot(contains('900002')));
     });
 
     test('with "Skore-beheer" and "Aanwezigheden" on too: the Skore tools, '
@@ -1391,7 +1422,7 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(65));
+      expect(tools, hasLength(66));
       expect([for (final tool in tools.skip(61)) tool['name']], lvsTools);
       expect(
         [for (final tool in tools.skip(57).take(4)) tool['name']],

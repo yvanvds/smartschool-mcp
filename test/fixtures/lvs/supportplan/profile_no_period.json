@@ -1,0 +1,14 @@
+{
+  "check": 0,
+  "content": "Testmelding: voor deze leerling is nog geen profielschets",
+  "avatarHash": "initials_JJ",
+  "pupilName": "Jan Janssens",
+  "birthdate": "01/01/2017",
+  "age": "13j en 9m",
+  "className_teacher": "1A",
+  "lastrevision": "",
+  "period": {
+    "error": 1,
+    "message": "Testfout: maak eerst een structuur aan voor deze klas"
+  }
+}

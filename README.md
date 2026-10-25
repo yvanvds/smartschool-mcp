@@ -1425,8 +1425,8 @@ The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
 not about rights: the LVS holds the most sensitive data about pupils (care,
 behaviour, educational needs, sometimes health), and the user and their
 school must choose to let an AI assistant read it. The tools use the
-library's `LvsService` (yvanvds/dartschool#160, #161, #162), which sends only
-its reads, by an allowlist; all of them only read:
+library's `LvsService` (yvanvds/dartschool#160 to #163), which sends only its
+reads, by an allowlist; all of them only read:
 
 - `search_lvs_pupils`: the pupils whose name matches `query`, among those the
   account may see (`searchPupils`), one line each with name, class,
@@ -1446,7 +1446,8 @@ its reads, by an allowlist; all of them only read:
   that hold nothing. A part's line names the tool that reads it, once there
   is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`):
   `read_lvs_notes` for the note categories and their headings,
-  `read_lvs_results` for the results (Resultaten). The LVS
+  `read_lvs_results` for the results (Resultaten), `read_lvs_support_plan`
+  for the support plans (handelingsplannen). The LVS
   answers a pupil it does not know in that class with a placeholder pupil,
   which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
   says to take both ids from one line of the search.
@@ -1539,6 +1540,51 @@ its reads, by an allowlist; all of them only read:
   names a part of the file by its id or name (the notes' `category` too).
   The file's read takes today's attendance along, unused, and the Belgian
   day is `lvsDay`'s: the workarounds of #160.
+- `read_lvs_support_plan`: one pupil's support plan (`pupil_id`,
+  `class_id`), the "handelingsplannen" part of the file, for schools that
+  use the LVS's support plans: the individual plan (IHP) and the profile
+  sketch of one period (`getSupportPlanPeriods`, `getSupportPlan`,
+  `getProfileSketch`; only the live plan, `exportID` 0). By default the
+  current period (`periodID` 0); `period` takes a `period_id` or a name of
+  the period menu (ignoring case, or else the period whose name holds it;
+  several matches, or none, are an error that lists them with their ids and
+  the menu's heading). The items in the LVS's order, each with its kind,
+  author, date (as the LVS shows it) and courses: an item of support needs
+  with its support needs (ondersteuningsnoden), main and work goals,
+  approach and the comment on it; an item of goals (from the class's group
+  plan, or chosen for the pupil, and the school's own goals or those of
+  special primary education when the LVS says so) with its theme, start
+  situation and goals, each with its domain, objectives, approach and
+  planning, and whether it is no longer in its curriculum; an uploaded plan
+  by its file name and kind only (nothing is downloaded); an item of a kind
+  the library does not know by its type, said so. Lists and texts of more
+  lines keep their lines; empty fields are left out, and an item with
+  nothing filled in says so. Then the profile sketch (profielschets) with its
+  last change, and the periods to ask for. `course` is a filter by name
+  (ignoring case, or else the courses whose name holds it): the items that
+  name it among their courses or their goals' planning, and the items that
+  name no course, which may concern every course; the others are counted.
+  The plan names its courses without ids, and the library cannot tell which
+  courses are the user's own (yvanvds/dartschool#189, #163): the
+  description says to pass the user's course as `course`. The three cases
+  without a plan each get a sentence: a file without a part of support plans
+  (a school that does not use them, or an account that may not see them:
+  the sentence points to the note categories and `read_lvs_notes`), a pupil
+  without a plan in the period (`noPlan`), and no period of support plans
+  (`noPeriod`, as for a class without a structure of them, with the LVS's
+  message). As what the LVS answers a pupil it does not know was not
+  captured, the file is read too when the plan holds no item and there is no
+  sketch, or before saying that there is no period to pick from: the error
+  then says the LVS does not know the pupil. A refusal with HTTP 403 is "no
+  access to the support plans" in a sentence. Not read: the plan's
+  evaluation, its report and the earlier versions of its items, which the
+  library does not read yet (yvanvds/dartschool#170, #162); the description
+  and every answer with a plan say so. The plan is read and written in
+  `lib/src/lvs/lvs_support_plan.dart`; `lvsNamed` in `lvs_access.dart`
+  finds a period or a course by name (the results' too). No real pupil's
+  plan was captured (yvanvds/dartschool#168): the fixtures are in the shapes
+  of the LVS's JavaScript. The file's read takes today's attendance along,
+  unused: the workaround of #160.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's

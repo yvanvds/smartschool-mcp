@@ -180,7 +180,7 @@ void main() {
     final tools = (await server.request('tools/list'))['tools'] as List;
     expect(_skoreTools, hasLength(8));
     expect(_presenceTools, hasLength(4));
-    expect(_lvsTools, hasLength(4));
+    expect(_lvsTools, hasLength(5));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       [
@@ -381,10 +381,10 @@ void main() {
       ],
     );
     expect(
-      [for (final tool in tools) tool['name']].skip(tools.length - 4),
+      [for (final tool in tools) tool['name']].skip(tools.length - 5),
       _lvsTools,
     );
-    for (final tool in tools.skip(tools.length - 4)) {
+    for (final tool in tools.skip(tools.length - 5)) {
       expect(
         tool['annotations'],
         containsPair('readOnlyHint', true),

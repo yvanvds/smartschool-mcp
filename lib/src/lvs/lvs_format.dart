@@ -16,6 +16,8 @@ const lvsSectionReaders = <String, String>{
   LvsSectionType.items: 'read_lvs_notes',
   // The results app's part, "Resultaten" (#155); not the older Skore part.
   LvsSectionType.results: 'read_lvs_results',
+  // The support plans, "handelingsplannen" (#156).
+  LvsSectionType.supportPlans: 'read_lvs_support_plan',
 };
 
 /// [schoolYear] as the LVS labels a school year, `2030-2031`; another range

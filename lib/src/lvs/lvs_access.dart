@@ -260,8 +260,8 @@ Schema lvsClassIdSchema() => Schema.int(
 /// An argument that names one thing of a pupil's file by its id or its
 /// name, as text: a name, or an id (digits, or `<id name> <digits>` as the
 /// tools print it, see [lvsIdIn]); `null` when it is absent or empty. Used
-/// for a note category (#154) and a period and a course of the results
-/// (#155).
+/// for a note category (#154), a period and a course of the results (#155),
+/// and a period and a course of the support plans (#156).
 ///
 /// Throws a [ToolError] for a number that is not a whole number, or a value
 /// of another type, saying that [name] must be [what].
@@ -303,6 +303,23 @@ int? lvsIdIn(String which, String idName) {
 /// space, trimmed.
 String lvsNameKey(String name) =>
     name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+/// The items of [items] named [which] by [name] (ignoring case and runs of
+/// white space, [lvsNameKey]), or, when none is, those whose name holds it.
+/// Used for a period and a course of the results (#155) and of the support
+/// plans (#156).
+List<T> lvsNamed<T>(List<T> items, String which, String Function(T) name) {
+  final key = lvsNameKey(which);
+  final exact = [
+    for (final item in items)
+      if (lvsNameKey(name(item)) == key) item,
+  ];
+  if (exact.isNotEmpty) return exact;
+  return [
+    for (final item in items)
+      if (lvsNameKey(name(item)).contains(key)) item,
+  ];
+}
 
 /// The `school_year` argument of the LVS tools that read one school year
 /// (#154): two years with a dash, as the LVS labels them.
