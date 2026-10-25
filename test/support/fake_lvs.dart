@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:xml/xml.dart';
 
 // A fake of Smartschool's pupil tracking system (LVS, "leerlingvolgsysteem",
 // `/?module=LVS`): the reads of the library's `LvsService`, answered with
@@ -12,10 +13,11 @@ import 'package:dio/dio.dart';
 // library's own (yvanvds/dartschool, `test/fixtures/lvs/`, written by hand
 // in the shapes of #160) or written by hand in those shapes, with the fakes
 // of `test/fixtures/lvs/FAKES.md` only. `test/lvs_fixtures_guard_test.dart`
-// checks them. A new kind of answer (the notes of #154, say) goes in a
+// checks them. A new kind of answer (the results of #155, say) goes in a
 // folder of its own under `test/fixtures/lvs/`, registered in that guard's
 // `lvsFixtureKinds`, and gets a [FakeLvsRead] and a case in
-// [FakeLvs.respond].
+// [FakeLvs.respond]; a command of the XML dispatcher gets an entry in
+// `_commands` too (the notes of #154 are those).
 
 /// The folder of the fixtures the fake answers with.
 const fakeLvsFixtures = 'test/fixtures/lvs';
@@ -54,7 +56,24 @@ enum FakeLvsRead {
   /// A pupil's attendance today (`getPupilFile`, after the file):
   /// `POST /LVS/Pupilxhr/getStatusInfo` with `pupilID`.
   todayStatus,
+
+  /// The notes of one category (`getNotes`, #154): the XML dispatcher,
+  /// `POST /?module=LVS&file=dispatcher`, with the one command
+  /// `lvs_cats/getUserCatItems` and its params.
+  categoryNotes,
+
+  /// All of a pupil's notes, the "all items" view (`getAllNotes`, #154):
+  /// the XML dispatcher with the one command `lvs_pupils/getUserData`.
+  allNotes,
 }
+
+/// The command of a request to the LVS's XML dispatcher: its subsystem,
+/// its action and its params with their values.
+typedef FakeLvsCommand = ({
+  String subsystem,
+  String action,
+  Map<String, String> params,
+});
 
 /// How the fake refuses or breaks a read ([FakeLvs.refusal]).
 enum FakeLvsRefusal {
@@ -77,12 +96,14 @@ enum FakeLvsRefusal {
   htmlPage,
 }
 
-/// One request the fake LVS got.
+/// One request the fake LVS got, with the command of a request to the XML
+/// dispatcher (`null` for any other, or a `command` that does not parse).
 typedef FakeLvsRequest = ({
   String method,
   String path,
   Map<String, String> query,
   Map<String, String> form,
+  FakeLvsCommand? command,
   FakeLvsRead? read,
 });
 
@@ -102,13 +123,20 @@ class FakeLvs {
 
   /// The requests, in order, each as one line: the method, the path with
   /// the query, and the form fields, such as
-  /// `POST /LVS/Pupilxhr/getStatusInfo pupilID=900001`.
+  /// `POST /LVS/Pupilxhr/getStatusInfo pupilID=900001`; for the XML
+  /// dispatcher, its command and the command's params instead of the form,
+  /// such as `POST /?module=LVS&file=dispatcher lvs_cats/getUserCatItems
+  /// catID=900401 userID=900001 ...`.
   List<String> get calls => [
     for (final r in requests)
       [
         '${r.method} ${r.path}'
             '${r.query.isEmpty ? '' : '?${_fields(r.query, '&')}'}',
-        if (r.form.isNotEmpty) _fields(r.form, ' '),
+        if (r.command case final command?) ...[
+          '${command.subsystem}/${command.action}',
+          if (command.params.isNotEmpty) _fields(command.params, ' '),
+        ] else if (r.form.isNotEmpty)
+          _fields(r.form, ' '),
       ].join(' '),
   ];
 
@@ -139,6 +167,26 @@ class FakeLvs {
     fakeLvsMarie.pupilId: 'status/am.json',
   };
 
+  /// The fixture of the notes of a category, by pupil id and category id
+  /// (#154): the category's own notes, of any school year, as the LVS
+  /// answers them (the library keeps those of the school year asked for).
+  /// A pupil asked for in another class than their file's gets the LVS's
+  /// placeholder pupil (`notes/pupil_unknown.xml`); a category without a
+  /// fixture the answer for a category the LVS does not know
+  /// (`notes/category_unknown.xml`); both with the ids asked for.
+  final Map<(int, int), String> categoryNotes = {
+    (fakeLvsJan.pupilId, 900401): 'notes/category.xml',
+    (fakeLvsJan.pupilId, 900402): 'notes/subcategory.xml',
+    (fakeLvsJan.pupilId, 900404): 'notes/subcategory_deep.xml',
+    (fakeLvsMarie.pupilId, 900401): 'notes/category_empty.xml',
+  };
+
+  /// The fixture of all of a pupil's notes, by pupil id (#154). A pupil
+  /// without one, or asked for in another class than their file's, gets an
+  /// answer without data (`notes/all_notes_empty.xml`, with the pupil id
+  /// asked for), as the LVS answers a pupil it does not know.
+  final Map<int, String> allNotes = {fakeLvsJan.pupilId: 'notes/all_notes.xml'};
+
   /// When set, the reads of [refusedReads] (all of them when that is null)
   /// are answered this way.
   FakeLvsRefusal? refusal;
@@ -163,12 +211,16 @@ class FakeLvs {
     final form = data is Map
         ? {for (final entry in data.entries) '${entry.key}': '${entry.value}'}
         : const <String, String>{};
-    final read = _readOf(options.method, path, query, form);
+    final command = query['file'] == 'dispatcher'
+        ? _commandOf(form['command'])
+        : null;
+    final read = _readOf(options.method, path, query, form, command);
     requests.add((
       method: options.method,
       path: path,
       query: query,
       form: form,
+      command: command,
       read: read,
     ));
     if (failure case final failure?) throw failure;
@@ -183,7 +235,58 @@ class FakeLvs {
       FakeLvsRead.todayStatus => _fixture(
         statuses[int.tryParse(form['pupilID'] ?? '')] ?? 'status/none.json',
       ),
+      FakeLvsRead.categoryNotes => _categoryNotes(command!.params),
+      FakeLvsRead.allNotes => _allNotes(command!.params),
     };
+  }
+
+  /// The params of each command of the XML dispatcher the fake answers,
+  /// with the read it is: exactly those the library sends (#154).
+  static const _commands = {
+    ('lvs_cats', 'getUserCatItems'): (
+      FakeLvsRead.categoryNotes,
+      {'catID', 'userID', 'toolbarType', 'syRange', 'groupID', 'toolbarSide'},
+    ),
+    ('lvs_pupils', 'getUserData'): (
+      FakeLvsRead.allNotes,
+      {
+        'userID',
+        'toolbarType',
+        'groupID',
+        'syRange',
+        'viewAllFilter',
+        'filterData',
+      },
+    ),
+  };
+
+  /// The command of the dispatcher's `command` form field [xml]: a
+  /// `<request>` of one `<command>` with its `<subsystem>`, `<action>` and
+  /// `<params>` of `<param name>`s; `null` for anything else.
+  static FakeLvsCommand? _commandOf(String? xml) {
+    if (xml == null) return null;
+    final XmlDocument document;
+    try {
+      document = XmlDocument.parse(xml);
+    } on XmlException {
+      return null;
+    }
+    final request = document.rootElement;
+    final commands = request.findElements('command').toList();
+    if (request.name.local != 'request' || commands.length != 1) return null;
+    final command = commands.single;
+    final subsystem = command.getElement('subsystem')?.innerText.trim();
+    final action = command.getElement('action')?.innerText.trim();
+    final params = command.getElement('params');
+    if (subsystem == null || action == null || params == null) return null;
+    final values = <String, String>{};
+    for (final param in params.childElements) {
+      final name = param.getAttribute('name');
+      if (param.name.local != 'param' || name == null) return null;
+      if (values.containsKey(name)) return null;
+      values[name] = param.innerText;
+    }
+    return (subsystem: subsystem, action: action, params: values);
   }
 
   static FakeLvsRead? _readOf(
@@ -191,10 +294,24 @@ class FakeLvs {
     String path,
     Map<String, String> query,
     Map<String, String> form,
+    FakeLvsCommand? command,
   ) {
     bool only(Map<String, String> fields, Set<String> names) =>
         fields.keys.toSet().difference(names).isEmpty;
     return switch ((method, path)) {
+      ('POST', '/')
+          when query['module'] == 'LVS' &&
+              query['file'] == 'dispatcher' &&
+              only(query, {'module', 'file'}) &&
+              only(form, {'command'}) &&
+              command != null =>
+        switch (_commands[(command.subsystem, command.action)]) {
+          (final read, final params)
+              when command.params.keys.toSet().containsAll(params) &&
+                  only(command.params, params) =>
+            read,
+          _ => null,
+        },
       ('POST', '/')
           when query['module'] == 'LVS' &&
               query['file'] == 'treeBuilder' &&
@@ -243,6 +360,71 @@ class FakeLvs {
     return _json(jsonEncode(placeholder));
   }
 
+  /// The class of pupil [pupilId] by their file's fixture; `null` for a
+  /// pupil without one.
+  int? _classOf(int pupilId) {
+    final fixture = pupilFiles[pupilId];
+    if (fixture == null) return null;
+    final file = jsonDecode(_read(fixture)) as Map<String, Object?>;
+    return (file['pupil'] as Map<String, Object?>)['classID'] as int?;
+  }
+
+  /// The notes of a category ([categoryNotes]), for the command's [params].
+  ResponseBody _categoryNotes(Map<String, String> params) {
+    final pupilId = int.parse(params['userID']!);
+    final classId = int.tryParse(params['groupID']!);
+    final categoryId = int.parse(params['catID']!);
+    if (_classOf(pupilId) != classId) {
+      return _xml(
+        _withIds(
+          _read('notes/pupil_unknown.xml'),
+          pupilId: pupilId,
+          categoryId: categoryId,
+        ),
+      );
+    }
+    if (categoryNotes[(pupilId, categoryId)] case final fixture?) {
+      return _xml(_read(fixture));
+    }
+    return _xml(
+      _withIds(
+        _read('notes/category_unknown.xml'),
+        pupilId: pupilId,
+        categoryId: categoryId,
+      ),
+    );
+  }
+
+  /// All of a pupil's notes ([allNotes]), for the command's [params].
+  ResponseBody _allNotes(Map<String, String> params) {
+    final pupilId = int.parse(params['userID']!);
+    final classId = int.tryParse(params['groupID']!);
+    if (allNotes[pupilId] case final fixture?
+        when _classOf(pupilId) == classId) {
+      return _xml(_read(fixture));
+    }
+    return _xml(_withIds(_read('notes/all_notes_empty.xml'), pupilId: pupilId));
+  }
+
+  /// [xml], an answer of the dispatcher, with [pupilId] as its pupil (the
+  /// content's `pupilID` and that of its `pupilInfo`) and [categoryId] as
+  /// its category (the content's `catID`).
+  static String _withIds(String xml, {required int pupilId, int? categoryId}) {
+    var result = xml
+        .replaceFirst(
+          RegExp(r'<pupilID>\d+</pupilID>'),
+          '<pupilID>$pupilId</pupilID>',
+        )
+        .replaceFirst(RegExp(r'"pupilID":\d+'), '"pupilID":$pupilId');
+    if (categoryId != null) {
+      result = result.replaceFirst(
+        RegExp(r'<catID>\d+</catID>'),
+        '<catID>$categoryId</catID>',
+      );
+    }
+    return result;
+  }
+
   ResponseBody _refuse(FakeLvsRefusal refusal, RequestOptions options) =>
       switch ((refusal, options.method)) {
         (FakeLvsRefusal.forbidden, _) => _html(_noAccessPage, status: 403),
@@ -283,6 +465,15 @@ class FakeLvs {
     200,
     headers: {
       Headers.contentTypeHeader: [type],
+    },
+  );
+
+  /// An answer of the XML dispatcher.
+  static ResponseBody _xml(String body) => ResponseBody.fromString(
+    body,
+    200,
+    headers: {
+      Headers.contentTypeHeader: ['text/xml; charset=UTF-8'],
     },
   );
 

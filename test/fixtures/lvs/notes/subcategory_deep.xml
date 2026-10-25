@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written for #154, in the shape of category.xml: renderPupilNotes for
+  Testsubcategorie (900404), under the heading 900403 under Testcategorie,
+  of Jan Janssens. One note in the older shape, without catName and
+  authorReverse: the library names its category by catInfo.
+-->
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+      <action>
+        <subsystem>lvs_pupil</subsystem>
+        <command>renderPupilNotes</command>
+        <data>
+          <content>
+            <hasData>1</hasData>
+            <buttons/>
+            <updateToolbar>1</updateToolbar>
+            <pupilID>900001</pupilID>
+            <catID>900404</catID>
+            <catInfo><![CDATA[{"catID":"900404","parentID":"900403","name":"Testsubcategorie","catType":"1","gFilter":1,"following":false}]]></catInfo>
+            <hideWindow>0</hideWindow>
+            <catFilter><![CDATA[{"start":"2030-09-01","end":"2031-08-31"}]]></catFilter>
+            <pupilInfo><![CDATA[{"pupilID":900001,"name":"Janssens Jan","class":"1A","classDesc":"Testrichting","classID":900101,"teachers":[],"userIsPupil":false}]]></pupilInfo>
+            <viewType>list</viewType>
+            <items>
+              <item>
+                <itemID>900304</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900404</catID>
+                <title><![CDATA[Testnotitie zonder categorienaam.]]></title>
+                <date>1916132400</date>
+                <author><![CDATA[Peeters Piet]]></author>
+                <rights><![CDATA[{"edit":1,"print":1,"duplicate":1,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params>
+                  <param>
+                    <itemID>900304</itemID>
+                    <paramID>900631</paramID>
+                    <type>1</type>
+                    <val><![CDATA[Testtekst in een oudere vorm.]]></val>
+                    <title><![CDATA[Testveld tekst]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>1</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>m</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>0</isNew>
+                <originalCreate>0</originalCreate>
+              </item>
+            </items>
+            <catsInfo><![CDATA[{"900404":{"catID":900404,"name":"Testsubcategorie"}}]]></catsInfo>
+            <catOrder><![CDATA[[900404]]]></catOrder>
+            <catViews><![CDATA[{"900404":"list"}]]></catViews>
+          </content>
+        </data>
+      </action>
+    </actions>
+  </response>
+</server>

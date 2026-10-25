@@ -11,7 +11,36 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 /// ([LvsSection.type]): `read_lvs_pupil` names the tool on the part's line,
 /// so that Claude knows which tool reads it. The LVS tools that read the
 /// parts (#154 to #157) add theirs here.
-const lvsSectionReaders = <String, String>{};
+const lvsSectionReaders = <String, String>{
+  // The note categories, and their headings (#154).
+  LvsSectionType.items: 'read_lvs_notes',
+};
+
+/// [schoolYear] as the LVS labels a school year, `2030-2031`; another range
+/// of days as `2030-09-01 to 2030-12-31`.
+String formatLvsSchoolYear(LvsSchoolYear schoolYear) {
+  final first = schoolYear.from.year;
+  return schoolYear == LvsSchoolYear.starting(first)
+      ? '$first-${first + 1}'
+      : '${schoolYear.firstDay} to ${schoolYear.lastDay}';
+}
+
+/// The day of [instant] in Belgian time, the LVS's, as `YYYY-MM-DD`: the
+/// day the LVS shows a note on, also on a computer in another time zone.
+///
+/// The library has the Belgian day of a note but does not export it
+/// (yvanvds/dartschool#185), so this asks its [LvsSchoolYear.includesDay],
+/// which tells the Belgian day: Belgian time is one or two hours ahead of
+/// UTC, so the day there is the day in UTC or the one after. Tracked for
+/// removal in #160.
+String lvsDay(DateTime instant) {
+  final utc = instant.toUtc();
+  final next = DateTime.utc(utc.year, utc.month, utc.day + 1);
+  final day = LvsSchoolYear(from: next, until: next).includesDay(instant)
+      ? next
+      : DateTime.utc(utc.year, utc.month, utc.day);
+  return LvsSchoolYear(from: day, until: day).firstDay;
+}
 
 /// What a part of a pupil's file is, in a few words, by its type.
 const _sectionKinds = {

@@ -234,3 +234,33 @@ Schema lvsClassIdSchema() => Schema.int(
 
   return (pupilId: positive('pupil_id'), classId: positive('class_id'));
 }
+
+/// The `school_year` argument of the LVS tools that read one school year
+/// (#154): two years with a dash, as the LVS labels them.
+Schema lvsSchoolYearSchema() => Schema.string(
+  description:
+      'The school year, like 2025-2026 (1 September to 31 August). Default: '
+      'the current school year.',
+);
+
+/// The school year of the `school_year` argument of [arguments] (a label
+/// like `2025-2026`, [LvsSchoolYear.tryParse]), or the current one in
+/// Belgian time, of [now], when it is absent or empty.
+///
+/// Throws a [ToolError] for any other text, before anything is sent.
+LvsSchoolYear lvsSchoolYearArgument(
+  Map<String, Object?> arguments, {
+  required DateTime now,
+}) {
+  final value = arguments['school_year'];
+  final text = value is String ? value.trim() : null;
+  if (value == null || text == '') return LvsSchoolYear.current(now: now);
+  if (text != null) {
+    if (LvsSchoolYear.tryParse(text) case final schoolYear?) return schoolYear;
+  }
+  throw ToolError(
+    'school_year must be a school year like 2025-2026: two years, the '
+    'second the one after the first; ${value is String ? '"$value"' : '$value'} '
+    'is not. Leave it out for the current school year.',
+  );
+}

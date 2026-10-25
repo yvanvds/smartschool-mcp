@@ -287,6 +287,10 @@
     {
       "name": "read_lvs_pupil",
       "description": "Alleen met Leerlingvolgsysteem aan: toont het overzicht van het dossier van één leerling in het leerlingvolgsysteem: de klas, de titularissen, de aanwezigheid van vandaag en welke onderdelen iets bevatten. Leest alleen en verandert niets."
+    },
+    {
+      "name": "read_lvs_notes",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest de notities in het dossier van één leerling in het leerlingvolgsysteem (gedrag, zorg, onderwijsbehoeften, gesprekken, ...), van één categorie of van alle, van één schooljaar, de nieuwste eerst. Vertrouwelijke notities telt het alleen, zonder ze te tonen, tenzij je er uitdrukkelijk om vraagt. Leest alleen; of Smartschool gelezen notities daarna niet meer als nieuw toont, is nog niet nagegaan."
     }
   ],
   "keywords": [

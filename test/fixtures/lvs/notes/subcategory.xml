@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written for #154, in the shape of category.xml: renderPupilNotes for
+  the sub-category Testsubcategorie (900402) of Testcategorie, of Jan
+  Janssens. One new note, of a talk, with a rich text that is a list (a
+  line per item) and its history.
+-->
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+      <action>
+        <subsystem>lvs_pupil</subsystem>
+        <command>renderPupilNotes</command>
+        <data>
+          <content>
+            <hasData>1</hasData>
+            <buttons/>
+            <updateToolbar>1</updateToolbar>
+            <pupilID>900001</pupilID>
+            <catID>900402</catID>
+            <catInfo><![CDATA[{"catID":"900402","parentID":"900401","name":"Testsubcategorie","catType":"1","gFilter":1,"following":false}]]></catInfo>
+            <hideWindow>0</hideWindow>
+            <catFilter><![CDATA[{"start":"2030-09-01","end":"2031-08-31"}]]></catFilter>
+            <pupilInfo><![CDATA[{"pupilID":900001,"name":"Janssens Jan","class":"1A","classDesc":"Testrichting","classID":900101,"teachers":[],"userIsPupil":false}]]></pupilInfo>
+            <viewType>form</viewType>
+            <items>
+              <item>
+                <itemID>900303</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900402</catID>
+                <title><![CDATA[Testgesprek met Koen Wouters.]]></title>
+                <date>1920096900</date>
+                <author><![CDATA[Jacobs Els]]></author>
+                <rights><![CDATA[{"edit":0,"print":1,"duplicate":0,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history>
+                  <entry>
+                    <date>1920096900</date>
+                    <author><![CDATA[Jacobs Els]]></author>
+                  </entry>
+                </history>
+                <params>
+                  <param>
+                    <itemID>900303</itemID>
+                    <paramID>900621</paramID>
+                    <type>2</type>
+                    <val><![CDATA[<ul><li>Testafspraak een.</li><li>Testafspraak twee.</li></ul>]]></val>
+                    <title><![CDATA[Testveld afspraken]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>0</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>f</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>1</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testsubcategorie]]></catName>
+                <authorReverse><![CDATA[Els Jacobs]]></authorReverse>
+              </item>
+            </items>
+            <catsInfo><![CDATA[{"900402":{"catID":900402,"name":"Testsubcategorie"}}]]></catsInfo>
+            <catOrder><![CDATA[[900402]]]></catOrder>
+            <catViews><![CDATA[{"900402":"form"}]]></catViews>
+          </content>
+        </data>
+      </action>
+    </actions>
+  </response>
+</server>

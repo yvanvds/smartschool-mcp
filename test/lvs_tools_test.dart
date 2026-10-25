@@ -51,11 +51,14 @@ const _janFile =
     "Today's attendance: morning: Testcode (TA); afternoon: Testcode (TB).\n"
     "The parts of the file that hold something, in the LVS's order (5). "
     'What they hold is not shown here.\n'
-    '- Testcategorie: note category (category_id 900401), with new notes\n'
+    '- Testcategorie: note category (category_id 900401), with new notes, '
+    'read it with read_lvs_notes\n'
     '  - Testsubcategorie: note category (category_id 900402), with new '
-    'notes\n'
-    '  - Testsubcategorie: heading of note categories (category_id 900403)\n'
-    '    - Testsubcategorie: note category (category_id 900404)\n'
+    'notes, read it with read_lvs_notes\n'
+    '  - Testsubcategorie: heading of note categories (category_id 900403), '
+    'read it with read_lvs_notes\n'
+    '    - Testsubcategorie: note category (category_id 900404), read it with '
+    'read_lvs_notes\n'
     '- Testsectie: results\n'
     'Parts that hold nothing for this pupil: Testsectie (support plans), '
     'Testsectie (a part of type "testsection").';
@@ -105,7 +108,7 @@ void main() {
         final optIn = lvsOptIn(session, state);
         expect(optIn.setting, Setting.lvs);
         expect(optIn.offered, isEmpty, reason: state.name);
-        expect(optIn.tools, hasLength(2));
+        expect(optIn.tools, hasLength(3));
       }
     });
 
@@ -140,8 +143,13 @@ void main() {
       };
     });
 
-    test('finding a pupil first, then their file; both read-only', () {
-      expect(tools.keys, ['search_lvs_pupils', 'read_lvs_pupil']);
+    test('finding a pupil first, then their file, then the parts of it (the '
+        'notes, #154); all read-only', () {
+      expect(tools.keys, [
+        'search_lvs_pupils',
+        'read_lvs_pupil',
+        'read_lvs_notes',
+      ]);
       for (final tool in tools.values) {
         final annotations = tool.toolAnnotations!;
         expect(annotations.readOnlyHint, isTrue, reason: tool.name);
@@ -703,9 +711,9 @@ void main() {
           todayStatus: today ?? LvsTodayStatus.none,
         );
 
-    test('names the tool that reads a part, once there is one (#154 to '
-        '#157)', () {
-      expect(lvsSectionReaders, isEmpty, reason: 'none yet');
+    test('names the tool that reads a part, once there is one: the notes '
+        '(#154; the other parts follow in #155 to #157)', () {
+      expect(lvsSectionReaders, {LvsSectionType.items: 'read_lvs_notes'});
       final text = formatLvsPupilFile(
         file([
           section(900401, LvsSectionType.items),

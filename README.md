@@ -1425,8 +1425,8 @@ The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
 not about rights: the LVS holds the most sensitive data about pupils (care,
 behaviour, educational needs, sometimes health), and the user and their
 school must choose to let an AI assistant read it. The tools use the
-library's `LvsService` (yvanvds/dartschool#160), which sends only its reads,
-by an allowlist; both tools only read:
+library's `LvsService` (yvanvds/dartschool#160, #161), which sends only its
+reads, by an allowlist; all of them only read:
 
 - `search_lvs_pupils`: the pupils whose name matches `query`, among those the
   account may see (`searchPupils`), one line each with name, class,
@@ -1444,10 +1444,47 @@ by an allowlist; both tools only read:
   the LVS's own parts (results, support plans, absences, ...), each marked
   "with new notes" or "with something new" (`hasNewItems`); then the parts
   that hold nothing. A part's line names the tool that reads it, once there
-  is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`). The LVS
+  is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`):
+  `read_lvs_notes` for the note categories and their headings. The LVS
   answers a pupil it does not know in that class with a placeholder pupil,
   which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
   says to take both ids from one line of the search.
+- `read_lvs_notes`: the notes of one pupil's file (`pupil_id`, `class_id`;
+  `getNotes`, `getAllNotes`), what schools keep on behaviour, care and
+  educational needs, class council remarks and talks with parents, in one
+  school year (`school_year`, a label like `2025-2026`; by default the
+  current one in Belgian time; the library keeps only the notes of that
+  school year, as the LVS does not apply it reliably), newest first by
+  their Belgian day. With `category`, a `category_id` or a name (ignoring
+  case; a name several categories have, or one the file does not have, is
+  an error that lists them by path, with their ids), the notes of that
+  category and of each of its sub-categories: the file is read for them,
+  then each on its own (`getNotes` reads a category's own notes only;
+  headings hold none and are not read). Without it, the "all items" view of
+  the file, its notes only; as the LVS answers a pupil it does not know
+  with no notes at all, an empty answer has the file read too, so that the
+  error says so. `since` (a day) and `limit` (default 20, at most 100) keep
+  the answer short. Each note: its day, category, title, author and "new",
+  then its fields as `label: value`, in the library's plain text (a rich
+  text with its lines, the chosen options, a date's day, attachments by
+  name only, nothing downloaded; a heading by its text; a field type the
+  library does not know as the LVS gives it, which the line says; empty
+  fields left out). Confidential notes ("vertrouwelijk"), which the library
+  returns marked, are left out unless `include_confidential` is true, which
+  the description says to set only when the user explicitly asks for them;
+  the answer ends with how many notes there are and how many were left out,
+  and why: older than `since`, confidential (counted only, nothing of them
+  shown) or over the limit. The library sends no "viewed" flag; whether the
+  LVS takes a read note as seen was not captured (yvanvds/dartschool#168),
+  and the description says so. Two workarounds, tracked in #160: the
+  Belgian day comes from the library's `LvsSchoolYear.includesDay`
+  (`lvsDay` in `lib/src/lvs/lvs_format.dart`), as the library does not
+  export it (yvanvds/dartschool#185); and the file's read for the
+  categories takes today's attendance along, unused
+  (yvanvds/dartschool#186). The notes are read and written in
+  `lib/src/lvs/lvs_notes.dart`; `lvsSchoolYearArgument` and
+  `lvsSchoolYearSchema` in `lvs_access.dart` are the `school_year` argument
+  of the LVS tools that read a school year.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's

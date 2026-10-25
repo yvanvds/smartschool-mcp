@@ -240,7 +240,152 @@ const lvsFixtureKinds = <LvsFixtureKind>[
     // own title of the root.
     nameFields: {'title'},
   ),
+  LvsFixtureKind(
+    folder: 'notes',
+    about:
+        'Answers of the XML dispatcher, POST /?module=LVS&file=dispatcher '
+        '(yvanvds/dartschool#161, #154): the notes of a category '
+        '(lvs_cats/getUserCatItems, action renderPupilNotes) and all of a '
+        "pupil's file (lvs_pupils/getUserData, action renderPupilAllNotes).",
+    // As the library's guard has them: `studierichting` and `classDesc`
+    // describe a class; `title` is a note's title and a field's label (a
+    // school's own label: one that says "test"); `keyword` a teacher's
+    // keyword on the pupil; `fileName` the name of an attachment; `dates`
+    // lists the items as "n_<note id>".
+    nameFields: {'studierichting', 'classDesc'},
+    idFields: {'dates'},
+    textFields: {'title', 'keyword', 'fileName'},
+    extraFields: dispatcherNoteFields,
+  ),
 ];
+
+/// The fields of the notes of a `notes` fixture by their position, as the
+/// library reads them (the names of the elements in a note are not
+/// captured), copied from the library's guard (yvanvds/dartschool#161): the
+/// notes are the children of the 11th child of the action's content for
+/// `renderPupilNotes`, of the 8th for `renderPupilAllNotes`. A note's
+/// children: [0] itemID, [1] groupID, [2] pupilID, [3] catID (ids),
+/// [4] title (text), [6] author (name), [10] its history (each entry's
+/// [1], an author), [11] its fields, [14] studierichting (name),
+/// [15] itemGroupID, [17] bulkID (ids), [21] catName, [22] authorReverse
+/// (names). A field's: [0] itemID, [1] paramID (ids), [4] its label (text:
+/// a school's own label says "test"), and by its type [2]: [3] val, a text
+/// for a text (1) or a rich text (2) and a type the library does not know,
+/// option IDs for a choice (3, 4, 5); [5] optionValue, the options' text for
+/// a choice and an unknown type, JSON of the attachments for 6 (a map from
+/// file IDs to `{fileName, ...}`).
+Iterable<LvsField> dispatcherNoteFields(Object? document) sync* {
+  if (document is! XmlDocument) return;
+  for (final action in document.findAllElements('action')) {
+    final parts = action.childElements.toList();
+    if (parts.length < 3) continue;
+    final notesAt = switch (parts[1].innerText.trim()) {
+      'renderPupilNotes' => 10,
+      'renderPupilAllNotes' => 7,
+      _ => null,
+    };
+    final content = parts[2].childElements.firstOrNull;
+    if (notesAt == null || content == null) continue;
+    final contentParts = content.childElements.toList();
+    // The pupil ([3]) and, for renderPupilNotes, the category ([4]).
+    for (final i in notesAt == 10 ? const [3, 4] : const [3]) {
+      if (i < contentParts.length) {
+        yield LvsField(
+          'content[$i]',
+          LvsFieldType.id,
+          contentParts[i].innerText,
+        );
+      }
+    }
+    if (notesAt >= contentParts.length) continue;
+    const notePositions = {
+      0: LvsFieldType.id,
+      1: LvsFieldType.id,
+      2: LvsFieldType.id,
+      3: LvsFieldType.id,
+      4: LvsFieldType.text,
+      6: LvsFieldType.name,
+      14: LvsFieldType.name,
+      15: LvsFieldType.id,
+      17: LvsFieldType.id,
+      21: LvsFieldType.name,
+      22: LvsFieldType.name,
+    };
+    for (final (n, note) in contentParts[notesAt].childElements.indexed) {
+      final values = note.childElements.toList();
+      final where = 'content[$notesAt] note[$n]';
+      for (final MapEntry(key: i, value: type) in notePositions.entries) {
+        if (i < values.length) {
+          yield LvsField('$where child [$i]', type, values[i].innerText);
+        }
+      }
+      if (values.length > 10) {
+        for (final (h, entry) in values[10].childElements.indexed) {
+          final entryParts = entry.childElements.toList();
+          if (entryParts.length > 1) {
+            yield LvsField(
+              '$where history[$h] child [1]',
+              LvsFieldType.name,
+              entryParts[1].innerText,
+            );
+          }
+        }
+      }
+      if (values.length > 11) {
+        for (final (f, field) in values[11].childElements.indexed) {
+          yield* _dispatcherFieldFields(field, '$where field[$f]');
+        }
+      }
+    }
+  }
+}
+
+/// The fields of one field of a note (see [dispatcherNoteFields]).
+Iterable<LvsField> _dispatcherFieldFields(
+  XmlElement field,
+  String where,
+) sync* {
+  final parts = field.childElements.toList();
+  if (parts.length < 6) return;
+  yield LvsField('$where child [0]', LvsFieldType.id, parts[0].innerText);
+  yield LvsField('$where child [1]', LvsFieldType.id, parts[1].innerText);
+  yield LvsField('$where child [4]', LvsFieldType.text, parts[4].innerText);
+  final type = int.tryParse(parts[2].innerText.trim());
+  final value = parts[3].innerText;
+  final option = parts[5].innerText;
+  switch (type) {
+    case 1 || 2:
+      yield LvsField('$where child [3]', LvsFieldType.text, value);
+    case 3 || 4 || 5:
+      yield LvsField('$where child [3]', LvsFieldType.id, value);
+      yield LvsField('$where child [5]', LvsFieldType.text, option);
+    case 6:
+      if (option.trim().isEmpty) return;
+      final Object? files;
+      try {
+        files = jsonDecode(option);
+      } on FormatException {
+        yield LvsField('$where child [5]', LvsFieldType.text, option);
+        return;
+      }
+      if (files is! Map) return;
+      for (final MapEntry(:key, value: file) in files.entries) {
+        yield LvsField('$where child [5] (key)', LvsFieldType.id, '$key');
+        if (file is Map) {
+          yield LvsField(
+            '$where child [5].fileName',
+            LvsFieldType.text,
+            file['fileName'],
+          );
+        }
+      }
+    case 7 || 8:
+      break;
+    default:
+      yield LvsField('$where child [3]', LvsFieldType.text, value);
+      yield LvsField('$where child [5]', LvsFieldType.text, option);
+  }
+}
 
 /// [name] in lower case, without a `data-` prefix and without anything
 /// but letters and digits: `pupil_name`, `pupilName` and `data-pupil-name`
@@ -1132,6 +1277,51 @@ void main() {
       expect(problems.join('\n'), isNot(contains('Onbekend')));
       expect(problems.join('\n'), isNot(contains('12345')));
       expect(problems.join('\n'), contains('/server/param[3](name=userID)'));
+    });
+
+    test('checks the notes of the XML dispatcher by their position (#154), '
+        'without the values', () {
+      final kind = lvsFixtureKinds.singleWhere((k) => k.folder == 'notes');
+      // Elements named nothing a field type knows: only the positions of
+      // dispatcherNoteFields find what they hold.
+      String answer(String id, String title, String author, String file) =>
+          '<server><response><actions><action><s>lvs_pupil</s>'
+          '<c>renderPupilNotes</c><d><content>'
+          '<x>1</x><x/><x/><x>900001</x><x>900401</x><x/><x/><x/><x/><x/>'
+          '<notes><n><x>$id</x><x>900101</x><x>900001</x><x>900401</x>'
+          '<x>$title</x><x>1917073800</x><x>$author</x><x/><x/><x/><x/>'
+          '<x><f><x>$id</x><x>900601</x><x>6</x><x/><x>Testveld</x>'
+          '<x>{"$id":{"fileName":"$file"}}</x></f></x></n></notes>'
+          '</content></d></action></actions></response></server>';
+      List<String> problems(String xml) => lvsFixtureProblems(
+        'test/fixtures/lvs/notes/a.xml',
+        xml,
+        testFakes,
+        kind: kind,
+      );
+
+      expect(
+        problems(
+          answer('900301', 'Testnotitie.', 'Jan Janssens', 'Testbijlage.pdf'),
+        ),
+        isEmpty,
+      );
+      final found = problems(
+        answer('12345', 'Gesprek over de les.', unknown, 'verslag.pdf'),
+      ).join('\n');
+      for (final where in [
+        'note[0] child [0]',
+        'note[0] child [4]',
+        'note[0] child [6]',
+        'note[0] field[0] child [0]',
+        'note[0] field[0] child [5] (key)',
+        'note[0] field[0] child [5].fileName',
+      ]) {
+        expect(found, contains(where));
+      }
+      for (final value in ['12345', 'Gesprek', 'Onbekend', 'verslag']) {
+        expect(found, isNot(contains(value)));
+      }
     });
 
     test('reads HTML: attributes, classes, name="key"', () {
