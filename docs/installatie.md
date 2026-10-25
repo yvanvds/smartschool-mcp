@@ -159,6 +159,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
    | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore-beheer](#skore-beheer). De meeste leerkrachten en alle leerlingen laten het uit. Voor je eigen puntenboek heb je het niet nodig (zie [Puntenboek](#puntenboek)). |
    | **Aanwezigheden** (niet verplicht) | Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: zet het aan. Zie [Aanwezigheden](#aanwezigheden). De meeste leerkrachten en alle leerlingen laten het uit. |
+   | **Leerlingvolgsysteem** (niet verplicht) | Alleen als jij en je school dat willen: dan leest Claude in het leerlingvolgsysteem (LVS), de gevoeligste gegevens over leerlingen in Smartschool. Claude zoekt een leerling op en leest het overzicht van zijn dossier: alleen lezen, één leerling per keer. Lees eerst [Veiligheid en privacy](#8-veiligheid-en-privacy). Twijfel je, laat het dan uit. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
 

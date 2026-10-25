@@ -107,7 +107,16 @@ final class SmartschoolSession {
   /// Login and connection failures, and a listing restarted again, are
   /// thrown as [SmartschoolProblem]s; other errors from [action] are
   /// rethrown unchanged.
-  Future<T> run<T>(Future<T> Function(SmartschoolClient client) action) async {
+  ///
+  /// The failures of [action] that are logged (a refused session, a
+  /// restarted listing, a problem) are logged as [describeError] gives
+  /// them; by default with their message, which names the request. The LVS
+  /// tools pass one that gives the type only: a request of the LVS names a
+  /// pupil by their id (`lvsLogDescription`, #153).
+  Future<T> run<T>(
+    Future<T> Function(SmartschoolClient client) action, {
+    String Function(Object error) describeError = _describe,
+  }) async {
     var client = await _connectedClient();
     final repeated = <ProblemKind>{};
     while (true) {
@@ -117,15 +126,15 @@ final class SmartschoolSession {
         final kind = classifyFailure(error);
         if (kind == null) rethrow;
         if (!_repeatable.contains(kind) || !repeated.add(kind)) {
-          throw _problem(kind, error, stackTrace);
+          throw _problem(kind, error, stackTrace, describeError: describeError);
         }
         log(switch (kind) {
           ProblemKind.listingRestarted =>
             'Smartschool restarted the listing of a message box '
-                '(${_describe(error)}); listing it again',
+                '(${describeError(error)}); listing it again',
           _ =>
-            'Smartschool did not accept the session (${_describe(error)}); '
-                'trying once more',
+            'Smartschool did not accept the session '
+                '(${describeError(error)}); trying once more',
         });
       }
       // Through [_connectedClient], so that a login that another call found
@@ -196,16 +205,18 @@ final class SmartschoolSession {
     return client;
   }
 
-  /// Builds the problem for [kind], logs [error] (with its stack trace when
-  /// unexpected) and remembers the problem if it is permanent.
+  /// Builds the problem for [kind], logs [error] as [describeError] gives it
+  /// (with its stack trace when unexpected) and remembers the problem if it
+  /// is permanent.
   SmartschoolProblem _problem(
     ProblemKind kind,
     Object error,
-    StackTrace stackTrace,
-  ) {
+    StackTrace stackTrace, {
+    String Function(Object error) describeError = _describe,
+  }) {
     if (error is SmartschoolProblem) return error;
     log(
-      'Smartschool problem (${kind.name}): ${_describe(error)}'
+      'Smartschool problem (${kind.name}): ${describeError(error)}'
       '${kind == ProblemKind.unexpected ? '\n$stackTrace' : ''}',
     );
     final problem = SmartschoolProblem.of(kind, settings);

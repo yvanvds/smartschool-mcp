@@ -52,11 +52,14 @@ download_dir: C:\Users\you\Downloads\Smartschool
 skore: false
 # Optional: true offers the presence tools (see Opt-in tools below).
 presence: false
+# Optional: true offers the tools of the pupil tracking system (LVS).
+lvs: false
 ```
 
 `SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
-*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`, and
-`SMARTSCHOOL_PRESENCE` before `presence`.
+*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`,
+`SMARTSCHOOL_PRESENCE` before `presence`, and `SMARTSCHOOL_LVS` before
+`lvs`.
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -127,7 +130,8 @@ via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
         "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder",
         "SMARTSCHOOL_SKORE": "false",
-        "SMARTSCHOOL_PRESENCE": "false"
+        "SMARTSCHOOL_PRESENCE": "false",
+        "SMARTSCHOOL_LVS": "false"
       }
     }
   }
@@ -142,8 +146,9 @@ Base32 (such as the app's 6-digit code) is reported without sending the
 password. When Smartschool asks for a 2FA code and the key is empty, the
 server says that the account uses 2FA and that the key must be filled in.
 `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below), and so
-are `SMARTSCHOOL_SKORE` and `SMARTSCHOOL_PRESENCE`, which offer the Skore
-tools and the presence tools when `true` (see *Opt-in tools* below). Restart
+are `SMARTSCHOOL_SKORE`, `SMARTSCHOOL_PRESENCE` and `SMARTSCHOOL_LVS`, which
+offer the Skore tools, the presence tools and the tools of the pupil
+tracking system when `true` (see *Opt-in tools* below). Restart
 Claude Desktop after editing the file. The server's stderr ends up in Claude
 Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -236,8 +241,8 @@ client name. It also installs again while that copy runs.
 ### Tools
 
 - `smartschool_status`: whether the connection works, or what to fix,
-  whether each opt-in switch is on and, when it is, whether the account has
-  the rights for its tools (see *Opt-in tools* below), the download folder
+  whether each opt-in switch is on and, when it is, whether the account can
+  use its tools (see *Opt-in tools* below), the download folder
   and whether it is writable, and whether a newer version is available,
   with its download link and what is new (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, or of a
@@ -1414,6 +1419,53 @@ off; the library's message goes to the log only. Other codes and the
 registration per lesson (which `userCanRecord` seems to stand for) are not
 offered; #77 is the live check.
 
+The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
+`/?module=LVS`) are offered only when the switch "Leerlingvolgsysteem" is on
+(see *Opt-in tools* below). Most teachers can read the LVS, so the switch is
+not about rights: the LVS holds the most sensitive data about pupils (care,
+behaviour, educational needs, sometimes health), and the user and their
+school must choose to let an AI assistant read it. The tools use the
+library's `LvsService` (yvanvds/dartschool#160), which sends only its reads,
+by an allowlist; both tools only read:
+
+- `search_lvs_pupils`: the pupils whose name matches `query`, among those the
+  account may see (`searchPupils`), one line each with name, class,
+  `pupil_id` and `class_id`, in the LVS's order, without the markup that
+  highlights the match. With several matches the result asks Claude to let
+  the user choose, never to pick one; with none it is a sentence, not an
+  error.
+- `read_lvs_pupil`: the overview of one pupil's file (`pupil_id`,
+  `class_id`; `getPupilFile`): name, class and its description, the form
+  tutors (titularissen), today's attendance per half-day (`getStatusInfo`; a
+  half-day other than `am` or `pm` is named as the LVS names it: three were
+  seen on a school day, yvanvds/dartschool#168), and the parts of the file
+  that hold something (`hasItems`), as a list indented by depth: the
+  school's note categories with their `category_id`, headings marked, and
+  the LVS's own parts (results, support plans, absences, ...), each marked
+  "with new notes" or "with something new" (`hasNewItems`); then the parts
+  that hold nothing. A part's line names the tool that reads it, once there
+  is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`). The LVS
+  answers a pupil it does not know in that class with a placeholder pupil,
+  which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
+  says to take both ids from one line of the search.
+
+Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
+nothing on disk (no cache, no downloads); nothing in the log but an error's
+type and HTTP status (`lvsTool` and `lvsLogDescription`: the server's own
+catch-all would log an error's message, which may quote the LVS; and
+`withLvs` has the session log a refused session that way too, through
+`SmartschoolSession.run`'s `describeError`, as its message names the
+request, with the pupil's id); errors say
+what to do, not what the answer held (`lvsToolError`); the descriptions say
+that the data is confidential, to use the tool only when the user asks about
+a particular pupil, and not to copy what it returns into files, artifacts,
+messages or other tools unless the user asks (`lvsPrivacyRules`); one pupil
+per call. A refusal (HTTP 403, or a redirect to the start page) says that
+the account may have no access to the LVS or may not see this pupil, and
+`smartschool_status` checks access with the root of the LVS's class tree,
+which holds no pupil: what the LVS answers an account without access was
+not captured (yvanvds/dartschool#168). #159 is the live check.
+
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive and the folders the user made, their headers and one
 message), the `box` and `folder` arguments (`BoxArgument`, `folderSchema`) and
@@ -1767,14 +1819,18 @@ which also gives the file name from the `Content-Disposition` header.
 ### Opt-in tools
 
 Some tools only work for accounts with extra rights in Smartschool, such as
-the Skore tools and the presence tools. They sit behind an opt-in switch, a
-setting that is off by default (`Setting.isSwitch` in
-`lib/src/settings.dart`): "Skore-beheer" (`SMARTSCHOOL_SKORE`, `skore` in a
-credentials file) and "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`, `presence`).
-Each switch turns on its own group. The server only
-offers the group's tools when its switch is on (`OptInTools` in
+the Skore tools and the presence tools; others read data sensitive enough
+that the user and their school must choose to let an AI assistant read it,
+such as the tools of the pupil tracking system (LVS), which most teachers
+can read. They sit behind an opt-in switch, a setting that is off by default
+(`Setting.isSwitch` in `lib/src/settings.dart`): "Skore-beheer"
+(`SMARTSCHOOL_SKORE`, `skore` in a credentials file), "Aanwezigheden"
+(`SMARTSCHOOL_PRESENCE`, `presence`) and "Leerlingvolgsysteem"
+(`SMARTSCHOOL_LVS`, `lvs`). Each switch turns on its own group. The server
+only offers the group's tools when its switch is on (`OptInTools` in
 `lib/src/opt_in.dart`), so accounts without the rights never see tools they
-cannot use, and those tools take up no context in their conversations. The
+cannot use, no one gets the LVS tools without choosing them, and those
+tools take up no context in their conversations. The
 switches are read once, at startup (`Switches.read`): the environment
 variable when it is set and not empty, else the credentials file's key.
 `true`, `1`, `yes`, `on`, `ja` and `aan` (any case) turn a switch on; empty,
@@ -1788,7 +1844,13 @@ the library's `checkAccess`, which reads the teachers for report management
 and the account's own gradebooks for gradebook management: access means
 both parts, and the line names the part an account with only one lacks;
 for the presences, `getConfig`, where access means that the account may
-record presences for at least one class). An answer that cannot tell
+record presences for at least one class; for the LVS, the library's
+`checkAccess`, the root of its class tree, which holds no pupil: access
+means that the LVS answers it, as the library does not tell how many classes
+it lists, yvanvds/dartschool#184). When the switch is off, the line of a
+switch for sensitive data adds what turning it on means
+(`OptInTools.caution`: for the LVS, with a link to the guide's privacy
+section). An answer that cannot tell
 (for Skore, one the server could not use) is reported as access that could
 not be checked.
 Registering the tools only once access is detected
@@ -1799,8 +1861,9 @@ conversation, and it would cost Skore requests at every start.
 To add a group: a `Setting` with `isSwitch: true` (a `boolean` field with
 the default `false` in the manifest's `user_config`, its variable in
 `mcp_config.env`, a hint in the installer's `settingHints`, and a row in both
-colleague guides), an `OptInTools` with its tools, rights and access check,
-and the group in the entry point's `optIns`.
+colleague guides), an `OptInTools` with its tools, rights and access check
+(and, for sensitive data, its caution), and the group in the entry point's
+`optIns`.
 
 ### Message folders
 

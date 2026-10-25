@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:smartschool_mcp/src/lvs/lvs_access.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
 import 'package:smartschool_mcp/src/opt_in.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
@@ -60,6 +62,7 @@ void main() {
         'download_dir': 'directory',
         'skore': 'boolean',
         'presence': 'boolean',
+        'lvs': 'boolean',
       },
     );
     // A switch, and only a switch, is a boolean field (#42).
@@ -110,8 +113,9 @@ void main() {
     }
   });
 
-  test('describes a switch by the rights its tools need, and each of its '
-      'tools as one that needs it on (#42, #47)', () {
+  test('describes a switch by the rights its tools need, or by the choice '
+      'it is for the LVS, and each of its tools as one that needs it on '
+      '(#42, #47, #153)', () {
     final skore = fields[Setting.skore.fileKey]!;
     expect(
       skore['description'],
@@ -129,10 +133,24 @@ void main() {
         contains('laat het dan uit'),
       ),
     );
+    // Not rights but a choice: the most sensitive data about pupils, with
+    // the privacy section of the guide (#153; #158 adds the LVS to it).
+    final lvs = fields[Setting.lvs.fileKey]!;
+    expect(
+      lvs['description'],
+      allOf(
+        startsWith('Alleen als jij en je school dat willen'),
+        contains('leerlingvolgsysteem (LVS)'),
+        contains('de gevoeligste gegevens over leerlingen'),
+        contains(lvsPrivacyGuideUrl),
+        contains('laat het dan uit'),
+      ),
+    );
     final session = SmartschoolSession(const ExtensionSettings());
     final optIns = <OptInTools>[
       skoreOptIn(session, SwitchState.on),
       presenceOptIn(session, SwitchState.on),
+      lvsOptIn(session, SwitchState.on),
     ];
     expect(
       {for (final optIn in optIns) optIn.setting},
@@ -183,7 +201,10 @@ void main() {
     final switchTitles = {
       for (final setting in Setting.switches) setting.formTitle,
     };
-    expect(parts.keys, containsAll(switchTitles));
+    // "Leerlingvolgsysteem" (#153) comes into the guide's summary and the
+    // long description with its privacy section, in #158.
+    final pending = {Setting.lvs.formTitle};
+    expect(parts.keys, containsAll(switchTitles.difference(pending)));
     for (final MapEntry(key: name, value: part) in parts.entries) {
       expect(
         part.switchTitle,
@@ -237,7 +258,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(61));
+    expect(readmeTools, hasLength(63));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

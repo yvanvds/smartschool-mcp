@@ -35,6 +35,8 @@ const settingHints = {
       'niet verplicht: true voor Skore-beheer, met de rechten ervoor',
   Setting.presence:
       'niet verplicht: true voor Aanwezigheden, met de rechten ervoor',
+  Setting.lvs:
+      'niet verplicht: true voor het leerlingvolgsysteem, als je school dat wil',
 };
 
 /// The folder the installer puts the server in:

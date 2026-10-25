@@ -7,6 +7,7 @@ import 'package:smartschool_mcp/src/downloads/download_folder.dart';
 import 'package:smartschool_mcp/src/install.dart';
 import 'package:smartschool_mcp/src/intradesk/intradesk_cache.dart';
 import 'package:smartschool_mcp/src/log.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
 import 'package:smartschool_mcp/src/messages/message_cache.dart';
 import 'package:smartschool_mcp/src/options.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
@@ -106,12 +107,15 @@ Future<void> _serve(ServerOptions options) async {
       final intradeskIndex = IntradeskIndexCache.of(session);
       final downloads = DownloadFolder.resolve(source);
       final updates = UpdateChecker.fromEnvironment();
-      // The tools only some accounts can use, each group behind a switch
-      // that is read once, now: the server offers them only when it is on.
+      // The tools only some accounts can use, or that read data sensitive
+      // enough to need an explicit choice (the LVS), each group behind a
+      // switch that is read once, now: the server offers them only when it
+      // is on.
       final switches = Switches.read(source);
       final optIns = [
         skoreOptIn(session, switches[Setting.skore]),
         presenceOptIn(session, switches[Setting.presence]),
+        lvsOptIn(session, switches[Setting.lvs]),
       ];
       final server = SmartschoolServer(
         stdioChannel(input: stdin, output: stdout),

@@ -279,11 +279,13 @@ void main() {
           'SMARTSCHOOL-USERNAME',
           'SMARTSCHOOL_DOWNLOADDIR',
           'SMARTSCHOOL_SCORE',
+          'SMARTSCHOOL_LSV',
         ]),
         [
           ('SMARTSCHOOL-USERNAME', Setting.username),
           ('SMARTSCHOOL_2FA', Setting.mfa),
           ('SMARTSCHOOL_DOWNLOADDIR', Setting.downloadDir),
+          ('SMARTSCHOOL_LSV', Setting.lvs),
           ('SMARTSCHOOL_MAINURL', Setting.mainUrl),
           ('SMARTSCHOOL_MFA ', Setting.mfa),
           ('SMARTSCHOOL_SCORE', Setting.skore),
@@ -321,7 +323,7 @@ void main() {
         '"SMARTSCHOOL_WACHTWOORD" is set, but that is not the name of a '
         'setting: the names are SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, '
         'SMARTSCHOOL_PASSWORD, SMARTSCHOOL_MFA, SMARTSCHOOL_DOWNLOAD_DIR, '
-        'SMARTSCHOOL_SKORE and SMARTSCHOOL_PRESENCE.',
+        'SMARTSCHOOL_SKORE, SMARTSCHOOL_PRESENCE and SMARTSCHOOL_LVS.',
       );
     });
 
@@ -339,9 +341,9 @@ void main() {
   });
 
   group('opt-in switches (#42)', () {
-    test('"Skore-beheer" and "Aanwezigheden" (#47) are optional switches, '
-        'not for logging in', () {
-      expect(Setting.switches, [Setting.skore, Setting.presence]);
+    test('"Skore-beheer", "Aanwezigheden" (#47) and "Leerlingvolgsysteem" '
+        '(#153) are optional switches, not for logging in', () {
+      expect(Setting.switches, [Setting.skore, Setting.presence, Setting.lvs]);
       expect(Setting.skore.formTitle, 'Skore-beheer');
       expect(Setting.skore.envVar, 'SMARTSCHOOL_SKORE');
       expect(Setting.skore.fileKey, 'skore');
@@ -354,6 +356,12 @@ void main() {
       expect(Setting.presence.required, isFalse);
       expect(Setting.presence.isSwitch, isTrue);
       expect(Setting.login, isNot(contains(Setting.presence)));
+      expect(Setting.lvs.formTitle, 'Leerlingvolgsysteem');
+      expect(Setting.lvs.envVar, 'SMARTSCHOOL_LVS');
+      expect(Setting.lvs.fileKey, 'lvs');
+      expect(Setting.lvs.required, isFalse);
+      expect(Setting.lvs.isSwitch, isTrue);
+      expect(Setting.login, isNot(contains(Setting.lvs)));
       expect([
         for (final setting in Setting.values)
           if (setting.isSwitch) setting,
@@ -433,6 +441,18 @@ void main() {
         SwitchState.off,
       );
       expect(const Switches()[Setting.presence], SwitchState.off);
+      final lvsOnly = read({'SMARTSCHOOL_LVS': 'aan'});
+      expect(lvsOnly[Setting.lvs], SwitchState.on);
+      expect(lvsOnly[Setting.skore], SwitchState.off);
+      expect(lvsOnly[Setting.presence], SwitchState.off);
+      expect(
+        read({
+          'SMARTSCHOOL_SKORE': 'true',
+          'SMARTSCHOOL_PRESENCE': 'true',
+        })[Setting.lvs],
+        SwitchState.off,
+      );
+      expect(const Switches()[Setting.lvs], SwitchState.off);
     });
 
     group('a credentials file', () {
@@ -477,6 +497,10 @@ void main() {
         );
         expect(both[Setting.skore], SwitchState.off);
         expect(both[Setting.presence], SwitchState.on);
+        expect(both[Setting.lvs], SwitchState.off);
+        final lvs = Switches.read(file('lvs: true\n'), environment: const {});
+        expect(lvs[Setting.lvs], SwitchState.on);
+        expect(lvs[Setting.presence], SwitchState.off);
       });
 
       test('without the key, or unreadable: off', () {

@@ -181,6 +181,7 @@ installatie. -->
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
    | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen laten deze regel weg. Voor je eigen puntenboek heb je deze regel niet nodig (zie [Puntenboek](installatie.md#puntenboek) in de gids voor Claude Desktop). |
    | `SMARTSCHOOL_PRESENCE` | Niet verplicht. Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: `true`. Dan kan ChatGPT per klas en dag zien wat er voor elke leerling 's morgens en 's middags geregistreerd is, en na jouw akkoord leerlingen als te laat of weer als aanwezig markeren. Een andere registratie, zoals een afwezigheid, overschrijft het nooit. De meeste leerkrachten en alle leerlingen laten deze regel weg. Meer uitleg staat bij [Aanwezigheden](installatie.md#aanwezigheden) in de gids voor Claude Desktop. |
+   | `SMARTSCHOOL_LVS` | Niet verplicht. Alleen als jij en je school dat willen: `true`. Dan leest ChatGPT in het leerlingvolgsysteem (LVS), de gevoeligste gegevens over leerlingen in Smartschool. ChatGPT zoekt een leerling op en leest het overzicht van zijn dossier: alleen lezen, één leerling per keer. Lees eerst [Veiligheid en privacy](#8-veiligheid-en-privacy). Twijfel je, laat deze regel dan weg. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.
 5. Bewaar, en herstart ChatGPT (zie hieronder).
@@ -299,6 +300,7 @@ herstarten", en zoek de instelling bij de sleutel in deze tabel:
 | **Downloadmap** | `SMARTSCHOOL_DOWNLOAD_DIR` |
 | **Skore-beheer** | `SMARTSCHOOL_SKORE` |
 | **Aanwezigheden** | `SMARTSCHOOL_PRESENCE` |
+| **Leerlingvolgsysteem** | `SMARTSCHOOL_LVS` |
 
 ### Een sleutel is verkeerd getypt
 

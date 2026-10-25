@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/downloads/download_folder.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -27,7 +28,8 @@ void main() {
   ///
   /// With [skore], the Skore tools are an opt-in group whose switch,
   /// "Skore-beheer", is set to it; with [presence], likewise the presence
-  /// tools and "Aanwezigheden".
+  /// tools and "Aanwezigheden"; with [lvs], the LVS tools and
+  /// "Leerlingvolgsysteem".
   Future<(CallToolResult, String)> status({
     CredentialSource? source,
     DownloadFolder? Function()? downloads,
@@ -35,6 +37,7 @@ void main() {
     String clientName = 'test',
     SwitchState? skore,
     SwitchState? presence,
+    SwitchState? lvs,
   }) async {
     final session = SmartschoolSession(
       source ?? fakeExtensionSettings(),
@@ -50,6 +53,7 @@ void main() {
           optIns: [
             if (skore != null) skoreOptIn(session, skore),
             if (presence != null) presenceOptIn(session, presence),
+            if (lvs != null) lvsOptIn(session, lvs),
           ],
         ),
       ],
@@ -806,6 +810,152 @@ void main() {
         contains(
           '\nAanwezigheden: on; access not checked, as the connection does '
           'not work.\n',
+        ),
+      );
+      expect(server.requests, isEmpty);
+    });
+  });
+
+  group('with the opt-in switch "Leerlingvolgsysteem" (#153)', () {
+    const rights =
+        "access to Smartschool's pupil tracking system (leerlingvolgsysteem, "
+        'LVS), as most teachers have';
+    const turnOn =
+        'turn on "Leerlingvolgsysteem" (SMARTSCHOOL_LVS) in the Smartschool '
+        'extension settings in Claude Desktop (Settings → Extensions), then '
+        'restart Claude Desktop.';
+    const caution =
+        'Its tools read what the LVS holds about pupils, the most sensitive '
+        'data in Smartschool (care, behaviour, educational needs, sometimes '
+        'health): turn it on only when the user, and their school, choose to '
+        'let the assistant read it. See the privacy section of the guide: '
+        'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
+        'installatie.md#8-veiligheid-en-privacy';
+    const fix =
+        "ask the school's Smartschool administrator for access to the LVS, "
+        'or turn off "Leerlingvolgsysteem" (SMARTSCHOOL_LVS) in the '
+        'Smartschool extension settings in Claude Desktop (Settings → '
+        'Extensions), then restart Claude Desktop';
+
+    test('off: says so after the other switches, how to turn it on and for '
+        "whom, and that it is a choice about pupils' data; the LVS is not "
+        'asked', () async {
+      final (result, text) = await status(
+        skore: SwitchState.off,
+        presence: SwitchState.off,
+        lvs: SwitchState.off,
+      );
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nAanwezigheden: off: its tools are not offered. For an account '
+          'with the right to record half-day presences for classes in '
+          "Smartschool's Presence module, as an absence administrator has: "
+          'turn on "Aanwezigheden" (SMARTSCHOOL_PRESENCE) in the Smartschool '
+          'extension settings in Claude Desktop (Settings → Extensions), then '
+          'restart Claude Desktop.\n'
+          'Leerlingvolgsysteem: off: its tools are not offered. For an '
+          'account with $rights: $turnOn $caution\n'
+          'Server version: ',
+        ),
+      );
+      expect(server.lvs.requests, isEmpty);
+    });
+
+    test('set to something that is neither true nor false: off, with the '
+        'same caution', () async {
+      final (_, text) = await status(lvs: SwitchState.unclear);
+
+      expect(
+        text,
+        contains(
+          '\nLeerlingvolgsysteem: off, as "Leerlingvolgsysteem" '
+          '(SMARTSCHOOL_LVS) is set to neither true nor false: its tools are '
+          'not offered. For an account with $rights: set it to true in the '
+          'Smartschool extension settings in Claude Desktop (Settings → '
+          'Extensions), then restart Claude Desktop. $caution\n',
+        ),
+      );
+      expect(server.lvs.requests, isEmpty);
+    });
+
+    test('on, and the LVS answers: access, checked with the root of its '
+        'class tree, which holds no pupil', () async {
+      final (result, text) = await status(lvs: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nSettings: extension settings (all filled in)\n'
+          'Leerlingvolgsysteem: on; access: yes (the LVS answers its class '
+          'tree)\n'
+          'Server version: ',
+        ),
+      );
+      expect(server.lvs.calls, ['POST /?module=LVS&file=treeBuilder id=0']);
+      expect(server.lvs.reads, [FakeLvsRead.tree]);
+    });
+
+    for (final refusal in [
+      FakeLvsRefusal.forbidden,
+      FakeLvsRefusal.startPage,
+    ]) {
+      test('on, refused by the LVS (${refusal.name}): no access, with what '
+          'to do, without quoting the page', () async {
+        server.lvs.refusal = refusal;
+
+        final (result, text) = await status(lvs: SwitchState.on);
+
+        expect(result.isError, isNot(true));
+        expect(
+          text,
+          contains(
+            '\nLeerlingvolgsysteem: on; access: NO. The LVS refused its class '
+            'tree to this account, as for an account without $rights. If so, '
+            '$fix.\n',
+          ),
+        );
+        expect(text, isNot(contains(fakeLvsNoAccessName)));
+        expectNoSecretsOrTraces(text);
+      });
+    }
+
+    test('on, answered with something the server cannot read: access could '
+        'not be checked, with the status', () async {
+      server.lvs.refusal = FakeLvsRefusal.serverError;
+
+      final (result, text) = await status(lvs: SwitchState.on);
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        contains(
+          '\nLeerlingvolgsysteem: on; access could not be checked: '
+          "Smartschool's pupil tracking system (LVS) answered with something "
+          'the server could not read (HTTP 500). Try again in a moment. If it '
+          'keeps failing, the server log names the type of the error, and '
+          'nothing of what the LVS answered.\n',
+        ),
+      );
+      expect(text, isNot(contains('Oeps')));
+      expectNoSecretsOrTraces(text);
+    });
+
+    test('on, while the connection does not work: access not checked, and '
+        'the LVS not asked', () async {
+      final (_, text) = await status(
+        source: fakeExtensionSettings(FakeCredentials(password: '')),
+        lvs: SwitchState.on,
+      );
+
+      expect(
+        text,
+        contains(
+          '\nLeerlingvolgsysteem: on; access not checked, as the connection '
+          'does not work.\n',
         ),
       );
       expect(server.requests, isEmpty);

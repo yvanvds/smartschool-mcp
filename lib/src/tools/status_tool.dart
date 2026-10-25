@@ -34,9 +34,10 @@ ServerTool statusTool(
     description:
         'Checks whether the connection to Smartschool works: whether all '
         'settings are filled in, whether logging in succeeds, who is logged '
-        'in, the Smartschool address, whether the optional tools that need '
-        'extra rights (Skore-beheer, Aanwezigheden) are turned on and whether the account '
-        'has those rights, the download folder files are saved in and '
+        'in, the Smartschool address, whether the optional tools behind a '
+        'switch (Skore-beheer, Aanwezigheden, Leerlingvolgsysteem) are '
+        'turned on and whether the account may use them, the download '
+        'folder files are saved in and '
         'whether it is writable, the version of this server and whether a '
         'newer version is available. Use it when the user asks whether '
         'their Smartschool connection works (for example "Werkt mijn '
@@ -154,14 +155,18 @@ Future<String> _describeOptIn(
   final title = setting.formTitle;
   final name = source.name(setting);
   final then = '${source.where}, then ${source.restart}';
+  final caution = switch (optIn.caution) {
+    final caution? => ' $caution',
+    null => '',
+  };
   switch (optIn.state) {
     case SwitchState.off:
       return '$title: off: its tools are not offered. For an account with '
-          '${optIn.rights}: turn on $name $then.';
+          '${optIn.rights}: turn on $name $then.$caution';
     case SwitchState.unclear:
       return '$title: off, as $name is set to neither true nor false: its '
           'tools are not offered. For an account with ${optIn.rights}: set '
-          'it to true $then.';
+          'it to true $then.$caution';
     case SwitchState.on:
       break;
   }

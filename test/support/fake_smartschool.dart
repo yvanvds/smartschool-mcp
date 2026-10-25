@@ -9,6 +9,7 @@ import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
 
 import 'fake_intradesk.dart';
+import 'fake_lvs.dart';
 import 'fake_messages.dart';
 import 'fake_planner.dart';
 import 'fake_presence.dart';
@@ -17,6 +18,7 @@ import 'fake_skore_gradebook.dart';
 import 'fake_uploads.dart';
 
 export 'fake_intradesk.dart';
+export 'fake_lvs.dart';
 export 'fake_messages.dart';
 export 'fake_planner.dart';
 export 'fake_presence.dart';
@@ -119,6 +121,10 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The Presence module, served to logged-in requests: empty until a test
   /// fills it (`FakePresence.loadSchool`).
   final FakePresence presence = FakePresence();
+
+  /// The pupil tracking system (LVS), served to logged-in requests, with
+  /// the hand-written fixtures of `test/fixtures/lvs/`.
+  final FakeLvs lvs = FakeLvs(startPage: _homePage);
 
   /// How long every request takes, so that concurrent requests overlap.
   Duration latency = Duration.zero;
@@ -223,7 +229,8 @@ class FakeSmartschool implements HttpClientAdapter {
         _rejectsLeft--;
         return ResponseBody.fromString('', 401);
       }
-      return uploads.respond(options) ??
+      return lvs.respond(options) ??
+          uploads.respond(options) ??
           mailbox.respond(options) ??
           intradesk.respond(options) ??
           planner.respond(options) ??
@@ -247,7 +254,8 @@ class FakeSmartschool implements HttpClientAdapter {
     if (path == fakeCourseListPath) {
       return planner.courseListAnswer();
     }
-    return uploads.respond(options) ??
+    return lvs.respond(options) ??
+        uploads.respond(options) ??
         mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
         planner.respond(options, cancelled: cancelled) ??
