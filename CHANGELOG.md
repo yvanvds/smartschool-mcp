@@ -8,6 +8,17 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.6.0
+
+- Leerlingvolgsysteem, alleen met Leerlingvolgsysteem aan (het staat
+  standaard uit): een leerling opzoeken en het dossier lezen van de
+  leerlingen die je in het leerlingvolgsysteem mag zien, met de notities,
+  de resultaten in alle vakken, het handelingsplan en de afwezigheden.
+  Claude kan in het leerlingvolgsysteem niets wijzigen. Vertrouwelijke
+  notities en de reden van een afwezigheid blijven weg, tenzij je er
+  uitdrukkelijk om vraagt. Lees eerst het stuk over privacy in de
+  handleiding voor je het aanzet.
+
 ## 0.5.0
 
 - Puntenboek, voor elke leerkracht (je hoeft niets aan te zetten): je eigen
