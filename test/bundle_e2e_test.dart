@@ -7,6 +7,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
@@ -30,6 +31,16 @@ final _skoreTools = [
 /// "Aanwezigheden" on (#47).
 final _presenceTools = [
   for (final tool in presenceOptIn(
+    SmartschoolSession(const ExtensionSettings()),
+    SwitchState.on,
+  ).tools)
+    tool.definition.name,
+];
+
+/// The tools of the manifest that the server offers only with the switch
+/// "Leerlingvolgsysteem" on (#153).
+final _lvsTools = [
+  for (final tool in lvsOptIn(
     SmartschoolSession(const ExtensionSettings()),
     SwitchState.on,
   ).tools)
@@ -151,8 +162,9 @@ void main() {
   });
 
   test('installed with the required settings, and "Downloadmap", '
-      '"Skore-beheer" and "Aanwezigheden" left alone: the server reports the '
-      'manifest\'s version and its tools but the Skore and presence tools, '
+      '"Skore-beheer", "Aanwezigheden" and "Leerlingvolgsysteem" left alone: '
+      'the server reports the manifest\'s version and its tools but the '
+      'Skore, presence and LVS tools, '
       'names the settings to fix by their titles in the install form, and '
       'saves in the default download folder', () async {
     final home = await tempHome();
@@ -168,12 +180,14 @@ void main() {
     final tools = (await server.request('tools/list'))['tools'] as List;
     expect(_skoreTools, hasLength(8));
     expect(_presenceTools, hasLength(4));
+    expect(_lvsTools, hasLength(6));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       [
         for (final tool in manifest['tools'] as List)
           if (!_skoreTools.contains((tool as Map)['name']) &&
-              !_presenceTools.contains(tool['name']))
+              !_presenceTools.contains(tool['name']) &&
+              !_lvsTools.contains(tool['name']))
             tool['name'],
       ],
     );
@@ -209,8 +223,8 @@ void main() {
 
   test('installed with "Skore-beheer" ticked: Claude Desktop passes it as '
       'true, and the server offers every tool of the manifest but the '
-      'presence tools, the Skore tools last, and says the switch is on (#42, '
-      '#43, #44)', () async {
+      'presence and LVS tools, the Skore tools last, and says the switch is '
+      'on (#42, #43, #44)', () async {
     final home = await tempHome();
     final required = {
       for (final MapEntry(:key, :value) in fields().entries)
@@ -234,7 +248,9 @@ void main() {
       [for (final tool in tools) (tool as Map)['name']],
       [
         for (final tool in manifest['tools'] as List)
-          if (!_presenceTools.contains((tool as Map)['name'])) tool['name'],
+          if (!_presenceTools.contains((tool as Map)['name']) &&
+              !_lvsTools.contains(tool['name']))
+            tool['name'],
       ],
     );
     expect(
@@ -258,7 +274,8 @@ void main() {
   test('installed with "Aanwezigheden" ticked: Claude Desktop passes it as '
       'true, and the server offers the presence tools last, the writes '
       'marked for approval, and says the switch is on; with "Skore-beheer" '
-      'ticked too, every tool of the manifest (#47)', () async {
+      'ticked too, every tool of the manifest but the LVS tools '
+      '(#47)', () async {
     final home = await tempHome();
     final required = {
       for (final MapEntry(:key, :value) in fields().entries)
@@ -283,7 +300,9 @@ void main() {
       [for (final tool in tools) tool['name']],
       [
         for (final tool in manifest['tools'] as List)
-          if (!_skoreTools.contains((tool as Map)['name'])) tool['name'],
+          if (!_skoreTools.contains((tool as Map)['name']) &&
+              !_lvsTools.contains(tool['name']))
+            tool['name'],
       ],
     );
     expect(
@@ -320,9 +339,82 @@ void main() {
     final all = (await both.request('tools/list'))['tools'] as List;
     expect(
       [for (final tool in all) (tool as Map)['name']],
-      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+      [
+        for (final tool in manifest['tools'] as List)
+          if (!_lvsTools.contains((tool as Map)['name'])) tool['name'],
+      ],
     );
     await both.stop();
+  });
+
+  test('installed with "Leerlingvolgsysteem" ticked: Claude Desktop passes '
+      'it as true, and the server offers the LVS tools last, read-only, and '
+      'says the switch is on; with "Skore-beheer" and "Aanwezigheden" ticked '
+      'too, every tool of the manifest (#153)', () async {
+    final home = await tempHome();
+    final required = {
+      for (final MapEntry(:key, :value) in fields().entries)
+        if (value['required'] == true) key: ' ',
+    };
+    final untouched = claudeDesktopConfig(
+      manifest,
+      extensionPath: bundle.path,
+      userConfig: required,
+      home: home.path,
+    );
+    expect(untouched?.env[Setting.lvs.envVar], 'false');
+
+    final server = await startInstalled({
+      ...required,
+      Setting.lvs.fileKey: 'true',
+    }, home);
+    await server.initialize();
+    final tools = ((await server.request('tools/list'))['tools'] as List)
+        .cast<Map<String, Object?>>();
+    expect(
+      [for (final tool in tools) tool['name']],
+      [
+        for (final tool in manifest['tools'] as List)
+          if (!_skoreTools.contains((tool as Map)['name']) &&
+              !_presenceTools.contains(tool['name']))
+            tool['name'],
+      ],
+    );
+    expect(
+      [for (final tool in tools) tool['name']].skip(tools.length - 6),
+      _lvsTools,
+    );
+    for (final tool in tools.skip(tools.length - 6)) {
+      expect(
+        tool['annotations'],
+        containsPair('readOnlyHint', true),
+        reason: '${tool['name']}',
+      );
+    }
+    final (_, text) = await server.callTool('smartschool_status');
+    expect(text, contains('\nAanwezigheden: off: its tools are not offered. '));
+    expect(
+      text,
+      contains(
+        '\nLeerlingvolgsysteem: on; access not checked, as the connection '
+        'does not work.\n',
+      ),
+    );
+    await server.stop();
+
+    final all = await startInstalled({
+      ...required,
+      Setting.skore.fileKey: 'true',
+      Setting.presence.fileKey: 'true',
+      Setting.lvs.fileKey: 'true',
+    }, home);
+    await all.initialize();
+    final allTools = (await all.request('tools/list'))['tools'] as List;
+    expect(
+      [for (final tool in allTools) (tool as Map)['name']],
+      [for (final tool in manifest['tools'] as List) (tool as Map)['name']],
+    );
+    await all.stop();
   });
 
   test('installed with the 6-digit code of the app in "2FA-sleutel": the '

@@ -7,7 +7,8 @@ import 'client_app.dart';
 
 /// A setting of the server: the four values it logs in to Smartschool with
 /// ([login]), the optional download folder, and the opt-in switches
-/// ([switches]) that turn on tools only some accounts can use.
+/// ([switches]) that turn on tools only some accounts can use, or that read
+/// data sensitive enough to need an explicit choice.
 ///
 /// Of the four, the 2FA key is optional: only an account with two-factor
 /// authentication (2FA), such as a teacher's, needs it. Students sign in
@@ -64,6 +65,21 @@ enum Setting {
     required: false,
     forLogin: false,
     isSwitch: true,
+  ),
+
+  /// The switch for the tools of the pupil tracking system
+  /// (`lib/src/lvs/`, "leerlingvolgsysteem", LVS). Most teachers can read
+  /// the LVS, so it is not a switch for extra rights: it holds the most
+  /// sensitive data about pupils (care, behaviour, educational needs,
+  /// sometimes health), and a user and their school must choose to let an
+  /// AI assistant read it. Off by default (#153).
+  lvs(
+    'Leerlingvolgsysteem',
+    'SMARTSCHOOL_LVS',
+    'lvs',
+    required: false,
+    forLogin: false,
+    isSwitch: true,
   );
 
   const Setting(
@@ -95,7 +111,8 @@ enum Setting {
 
   /// Whether it is an opt-in switch: on or off, off by default, and only
   /// when it is on does the server offer a group of tools that only some
-  /// accounts can use (`OptInTools` in `opt_in.dart`). In the extension
+  /// accounts can use, or that read data sensitive enough to need an
+  /// explicit choice (`OptInTools` in `opt_in.dart`). In the extension
   /// manifest a `boolean` field with the default `false`, which Claude
   /// Desktop passes as `true` or `false`; read with [Switches.read].
   final bool isSwitch;

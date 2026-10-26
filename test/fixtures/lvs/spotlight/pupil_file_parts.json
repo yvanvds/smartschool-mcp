@@ -1,0 +1,83 @@
+{
+  "categories": [
+    {
+      "id": 900401,
+      "parentID": 0,
+      "name": "Testcategorie",
+      "sort": 1,
+      "icon": "",
+      "isTitle": 0,
+      "type": "items",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": false,
+      "hasNewItems": false
+    },
+    {
+      "id": 900405,
+      "parentID": 0,
+      "name": "Testsectie",
+      "sort": 2,
+      "icon": "",
+      "isTitle": 0,
+      "type": "handelingsplannen",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": 1,
+      "hasNewItems": 0
+    },
+    {
+      "id": 0,
+      "parentID": 0,
+      "name": "Testsectie",
+      "sort": 12,
+      "icon": "absents",
+      "isTitle": 0,
+      "type": "absents",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": true,
+      "hasNewItems": true
+    },
+    {
+      "id": 0,
+      "parentID": 0,
+      "name": "Testsectie",
+      "sort": 13,
+      "icon": "skore",
+      "isTitle": 0,
+      "type": "skore",
+      "role": 0,
+      "hasChildren": false,
+      "isFollowing": false,
+      "hasItems": false,
+      "hasNewItems": false
+    }
+  ],
+  "pupil": {
+    "pupilID": 900002,
+    "name": "Peeters Marie",
+    "keyword": "",
+    "keywordShow": false,
+    "pictureShow": true,
+    "pictureUrl": "/smsc/img/fake/initials_MP.png",
+    "class": "2B",
+    "classDesc": "",
+    "classID": 900102,
+    "teachers": [],
+    "classtituShow": 2,
+    "userIsPupil": false,
+    "userIsCanEdit": 0,
+    "birthday": "02/09/2015",
+    "age": "15",
+    "presences": [],
+    "picUrl": "/smsc/img/fake/initials_MP.png",
+    "classPupils": [],
+    "ssID": 49,
+    "following": false,
+    "hasSasData": false
+  }
+}

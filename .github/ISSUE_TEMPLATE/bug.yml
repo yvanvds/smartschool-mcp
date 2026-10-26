@@ -1,5 +1,8 @@
 name: Bug Report
-description: Something isn't working as expected.
+description: >-
+  Something isn't working as expected. Never paste pupil data, answers from
+  the pupil tracking system (LVS) or log lines with names: describe what
+  happened instead.
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -41,4 +44,7 @@ body:
     id: notes
     attributes:
       label: Additional context
-      description: Logs, screenshots, links to related issues.
+      description: >-
+        Logs, screenshots, links to related issues. No passwords, 2FA keys,
+        pupil data, LVS answers or log lines with names: describe what
+        happened instead.

@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written for #154, in the shape of the library's notes/all_notes.xml
+  (yvanvds/dartschool#161): the answer to the dispatcher's
+  lvs_pupils/getUserData, the action renderPupilAllNotes, the "all items"
+  view of the file of Jan Janssens. The notes of category.xml,
+  subcategory.xml and subcategory_deep.xml, with fewer fields, in another
+  order than their dates; dates orders them between an absence and a
+  report, whose lists are left empty (the tools of #155 and #157 read
+  those). The note of 900404 comes without catName (the older shape), and
+  one is of school year 2029-2030.
+-->
+<server>
+  <response>
+    <status>ok</status>
+    <actions>
+      <action>
+        <subsystem>lvs_pupil</subsystem>
+        <command>renderPupilAllNotes</command>
+        <data>
+          <content>
+            <hasData>1</hasData>
+            <buttons/>
+            <updateToolbar>1</updateToolbar>
+            <pupilID>900001</pupilID>
+            <dates><![CDATA[["n_900301","a_900901","n_900303","n_900306","r_900902","n_900302","n_900305","n_900304"]]]></dates>
+            <reports/>
+            <absents/>
+            <notes>
+              <note>
+                <itemID>900301</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900401</catID>
+                <title><![CDATA[Testnotitie over de les.]]></title>
+                <date>1917073800</date>
+                <author><![CDATA[Peeters Piet]]></author>
+                <rights><![CDATA[{"edit":1,"print":1,"duplicate":1,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params>
+                  <param>
+                    <itemID>900301</itemID>
+                    <paramID>900601</paramID>
+                    <type>1</type>
+                    <val><![CDATA[Testtekst over het gedrag.]]></val>
+                    <title><![CDATA[Testveld tekst]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>0</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>m</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>1</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testcategorie]]></catName>
+                <authorReverse><![CDATA[Piet Peeters]]></authorReverse>
+              </note>
+              <note>
+                <itemID>900302</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900401</catID>
+                <title><![CDATA[Testnotitie vertrouwelijk.]]></title>
+                <date>1917691200</date>
+                <author><![CDATA[Dupré Céline]]></author>
+                <rights><![CDATA[{"edit":0,"print":1,"duplicate":0,"follow":1,"unfollow":-1,"del":-1}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params>
+                  <param>
+                    <itemID>900302</itemID>
+                    <paramID>900613</paramID>
+                    <type>2</type>
+                    <val><![CDATA[<p>Testnotitie, vertrouwelijk.</p>]]></val>
+                    <title><![CDATA[Testveld verslag]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>1</viewed>
+                <privateFile>1</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>f</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>0</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testcategorie]]></catName>
+                <authorReverse><![CDATA[Céline Dupré]]></authorReverse>
+              </note>
+              <note>
+                <itemID>900303</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900402</catID>
+                <title><![CDATA[Testgesprek met Koen Wouters.]]></title>
+                <date>1920096900</date>
+                <author><![CDATA[Jacobs Els]]></author>
+                <rights><![CDATA[{"edit":0,"print":1,"duplicate":0,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params>
+                  <param>
+                    <itemID>900303</itemID>
+                    <paramID>900621</paramID>
+                    <type>2</type>
+                    <val><![CDATA[<ul><li>Testafspraak een.</li><li>Testafspraak twee.</li></ul>]]></val>
+                    <title><![CDATA[Testveld afspraken]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>0</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>f</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>1</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testsubcategorie]]></catName>
+                <authorReverse><![CDATA[Els Jacobs]]></authorReverse>
+              </note>
+              <note>
+                <itemID>900304</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900404</catID>
+                <title><![CDATA[Testnotitie zonder categorienaam.]]></title>
+                <date>1916132400</date>
+                <author><![CDATA[Peeters Piet]]></author>
+                <rights><![CDATA[{"edit":1,"print":1,"duplicate":1,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params>
+                  <param>
+                    <itemID>900304</itemID>
+                    <paramID>900631</paramID>
+                    <type>1</type>
+                    <val><![CDATA[Testtekst in een oudere vorm.]]></val>
+                    <title><![CDATA[Testveld tekst]]></title>
+                    <optionValue></optionValue>
+                    <itemType>1</itemType>
+                    <sortorder>1</sortorder>
+                  </param>
+                </params>
+                <viewed>1</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>m</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>0</isNew>
+                <originalCreate>0</originalCreate>
+              </note>
+              <note>
+                <itemID>900305</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900401</catID>
+                <title><![CDATA[Testnotitie van vorig schooljaar.]]></title>
+                <date>1899540000</date>
+                <author><![CDATA[Peeters Piet]]></author>
+                <rights><![CDATA[{"edit":0,"print":1,"duplicate":0,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params/>
+                <viewed>1</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>m</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2029-2030</schoolyear>
+                <isNew>0</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testcategorie]]></catName>
+                <authorReverse><![CDATA[Piet Peeters]]></authorReverse>
+              </note>
+              <note>
+                <itemID>900306</itemID>
+                <groupID>900101</groupID>
+                <pupilID>900001</pupilID>
+                <catID>900401</catID>
+                <title></title>
+                <date>1918247400</date>
+                <author><![CDATA[Peeters Piet]]></author>
+                <rights><![CDATA[{"edit":1,"print":1,"duplicate":1,"follow":1,"unfollow":-1,"del":0}]]></rights>
+                <assigned>0</assigned>
+                <assignees><![CDATA[[]]]></assignees>
+                <history/>
+                <params/>
+                <viewed>1</viewed>
+                <privateFile>0</privateFile>
+                <studierichting><![CDATA[Testrichting]]></studierichting>
+                <itemGroupID>900101</itemGroupID>
+                <authorSex>m</authorSex>
+                <bulkID>0</bulkID>
+                <schoolyear>2030-2031</schoolyear>
+                <isNew>0</isNew>
+                <originalCreate>0</originalCreate>
+                <catName><![CDATA[Testcategorie]]></catName>
+                <authorReverse><![CDATA[Piet Peeters]]></authorReverse>
+              </note>
+            </notes>
+            <filterData>0</filterData>
+            <evals><![CDATA[[]]]></evals>
+            <skore_rights><![CDATA[{"printrep":1,"viewrep":1}]]></skore_rights>
+            <messages><![CDATA[[]]]></messages>
+            <smartsignals><![CDATA[[]]]></smartsignals>
+          </content>
+        </data>
+      </action>
+    </actions>
+  </response>
+</server>

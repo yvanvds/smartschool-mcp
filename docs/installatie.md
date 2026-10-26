@@ -44,6 +44,14 @@ Je vraagt het gewoon in een gesprek:
   geregistreerd is. Leerlingen als te laat markeren, of weer als aanwezig.
   Telkens pas nadat jij het goedgekeurd hebt. Dat zet je aan met
   **Aanwezigheden**.
+- **Leerlingvolgsysteem**, alleen als jij en je school dat willen: in het
+  leerlingvolgsysteem (LVS) een leerling opzoeken en zijn dossier lezen: de
+  notities, de resultaten in alle vakken, het handelingsplan en de
+  afwezigheden. Eén leerling per keer, en alleen lezen: Claude kan in het
+  LVS niets veranderen. Vertrouwelijke notities en de motivering van
+  afwezigheden laat Claude weg, tenzij je erom vraagt. Dat zet je aan met
+  **Leerlingvolgsysteem**. Het staat standaard uit: lees eerst
+  [Veiligheid en privacy](#8-veiligheid-en-privacy).
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
 [installatiegids voor ChatGPT](installatie-chatgpt.md).
@@ -159,6 +167,7 @@ Smartschool-account in je app niet meer, dan mag je dat verwijderen.
    | **Downloadmap** (niet verplicht) | De map waarin Claude bestanden uit Smartschool bewaart. Zie hieronder. |
    | **Skore-beheer** (niet verplicht) | Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: zet het aan. Zie [Skore-beheer](#skore-beheer). De meeste leerkrachten en alle leerlingen laten het uit. Voor je eigen puntenboek heb je het niet nodig (zie [Puntenboek](#puntenboek)). |
    | **Aanwezigheden** (niet verplicht) | Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: zet het aan. Zie [Aanwezigheden](#aanwezigheden). De meeste leerkrachten en alle leerlingen laten het uit. |
+   | **Leerlingvolgsysteem** (niet verplicht) | Alleen als jij en je school dat willen: dan leest Claude in het leerlingvolgsysteem (LVS), de gevoeligste gegevens over leerlingen in Smartschool. Claude zoekt een leerling op en leest zijn dossier: de notities, de resultaten, het handelingsplan en de afwezigheden. Alleen lezen, één leerling per keer. Zie [Leerlingvolgsysteem](#leerlingvolgsysteem), en lees eerst [Veiligheid en privacy](#8-veiligheid-en-privacy). Twijfel je, laat het dan uit. |
 
 4. Sla het formulier op en zorg dat de extensie aan staat (ingeschakeld).
 
@@ -500,6 +509,84 @@ registreren leest Claude de klas opnieuw en zegt het wat er nu staat. Andere
 codes (zoals ziek of een attest), het bevestigen van aanwezigheden en de
 registratie per lesuur kan Claude niet: dat doe je zelf in Smartschool.
 
+### Leerlingvolgsysteem
+
+Alleen met **Leerlingvolgsysteem** aan. Het staat standaard uit, en dat is
+bewust: het leerlingvolgsysteem (LVS) bevat de gevoeligste gegevens over
+leerlingen in Smartschool, over hun zorg, gedrag en onderwijsbehoeften, en
+soms over hun gezondheid of thuissituatie. Zet het alleen aan als jij en je
+school willen dat Claude die gegevens leest, en lees eerst
+[Veiligheid en privacy](#8-veiligheid-en-privacy). Je zet het aan in de
+instellingen van de extensie (zie [Later iets aanpassen](#later-iets-aanpassen)).
+
+Claude leest wat jouw account in het LVS mag zien, zoals in Smartschool. De
+meeste leerkrachten kunnen het LVS lezen. "Werkt mijn
+Smartschool-verbinding?" zegt of jouw account het kan. Kan het niet, vraag
+dan toegang aan de Smartschool-beheerder van je school, of zet
+**Leerlingvolgsysteem** weer uit.
+
+- "Hoe doet Jan Janssens het dit trimester?"
+  Claude zoekt Jan eerst op in het LVS. Vindt het meer dan één leerling met
+  die naam, dan vraagt het wie je bedoelt (met naam en klas): het kiest nooit
+  zelf. Het leest het overzicht van zijn dossier: zijn klas, de
+  titularissen, of hij vandaag aanwezig is, en welke onderdelen iets bevatten
+  of iets nieuws voor jou. Daarna leest het wat bij je vraag past, zoals zijn
+  resultaten en zijn notities.
+- "Hoe staat Jan ervoor in wiskunde?"
+  Claude leest de resultaten van Jan, zoals leerlingen en ouders ze zien: in
+  alle vakken, niet alleen in je eigen puntenboeken. Per vak de evaluaties
+  met hun score en of ze meetellen, de feedback, en de rapporten (alleen hun
+  naam en datum: Claude opent ze niet). Standaard van de actieve periode van
+  dit schooljaar; vraag gerust een andere periode of een ander schooljaar.
+  Heeft een vak 5 of meer evaluaties, dan telt Claude hoeveel er onder de
+  helft liggen, en zegt het dat het dat zelf berekende.
+- "Welke maatregelen heeft Jan in mijn lessen?"
+  Claude leest het handelingsplan van Jan: zijn ondersteuningsnoden, zijn
+  doelen en de aanpak (de maatregelen), met de vakken waarvoor ze gelden, en
+  zijn profielschets. Zeg erbij welk vak je geeft, bijvoorbeeld "in mijn
+  lessen wiskunde": Claude weet niet welke vakken van jou zijn. Dan toont het
+  wat voor dat vak geldt, en wat voor geen vak apart geldt. Houdt je school de
+  onderwijsbehoeften bij in notities in plaats van in handelingsplannen, dan
+  leest Claude die notities.
+- "Hoeveel is Jan afwezig geweest?"
+  Claude leest de afwezigheden van Jan van dit schooljaar: per code hoeveel
+  halve dagen (een hele dag telt voor twee), en elke afwezigheid met de
+  datum, de weekdag, of het om de voormiddag, de namiddag of de hele dag
+  ging, en de code. Zo ziet Claude ook een patroon, zoals veel maandagen.
+  Daarna de totalen van andere schooljaren, zoals het LVS ze geeft. **De
+  motivering van een afwezigheid laat Claude weg**, want die kan over de
+  gezondheid van de leerling gaan: Claude leest ze alleen als je vraagt
+  waarom Jan afwezig was.
+- "Welke notities zijn er dit schooljaar over Marie Peeters?"
+  Claude leest de notities in het dossier van Marie, de nieuwste eerst: van
+  één categorie als je die noemt, anders van alle. Per notitie de dag, de
+  categorie, de titel, wie ze schreef en wat erin staat. Een bijlage noemt
+  Claude alleen bij naam: het opent ze niet. Per keer leest Claude er
+  standaard 20; vraag gerust meer (tot 100), of alleen de notities vanaf een
+  bepaalde dag. **Vertrouwelijke notities laat Claude weg:** het zegt alleen
+  hoeveel er zijn. Wil je ze toch, vraag er dan uitdrukkelijk naar.
+
+Claude kan in het LVS niets veranderen: het leest alleen. Een notitie
+schrijven, aanpassen of verwijderen, een handelingsplan aanpassen of een
+afwezigheid registreren doe je zelf in Smartschool. Claude leest één
+leerling per keer, nooit de notities of resultaten van een hele klas tegelijk.
+Wat het uit het LVS leest, bewaart de extensie niet op je pc (zie
+[Wat bewaart de extensie, en waar?](#wat-bewaart-de-extensie-en-waar)).
+
+Wat Claude nog niet leest:
+
+- Van een handelingsplan de evaluatie, het rapport en de vroegere versies.
+  Een plan dat als bestand in het LVS staat, noemt Claude alleen bij naam.
+- Van de resultaten de commentaren op de rapporten, en het oudere onderdeel
+  Skore, dat sommige scholen nog tonen in plaats van Resultaten.
+
+Of Smartschool een notitie die Claude las daarna niet meer als nieuw toont
+voor jou, is nog niet nagegaan. De extensie stuurt in elk geval niets wat een
+notitie als gelezen markeert.
+
+<!-- TE BEVESTIGEN (#159): toont het LVS een notitie die Claude las daarna
+nog als nieuw? Schrijf hier wat er gebeurt. -->
+
 ### Bestanden bewaren
 
 Vraag je Claude om een bijlage of een Intradesk-bestand te openen of te
@@ -535,11 +622,13 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   dan 25 MB. Vraag Claude zo'n bestand dan te bewaren (tot 200 MB) en open het
   zelf.
 - De extensie werkt alleen met berichten, Intradesk, de planner, je
-  puntenboeken in Skore, met **Skore-beheer** aan het beheer van Skore, en
-  met **Aanwezigheden** aan de halve-dagaanwezigheden. Andere onderdelen van
-  Smartschool kent ze niet. Op Intradesk maakt ze mappen en weblinks, zet ze
-  bestanden van je pc in een map en verplaatst ze mappen, bestanden en
-  weblinks naar de prullenbak: iets hernoemen of naar een andere map
+  puntenboeken in Skore, met **Skore-beheer** aan het beheer van Skore, met
+  **Aanwezigheden** aan de halve-dagaanwezigheden, en met
+  **Leerlingvolgsysteem** aan het leerlingvolgsysteem, waarin ze alleen
+  leest. Andere onderdelen van Smartschool kent ze niet. Op Intradesk maakt
+  ze mappen en weblinks, zet ze bestanden van je pc in een map en verplaatst
+  ze mappen, bestanden en weblinks naar de prullenbak: iets hernoemen of naar
+  een andere map
   verplaatsen, een nieuwe versie van een bestand zetten, iets uit de
   prullenbak terugzetten of voor altijd verwijderen kan ze niet. In je
   puntenboeken leest ze de evaluaties, de punten en de feedback, maakt ze
@@ -699,7 +788,7 @@ na het installeren? Klik dan niet zomaar verder, maar vraag eerst raad (zie
 
 | Wat | Waar |
 | --- | --- |
-| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel, downloadmap, Skore-beheer en Aanwezigheden | In Claude Desktop, op deze pc |
+| Je instellingen: adres, gebruikersnaam, wachtwoord, 2FA-sleutel, downloadmap, Skore-beheer, Aanwezigheden en Leerlingvolgsysteem | In Claude Desktop, op deze pc |
 | Je Smartschool-sessie, zodat de extensie niet bij elke vraag opnieuw moet inloggen | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\` |
 | De tekst van de berichten die Claude doorzocht | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\messages\<schooladres>\` |
 | De lijst van Intradesk: namen en mappen, niet wat er in de bestanden staat (op een grote Intradesk zo'n 10 MB) | `%USERPROFILE%\.cache\smartschool\<gebruikersnaam>\intradesk\<schooladres>\index.json` |
@@ -720,6 +809,13 @@ map te openen.
   haalt opnieuw op wat ze nodig heeft.
 - Bewaarde bestanden zijn persoonlijke gegevens of gegevens van de school.
   Ze verdwijnen na 7 dagen; verplaats wat je wilt houden.
+- **Uit het leerlingvolgsysteem bewaart de extensie niets op je pc:** niet in
+  `%USERPROFILE%\.cache\smartschool` en niet in je downloadmap. In haar
+  logboek schrijft ze bij een fout alleen wat voor fout het was, nooit wat
+  het LVS antwoordde.
+
+<!-- TE BEVESTIGEN (#159): houdt het MCP-logboek van Claude Desktop zelf
+niets bij van wat Claude uit het LVS las, ook niet na een fout? -->
 
 ### Je pc wordt je tweede factor
 
@@ -755,10 +851,44 @@ in jouw naam in te loggen. Daarom:
   leerlingen naar Claude, met de motivatie die erbij staat. Ook dat zijn
   gegevens over leerlingen, en een afwezigheid of haar motivatie kan iets
   zeggen over hun gezondheid of thuissituatie.
+- Met **Leerlingvolgsysteem** aan gaat ook wat Claude in het
+  leerlingvolgsysteem leest naar Claude: zie
+  [Het leerlingvolgsysteem](#het-leerlingvolgsysteem) hieronder.
 - Kijk in de privacy-instellingen van je Claude-account wat er met je
   gesprekken mag gebeuren.
 - Je wachtwoord en je 2FA-sleutel gaan nooit naar Claude: de extensie gebruikt
   ze alleen om in te loggen op Smartschool.
+
+### Het leerlingvolgsysteem
+
+Met **Leerlingvolgsysteem** aan gaat wat Claude in het leerlingvolgsysteem
+(LVS) leest naar de servers van Anthropic: notities over gedrag, zorg en
+onderwijsbehoeften, gesprekken met ouders, resultaten, handelingsplannen en
+afwezigheden. Dat zijn de gevoeligste gegevens over leerlingen in
+Smartschool, en ze kunnen iets zeggen over hun gezondheid, zorg of
+thuissituatie. Daarom:
+
+- **Het staat standaard uit.** Zet het alleen aan als je daar bewust voor
+  kiest, en kijk eerst of het past in het privacybeleid van je school.
+- **Gebruik het alleen met een betalend Claude-abonnement,** en zet in de
+  privacy-instellingen van je Claude-account uit dat Anthropic je gesprekken
+  gebruikt om Claude te verbeteren (in het Engels: *Help improve Claude*).
+- **Vraag naar één leerling per keer,** en alleen wat je nodig hebt. Claude
+  leest ook altijd één leerling per keer.
+- **Vertrouwelijke notities en de motivering van afwezigheden laat Claude
+  weg,** tenzij je er uitdrukkelijk om vraagt. Pas dan gaan ze naar Claude.
+- Claude kan in het LVS niets veranderen: het leest alleen.
+- De extensie bewaart niets uit het LVS op je pc (zie
+  [Wat bewaart de extensie, en waar?](#wat-bewaart-de-extensie-en-waar)).
+  Wat Claude las, staat wel in het gesprek, zoals alles in een gesprek:
+  verwijder het gesprek als je het niet meer nodig hebt.
+- De extensie vraagt Claude om wat het uit het LVS leest niet over te nemen
+  in een bestand, een bericht of een ander hulpmiddel, tenzij jij erom
+  vraagt.
+
+<!-- TE BEVESTIGEN (#108): hoe heet de instelling Help improve Claude in de
+Nederlandse versie van Claude Desktop, en wat kan een gratis account niet?
+Pas de zin over het betalende abonnement daaraan aan. -->
 
 ### Met wie praat de extensie?
 
@@ -770,6 +900,7 @@ in jouw naam in te loggen. Daarom:
   prullenbak verplaatst. In je puntenboek maakt ze evaluaties en vult ze
   punten en feedback in op jouw naam. Met **Aanwezigheden** aan registreert
   ze te laat en aanwezig op jouw naam. Ook dat telkens pas na jouw akkoord.
+  In het leerlingvolgsysteem leest ze alleen.
 
 ## 9. Verwijderen
 
@@ -798,5 +929,7 @@ Kom je er niet uit, of vind je een fout? Meld het op
 [GitHub](https://github.com/yvanvds/smartschool-mcp/issues), of laat het de
 maker, Yvan Vander Sanden, weten.
 
-Zet nooit je wachtwoord, je 2FA-sleutel of berichten van anderen in een
-melding of een schermafbeelding.
+Zet nooit je wachtwoord, je 2FA-sleutel, berichten van anderen of gegevens
+over leerlingen in een melding of een schermafbeelding: ook geen antwoord van
+Claude uit het leerlingvolgsysteem, en geen regels uit een logboek met namen
+erin. Beschrijf liever wat er gebeurde.

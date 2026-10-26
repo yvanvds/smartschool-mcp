@@ -623,23 +623,34 @@ void main() {
       'titles and descriptions speak of the user (#62). Only the Skore '
       'tools, with "Skore-beheer" on, speak of teachers, as their subject '
       '(#42, #43, #44); the presence tools, with "Aanwezigheden" on, do not '
-      '(#47)', () async {
+      '(#47), nor the LVS tools, with "Leerlingvolgsysteem" on '
+      '(#153)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: {
         ...environmentWithoutSmartschool(),
         Setting.skore.envVar: 'true',
         Setting.presence.envVar: 'true',
+        Setting.lvs.envVar: 'true',
       },
     );
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(61));
+    expect(tools, hasLength(67));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
-      containsAll(['list_presence_classes', 'set_pupils_late']),
-      reason: 'the presence tools are checked too',
+      containsAll([
+        'list_presence_classes',
+        'set_pupils_late',
+        'search_lvs_pupils',
+        'read_lvs_pupil',
+        'read_lvs_notes',
+        'read_lvs_results',
+        'read_lvs_support_plan',
+        'read_lvs_absences',
+      ]),
+      reason: 'the presence and LVS tools are checked too',
     );
     expect([
       for (final tool in tools.cast<Map<String, Object?>>())
@@ -1172,6 +1183,291 @@ void main() {
       final tools = await listTools(server);
       expect(tools, hasLength(61));
       expect([for (final tool in tools.skip(57)) tool['name']], presenceTools);
+      expect([
+        for (final tool in tools.skip(49).take(8)) tool['name'],
+      ], _teachersAsSubject.toList());
+
+      await server.stop();
+    });
+  });
+
+  group('the opt-in switch "Leerlingvolgsysteem" (#153)', () {
+    const lvsTools = [
+      'search_lvs_pupils',
+      'read_lvs_pupil',
+      'read_lvs_notes',
+      'read_lvs_results',
+      'read_lvs_support_plan',
+      'read_lvs_absences',
+    ];
+
+    Future<List<Map<String, Object?>>> listTools(ServerProcess server) async =>
+        ((await server.request('tools/list'))['tools'] as List)
+            .cast<Map<String, Object?>>();
+
+    test('off, as Claude Desktop passes an untouched switch ("false"), or '
+        'not set: no LVS tool is offered, and smartschool_status says it is '
+        "off, how to turn it on, and that it is a choice about pupils' "
+        'data', () async {
+      for (final environment in [
+        {...environmentWithoutSmartschool(), 'SMARTSCHOOL_LVS': 'false'},
+        environmentWithoutSmartschool(),
+      ]) {
+        final server = await ServerProcess.start(
+          exePath,
+          environment: environment,
+        );
+        await server.initialize();
+
+        final tools = await listTools(server);
+        expect(tools, hasLength(49));
+        expect([
+          for (final tool in tools) tool['name'],
+        ], everyElement(isNot(isIn(lvsTools))));
+        final (_, status) = await server.callTool('smartschool_status');
+        expect(
+          status,
+          contains(
+            '\nLeerlingvolgsysteem: off: its tools are not offered. For an '
+            "account with access to Smartschool's pupil tracking system "
+            '(leerlingvolgsysteem, LVS), as most teachers have: turn on '
+            '"Leerlingvolgsysteem" (SMARTSCHOOL_LVS) in the Smartschool '
+            'extension settings in Claude Desktop (Settings → Extensions), '
+            'then restart Claude Desktop. Its tools read what the LVS holds '
+            'about pupils, the most sensitive data in Smartschool (care, '
+            'behaviour, educational needs, sometimes health): turn it on only '
+            'when the user, and their school, choose to let the assistant '
+            'read it. See the privacy section of the guide: '
+            'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
+            'installatie.md#8-veiligheid-en-privacy\n',
+          ),
+        );
+        for (final name in [
+          'read_lvs_pupil',
+          'read_lvs_notes',
+          'read_lvs_results',
+          'read_lvs_support_plan',
+          'read_lvs_absences',
+        ]) {
+          final (isError, text) = await server.callTool(name);
+          expect(isError, isTrue, reason: name);
+          expect(text, contains(name));
+        }
+
+        await server.stop();
+        expect(await server.stderr, contains('Leerlingvolgsysteem: off'));
+      }
+    });
+
+    test('on: the LVS tools come last, all read-only, with their arguments; '
+        'smartschool_status says it is on; without settings they name the '
+        'missing settings, before any login, and the log holds no search '
+        'text', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          'SMARTSCHOOL_LVS': 'true',
+        },
+      );
+      await server.initialize();
+
+      final tools = await listTools(server);
+      expect(tools, hasLength(55));
+      expect([for (final tool in tools.skip(49)) tool['name']], lvsTools);
+      final byName = {for (final tool in tools) tool['name']: tool};
+      for (final name in lvsTools) {
+        expect(byName[name]!['annotations'], {
+          'title': isA<String>(),
+          'readOnlyHint': true,
+          'idempotentHint': true,
+          'openWorldHint': true,
+        }, reason: name);
+        expect(
+          byName[name]!['description'],
+          contains('What the LVS holds about pupils is confidential'),
+          reason: name,
+        );
+      }
+      final search = byName['search_lvs_pupils']!['inputSchema'] as Map;
+      expect(search['required'], ['query']);
+      expect((search['properties'] as Map).keys, ['query']);
+      final read = byName['read_lvs_pupil']!['inputSchema'] as Map;
+      expect(read['required'], ['pupil_id', 'class_id']);
+      for (final name in ['pupil_id', 'class_id']) {
+        expect((read['properties'] as Map)[name], {
+          'type': 'integer',
+          'description': isA<String>(),
+          'minimum': 1,
+        }, reason: name);
+      }
+      // The notes (#154): of one pupil, with what narrows them down.
+      final notes = byName['read_lvs_notes']!['inputSchema'] as Map;
+      expect(notes['required'], ['pupil_id', 'class_id']);
+      expect((notes['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'category',
+        'school_year',
+        'since',
+        'limit',
+        'include_confidential',
+      ]);
+      expect(
+        byName['read_lvs_notes']!['description'],
+        contains(
+          'set it only when the user explicitly asks for confidential notes',
+        ),
+      );
+      // The results (#155): of one pupil, one school year and a period, in
+      // every course or some.
+      final results = byName['read_lvs_results']!['inputSchema'] as Map;
+      expect(results['required'], ['pupil_id', 'class_id']);
+      expect((results['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'school_year',
+        'period',
+        'course',
+      ]);
+      expect(
+        byName['read_lvs_results']!['description'],
+        contains('a summary line computed from the scores given'),
+      );
+      // The support plan (#156): of one pupil and a period, with the items
+      // of every course or of one; its evaluation is not read yet.
+      final plan = byName['read_lvs_support_plan']!['inputSchema'] as Map;
+      expect(plan['required'], ['pupil_id', 'class_id']);
+      expect((plan['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'period',
+        'course',
+      ]);
+      expect(
+        byName['read_lvs_support_plan']!['description'],
+        allOf(
+          contains("Not read yet: the plan's evaluation"),
+          contains("The server cannot tell which courses are the user's own"),
+          contains('read with read_lvs_notes'),
+        ),
+      );
+      // The absences (#157): of one pupil and a school year; motivations
+      // only when the user asks why the pupil was absent.
+      final absences = byName['read_lvs_absences']!['inputSchema'] as Map;
+      expect(absences['required'], ['pupil_id', 'class_id']);
+      expect((absences['properties'] as Map).keys, [
+        'pupil_id',
+        'class_id',
+        'school_year',
+        'with_motivation',
+      ]);
+      expect(
+        ((absences['properties'] as Map)['with_motivation'] as Map)['type'],
+        'boolean',
+      );
+      expect(
+        byName['read_lvs_absences']!['description'],
+        allOf(
+          contains('the current one unless school_year is given'),
+          contains('set it only when the user asks why the pupil was absent'),
+        ),
+      );
+
+      final (statusError, status) = await server.callTool('smartschool_status');
+      expect(statusError, isNot(true));
+      expect(
+        status,
+        contains(
+          '\nLeerlingvolgsysteem: on; access not checked, as the connection '
+          'does not work.\n',
+        ),
+      );
+      for (final (tool, arguments) in <(String, Map<String, Object?>)>[
+        ('search_lvs_pupils', {'query': 'Janssens'}),
+        ('read_lvs_pupil', {'pupil_id': 900001, 'class_id': 900101}),
+        (
+          'read_lvs_notes',
+          {'pupil_id': 900001, 'class_id': 900101, 'category': 'Testcategorie'},
+        ),
+        (
+          'read_lvs_results',
+          {
+            'pupil_id': 900001,
+            'class_id': 900101,
+            'period': 'Testperiode',
+            'course': 'Testvak',
+          },
+        ),
+        (
+          'read_lvs_support_plan',
+          {
+            'pupil_id': 900002,
+            'class_id': 900102,
+            'period': 'Testperiode 2',
+            'course': 'Testvak',
+          },
+        ),
+        (
+          'read_lvs_absences',
+          {
+            'pupil_id': 900003,
+            'class_id': 900103,
+            'school_year': '2030-2031',
+            'with_motivation': true,
+          },
+        ),
+      ]) {
+        final (isError, text) = await server.callTool(
+          tool,
+          arguments: arguments,
+        );
+        expect(isError, isTrue, reason: tool);
+        expect(
+          text,
+          startsWith('Not all Smartschool settings are filled in. Missing: '),
+          reason: tool,
+        );
+        expect(text, isNot(contains('#0')), reason: 'no stack trace');
+      }
+
+      await server.stop();
+      final log = await server.stderr;
+      expect(log, contains('Leerlingvolgsysteem: on, 6 tools offered'));
+      expect(log.toLowerCase(), isNot(contains('testcategorie')));
+      expect(log.toLowerCase(), isNot(contains('testvak')));
+      expect(log.toLowerCase(), isNot(contains('testperiode')));
+      expect(log.toLowerCase(), isNot(contains('janssens')));
+      expect(log, isNot(contains('900002')));
+      expect(log, isNot(contains('900003')));
+      expect(log, isNot(contains('2030-2031')));
+    });
+
+    test('with "Skore-beheer" and "Aanwezigheden" on too: the Skore tools, '
+        'the presence tools, then the LVS tools', () async {
+      final server = await ServerProcess.start(
+        exePath,
+        environment: {
+          ...environmentWithoutSmartschool(),
+          Setting.skore.envVar: 'true',
+          Setting.presence.envVar: 'true',
+          Setting.lvs.envVar: 'true',
+        },
+      );
+      await server.initialize();
+
+      final tools = await listTools(server);
+      expect(tools, hasLength(67));
+      expect([for (final tool in tools.skip(61)) tool['name']], lvsTools);
+      expect(
+        [for (final tool in tools.skip(57).take(4)) tool['name']],
+        [
+          'list_presence_classes',
+          'list_class_presences',
+          'set_pupils_late',
+          'set_pupils_present',
+        ],
+      );
       expect([
         for (final tool in tools.skip(49).take(8)) tool['name'],
       ], _teachersAsSubject.toList());

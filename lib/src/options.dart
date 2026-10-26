@@ -94,7 +94,7 @@ authentication (teachers); students without 2FA leave it empty.
 
   --credentials <path>  Read the settings from this credentials.yml instead
                         (keys: main_url, username, password, and optionally
-                        mfa, download_dir, skore and presence). For
+                        mfa, download_dir, skore, presence and lvs). For
                         development.
 
   --install             Install for ChatGPT and Codex instead of serving:
@@ -114,7 +114,10 @@ SMARTSCHOOL_SKORE=true (then skore: true in the credentials file) offers the
 Skore tools, for an account with the rights for score management in Skore.
 SMARTSCHOOL_PRESENCE=true (then presence: true) offers the presence tools,
 for an account that records half-day presences, as an absence administrator
-does. Both are off by default.
+does. SMARTSCHOOL_LVS=true (then lvs: true) offers the tools of the pupil
+tracking system (leerlingvolgsysteem, LVS), which read confidential data
+about pupils: turn it on only when the user and their school choose to. All
+three are off by default.
 
 Once a day the server asks GitHub whether a newer release exists.
 SMARTSCHOOL_MCP_UPDATE_CHECK=off turns that off; SMARTSCHOOL_MCP_UPDATE_URL

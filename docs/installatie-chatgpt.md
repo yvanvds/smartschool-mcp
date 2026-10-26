@@ -181,6 +181,7 @@ installatie. -->
    | `SMARTSCHOOL_DOWNLOAD_DIR` | Niet verplicht. De map waarin ChatGPT bestanden uit Smartschool bewaart, bijvoorbeeld `C:\Users\jan.peeters\Documents\Smartschool`. Laat je deze regel weg, dan is het `Downloads\Smartschool` in je gebruikersmap. |
    | `SMARTSCHOOL_SKORE` | Niet verplicht. Alleen als je in Skore de rechten hebt voor puntenbeheer (Rapporten > Modellen en Puntenboeken), zoals een Skore-beheerder: `true`. Dan kan ChatGPT in Skore de klassen, de vakken met hun leerkrachten en de leerkrachten bekijken, en na jouw akkoord leerkrachten aan vakken koppelen en puntenboeken delen. De meeste leerkrachten en alle leerlingen laten deze regel weg. Voor je eigen puntenboek heb je deze regel niet nodig (zie [Puntenboek](installatie.md#puntenboek) in de gids voor Claude Desktop). |
    | `SMARTSCHOOL_PRESENCE` | Niet verplicht. Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: `true`. Dan kan ChatGPT per klas en dag zien wat er voor elke leerling 's morgens en 's middags geregistreerd is, en na jouw akkoord leerlingen als te laat of weer als aanwezig markeren. Een andere registratie, zoals een afwezigheid, overschrijft het nooit. De meeste leerkrachten en alle leerlingen laten deze regel weg. Meer uitleg staat bij [Aanwezigheden](installatie.md#aanwezigheden) in de gids voor Claude Desktop. |
+   | `SMARTSCHOOL_LVS` | Niet verplicht. Alleen als jij en je school dat willen: `true`. Dan leest ChatGPT in het leerlingvolgsysteem (LVS), de gevoeligste gegevens over leerlingen in Smartschool. ChatGPT zoekt een leerling op en leest zijn dossier: de notities, de resultaten, het handelingsplan en de afwezigheden. Alleen lezen, één leerling per keer. Zie [Leerlingvolgsysteem](#leerlingvolgsysteem), en lees eerst [Het leerlingvolgsysteem](#het-leerlingvolgsysteem) bij Veiligheid en privacy. Twijfel je, laat deze regel dan weg. |
 
    Laat **Doorgifte van omgevingsvariabele** leeg.
 5. Bewaar, en herstart ChatGPT (zie hieronder).
@@ -251,6 +252,23 @@ verschillen:
   een deel. Vraag dan naar een bepaald deel, of bewaar het bestand en open het
   zelf.
 
+### Leerlingvolgsysteem
+
+Alleen met `SMARTSCHOOL_LVS` op `true` (zie
+[Smartschool toevoegen in ChatGPT](#smartschool-toevoegen-in-chatgpt)). Het
+staat standaard uit, en dat is bewust: het leerlingvolgsysteem (LVS) bevat de
+gevoeligste gegevens over leerlingen in Smartschool. Lees eerst
+[Het leerlingvolgsysteem](#het-leerlingvolgsysteem) bij Veiligheid en
+privacy.
+
+Wat ChatGPT dan leest, en wat het doet bij vragen als "Hoe doet Jan Janssens
+het dit trimester?", "Welke maatregelen heeft Jan in mijn lessen?" of
+"Hoeveel is Jan afwezig geweest?", staat bij
+[Leerlingvolgsysteem](installatie.md#leerlingvolgsysteem) in de gids voor
+Claude Desktop. Ook hier leest ChatGPT één leerling per keer, en het leest
+alleen: ChatGPT kan in het LVS niets veranderen. Vertrouwelijke notities en
+de motivering van afwezigheden laat ChatGPT weg, tenzij je erom vraagt.
+
 ## 6. Bijwerken naar een nieuwe versie
 
 Eén keer per dag kijkt Smartschool voor ChatGPT op GitHub of er een nieuwe
@@ -299,6 +317,7 @@ herstarten", en zoek de instelling bij de sleutel in deze tabel:
 | **Downloadmap** | `SMARTSCHOOL_DOWNLOAD_DIR` |
 | **Skore-beheer** | `SMARTSCHOOL_SKORE` |
 | **Aanwezigheden** | `SMARTSCHOOL_PRESENCE` |
+| **Leerlingvolgsysteem** | `SMARTSCHOOL_LVS` |
 
 ### Een sleutel is verkeerd getypt
 
@@ -373,8 +392,39 @@ Het programma zelf staat in
   [Eerst: OpenAI niet laten trainen met je gesprekken](#eerst-openai-niet-laten-trainen-met-je-gesprekken)).
   Ook dan gaan de gegevens naar OpenAI: ga dus nog altijd na of dat mag
   volgens het privacybeleid van je school.
+- Met `SMARTSCHOOL_LVS` op `true` gaat ook wat ChatGPT in het
+  leerlingvolgsysteem leest naar OpenAI: zie
+  [Het leerlingvolgsysteem](#het-leerlingvolgsysteem) hieronder.
 - Je wachtwoord en je 2FA-sleutel geeft Smartschool voor ChatGPT nooit aan
   ChatGPT: het gebruikt ze alleen om in te loggen op Smartschool.
+
+### Het leerlingvolgsysteem
+
+Met `SMARTSCHOOL_LVS` op `true` gaat wat ChatGPT in het leerlingvolgsysteem
+(LVS) leest naar de servers van OpenAI: notities over gedrag, zorg en
+onderwijsbehoeften, gesprekken met ouders, resultaten, handelingsplannen en
+afwezigheden. Dat zijn de gevoeligste gegevens over leerlingen in
+Smartschool, en ze kunnen iets zeggen over hun gezondheid, zorg of
+thuissituatie. Daarom:
+
+- **Het staat standaard uit.** Zet `SMARTSCHOOL_LVS` alleen op `true` als je
+  daar bewust voor kiest, en kijk eerst of het past in het privacybeleid van
+  je school.
+- **Gebruik het alleen met een betalend ChatGPT-abonnement,** en laat OpenAI
+  niet trainen met je gesprekken (zie
+  [Eerst: OpenAI niet laten trainen met je gesprekken](#eerst-openai-niet-laten-trainen-met-je-gesprekken)).
+- **Vraag naar één leerling per keer,** en alleen wat je nodig hebt. ChatGPT
+  leest ook altijd één leerling per keer.
+- **Vertrouwelijke notities en de motivering van afwezigheden laat ChatGPT
+  weg,** tenzij je er uitdrukkelijk om vraagt. Pas dan gaan ze naar OpenAI.
+- ChatGPT kan in het LVS niets veranderen: het leest alleen.
+- Smartschool voor ChatGPT bewaart niets uit het LVS op je pc: niet in
+  `%USERPROFILE%\.cache\smartschool` en niet in je downloadmap. Wat ChatGPT
+  las, staat wel in de chat, zoals alles in een chat: verwijder de chat als
+  je ze niet meer nodig hebt.
+- Smartschool voor ChatGPT vraagt ChatGPT om wat het uit het LVS leest niet
+  over te nemen in een bestand, een bericht of een ander hulpmiddel, tenzij
+  jij erom vraagt.
 
 ## 9. Verwijderen
 
@@ -396,5 +446,7 @@ Kom je er niet uit, of vind je een fout? Meld het op
 [GitHub](https://github.com/yvanvds/smartschool-mcp/issues), of laat het de
 maker, Yvan Vander Sanden, weten.
 
-Zet nooit je wachtwoord, je 2FA-sleutel, je `config.toml` of berichten van
-anderen in een melding of een schermafbeelding.
+Zet nooit je wachtwoord, je 2FA-sleutel, je `config.toml`, berichten van
+anderen of gegevens over leerlingen in een melding of een schermafbeelding:
+ook geen antwoord van ChatGPT uit het leerlingvolgsysteem, en geen regels uit
+een logboek met namen erin. Beschrijf liever wat er gebeurde.

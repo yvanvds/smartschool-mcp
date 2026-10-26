@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written for #154, in the shape of the library's
+  notes/category_empty.xml: renderPupilNotes for the category Testcategorie
+  (900401) of Marie Peeters (900002 in 2B, 900102), without notes: hasData
+  0 and the first ten children of content only, written without white
+  space between the elements, as the LVS sends it.
+-->
+<server><response><status>ok</status><actions><action><subsystem>lvs_pupil</subsystem><command>renderPupilNotes</command><data><content><hasData>0</hasData><buttons/><updateToolbar>1</updateToolbar><pupilID>900002</pupilID><catID>900401</catID><catInfo><![CDATA[{"catID":"900401","parentID":"0","name":"Testcategorie","catType":"1","gFilter":1,"following":false}]]></catInfo><hideWindow>0</hideWindow><catFilter><![CDATA[{"start":"2030-09-01","end":"2031-08-31"}]]></catFilter><pupilInfo><![CDATA[{"pupilID":900002,"name":"Peeters Marie","class":"2B","classDesc":"","classID":900102,"teachers":[],"userIsPupil":false}]]></pupilInfo><viewType></viewType></content></data></action></actions></response></server>

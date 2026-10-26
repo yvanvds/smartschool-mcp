@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.5.0",
   "description": "Geeft Claude toegang tot je Smartschool-berichten, Intradesk en planner.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen. Een map, een weblink of bestanden van deze pc in een map zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk verplaatsen (telkens pas na jouw bevestiging).\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je lesfiches uit de module Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches in je eigen bibliotheek maken, aanpassen en naar de prullenbak verplaatsen, met hun info, vakken, weblinks en bijlagen van deze pc. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de evaluaties met de punten van je leerlingen en of ze gepubliceerd zijn, en de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten invullen en een leerling feedback geven (telkens pas na jouw bevestiging). Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te zetten.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore-beheer (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging). Voor je eigen puntenboek heb je Skore-beheer niet nodig.\n- **Aanwezigheden (alleen met Aanwezigheden aan):** voor wie in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: de klassen bekijken, en per klas en dag wat er voor elke leerling 's morgens en 's middags geregistreerd is. Leerlingen als te laat markeren (ook zonder geldige reden), of weer als aanwezig, bijvoorbeeld een groep van een bus die te laat was (telkens pas na jouw bevestiging). Een andere registratie, zoals een afwezigheid, overschrijft de extensie nooit.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen. Een map, een weblink of bestanden van deze pc in een map zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk verplaatsen (telkens pas na jouw bevestiging).\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je lesfiches uit de module Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches in je eigen bibliotheek maken, aanpassen en naar de prullenbak verplaatsen, met hun info, vakken, weblinks en bijlagen van deze pc. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de evaluaties met de punten van je leerlingen en of ze gepubliceerd zijn, en de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten invullen en een leerling feedback geven (telkens pas na jouw bevestiging). Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te zetten.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore-beheer (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging). Voor je eigen puntenboek heb je Skore-beheer niet nodig.\n- **Aanwezigheden (alleen met Aanwezigheden aan):** voor wie in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: de klassen bekijken, en per klas en dag wat er voor elke leerling 's morgens en 's middags geregistreerd is. Leerlingen als te laat markeren (ook zonder geldige reden), of weer als aanwezig, bijvoorbeeld een groep van een bus die te laat was (telkens pas na jouw bevestiging). Een andere registratie, zoals een afwezigheid, overschrijft de extensie nooit.\n- **Leerlingvolgsysteem (alleen met Leerlingvolgsysteem aan):** alleen als jij en je school dat willen: in het leerlingvolgsysteem (LVS) een leerling opzoeken en zijn dossier lezen: de notities, de resultaten in alle vakken, het handelingsplan en de afwezigheden. Eén leerling per keer, en alleen lezen: Claude kan in het LVS niets veranderen. Vertrouwelijke notities en de motivering van afwezigheden laat Claude weg, tenzij je erom vraagt. Het LVS bevat de gevoeligste gegevens over leerlingen: het staat standaard uit, en wat Claude erin leest, gaat naar Anthropic. Lees eerst Veiligheid en privacy in de gids.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Uit het leerlingvolgsysteem bewaart ze niets. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -30,7 +30,8 @@
         "SMARTSCHOOL_MFA": "${user_config.mfa}",
         "SMARTSCHOOL_DOWNLOAD_DIR": "${user_config.download_dir}",
         "SMARTSCHOOL_SKORE": "${user_config.skore}",
-        "SMARTSCHOOL_PRESENCE": "${user_config.presence}"
+        "SMARTSCHOOL_PRESENCE": "${user_config.presence}",
+        "SMARTSCHOOL_LVS": "${user_config.lvs}"
       }
     }
   },
@@ -278,6 +279,30 @@
     {
       "name": "set_pupils_present",
       "description": "Alleen met Aanwezigheden aan: markeert een of meer leerlingen van een klas weer als aanwezig voor een halve dag, bijvoorbeeld na een te laat dat een vergissing was. Een andere registratie overschrijft het nooit. Pas na jouw bevestiging."
+    },
+    {
+      "name": "search_lvs_pupils",
+      "description": "Alleen met Leerlingvolgsysteem aan: zoekt een leerling op naam in het leerlingvolgsysteem (LVS), met zijn klas. Vindt het er meer dan één, dan vraagt Claude welke je bedoelt."
+    },
+    {
+      "name": "read_lvs_pupil",
+      "description": "Alleen met Leerlingvolgsysteem aan: toont het overzicht van het dossier van één leerling in het leerlingvolgsysteem: de klas, de titularissen, de aanwezigheid van vandaag en welke onderdelen iets bevatten. Leest alleen en verandert niets."
+    },
+    {
+      "name": "read_lvs_notes",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest de notities in het dossier van één leerling in het leerlingvolgsysteem (gedrag, zorg, onderwijsbehoeften, gesprekken, ...), van één categorie of van alle, van één schooljaar, de nieuwste eerst. Vertrouwelijke notities telt het alleen, zonder ze te tonen, tenzij je er uitdrukkelijk om vraagt. Leest alleen; of Smartschool gelezen notities daarna niet meer als nieuw toont, is nog niet nagegaan."
+    },
+    {
+      "name": "read_lvs_results",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest de resultaten van één leerling in het leerlingvolgsysteem, in alle vakken: per vak de evaluaties met hun score zoals gegeven en of ze meetellen, bij veel evaluaties een berekende samenvatting, daarna de feedback, de rapporten (alleen naam en datum) en de periodes. Standaard de actieve periode van het huidige schooljaar. Leest alleen en verandert niets."
+    },
+    {
+      "name": "read_lvs_support_plan",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest het handelingsplan van één leerling in het leerlingvolgsysteem: de ondersteuningsnoden, hoofd- en werkdoelen en de aanpak, met de vakken waarvoor ze gelden, de doelen en de profielschets, van de huidige of een gekozen periode, eventueel alleen wat één vak aangaat. Een geüpload plan alleen bij naam. De evaluatie van het plan leest het nog niet. Leest alleen en verandert niets."
+    },
+    {
+      "name": "read_lvs_absences",
+      "description": "Alleen met Leerlingvolgsysteem aan: leest de afwezigheden van één leerling in het leerlingvolgsysteem: de totalen per afwezigheidscode in halve dagen en elke halve of hele dag met datum, weekdag en code, standaard van het huidige schooljaar, met de totalen van de andere schooljaren. De motivering van een afwezigheid alleen als je vraagt waarom de leerling afwezig was: die kan over de gezondheid gaan. Leest alleen en verandert niets."
     }
   ],
   "keywords": [
@@ -346,6 +371,13 @@
       "type": "boolean",
       "title": "Aanwezigheden",
       "description": "Alleen als je in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat. Dan kan Claude de aanwezigheden van een klas bekijken, en na jouw bevestiging leerlingen als te laat of weer als aanwezig markeren. De meeste leerkrachten en alle leerlingen hebben die rechten niet: laat het dan uit.",
+      "required": false,
+      "default": false
+    },
+    "lvs": {
+      "type": "boolean",
+      "title": "Leerlingvolgsysteem",
+      "description": "Alleen als jij en je school dat willen: dan leest Claude in het leerlingvolgsysteem (LVS), de gevoeligste gegevens over leerlingen in Smartschool (zorg, gedrag, onderwijsbehoeften, soms gezondheid). Claude zoekt een leerling op en leest zijn dossier: de notities, de resultaten, het handelingsplan en de afwezigheden. Alleen lezen, één leerling per keer; vertrouwelijke notities en de motivering van afwezigheden alleen als je erom vraagt. Lees eerst Veiligheid en privacy in de gids: https://github.com/yvanvds/smartschool-mcp/blob/main/docs/installatie.md#8-veiligheid-en-privacy. Twijfel je, of heb je geen toegang tot het LVS: laat het dan uit.",
       "required": false,
       "default": false
     }

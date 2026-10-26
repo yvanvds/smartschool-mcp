@@ -52,11 +52,14 @@ download_dir: C:\Users\you\Downloads\Smartschool
 skore: false
 # Optional: true offers the presence tools (see Opt-in tools below).
 presence: false
+# Optional: true offers the tools of the pupil tracking system (LVS).
+lvs: false
 ```
 
 `SMARTSCHOOL_DOWNLOAD_DIR`, when set, comes before `download_dir` (see
-*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`, and
-`SMARTSCHOOL_PRESENCE` before `presence`.
+*Saving files* below), `SMARTSCHOOL_SKORE` before `skore`,
+`SMARTSCHOOL_PRESENCE` before `presence`, and `SMARTSCHOOL_LVS` before
+`lvs`.
 
 Pass it explicitly with `--credentials credentials.yml`; the server never
 looks for the file on its own. The project's `.mcp.json` starts the server
@@ -93,6 +96,43 @@ second copy get a name of its own) into a temporary download folder that is
 deleted afterwards, checks their sizes and first bytes, and prints
 extensions, sizes and timings only; run it with `--name save_intradesk_file`.
 
+### Pupil tracking system (LVS) data
+
+The LVS tools read the most sensitive data Smartschool has (care, behaviour,
+educational needs, sometimes health). **No LVS data from a live school ever
+goes into this repository or onto GitHub.** The rules are the library's,
+in flutter_smartschool's
+[`doc/lvs-privacy.md`](https://github.com/yvanvds/dartschool/blob/main/doc/lvs-privacy.md)
+(yvanvds/dartschool#159), and hold here too, for every contributor and every
+coding agent:
+
+- The fixtures of the fake LVS (`test/fixtures/lvs/`) are written by hand,
+  in the shapes the library's research found, and never derived from a live
+  answer by trimming it: an LVS answer is mostly free text about a pupil, and
+  a forgotten sentence is a leak. They name only the fakes of
+  `test/fixtures/lvs/FAKES.md` (a copy of the library's list: add a fake
+  there and here alike), hold ids in 900000–999999 only and free text that
+  says "test". `test/lvs_fixtures_guard_test.dart`, a copy of the library's
+  guard, checks them, and names a file and a field when it fails, never a
+  value.
+- Issues, PRs, commit messages, code comments and docs describe an LVS
+  answer by its shape: field names, types, nesting and placeholders
+  (`<pupil id>`, `<text>`, "Jan Janssens"). Never a value from a live
+  answer: no names, no pupil, class or note ids, no dates or texts of a note,
+  no category names a school made itself. Example questions in the guides
+  use the fakes too.
+- A coding agent does not open a pupil's data, and makes no live LVS calls.
+  The live check of the tools on a real pupil is the developer's (#159), and
+  reports only what worked, shapes and counts, never values. Raw answers
+  from research go to a temp folder outside the repository, never to
+  `dev_dumps/` or another git-ignored folder in the working tree.
+- A bug report holds no pupil data, no LVS answers and no log lines with
+  names (the bug template and both guides say so): it describes what
+  happened.
+
+The tools themselves only read, keep nothing on disk and log nothing but an
+error's type: see the LVS tools under *Tools* and `lib/src/lvs/` below.
+
 ### Build
 
 ```
@@ -127,7 +167,8 @@ via *Settings → Developer → Edit Config*
         "SMARTSCHOOL_MFA": "YOUR-TOTP-BASE32-SECRET",
         "SMARTSCHOOL_DOWNLOAD_DIR": "C:\\path\\to\\a\\folder",
         "SMARTSCHOOL_SKORE": "false",
-        "SMARTSCHOOL_PRESENCE": "false"
+        "SMARTSCHOOL_PRESENCE": "false",
+        "SMARTSCHOOL_LVS": "false"
       }
     }
   }
@@ -142,8 +183,9 @@ Base32 (such as the app's 6-digit code) is reported without sending the
 password. When Smartschool asks for a 2FA code and the key is empty, the
 server says that the account uses 2FA and that the key must be filled in.
 `SMARTSCHOOL_DOWNLOAD_DIR` is optional (see *Saving files* below), and so
-are `SMARTSCHOOL_SKORE` and `SMARTSCHOOL_PRESENCE`, which offer the Skore
-tools and the presence tools when `true` (see *Opt-in tools* below). Restart
+are `SMARTSCHOOL_SKORE`, `SMARTSCHOOL_PRESENCE` and `SMARTSCHOOL_LVS`, which
+offer the Skore tools, the presence tools and the tools of the pupil
+tracking system when `true` (see *Opt-in tools* below). Restart
 Claude Desktop after editing the file. The server's stderr ends up in Claude
 Desktop's MCP log (`%APPDATA%\Claude\logs\mcp-server-smartschool.log`).
 
@@ -236,8 +278,8 @@ client name. It also installs again while that copy runs.
 ### Tools
 
 - `smartschool_status`: whether the connection works, or what to fix,
-  whether each opt-in switch is on and, when it is, whether the account has
-  the rights for its tools (see *Opt-in tools* below), the download folder
+  whether each opt-in switch is on and, when it is, whether the account can
+  use its tools (see *Opt-in tools* below), the download folder
   and whether it is writable, and whether a newer version is available,
   with its download link and what is new (see *Update check* below).
 - `list_messages`: the headers of the inbox, sent box or archive, or of a
@@ -1414,6 +1456,219 @@ off; the library's message goes to the log only. Other codes and the
 registration per lesson (which `userCanRecord` seems to stand for) are not
 offered; #77 is the live check.
 
+The tools of the pupil tracking system (LVS, "leerlingvolgsysteem",
+`/?module=LVS`) are offered only when the switch "Leerlingvolgsysteem" is on
+(see *Opt-in tools* below). Most teachers can read the LVS, so the switch is
+not about rights: the LVS holds the most sensitive data about pupils (care,
+behaviour, educational needs, sometimes health), and the user and their
+school must choose to let an AI assistant read it. The tools use the
+library's `LvsService` (yvanvds/dartschool#160 to #164), which sends only its
+reads, by an allowlist; all of them only read:
+
+- `search_lvs_pupils`: the pupils whose name matches `query`, among those the
+  account may see (`searchPupils`), one line each with name, class,
+  `pupil_id` and `class_id`, in the LVS's order, without the markup that
+  highlights the match. With several matches the result asks Claude to let
+  the user choose, never to pick one; with none it is a sentence, not an
+  error.
+- `read_lvs_pupil`: the overview of one pupil's file (`pupil_id`,
+  `class_id`; `getPupilFile`): name, class and its description, the form
+  tutors (titularissen), today's attendance per half-day (`getStatusInfo`; a
+  half-day other than `am` or `pm` is named as the LVS names it: three were
+  seen on a school day, yvanvds/dartschool#168), and the parts of the file
+  that hold something (`hasItems`), as a list indented by depth: the
+  school's note categories with their `category_id`, headings marked, and
+  the LVS's own parts (results, support plans, absences, ...), each marked
+  "with new notes" or "with something new" (`hasNewItems`); then the parts
+  that hold nothing. A part's line names the tool that reads it, once there
+  is one (`lvsSectionReaders` in `lib/src/lvs/lvs_format.dart`):
+  `read_lvs_notes` for the note categories and their headings,
+  `read_lvs_results` for the results (Resultaten), `read_lvs_support_plan`
+  for the support plans (handelingsplannen), `read_lvs_absences` for the
+  absences (Afwezigheden). The LVS
+  answers a pupil it does not know in that class with a placeholder pupil,
+  which the library reports (`SmartschoolLvsPupilNotFoundError`): the error
+  says to take both ids from one line of the search.
+- `read_lvs_notes`: the notes of one pupil's file (`pupil_id`, `class_id`;
+  `getNotes`, `getAllNotes`), what schools keep on behaviour, care and
+  educational needs, class council remarks and talks with parents, in one
+  school year (`school_year`, a label like `2025-2026`; by default the
+  current one in Belgian time; the library keeps only the notes of that
+  school year, as the LVS does not apply it reliably), newest first by
+  their Belgian day. With `category`, a `category_id` or a name (ignoring
+  case; a name several categories have, or one the file does not have, is
+  an error that lists them by path, with their ids), the notes of that
+  category and of each of its sub-categories: the file is read for them,
+  then each on its own (`getNotes` reads a category's own notes only;
+  headings hold none and are not read). Without it, the "all items" view of
+  the file, its notes only; as the LVS answers a pupil it does not know
+  with no notes at all, an empty answer has the file read too, so that the
+  error says so. `since` (a day) and `limit` (default 20, at most 100) keep
+  the answer short. Each note: its day, category, title, author and "new",
+  then its fields as `label: value`, in the library's plain text (a rich
+  text with its lines, the chosen options, a date's day, attachments by
+  name only, nothing downloaded; a heading by its text; a field type the
+  library does not know as the LVS gives it, which the line says; empty
+  fields left out). Confidential notes ("vertrouwelijk"), which the library
+  returns marked, are left out unless `include_confidential` is true, which
+  the description says to set only when the user explicitly asks for them;
+  the answer ends with how many notes there are and how many were left out,
+  and why: older than `since`, confidential (counted only, nothing of them
+  shown) or over the limit. The library sends no "viewed" flag; whether the
+  LVS takes a read note as seen was not captured (yvanvds/dartschool#168),
+  and the description says so. Two workarounds, tracked in #160: the
+  Belgian day comes from the library's `LvsSchoolYear.includesDay`
+  (`lvsDay` in `lib/src/lvs/lvs_format.dart`), as the library does not
+  export it (yvanvds/dartschool#185); and the file's read for the
+  categories takes today's attendance along, unused
+  (yvanvds/dartschool#186). The notes are read and written in
+  `lib/src/lvs/lvs_notes.dart`; `lvsSchoolYearArgument` and
+  `lvsSchoolYearSchema` in `lvs_access.dart` are the `school_year` argument
+  of the LVS tools that read a school year.
+- `read_lvs_results`: one pupil's results (`pupil_id`, `class_id`), the
+  "Resultaten" part of the file: the results app pupils and parents see, in
+  every course, not only the user's own gradebooks (`getResultsPeriods`,
+  `getResultsCourses`, `getAllEvaluations`, `getFeedback`, `getReports`,
+  which the library sends with the app's headers). Of one school year
+  (`school_year`, as for `read_lvs_notes`; for another than the current one
+  the app's configuration is read first, `getResultsConfiguration`, and an
+  account it lets see the current school year only, `canSeeAll` false, gets
+  an error), by default of its active period (`isActive`; all periods when
+  none is, which the answer says). `period` takes a `period_id` or a name
+  (ignoring case, or else the period whose name holds it; several matches
+  are an error that lists them with their ids), or `all`. `course` is a
+  filter: the course with that `course_id`, or those with that name
+  (ignoring case), or else those whose name holds it, with their parts
+  (`parentCourseId`, at any depth); a course the results do not have is an
+  error that lists them. Both go to the LVS as ids, and the server keeps
+  only the evaluations of the periods and courses chosen, also when the LVS
+  sends others (whether it applies the ids was not captured). Per course, in
+  the LVS's order, its teachers and count, then its evaluations newest first
+  by their Belgian day, each with its name, the score as given
+  (`formatLvsScore`: points with their percentage, a text with its
+  description, a symbol by its icon, an image, a rubric, a type the server
+  does not know, or none; nothing computed), whether it counts, whether it
+  is not published to the pupil, its component, its period when several are
+  shown, the other courses it is for, and whether it has feedback. A course
+  with 5 or more evaluations gets a summary line computed from the scores
+  given (`formatLvsResultsSummary`): how many are below half, of those whose
+  score is a number (`LvsScore.percentage`), and how many could not be
+  counted; the line says it is computed, not the LVS's. Then the courses
+  without evaluations; the feedback, newest first (day, teacher, what it is
+  on, its text as plain text, attachments by name only), of the periods and
+  courses chosen (feedback on an evaluation by its evaluation, a remark per
+  course on a report by its course; the class council's remarks are about
+  no one course and left out with `course`), with what was left out
+  counted; the reports of the school year by name and day (nothing is
+  downloaded); and the periods to ask for. Evaluations are read 100 a page,
+  at most 10 pages: when the cap stops at a full page, the answer says the
+  LVS may have more. A refusal with HTTP 403 is "no access to the results"
+  in a sentence (`withLvs`'s `part`). As the LVS answers a pupil it does not
+  know with empty lists, the file is read too when no evaluation, feedback
+  or report came, or before saying that there is no period or course to
+  pick from: the error then says the LVS does not know the pupil, and a file
+  that shows the older Skore part instead of Resultaten, which the library
+  does not read, is said so. The comments on reports (`/LVS/Skorecomments`)
+  are not read: the library does not read them, nor that older part
+  (yvanvds/dartschool#169). The library gives the feedback's text as HTML,
+  unlike its other LVS texts, so the server makes it plain text with its own
+  `htmlToText` (yvanvds/dartschool#187, tracked in #161). The results are
+  read and written in `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
+  `lvsIdIn` and `lvsNameKey` in `lvs_access.dart` are an argument that
+  names a part of the file by its id or name (the notes' `category` too).
+  The file's read takes today's attendance along, unused, and the Belgian
+  day is `lvsDay`'s: the workarounds of #160.
+- `read_lvs_support_plan`: one pupil's support plan (`pupil_id`,
+  `class_id`), the "handelingsplannen" part of the file, for schools that
+  use the LVS's support plans: the individual plan (IHP) and the profile
+  sketch of one period (`getSupportPlanPeriods`, `getSupportPlan`,
+  `getProfileSketch`; only the live plan, `exportID` 0). By default the
+  current period (`periodID` 0); `period` takes a `period_id` or a name of
+  the period menu (ignoring case, or else the period whose name holds it;
+  several matches, or none, are an error that lists them with their ids and
+  the menu's heading). The items in the LVS's order, each with its kind,
+  author, date (as the LVS shows it) and courses: an item of support needs
+  with its support needs (ondersteuningsnoden), main and work goals,
+  approach and the comment on it; an item of goals (from the class's group
+  plan, or chosen for the pupil, and the school's own goals or those of
+  special primary education when the LVS says so) with its theme, start
+  situation and goals, each with its domain, objectives, approach and
+  planning, and whether it is no longer in its curriculum; an uploaded plan
+  by its file name and kind only (nothing is downloaded); an item of a kind
+  the library does not know by its type, said so. Lists and texts of more
+  lines keep their lines; empty fields are left out, and an item with
+  nothing filled in says so. Then the profile sketch (profielschets) with its
+  last change, and the periods to ask for. `course` is a filter by name
+  (ignoring case, or else the courses whose name holds it): the items that
+  name it among their courses or their goals' planning, and the items that
+  name no course, which may concern every course; the others are counted.
+  The plan names its courses without ids, and the library cannot tell which
+  courses are the user's own (yvanvds/dartschool#189, #163): the
+  description says to pass the user's course as `course`. The three cases
+  without a plan each get a sentence: a file without a part of support plans
+  (a school that does not use them, or an account that may not see them:
+  the sentence points to the note categories and `read_lvs_notes`), a pupil
+  without a plan in the period (`noPlan`), and no period of support plans
+  (`noPeriod`, as for a class without a structure of them, with the LVS's
+  message). As what the LVS answers a pupil it does not know was not
+  captured, the file is read too when the plan holds no item and there is no
+  sketch, or before saying that there is no period to pick from: the error
+  then says the LVS does not know the pupil. A refusal with HTTP 403 is "no
+  access to the support plans" in a sentence. Not read: the plan's
+  evaluation, its report and the earlier versions of its items, which the
+  library does not read yet (yvanvds/dartschool#170, #162); the description
+  and every answer with a plan say so. The plan is read and written in
+  `lib/src/lvs/lvs_support_plan.dart`; `lvsNamed` in `lvs_access.dart`
+  finds a period or a course by name (the results' too). No real pupil's
+  plan was captured (yvanvds/dartschool#168): the fixtures are in the shapes
+  of the LVS's JavaScript. The file's read takes today's attendance along,
+  unused: the workaround of #160.
+- `read_lvs_absences`: one pupil's absences (`pupil_id`, `class_id`), the
+  "Afwezigheden" part of the file: the half-days the school registered with
+  an absence code (`getAbsences`, one read). The library sends no school
+  year: the LVS answers with the school years it picks, each a period of its
+  answer. `school_year` (as for `read_lvs_notes`; by default the current one
+  in Belgian time) picks the periods labelled with it; for those, the total
+  per code (its description and code, in half-days, a whole day counting
+  two: the library's `totalsByCode`), then each absence day after day in the
+  LVS's order, with its day (`YYYY-MM-DD`) and day of the week, morning,
+  afternoon or whole day, and its code; a day the library could not read
+  (`date` null) is shown as the LVS shows it, said so. Then the other school
+  years the LVS gives, each with its totals (a period whose label is not a
+  school year by its label, said so). The codes are the school's own. A
+  motivation can hold health information: by default the answer says only
+  how many absences have one, never what they say; `with_motivation` (the
+  description says to set it only when the user asks why the pupil was
+  absent) shows each under its absence, as plain text with its lines. No
+  absences is a sentence: none in the school year asked for (with the school
+  years the LVS gives), none at all, or none and no part of absences in the
+  file. The LVS answered a made-up pupil with HTTP 500 and an error page, a
+  plain `SmartschoolLvsError` that the library cannot tell from an answer
+  it cannot read (yvanvds/dartschool#190, tracked in #164): so after such an
+  error, and when there are no absences at all, the file is read too, and
+  the error says when the LVS does not know the pupil. A refusal with HTTP
+  403 is "no access to the absences" in a sentence, without reading the
+  file. The absences are read and written in `lib/src/lvs/lvs_absences.dart`.
+  The file's read takes today's attendance along, unused: the workaround of
+  #160.
+
+Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
+nothing on disk (no cache, no downloads); nothing in the log but an error's
+type and HTTP status (`lvsTool` and `lvsLogDescription`: the server's own
+catch-all would log an error's message, which may quote the LVS; and
+`withLvs` has the session log a refused session that way too, through
+`SmartschoolSession.run`'s `describeError`, as its message names the
+request, with the pupil's id); errors say
+what to do, not what the answer held (`lvsToolError`); the descriptions say
+that the data is confidential, to use the tool only when the user asks about
+a particular pupil, and not to copy what it returns into files, artifacts,
+messages or other tools unless the user asks (`lvsPrivacyRules`); one pupil
+per call. A refusal (HTTP 403, or a redirect to the start page) says that
+the account may have no access to the LVS or may not see this pupil, and
+`smartschool_status` checks access with the root of the LVS's class tree,
+which holds no pupil: what the LVS answers an account without access was
+not captured (yvanvds/dartschool#168). #159 is the live check.
+
 Message helpers for later tools live in `lib/src/messages/`: `MessageBox`
 (inbox / sent / archive and the folders the user made, their headers and one
 message), the `box` and `folder` arguments (`BoxArgument`, `folderSchema`) and
@@ -1749,6 +2004,39 @@ the account may only view, and a class without pupils, a class ID it does
 not know and a day after `today` without pupils, with `saveIsAllowed:
 false` and the module's reason.
 
+LVS helpers live in `lib/src/lvs/`. In `lvs_access.dart`: `withLvs`, which
+runs an action with an `LvsService` on the session and turns the LVS's
+errors into `ToolError`s that say what to do (`lvsToolError`, with `lvsFix`
+for an account without access); `lvsTool`, which every LVS tool is, so that
+nothing of an error reaches the log but its type and HTTP status
+(`lvsLogDescription`); the sentences every description ends with
+(`lvsPrivacyRules`); what turning the switch on means, for
+`smartschool_status` (`lvsRights`, and `lvsCaution` with
+`lvsPrivacyGuideUrl`, the guide's privacy section); the arguments the tools
+share (`lvsPupilArguments` with `lvsPupilIdSchema` and `lvsClassIdSchema`,
+`lvsSchoolYearArgument` and `lvsSchoolYearSchema`, and an id or a name with
+`lvsIdOrNameArgument`, `lvsIdIn`, `lvsNameKey` and `lvsNamed`); and
+`checkLvsAccess`, the access check of `smartschool_status`. In
+`lvs_format.dart`: the lines of `search_lvs_pupils` and `read_lvs_pupil`
+(`formatLvsMatches`, `formatLvsPupilFile`, with `lvsSectionReaders`, the
+tool that reads each part), a school year (`formatLvsSchoolYear`) and a
+Belgian day (`lvsDay`). Each part of the file the tools read has a file of
+its own, which reads it, picks from it and writes the answer:
+`lvs_notes.dart` (`readLvsNotes`, `selectLvsNotes`, `formatLvsNotes`),
+`lvs_results.dart` (`readLvsResults`, `formatLvsResults`),
+`lvs_support_plan.dart` (`readLvsSupportPlan`, `formatLvsSupportPlan`) and
+`lvs_absences.dart` (`readLvsAbsences`, `formatLvsAbsences`). In
+`lvs_opt_in.dart`: the LVS tools behind their switch (`lvsOptIn`). The tests
+run against a fake LVS (`test/support/fake_lvs.dart`,
+`FakeSmartschool.lvs`) that answers the reads of `LvsService` with the
+hand-written fixtures of `test/fixtures/lvs/`, with the fakes of
+`test/fixtures/lvs/FAKES.md` only (see *Pupil tracking system (LVS) data*
+above). `test/support/lvs_tool_harness.dart` calls the LVS tools over MCP
+on the real server and library against that fake, and gives each test the
+requests the fake LVS got, the server's log of a call
+(`test/support/log_capture.dart`) and the cache folder, to check that
+nothing of a pupil reaches either.
+
 Reading documents lives in `lib/src/documents/`, independent of Intradesk so
 that message and lesfiche attachments can use it too: `readDocument(bytes,
 name: ...)` in `document_reader.dart` returns a `DocumentText`, a
@@ -1767,14 +2055,18 @@ which also gives the file name from the `Content-Disposition` header.
 ### Opt-in tools
 
 Some tools only work for accounts with extra rights in Smartschool, such as
-the Skore tools and the presence tools. They sit behind an opt-in switch, a
-setting that is off by default (`Setting.isSwitch` in
-`lib/src/settings.dart`): "Skore-beheer" (`SMARTSCHOOL_SKORE`, `skore` in a
-credentials file) and "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`, `presence`).
-Each switch turns on its own group. The server only
-offers the group's tools when its switch is on (`OptInTools` in
+the Skore tools and the presence tools; others read data sensitive enough
+that the user and their school must choose to let an AI assistant read it,
+such as the tools of the pupil tracking system (LVS), which most teachers
+can read. They sit behind an opt-in switch, a setting that is off by default
+(`Setting.isSwitch` in `lib/src/settings.dart`): "Skore-beheer"
+(`SMARTSCHOOL_SKORE`, `skore` in a credentials file), "Aanwezigheden"
+(`SMARTSCHOOL_PRESENCE`, `presence`) and "Leerlingvolgsysteem"
+(`SMARTSCHOOL_LVS`, `lvs`). Each switch turns on its own group. The server
+only offers the group's tools when its switch is on (`OptInTools` in
 `lib/src/opt_in.dart`), so accounts without the rights never see tools they
-cannot use, and those tools take up no context in their conversations. The
+cannot use, no one gets the LVS tools without choosing them, and those
+tools take up no context in their conversations. The
 switches are read once, at startup (`Switches.read`): the environment
 variable when it is set and not empty, else the credentials file's key.
 `true`, `1`, `yes`, `on`, `ja` and `aan` (any case) turn a switch on; empty,
@@ -1788,7 +2080,13 @@ the library's `checkAccess`, which reads the teachers for report management
 and the account's own gradebooks for gradebook management: access means
 both parts, and the line names the part an account with only one lacks;
 for the presences, `getConfig`, where access means that the account may
-record presences for at least one class). An answer that cannot tell
+record presences for at least one class; for the LVS, the library's
+`checkAccess`, the root of its class tree, which holds no pupil: access
+means that the LVS answers it, as the library does not tell how many classes
+it lists, yvanvds/dartschool#184). When the switch is off, the line of a
+switch for sensitive data adds what turning it on means
+(`OptInTools.caution`: for the LVS, with a link to the guide's privacy
+section). An answer that cannot tell
 (for Skore, one the server could not use) is reported as access that could
 not be checked.
 Registering the tools only once access is detected
@@ -1799,8 +2097,9 @@ conversation, and it would cost Skore requests at every start.
 To add a group: a `Setting` with `isSwitch: true` (a `boolean` field with
 the default `false` in the manifest's `user_config`, its variable in
 `mcp_config.env`, a hint in the installer's `settingHints`, and a row in both
-colleague guides), an `OptInTools` with its tools, rights and access check,
-and the group in the entry point's `optIns`.
+colleague guides), an `OptInTools` with its tools, rights and access check
+(and, for sensitive data, its caution), and the group in the entry point's
+`optIns`.
 
 ### Message folders
 

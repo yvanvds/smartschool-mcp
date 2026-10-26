@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:smartschool_mcp/src/lvs/lvs_access.dart';
+import 'package:smartschool_mcp/src/lvs/lvs_opt_in.dart';
 import 'package:smartschool_mcp/src/opt_in.dart';
 import 'package:smartschool_mcp/src/presence/presence_opt_in.dart';
 import 'package:smartschool_mcp/src/session.dart';
@@ -60,6 +62,7 @@ void main() {
         'download_dir': 'directory',
         'skore': 'boolean',
         'presence': 'boolean',
+        'lvs': 'boolean',
       },
     );
     // A switch, and only a switch, is a boolean field (#42).
@@ -110,8 +113,9 @@ void main() {
     }
   });
 
-  test('describes a switch by the rights its tools need, and each of its '
-      'tools as one that needs it on (#42, #47)', () {
+  test('describes a switch by the rights its tools need, or by the choice '
+      'it is for the LVS, and each of its tools as one that needs it on '
+      '(#42, #47, #153)', () {
     final skore = fields[Setting.skore.fileKey]!;
     expect(
       skore['description'],
@@ -129,10 +133,33 @@ void main() {
         contains('laat het dan uit'),
       ),
     );
+    // Not rights but a choice: the most sensitive data about pupils, with
+    // the privacy section of the guide and what is left out unless asked
+    // (#153, #158).
+    final lvs = fields[Setting.lvs.fileKey]!;
+    expect(
+      lvs['description'],
+      allOf([
+        startsWith('Alleen als jij en je school dat willen'),
+        contains('leerlingvolgsysteem (LVS)'),
+        contains('de gevoeligste gegevens over leerlingen'),
+        contains(
+          'de notities, de resultaten, het handelingsplan en de afwezigheden',
+        ),
+        contains('Alleen lezen, één leerling per keer'),
+        contains(
+          'vertrouwelijke notities en de motivering van afwezigheden alleen '
+          'als je erom vraagt',
+        ),
+        contains(lvsPrivacyGuideUrl),
+        contains('laat het dan uit'),
+      ]),
+    );
     final session = SmartschoolSession(const ExtensionSettings());
     final optIns = <OptInTools>[
       skoreOptIn(session, SwitchState.on),
       presenceOptIn(session, SwitchState.on),
+      lvsOptIn(session, SwitchState.on),
     ];
     expect(
       {for (final optIn in optIns) optIn.setting},
@@ -157,7 +184,8 @@ void main() {
 
   test('sums up in its long description the parts the Claude Desktop guide '
       'sums up, in its order, each part a switch turns on marked with that '
-      'switch, and the gradebook as the guide does (#150)', () {
+      'switch, and the gradebook and the pupil tracking system as the guide '
+      'does (#150, #158)', () {
     final guide = File(
       'docs/installatie.md',
     ).readAsStringSync().replaceAll('\r\n', '\n');
@@ -206,6 +234,24 @@ void main() {
         'Dit is er voor elke leerkracht: je hoeft er niets voor aan te '
             'zetten.',
       ),
+      // The pupil tracking system (#158): read-only, one pupil at a time,
+      // and what is left out unless asked.
+      (
+        'Leerlingvolgsysteem',
+        'in het leerlingvolgsysteem (LVS) een leerling opzoeken en zijn '
+            'dossier lezen: de notities, de resultaten in alle vakken, het '
+            'handelingsplan en de afwezigheden.',
+      ),
+      (
+        'Leerlingvolgsysteem',
+        'Eén leerling per keer, en alleen lezen: Claude kan in het LVS niets '
+            'veranderen.',
+      ),
+      (
+        'Leerlingvolgsysteem',
+        'Vertrouwelijke notities en de motivering van afwezigheden laat '
+            'Claude weg, tenzij je erom vraagt.',
+      ),
     ]) {
       expect(guideText, contains(sentence));
       expect(parts[part]!.text, contains(sentence), reason: part);
@@ -217,6 +263,25 @@ void main() {
     expect(
       parts['Skore-beheer']!.text,
       contains('Voor je eigen puntenboek heb je Skore-beheer niet nodig.'),
+    );
+    expect(
+      parts['Leerlingvolgsysteem']!.text,
+      allOf(
+        startsWith('alleen als jij en je school dat willen'),
+        contains('het staat standaard uit'),
+        contains('gaat naar Anthropic'),
+        contains('Lees eerst Veiligheid en privacy in de gids.'),
+      ),
+    );
+    expect(
+      guideText,
+      contains(
+        '- **Leerlingvolgsysteem**, alleen als jij en je school dat willen',
+      ),
+    );
+    expect(
+      longDescription,
+      contains('Uit het leerlingvolgsysteem bewaart ze niets.'),
     );
   });
 
@@ -237,7 +302,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(61));
+    expect(readmeTools, hasLength(67));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

@@ -1,0 +1,572 @@
+[
+  {
+    "identifier": "900000_900001_0_normal_900601",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "yellow",
+      "value": 70,
+      "description": "7/10"
+    },
+    "date": "2030-10-15T00:00:00+02:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "component": {
+      "name": "Testcomponent",
+      "abbreviation": "TEST"
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": [
+      {
+        "teacher": {
+          "id": "900000_900201_0",
+          "name": {
+            "startingWithFirstName": "Piet Peeters",
+            "startingWithLastName": "Peeters Piet"
+          }
+        },
+        "text": "Testfeedback bij de evaluatie."
+      }
+    ]
+  },
+  {
+    "identifier": "900000_900001_0_normal_900602",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "red",
+      "value": 40,
+      "description": "4/10"
+    },
+    "date": "2030-10-22T00:00:00+02:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900603",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "text",
+      "color": "green",
+      "value": "A",
+      "description": "Testbeoordeling"
+    },
+    "date": "2030-11-05T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": false,
+    "isPublished": false,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900604",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "red",
+      "value": 45,
+      "description": "9/20"
+    },
+    "date": "2030-11-12T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900605",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "icon",
+      "color": "steel",
+      "value": "target_lpd_steel",
+      "description": null
+    },
+    "date": "2030-11-19T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900606",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "green",
+      "value": 100,
+      "description": "10/10"
+    },
+    "date": "2030-11-26T00:30:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900401,
+      "name": "Testperiode",
+      "icon": "cal_purple_generic_week",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900607",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "percentage",
+      "color": "green",
+      "value": 62.5,
+      "description": "12,5/20"
+    },
+    "date": "2031-03-02T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900302,
+        "name": "Testvak 2",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": 900301,
+        "teachers": [
+          {
+            "id": "900000_900202_0",
+            "name": {
+              "startingWithFirstName": "Céline Dupré",
+              "startingWithLastName": "Dupré Céline"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900402,
+      "name": "Testperiode 2",
+      "icon": "cal_purple_generic_trimester",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_project_900608",
+    "type": "project",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "rubrics",
+      "color": "steel",
+      "value": "",
+      "description": "Testbeoordeling"
+    },
+    "date": "2031-03-09T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900402,
+      "name": "Testperiode 2",
+      "icon": "cal_purple_generic_trimester",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": [
+      {
+        "teacher": {
+          "id": "900000_900202_0",
+          "name": {
+            "startingWithFirstName": "Céline Dupré",
+            "startingWithLastName": "Dupré Céline"
+          }
+        },
+        "text": "Testfeedback bij een doel."
+      }
+    ]
+  },
+  {
+    "identifier": "900000_900001_0_normal_900609",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "courses": [
+      {
+        "id": 900302,
+        "name": "Testvak 2",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": 900301,
+        "teachers": [
+          {
+            "id": "900000_900202_0",
+            "name": {
+              "startingWithFirstName": "Céline Dupré",
+              "startingWithLastName": "Dupré Céline"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900402,
+      "name": "Testperiode 2",
+      "icon": "cal_purple_generic_trimester",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "isPublished": true,
+    "feedbacks": []
+  },
+  {
+    "identifier": "900000_900001_0_normal_900610",
+    "type": "normal",
+    "name": "Testevaluatie",
+    "graphic": {
+      "type": "testgrafiek",
+      "color": "",
+      "value": "Testwaarde"
+    },
+    "date": "2031-03-16T00:00:00+01:00",
+    "courses": [
+      {
+        "id": 900301,
+        "name": "Testvak",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": null,
+        "teachers": [
+          {
+            "id": "900000_900201_0",
+            "name": {
+              "startingWithFirstName": "Piet Peeters",
+              "startingWithLastName": "Peeters Piet"
+            }
+          }
+        ]
+      },
+      {
+        "id": 900302,
+        "name": "Testvak 2",
+        "graphic": {
+          "type": "icon",
+          "value": "knight2"
+        },
+        "class": {
+          "id": 900101,
+          "name": "1A",
+          "type": "K",
+          "icon": "briefcase"
+        },
+        "skoreClassId": 900101,
+        "parentCourseId": 900301,
+        "teachers": [
+          {
+            "id": "900000_900202_0",
+            "name": {
+              "startingWithFirstName": "Céline Dupré",
+              "startingWithLastName": "Dupré Céline"
+            }
+          }
+        ]
+      }
+    ],
+    "period": {
+      "id": 900402,
+      "name": "Testperiode 2",
+      "icon": "cal_purple_generic_trimester",
+      "class": {
+        "id": 900101,
+        "name": "1A",
+        "type": "K",
+        "icon": "briefcase"
+      }
+    },
+    "doesCount": true,
+    "isPublished": true,
+    "feedbacks": []
+  }
+]
