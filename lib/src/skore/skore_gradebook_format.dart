@@ -150,28 +150,149 @@ String formatSkoreEvaluation(SkoreEvaluation evaluation) {
     switch (evaluation.type) {
       SkoreEvaluationType.points => 'points',
       SkoreEvaluationType.scale => 'a scale',
-      SkoreEvaluationType.unknown => 'type ${evaluation.typeCode}',
+      SkoreEvaluationType.unknown =>
+        'a type the server does not support (evaltype ${evaluation.typeCode})',
     },
     if (evaluation.isPlannerEvaluation) 'from the planner',
     formatSkorePublication(evaluation.publication),
   ].join(' | ');
 }
 
+/// Why the server cannot read the grades of [evaluation], one the library
+/// could not read (not [SkoreEvaluation.isReadable]), for after a colon: a
+/// type it does not know, named by Skore's `evaltype`
+/// ([SkoreEvaluation.typeCode]), in the server's words; or a cell in a
+/// shape it does not recognise, with the library's reason
+/// ([SkoreEvaluation.unreadableReason]), which names a cell by its row (a
+/// pupil id) and quotes nothing of Skore's answer.
+///
+/// For example `it is of a type the server does not support yet (Skore's
+/// evaltype 3; the server reads evaluations in points and on a scale)`.
+String skoreUnreadableReason(SkoreEvaluation evaluation) =>
+    switch (evaluation.type) {
+      SkoreEvaluationType.unknown =>
+        'it is of a type the server does not support yet (Skore\'s evaltype '
+            '${evaluation.typeCode}; the server reads evaluations in points '
+            'and on a scale)',
+      _ =>
+        'Skore gave its grades in a shape the server does not know yet '
+            '(${evaluation.unreadableReason})',
+    };
+
 /// What the gradebook tools say instead of the grades of an [evaluation]
-/// the library could not read (not [SkoreEvaluation.isReadable]: its type
-/// is not one the library knows, or a cell of it is in a shape it does not
-/// recognise), with the library's reason, which names a cell by its row and
-/// quotes nothing of Skore's answer: `The server could not read the grades
-/// of this evaluation: its type, evaltype 7, is not one the library reads
-/// (1, points, or 2, a scale).`
+/// the library could not read (not [SkoreEvaluation.isReadable]), with why
+/// ([skoreUnreadableReason]): `The server cannot read the grades of this
+/// evaluation: it is of a type the server does not support yet (Skore's
+/// evaltype 7; the server reads evaluations in points and on a scale). The
+/// user sees them in Skore in Smartschool itself.`
 ///
 /// Since flutter_smartschool 0.4.0 the library reads the rest of the period
 /// around such an evaluation, and its `results` throw
 /// (yvanvds/dartschool#193): the tools ask [SkoreEvaluation.isReadable]
-/// first (#170). Reading evaluations on a scale with their labels is #169.
+/// first (#170).
 String formatSkoreUnreadableGrades(SkoreEvaluation evaluation) =>
-    'The server could not read the grades of this evaluation: '
-    '${evaluation.unreadableReason}.';
+    'The server cannot read the grades of this evaluation: '
+    '${skoreUnreadableReason(evaluation)}. The user sees them in Skore in '
+    'Smartschool itself.';
+
+/// Whether [evaluation] is one on a scale ("Waarderingen", Skore's
+/// `evaltype` 2) whose grades the library read: the tools show its values
+/// with the levels of the school's scale ([formatSkoreScaleValue]), read
+/// once per call (`readSkoreScaleFor`, #169).
+bool isSkoreScaleEvaluation(SkoreEvaluation evaluation) =>
+    evaluation.type == SkoreEvaluationType.scale && evaluation.isReadable;
+
+/// A pupil's [grade] in [evaluation], as the gradebook tools show it: for an
+/// evaluation on a scale ([isSkoreScaleEvaluation]) with its level on
+/// [scale] ([formatSkoreScaleValue]), else as Skore stores it
+/// ([formatSkoreGradeValue]).
+String formatSkoreGradeIn(
+  SkoreEvaluation evaluation,
+  SkoreGrade? grade,
+  SkoreScale? scale,
+) => isSkoreScaleEvaluation(evaluation)
+    ? formatSkoreScaleValue(evaluation, grade, scale)
+    : formatSkoreGradeValue(grade);
+
+/// A pupil's [grade] in [evaluation], an evaluation on a scale (#169): the
+/// level of [scale] it has ([SkoreScale.levelOf], as Skore's web client
+/// finds it), by its description and abbreviation, and the value Skore
+/// stores, out of the evaluation's max: `Zeer goed (ZG; stored as 10)`.
+///
+/// `no grade` for an empty cell and `no cell` when Skore gave none, as for
+/// points; a value no level covers (not a number, or an evaluation without
+/// a max) says so: `G (no level of the scale)`. Without [scale] (it could
+/// not be read, which [formatSkoreScaleNote] says once), the value as Skore
+/// stores it.
+String formatSkoreScaleValue(
+  SkoreEvaluation evaluation,
+  SkoreGrade? grade,
+  SkoreScale? scale,
+) {
+  final value = grade?.grade;
+  if (grade == null || value == null || scale == null) {
+    return formatSkoreGradeValue(grade);
+  }
+  final level = scale.levelOf(evaluation, grade);
+  if (level == null) return '$value (no level of the scale)';
+  final (label, short) = _scaleLabels(level);
+  return short == null
+      ? '$label (stored as $value)'
+      : '$label ($short; stored as $value)';
+}
+
+/// A level of a scale by its description and abbreviation, `Zeer goed
+/// (ZG)`; one of the two alone when Skore gives no other.
+String formatSkoreScaleLevel(SkoreScaleLevel level) {
+  final (label, short) = _scaleLabels(level);
+  return short == null ? label : '$label ($short)';
+}
+
+/// The label of [level], its description (its abbreviation when it has
+/// none), and its abbreviation next to it, or null when there is not both.
+(String, String?) _scaleLabels(SkoreScaleLevel level) {
+  final description = level.description.trim();
+  final abbreviation = level.abbreviation.trim();
+  if (description.isEmpty) return (skoreName(abbreviation), null);
+  if (abbreviation.isEmpty) return (skoreName(description), null);
+  return (skoreName(description), skoreName(abbreviation));
+}
+
+/// The school's [scale] in a sentence, for a result that shows values on
+/// it (#169): its name and its levels from low to high, each with the
+/// percentage of the max it starts at, and how Skore stores a value. For
+/// example `The scale "Gedragsschaal" of the evaluations on a scale, from
+/// low to high: Onvoldoende (O) from 0% of the max, Voldoende (V) from 50%,
+/// Zeer goed (ZG) from 80%. Skore stores a value on it as a number out of
+/// the evaluation's max.`
+String formatSkoreScale(SkoreScale scale) {
+  final name =
+      'The scale "${skoreName(scale.name)}" of the evaluations on a '
+      'scale';
+  final levels = scale.levels;
+  if (levels.isEmpty) return '$name has no levels.';
+  return '$name, from low to high: '
+      '${[for (final (index, level) in levels.indexed) '${formatSkoreScaleLevel(level)} from '
+            '${formatSkoreNumber(level.lowerThreshold)}%'
+            '${index == 0 ? ' of the max' : ''}'].join(', ')}. Skore stores a value on it as a number out of the '
+      'evaluation\'s max.';
+}
+
+/// The line about the school's scale for a result that shows [evaluations]:
+/// [formatSkoreScale] when one of them is on a scale
+/// ([isSkoreScaleEvaluation]) and [scale] was read, a sentence that it
+/// could not be read when it was not, and null when none is on a scale.
+String? formatSkoreScaleNote(
+  Iterable<SkoreEvaluation> evaluations,
+  SkoreScale? scale,
+) {
+  if (!evaluations.any(isSkoreScaleEvaluation)) return null;
+  if (scale != null) return formatSkoreScale(scale);
+  return 'The scale of the evaluations on a scale could not be read, so '
+      'their values are shown as Skore stores them (a number out of the '
+      'max), without their labels; the technical details are in the server '
+      'log.';
+}
 
 /// An evaluation by its title and id, as a sentence or an error names it:
 /// `evaluation "Toets 1" (evaluation id 500003)`.

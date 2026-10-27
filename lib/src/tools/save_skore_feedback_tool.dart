@@ -36,13 +36,20 @@ const _tool = 'save_skore_feedback';
 /// changed the user's feedback or created one, which the library's result
 /// does not say. Feedback by others is never sent: the library keeps to the
 /// user's own.
+///
+/// Feedback on an evaluation on a scale ("Waarderingen", such as for
+/// behaviour) goes as on one in points, with the same checks (#169): the
+/// library sends it to the same REST API. An evaluation the library could
+/// not read (a type it does not know) is refused in the tool's own words
+/// before the library is asked, which refuses it too.
 ServerTool saveSkoreFeedbackTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: _tool,
     title: 'Give a pupil feedback on an evaluation in Skore',
     description:
         'Gives one pupil the user\'s written feedback on one evaluation (a '
-        'column of grades, such as a test) of one of the user\'s own '
+        'column of grades, such as a test, in points or on a scale, such as '
+        'for behaviour) of one of the user\'s own '
         'gradebooks in Skore, the Smartschool module for scores and reports, '
         'or changes the feedback the user gave that pupil there before. One '
         'pupil per call: each text is personal. The text is plain text; line '
@@ -172,6 +179,18 @@ Future<CallToolResult> _save(
         );
         final evaluation = listed.evaluation;
         final where = _where(sheet, listed.period);
+        // The library refuses it as well, after reading Skore again, in
+        // words for a caller of the library (#169). One on a scale it
+        // takes: feedback is not a grade.
+        if (!evaluation.isReadable) {
+          throw ToolError(
+            'The server cannot read the '
+            '${formatSkoreEvaluationName(evaluation)} in $where: '
+            '${skoreUnreadableReason(evaluation)}, so $_tool gives no '
+            'feedback on it. Tell the user so; they can give the feedback in '
+            'Skore in Smartschool itself.',
+          );
+        }
         // The library refuses it as well, but its refusal cannot be told
         // apart from the others (dartschool#157, #148).
         checkSkoreWritePublication(

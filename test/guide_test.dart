@@ -30,6 +30,7 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
@@ -316,6 +317,45 @@ void main() {
           contains('ook die van collega\'s.'),
         ),
       );
+    });
+
+    test('says Claude shows the level of each pupil on an evaluation on a '
+        'scale, reads and gives feedback on it as on points, but cannot fill '
+        'it in, as save_skore_grades refuses one (#169)', () {
+      expect(
+        listSkoreEvaluationsTool(session).definition.description,
+        contains(
+          'For an evaluation on a scale (Skore\'s "Waarderingen", such as for '
+          'behaviour), each pupil\'s value is its level on the school\'s '
+          'scale, with its label and abbreviation',
+        ),
+      );
+      expect(
+        feedback.description,
+        contains('in points or on a scale, such as for behaviour'),
+      );
+      expect(
+        grades.description,
+        contains(
+          'Only an evaluation in points takes grades: one on a scale '
+          '(Skore\'s "Waarderingen", such as for behaviour; its type in '
+          'list_skore_evaluations) is refused, as the server cannot save a '
+          'value on a scale',
+        ),
+      );
+      expect(
+        section,
+        contains(
+          'Staat een evaluatie op een schaal (waarderingen, zoals bij gedrag), '
+          'dan toont Claude per leerling het niveau met zijn naam en '
+          'afkorting, zoals "Voldoende (V)", en de schaal van je school. '
+          'Feedback lezen en geven gaat zoals bij punten. Een waardering '
+          'invullen kan Claude nog niet: dat doe je zelf in Smartschool.',
+        ),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(guide, contains('de evaluaties met de punten of waarderingen'));
+      }
     });
 
     test('says Claude cannot publish, delete or move an evaluation: no tool '

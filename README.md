@@ -988,12 +988,26 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   the library does not know leave the evaluations listed, with a line that
   says the components could not be read. A closed period gets no line, and
   its components are not read: no evaluation can be created in it. An
-  evaluation whose grades the library cannot read (`isReadable` false: a
-  type other than points or a scale, or a cell in a shape it does not
-  know) is listed with the library's reason instead of its grades, and the
-  rest of the period is read around it (flutter_smartschool 0.4.0,
-  yvanvds/dartschool#193; #170); `read_skore_feedback` reads its feedback
-  with "grade not read". Evaluations on a scale with their labels are #169.
+  evaluation on a scale (Skore's "Waarderingen", `evaltype` 2, such as for
+  behaviour; #169, flutter_smartschool 0.4.0, yvanvds/dartschool#193) shows
+  each pupil's value as its level on the school's scale, by its label and
+  abbreviation, with the value Skore stores out of the max (`Zeer goed (ZG;
+  stored as 10)`; `SkoreScale.levelOf`, as Skore's web client finds it), and
+  the scale itself once, its levels from low to high with the percentage of
+  the max each starts at. The scale is read once per call, and only when an
+  evaluation shown is on a scale (`getScale`: two `GET`s, of the page
+  `/SkoreGradebook` and of its frame, which holds it as `defaultScale`;
+  `readSkoreScaleFor`). A value no level covers says so; a scale the library
+  cannot read leaves the values as Skore stores them, with a sentence that
+  the labels could not be read, and the reason in the log only. No evaluation
+  on a scale was seen live: the library reads it as Skore's web client does.
+  An evaluation whose grades the library cannot read (`isReadable` false) is
+  listed with why instead of its grades, and the rest of the period is read
+  around it (#170): for a type the server does not support yet, its
+  `evaltype` (`a type the server does not support (evaltype 3)`); for a cell
+  in a shape it does not know, the library's reason, which names the cell by
+  its row and quotes nothing of Skore's answer (`skoreUnreadableReason`).
+  `read_skore_feedback` reads its feedback with "grade not read".
 - `read_skore_feedback`: the feedback of one pupil on one evaluation
   (`gradebook_id`, `evaluation_id`, `pupil_id`, optional `period_id` and
   `workyear_id`; `getFeedback`, one `GET` of Skore's REST API as the
@@ -1003,10 +1017,13 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   was written and last changed (Belgian time), the names of its
   attachments, whether Skore lets the user change it (`canEdit`) and its
   text, line by line. Above it the evaluation (with its publication: the
-  pupils see the feedback on a published one) and the pupil with the grade.
+  pupils see the feedback on a published one) and the pupil with the grade
+  (on a scale, with its level, the scale read once as above).
   No feedback is a sentence. The pupil is looked up in the gradebook first,
   so an unknown pupil is an error before anything else is read.
-- `create_skore_evaluation`: creates an evaluation (a column of grades) in a
+- `create_skore_evaluation`: creates an evaluation in points (a column of
+  grades out of `max`; the library makes no other type, so one on a scale is
+  made in Smartschool) in a
   period of a gradebook of Skore's current school year (`gradebook_id`,
   `title`, `date` as a day like `2026-10-14`, `max` a positive whole number;
   optional `period_id`, else the period Skore opens the gradebook on,
@@ -1042,7 +1059,15 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   confirmation. Pupils go by id, not by name: names are ambiguous. An empty
   list, a pupil given twice and a grade that is not a text or null are
   errors before anything is sent; a pupil the gradebook does not list is an
-  error that names every such id, before the evaluations are read. An
+  error that names every such id, before the evaluations are read. Only an
+  evaluation in points takes grades: one on a scale is refused in the
+  server's own words (its values are levels, and the library saves no value
+  on a scale, flutter_smartschool 0.4.0; the user enters them in Smartschool,
+  and its feedback goes with `save_skore_feedback`), and so is one whose
+  grades the library cannot read, with why (`skoreUnreadableReason`), both
+  before the library is asked (#169). The library refuses both too, after
+  reading Skore again, with a reason worded for its caller ("not in points
+  (evaltype 2)"). An
   evaluation that is published or scheduled is refused unless
   `allow_published` is true: a grade there is visible to its pupils at once,
   and the school sends them a notification, or from its publication time on.
@@ -1069,7 +1094,11 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   to show the old text and the new one, as this replaces it; to show the
   pupil (class number, name), the evaluation and the text; and to call only
   after explicit confirmation. Feedback that others gave the pupil is never
-  sent: the library keeps to the user's own. A published or scheduled
+  sent: the library keeps to the user's own. Feedback on an evaluation on a
+  scale goes as on one in points, with the same checks and the same `POST`s
+  (the library sends it to the same REST API; not tried live, #169); one
+  whose grades the library cannot read is refused in the server's own words,
+  with why, before the pupil's feedback is read. A published or scheduled
   evaluation is refused without `allow_published`, as for the grades: the
   pupil sees the feedback at once (and the school sends a notification), or
   from its publication time on. The result is the feedback as Skore lists it
@@ -1113,8 +1142,9 @@ For `save_skore_grades`, the library reads the gradebook, the period and the
 evaluation again, checks every pupil and grade first, and refuses the whole
 list when one does not fit (`SmartschoolSkoreChangeRefusedError`: a grade
 that is not a number or is above the max, a pupil without a cell in the
-class, a closed or read-only period, an evaluation from the planner or not
-in points, a published or scheduled one without `allow_published`): nothing
+class, a closed or read-only period, an evaluation from the planner, a
+published or scheduled one without `allow_published`; one not in points the
+server refuses first, see above): nothing
 was saved, and the reason is passed on with what to read again
 (`list_skore_evaluations` with the `evaluation_id`, `read_skore_gradebook`).
 The server checks the publication itself first, from the evaluation it has

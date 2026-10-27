@@ -574,6 +574,31 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
   );
 }
 
+/// The school's scale, for a result that shows [evaluations]: read once
+/// with [gradebooks] ([SkoreGradebookService.getScale], two `GET`s of HTML
+/// pages) when one of them is an evaluation on a scale whose grades the
+/// library read ([isSkoreScaleEvaluation]), so that each pupil's value comes
+/// with its level (#169); null when none is, and nothing is sent then.
+///
+/// Skore's web client has one scale for every evaluation on a scale of
+/// every gradebook, so a tool reads it once per call, not per evaluation or
+/// pupil. A scale the library cannot read (a [SmartschoolSkoreError]) is
+/// logged and gives null too: the grades are what was asked for, and the
+/// result says that the labels could not be read ([formatSkoreScaleNote]).
+/// Login and connection failures are passed on.
+Future<SkoreScale?> readSkoreScaleFor(
+  SkoreGradebookService gradebooks,
+  Iterable<SkoreEvaluation> evaluations,
+) async {
+  if (!evaluations.any(isSkoreScaleEvaluation)) return null;
+  try {
+    return await gradebooks.getScale();
+  } on SmartschoolSkoreError catch (error) {
+    log('skore gradebook: the scale of the evaluations on a scale: $error');
+    return null;
+  }
+}
+
 /// Refuses [what] (such as `the grades`), which [tool] would write into
 /// [evaluation] of [where] (its period and gradebook, as in `period DW1
 /// (period id 1704) of the gradebook of ...`), when Skore lists the

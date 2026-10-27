@@ -23,12 +23,12 @@ Je vraagt het gewoon in een gesprek:
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de
-  evaluaties met de punten van je leerlingen en of ze gepubliceerd zijn, en
-  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
-  invullen en een leerling feedback geven. Telkens pas nadat jij het
-  goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd: je
-  publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft
-  er niets voor aan te zetten.
+  evaluaties met de punten of waarderingen van je leerlingen en of ze
+  gepubliceerd zijn, en de feedback die een leerling kreeg. Een nieuwe
+  evaluatie maken, punten invullen en een leerling feedback geven. Telkens
+  pas nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft
+  ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke
+  leerkracht: je hoeft er niets voor aan te zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 - **Skore-beheer**, alleen voor wie er de rechten voor puntenbeheer heeft,
@@ -395,6 +395,12 @@ periode die nog open is.
   Claude toont per evaluatie de datum, op hoeveel punten ze staat, de punten
   van je leerlingen, de gemiddelden en of ze gepubliceerd is.
 - "Wie heeft nog geen punten voor de toets Python in 5WW1?"
+- "Welke waarderingen gaf ik voor Inzet in 5WW1?"
+  Staat een evaluatie op een schaal (waarderingen, zoals bij gedrag), dan
+  toont Claude per leerling het niveau met zijn naam en afkorting, zoals
+  "Voldoende (V)", en de schaal van je school. Feedback lezen en geven gaat
+  zoals bij punten. Een waardering invullen kan Claude nog niet: dat doe je
+  zelf in Smartschool.
 - "Welke feedback kreeg Jan op de toets Python?"
   Claude leest alle feedback die Jan op die evaluatie kreeg, ook die van
   collega's.

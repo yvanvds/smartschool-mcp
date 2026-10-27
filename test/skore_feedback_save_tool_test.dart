@@ -643,6 +643,137 @@ void main() {
       );
     });
 
+    group('an evaluation on a scale (#169, flutter_smartschool 0.4.0)', () {
+      /// Inzet in de les of `fakeSkoreMixedEvaluations`, after the three
+      /// evaluations of DW1, as the tools list it, and by name.
+      const inzet =
+          'Inzet in de les (short name inzet) | evaluation id 500012 | column '
+          'E | 2026-10-06 | max 10 | no component | a scale | not published: '
+          'the pupils do not see it';
+      const inzetName = 'evaluation "Inzet in de les" (evaluation id 500012)';
+      const ansFeedback = '00000000-0000-4000-8000-000000000012';
+
+      setUp(() {
+        // Next to the others, which hold the colleague's feedback the
+        // tearDown checks is never sent.
+        book().evaluations[1704]!.addAll(fakeSkoreMixedEvaluations());
+      });
+
+      test('the user\'s feedback is read with the pupil\'s level, changed, '
+          'and created for another pupil, with the POSTs of the feedback '
+          'panel, as on an evaluation in points; no grade is sent, and the '
+          'saves read no scale', () async {
+        expect(
+          await feedback(evaluation: 500012),
+          contains(
+            '\nPupil: 1. Aerts, An | pupil id 1201 | grade Zeer goed (ZG; '
+            'stored as 10)\n'
+            '1 feedback text on it, in the order it was written:\n'
+            '$_byUser | written ${_time('2026-10-06T15:10:00+02:00')} | the '
+            'user may change it\n'
+            '  Werkt elke les goed mee.',
+          ),
+        );
+        expect(skore.scaleReads, ['page', 'frame']);
+        skore.scaleReads.clear();
+
+        expect(
+          await saved('Werkt elke les goed mee, ook in groep.', {
+            'evaluation_id': 500012,
+          }),
+          'Changed the text of the user\'s feedback for $_an on the '
+          '$inzetName in $_where.\n'
+          'Evaluation: $inzet\n'
+          'The feedback as Skore lists it after the save:\n'
+          '$_byUser | written ${_time('2026-10-06T15:10:00+02:00')}, changed '
+          '${_time('2026-10-08T12:30:00+02:00')} | the user may change it\n'
+          '  Werkt elke les goed mee, ook in groep.',
+        );
+        final change = skore.feedbackSaves.single;
+        expect(change.path, '$fakeSkoreFeedbackCreatePath/$ansFeedback');
+        expect(
+          change.body,
+          _changeBody(
+            ansFeedback,
+            'Werkt elke les goed mee, ook in groep.',
+            evaluation: 500012,
+          ),
+        );
+
+        expect(
+          await saved('Let beter op in de les.', {
+            'evaluation_id': 500012,
+            'pupil_id': 1202,
+          }),
+          startsWith(
+            'Saved new feedback of the user for $_bart on the $inzetName in '
+            '$_where.\n'
+            'Evaluation: $inzet\n',
+          ),
+        );
+        expect(
+          skore.feedbackSaves.last.body,
+          _createBody(
+            'Let beter op in de les.',
+            pupil: 1202,
+            evaluation: 500012,
+          ),
+        );
+        expect(skore.feedbackSaves, hasLength(2));
+        expect(skore.scaleReads, isEmpty);
+      });
+
+      test('published: refused without allow_published, as on an evaluation '
+          'in points, and saved with it', () async {
+        book().evaluationWithId(500012)!
+          ..public = '1'
+          ..publicDateTime = '2026-10-07T08:00:00';
+        expect(
+          await refused('Goed.', {'evaluation_id': 500012, 'pupil_id': 1203}),
+          'The $inzetName in $_where is PUBLISHED since '
+          '${_time('2026-10-07T08:00:00+02:00')}: its pupils would see the '
+          'feedback at once, and the school sends them a notification. Tell '
+          'the user exactly that, and only if the user explicitly says yes to '
+          'it, call save_skore_feedback again with allow_published: true. '
+          'Nothing was changed in Skore.',
+        );
+        expect(skore.feedbackSaves, isEmpty);
+        expect(
+          await saved('Goed.', {
+            'evaluation_id': 500012,
+            'pupil_id': 1203,
+            'allow_published': true,
+          }),
+          startsWith(
+            'Saved new feedback of the user for $_chloe on the $inzetName in '
+            '$_where.\n',
+          ),
+        );
+        // Next to the colleague's, which is never sent.
+        expect(
+          skore.feedbackSaves.single.body,
+          _createBody('Goed.', pupil: 1203, evaluation: 500012),
+        );
+      });
+
+      test('one of a type the server does not support: refused in the '
+          'tool\'s own words, before the pupil\'s feedback is read and the '
+          'library is asked', () async {
+        expect(
+          await refused('Goed.', {'evaluation_id': 500013}),
+          'The server cannot read the evaluation "Attitudes" (evaluation id '
+          '500013) in $_where: it is of a type the server does not support '
+          'yet (Skore\'s evaltype 3; the server reads evaluations in points '
+          'and on a scale), so save_skore_feedback gives no feedback on it. '
+          'Tell the user so; they can give the feedback in Skore in '
+          'Smartschool itself. Nothing was changed in Skore.',
+        );
+        expect(skore.calls, _toolReads, reason: 'the library was not asked');
+        expect(skore.feedbackReads, isEmpty);
+        expect(skore.feedbackSaves, isEmpty);
+      });
+    });
+
     group('refused in its own words, with what to tell the user, before the '
         'library is asked:', () {
       test('the user has more than one feedback of their own for the pupil '

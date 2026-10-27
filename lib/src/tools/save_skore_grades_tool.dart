@@ -23,8 +23,12 @@ const _tool = 'save_skore_grades';
 /// which Claude matches to the names the user gave with
 /// `list_skore_evaluations`: names are ambiguous.
 ///
-/// An evaluation its pupils see (published or scheduled) is refused unless
-/// `allow_published` is true ([checkSkoreWritePublication]). The library
+/// Only an evaluation in points takes grades: one on a scale, whose values
+/// the library does not save, and one the library could not read, are
+/// refused in the tool's own words before the library is asked
+/// ([_checkInPoints], #169). An evaluation its pupils see (published or
+/// scheduled) is refused unless `allow_published` is true
+/// ([checkSkoreWritePublication]). The library
 /// reads the gradebook again and refuses the whole list when one grade does
 /// not fit, saving nothing; it saves one pupil at a time and reads the
 /// period again to confirm them. Grades it cannot confirm are reported per
@@ -57,8 +61,13 @@ ServerTool saveSkoreGradesTool(SmartschoolSession session) => ServerTool(
         'exactly that and getting their explicit yes for it. The server '
         'reads the gradebook again before it saves, and when one grade does '
         'not fit (not a number, above the max, a pupil not in the gradebook, '
-        'a closed or read-only period, an evaluation from the planner or not '
-        'in points), it saves none: the result says why. The result gives '
+        'a closed or read-only period, an evaluation from the planner), it '
+        'saves none: the result says why. Only an evaluation in points takes '
+        'grades: one on a scale (Skore\'s "Waarderingen", such as for '
+        'behaviour; its type in list_skore_evaluations) is refused, as the '
+        'server cannot save a value on a scale, and so is one of a type the '
+        'server does not support; the user enters those in Smartschool. The '
+        'result gives '
         'each pupil\'s grade as Skore lists it after the save, and the '
         'evaluation\'s publication. If the result says some grades may or '
         'may not have been saved: saving a grade again is harmless, so read '
@@ -176,6 +185,9 @@ Future<CallToolResult> _save(
           evaluation: evaluation,
           pupils: pupils,
         );
+        // The library refuses both as well, after reading Skore again, in
+        // words for a caller of the library (#169).
+        _checkInPoints(to);
         // The library refuses it as well, but its refusal cannot be told
         // apart from the others (dartschool#157, #148).
         checkSkoreWritePublication(
@@ -268,6 +280,42 @@ Map<int, SkoreGradebookPupil> _pupils(
     );
   }
   return {for (final id in ids) id: byId[id]!};
+}
+
+/// Refuses the grades for the evaluation of [to] when it is not one in
+/// points whose grades the server reads (#169): one on a scale
+/// ([SkoreEvaluationType.scale], "Waarderingen"), whose values the library
+/// does not save (it saves grades in points only, flutter_smartschool
+/// 0.4.0), or one the library could not read (not
+/// [SkoreEvaluation.isReadable]: a type it does not know, or a cell in a
+/// shape it does not recognise), which it refuses to write in.
+///
+/// Throws a [ToolError] that says which and what to tell the user, before
+/// the library is asked: nothing is sent. The library refuses both too,
+/// after reading Skore again, with a `SmartschoolSkoreChangeRefusedError`
+/// worded for its caller ("not in points (evaltype 2)"), which would come
+/// out as a refusal of Skore's.
+void _checkInPoints(_Target to) {
+  final evaluation = to.evaluation;
+  final name = '${formatSkoreEvaluationName(evaluation)} in ${_where(to)}';
+  if (!evaluation.isReadable) {
+    throw ToolError(
+      'The server cannot read the $name: '
+      '${skoreUnreadableReason(evaluation)}, so $_tool saves no grades in '
+      'it. Tell the user so; they can enter its grades in Skore in '
+      'Smartschool itself.',
+    );
+  }
+  if (evaluation.type != SkoreEvaluationType.points) {
+    throw ToolError(
+      'The $name is an evaluation on a scale: its values are levels of the '
+      'school\'s scale, which list_skore_evaluations shows, not points. '
+      '$_tool saves grades in points only, and the server cannot save a '
+      'value on a scale yet. Tell the user so; they can enter its values in '
+      'Skore in Smartschool itself. Feedback on it can be given with '
+      'save_skore_feedback.',
+    );
+  }
 }
 
 /// What to read again after a change Skore refused, to correct the call.

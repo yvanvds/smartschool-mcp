@@ -74,6 +74,19 @@ import 'package:dio/dio.dart';
 //
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
 // HTTP 501.
+//
+// And it serves the school's scale of the evaluations on a scale
+// ("Waarderingen", `evaltype` 2; #169, dartschool#193) as Skore's web client
+// reads it, in the shape of dartschool's captures in
+// `test/skore_gradebook_scale_test.dart` (read-only, 2026-10-27): the page
+// `GET /SkoreGradebook` hands its frame a start-up secret (`startUpSecret`,
+// with `fcm`), and the frame `GET /modules/Skore/gradebook.php?fcm=1&
+// initcontrol=<secret>&teacher=` gives the scale as `defaultScale` of its
+// `djConfig`, or `not good` for another secret. No evaluation on a scale
+// was seen live: its cells are in the shape of dartschool's hand-written
+// `_mixedAnswer` (a `div.gbc` whose `raw` is the value out of `max`, with
+// the level's abbreviation as its text), and so are those of a type the
+// library does not know (a `div.gbc_attitude`, without a `raw`).
 
 /// Skore's gradebook RPC service, behind `/SkoreGradebook`.
 const fakeSkoreGradebookRpcPath = '/modules/Skore/backend/gradebook/rpc.php';
@@ -104,6 +117,111 @@ const fakeSkoreGradebookUser = 345;
 /// The platform of the fake's account (`12` of `12_345_0`): Skore's `ss`
 /// in the ids of its REST API.
 const fakeSkoreGradebookPlatform = 12;
+
+/// The page of Skore's gradebook, which hands its frame the start-up secret
+/// (#169).
+const fakeSkoreGradebookPagePath = '/SkoreGradebook';
+
+/// The frame of Skore's gradebook, which holds the school's scale (#169).
+const fakeSkoreGradebookFramePath = '/modules/Skore/gradebook.php';
+
+/// The start-up secret the page hands the frame (a fake).
+const fakeSkoreStartUpSecret = '7f3c9a51e2b04d6f8a1c2e3d4b5a6978';
+
+/// A level of the school's scale, as the frame's `defaultScale` gives it
+/// (#169): `{"id": 912, "description": "Voldoende", "range":
+/// {"lowerThreshold": 50, "value": 65}, "graphic": null, "abbreviation":
+/// "V", "color": "orange"}`.
+class FakeSkoreScaleLevel {
+  const FakeSkoreScaleLevel(
+    this.id,
+    this.description,
+    this.abbreviation, {
+    required this.lowerThreshold,
+    required this.value,
+    this.color = '',
+  });
+
+  final int id;
+  final String description;
+  final String abbreviation;
+
+  /// Skore's `range.lowerThreshold`: the lowest percentage of the max with
+  /// this level.
+  final num lowerThreshold;
+
+  /// Skore's `range.value`.
+  final num value;
+  final String color;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'description': description,
+    'range': {'lowerThreshold': lowerThreshold, 'value': value},
+    'graphic': null,
+    'abbreviation': abbreviation,
+    'color': color,
+  };
+}
+
+/// The school's scale of the evaluations on a scale (#169): a UUID, a name
+/// and its levels from low to high.
+class FakeSkoreScale {
+  const FakeSkoreScale(this.id, this.name, this.levels);
+
+  final String id;
+  final String name;
+  final List<FakeSkoreScaleLevel> levels;
+
+  /// The level of [grade] in [evaluation], as Skore's web client finds it:
+  /// the grade as a percentage of the max (cut to a whole number), rounded
+  /// to one decimal, cut, and the last level whose threshold is at most
+  /// that. Null for no grade, a grade or max that is not a number, or no
+  /// level.
+  FakeSkoreScaleLevel? levelOf(FakeSkoreEvaluation evaluation, String? grade) {
+    final value = grade == null ? null : num.tryParse(grade);
+    final max = num.tryParse('${evaluation.max}')?.truncate();
+    if (value == null || max == null || max <= 0) return null;
+    final percentage = ((value / max * 1000).round() / 10).truncate();
+    return levels.where((l) => l.lowerThreshold <= percentage).lastOrNull;
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'levels': [for (final level in levels) level.toJson()],
+  };
+}
+
+/// The school's scale the fake serves by default (#169): three levels, in
+/// the shape seen live (which had two), with fake names.
+const fakeSkoreScale =
+    FakeSkoreScale('00000000-0000-4000-8000-000000000169', 'Gedragsschaal', [
+      FakeSkoreScaleLevel(
+        911,
+        'Onvoldoende',
+        'O',
+        lowerThreshold: 0,
+        value: 0,
+        color: 'red',
+      ),
+      FakeSkoreScaleLevel(
+        912,
+        'Voldoende',
+        'V',
+        lowerThreshold: 50,
+        value: 65,
+        color: 'orange',
+      ),
+      FakeSkoreScaleLevel(
+        913,
+        'Zeer goed',
+        'ZG',
+        lowerThreshold: 80,
+        value: 100,
+        color: 'green',
+      ),
+    ]);
 
 /// A school year of Skore: `["24", "2026-2027"]`.
 class FakeSkoreWorkyear {
@@ -250,9 +368,11 @@ class FakeSkoreEvaluation {
     Map<int, String>? grades,
     Map<int, List<FakeSkoreFeedback>>? feedback,
     Set<int>? withoutCell,
+    Map<int, String>? cells,
   }) : grades = grades ?? {},
        feedback = feedback ?? {},
-       withoutCell = withoutCell ?? {};
+       withoutCell = withoutCell ?? {},
+       cells = cells ?? {};
 
   /// Skore's `refID` and `evaluationID`.
   final int id;
@@ -294,6 +414,10 @@ class FakeSkoreEvaluation {
   /// The pupils of the gradebook whose cell Skore leaves out (not seen
   /// live).
   final Set<int> withoutCell;
+
+  /// Cells in a shape the fake gives instead of its own (the cell's `v`),
+  /// by pupil id: a shape the library does not recognise.
+  final Map<int, String> cells;
 }
 
 /// A feedback text on an evaluation for a pupil, as Skore's REST API gives
@@ -695,6 +819,64 @@ FakeSkoreOwnGradebook fakeSkoreGradebookGedrag() => FakeSkoreOwnGradebook(
   ],
 );
 
+/// The evaluations of a period that mixes points, a scale and a type the
+/// library does not know (#169), for the pupils of
+/// [fakeSkoreGradebook6EWI], in the shape of dartschool's `_mixedAnswer`
+/// (#193), with fake titles and feedback:
+/// - `Toets lussen` (column A, points out of 20): 14, 9.5 and none;
+/// - `Inzet in de les` (B, on the scale, out of 10, without a component):
+///   10 for An (Zeer goed on [fakeSkoreScale]) with feedback, 5 for Bart
+///   (Voldoende), none for Chloé, with feedback of a colleague;
+/// - `Attitudes` (C, `evaltype` 3, no max): cells in a shape of their own.
+List<FakeSkoreEvaluation> fakeSkoreMixedEvaluations() => [
+  FakeSkoreEvaluation(
+    500011,
+    'Toets lussen',
+    date: '2026-10-05',
+    grades: {1201: '14', 1202: '9.5'},
+  ),
+  FakeSkoreEvaluation(
+    500012,
+    'Inzet in de les',
+    short: 'inzet',
+    date: '2026-10-06',
+    max: 10,
+    componentId: 0,
+    component: '',
+    evaltype: 2,
+    grades: {1201: '10', 1202: '5'},
+    feedback: {
+      1201: [
+        const FakeSkoreFeedback(
+          '00000000-0000-4000-8000-000000000012',
+          'Werkt elke les goed mee.',
+          createdAt: '2026-10-06T15:10:00+02:00',
+        ),
+      ],
+      1203: [
+        const FakeSkoreFeedback(
+          '00000000-0000-4000-8000-000000000013',
+          'Komt vaak te laat in de les.',
+          teacherId: fakeSkoreColleague,
+          teacherName: 'Céline Dupré',
+          createdAt: '2026-10-06T16:00:00+02:00',
+          canEdit: false,
+        ),
+      ],
+    },
+  ),
+  FakeSkoreEvaluation(
+    500013,
+    'Attitudes',
+    date: '2026-10-07',
+    max: null,
+    componentId: 0,
+    component: '',
+    evaltype: 3,
+    grades: {1201: '+', 1202: '-'},
+  ),
+];
+
 /// A fake of Skore's gradebook RPC service, served by `FakeSmartschool` to
 /// logged-in requests: the user's gradebooks per school year ([gradebooks],
 /// in the order of the left panel) and the school years Skore offers
@@ -836,6 +1018,19 @@ class FakeSkoreGradebook {
   )?
   onFeedbackSaved;
 
+  /// The school's scale, which the frame of Skore's gradebook gives as its
+  /// `defaultScale` (#169), and by which the cells of an evaluation on a
+  /// scale show their level's abbreviation.
+  FakeSkoreScale scale = fakeSkoreScale;
+
+  /// The body that replaces the frame of Skore's gradebook, such as one
+  /// without a `defaultScale`: a scale the library cannot read.
+  String? frameAnswer;
+
+  /// The GETs of the page and the frame of Skore's gradebook that reached
+  /// the fake, in order, as `page` and `frame`: two per read of the scale.
+  final List<String> scaleReads = [];
+
   /// The calls, as `method` or, with a school year, `method wy=22`.
   List<String> get calls => [
     for (final request in requests)
@@ -944,6 +1139,19 @@ class FakeSkoreGradebook {
     final path = options.uri.path;
     if (options.method == 'GET' && path.startsWith(fakeSkoreFeedbackPath)) {
       return _feedback(path);
+    }
+    if (options.method == 'GET' && path == fakeSkoreGradebookPagePath) {
+      scaleReads.add('page');
+      return _html(_gradebookPage);
+    }
+    if (options.method == 'GET' && path == fakeSkoreGradebookFramePath) {
+      scaleReads.add('frame');
+      final query = options.uri.queryParameters;
+      if (query['initcontrol'] != fakeSkoreStartUpSecret ||
+          query['fcm'] != '1') {
+        return _html('not good');
+      }
+      return _html(frameAnswer ?? _gradebookFrame(scale));
     }
     if (options.method == 'POST' &&
         (path == fakeSkoreFeedbackCreatePath ||
@@ -1274,10 +1482,28 @@ class FakeSkoreGradebook {
                 {
                   'c': '${evaluation.id}',
                   'r': 'pupil_${pupil.id}_${book.classId}',
-                  'v': _gradeCell(
-                    evaluation.grades[pupil.id],
-                    evaluation.feedback[pupil.id] ?? const [],
-                  ),
+                  'v': switch (evaluation.evaltype) {
+                    _ when evaluation.cells.containsKey(pupil.id) =>
+                      evaluation.cells[pupil.id],
+                    1 => _gradeCell(
+                      evaluation.grades[pupil.id],
+                      evaluation.feedback[pupil.id] ?? const [],
+                    ),
+                    // On a scale (#169): the value out of max as raw, the
+                    // level's abbreviation as text.
+                    2 => _gradeCell(
+                      evaluation.grades[pupil.id],
+                      evaluation.feedback[pupil.id] ?? const [],
+                      text: scale
+                          .levelOf(evaluation, evaluation.grades[pupil.id])
+                          ?.abbreviation,
+                    ),
+                    // A type the library does not know: a shape of its own.
+                    _ =>
+                      '<div class="gbc_attitude">'
+                          '${_text.convert(evaluation.grades[pupil.id] ?? '')}'
+                          '</div>',
+                  },
                   'p': [1, 0, '${evaluation.id}', '${book.id}', evaluation.id],
                 },
             {
@@ -1366,9 +1592,14 @@ class FakeSkoreGradebook {
   }
 
   /// A grade cell as Skore gives it: the grade as `raw` (with a decimal
-  /// point) and as text (with a decimal comma), and, when the pupil has
-  /// [feedback], the `gbc_message` marker whose tooltip joins the texts.
-  static String _gradeCell(String? grade, List<FakeSkoreFeedback> feedback) {
+  /// point) and as text (with a decimal comma, or [text], such as a level's
+  /// abbreviation), and, when the pupil has [feedback], the `gbc_message`
+  /// marker whose tooltip joins the texts.
+  static String _gradeCell(
+    String? grade,
+    List<FakeSkoreFeedback> feedback, {
+    String? text,
+  }) {
     final raw = grade ?? '';
     final tooltip = base64.encode(
       utf8.encode(
@@ -1382,7 +1613,7 @@ class FakeSkoreGradebook {
               'class="gbc_message_place gbc_message" skoretooltip="true" '
               'tooltip="$tooltip" encoding="base64">&nbsp;&nbsp;</span>';
     return '<div class="gbc" raw="${_attribute.convert(raw)}">'
-        '${_text.convert(raw.replaceAll('.', ','))}</div>'
+        '${_text.convert(text ?? raw.replaceAll('.', ','))}</div>'
         '<div class="gbc_cell_header">$marker</div>$_presence';
   }
 
@@ -1986,6 +2217,35 @@ class FakeSkoreGradebook {
     },
   );
 }
+
+/// The page of Skore's gradebook (`/SkoreGradebook`), with the start-up
+/// secret it hands its frame, in the shape of dartschool's capture (#193),
+/// with fake names.
+const _gradebookPage =
+    '<!DOCTYPE html><html><head><title>Puntenboek</title></head><body>'
+    '<script>window.SMSC = {"vars":{"lng":{"skore_feedback_copy_dialog_ok":'
+    '"Kopi\\u00ebren"}},"activeClass":null,"userFullName":"Jan Peeters",'
+    '"teacherRequest":$fakeSkoreGradebookUser,"teacherParam":"",'
+    '"teacherId":$fakeSkoreGradebookUser,'
+    '"startUpSecret":"$fakeSkoreStartUpSecret","fcm":1,"coordmode":0};'
+    '</script></body></html>';
+
+/// The frame of Skore's gradebook (`/modules/Skore/gradebook.php`) with
+/// [scale] as the `defaultScale` of its `djConfig`, in the shape of
+/// dartschool's capture (#193).
+String _gradebookFrame(FakeSkoreScale scale) =>
+    '<!DOCTYPE html><html><head><title>Skore</title>\n'
+    '<script type="text/javascript" nonce="abc">\n'
+    '  var djConfig = {\n'
+    '    isDebug : false,\n'
+    '    me:$fakeSkoreGradebookUser,\n'
+    '    actualWy:24,\n'
+    '    resultsOptions: {"colorScales":[{"lowerThreshold":0,"color":"red"},'
+    '{"lowerThreshold":50,"color":"mint"}]},\n'
+    '    defaultScale: ${jsonEncode(scale.toJson())}\n'
+    '  };\n'
+    '</script></head><body><div widgetID="gradebook" dojoType="gradebook2">'
+    '</div></body></html>';
 
 /// Smartschool's generic error page.
 const _errorPage =
