@@ -1806,8 +1806,14 @@ reads, by an allowlist; all of them only read:
   current period (`periodID` 0); `period` takes a `period_id` or a name of
   the period menu (ignoring case, or else the period whose name holds it;
   several matches, or none, are an error that lists them with their ids and
-  the menu's heading). The items in the LVS's order, each with its kind,
-  author, date (as the LVS shows it) and courses: an item of support needs
+  the menu's heading). The items the user wrote first, marked "by the
+  user" (an item's author by user id, `LvsPlanItem.authorId`, against the
+  logged-in user's, `getCurrentUser`, which sends nothing to the LVS;
+  yvanvds/dartschool#189, #163), and the answer's first line says how
+  many; then the others, each part in the LVS's order. Each item with its
+  kind, author, date (as the LVS shows it) and courses (those the LVS names
+  for it, and those of its course ids, `courseIds`, that the plan names; a
+  course id the plan does not name is counted): an item of support needs
   with its support needs (ondersteuningsnoden), main and work goals,
   approach and the comment on it; an item of goals (from the class's group
   plan, or chosen for the pupil, and the school's own goals or those of
@@ -1819,12 +1825,17 @@ reads, by an allowlist; all of them only read:
   lines keep their lines; empty fields are left out, and an item with
   nothing filled in says so. Then the profile sketch (profielschets) with its
   last change, and the periods to ask for. `course` is a filter by name
-  (ignoring case, or else the courses whose name holds it): the items that
-  name it among their courses or their goals' planning, and the items that
-  name no course, which may concern every course; the others are counted.
-  The plan names its courses without ids, and the library cannot tell which
-  courses are the user's own (yvanvds/dartschool#189, #163): the
-  description says to pass the user's course as `course`. The three cases
+  (ignoring case, or else the courses whose name holds it), among the
+  plan's courses (`LvsSupportPlan.courses`) and those its items name: the
+  items planned in it by its id (an item's `courseIds`, and the course ids
+  of its goals' planning, `LvsPlanGoal.moments`, as the LVS's web client
+  filters them), or that name it among their courses or their goals'
+  planning, and the items tied to no course, which may concern every
+  course; the others are counted. `course` takes no id: the answer prints
+  none, and the LVS's course ids need not be those of `read_lvs_results`.
+  Which courses the user teaches the library does not read yet
+  (yvanvds/dartschool#196): the description says to pass the user's course
+  as `course`. The three cases
   without a plan each get a sentence: a file without a part of support plans
   (a school that does not use them, or an account that may not see them:
   the sentence points to the note categories and `read_lvs_notes`), a pupil
@@ -2248,7 +2259,8 @@ not know and a day after `today` without pupils, with `saveIsAllowed:
 false` and the module's reason.
 
 LVS helpers live in `lib/src/lvs/`. In `lvs_access.dart`: `withLvs`, which
-runs an action with an `LvsService` on the session and turns the LVS's
+runs an action with an `LvsReads` (an `LvsService` that also tells the
+logged-in user's id, `userId`) on the session and turns the LVS's
 errors into `ToolError`s that say what to do (`lvsToolError`, with `lvsFix`
 for an account without access); `lvsTool`, which every LVS tool is, so that
 nothing of an error reaches the log but its type and HTTP status

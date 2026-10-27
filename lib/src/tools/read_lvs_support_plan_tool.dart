@@ -11,7 +11,8 @@ import 'server_tool.dart';
 /// file: the individual plan with the pupil's support needs, goals and
 /// approach, and the profile sketch, of the current period or another
 /// ([LvsService.getSupportPlan] and the other reads of the support plans,
-/// #156), with only the items for one course when asked.
+/// #156), the items the user wrote first (#163), with only the items for
+/// one course when asked.
 ServerTool readLvsSupportPlanTool(SmartschoolSession session) => lvsTool(
   definition: Tool(
     name: 'read_lvs_support_plan',
@@ -27,15 +28,15 @@ ServerTool readLvsSupportPlanTool(SmartschoolSession session) => lvsTool(
         'profile sketch (profielschets). Use it when the user asks what a '
         'pupil needs, in their lessons or in general. Of the current period '
         'of the support plans unless period is given (a period_id or name, '
-        'as the answer lists them). course keeps only the items for that '
-        'course (its name, or part of it) and those tied to no course. The '
-        'server cannot tell which courses are the user\'s own: to see what '
-        "concerns the user's course, pass it as course. A school without "
-        'support plans, a pupil without a plan and a period without one '
-        'each get a sentence; a school that keeps educational needs in note '
-        'categories instead is read with read_lvs_notes. Not read yet: the '
-        "plan's evaluation and its report, and the earlier versions of its "
-        'items. Take pupil_id and class_id from one line of '
+        'as the answer lists them). The items the user wrote come first, '
+        'marked "by the user". course keeps only the items for that course '
+        '(its name, or part of it) and those tied to no course: to see what '
+        "concerns the user's lessons, pass the user's course as course. A "
+        'school without support plans, a pupil without a plan and a period '
+        'without one each get a sentence; a school that keeps educational '
+        'needs in note categories instead is read with read_lvs_notes. Not '
+        "read yet: the plan's evaluation and its report, and the earlier "
+        'versions of its items. Take pupil_id and class_id from one line of '
         'search_lvs_pupils. $lvsPrivacyRules Reading changes nothing.',
     inputSchema: Schema.object(
       properties: {

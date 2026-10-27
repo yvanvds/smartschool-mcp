@@ -114,8 +114,27 @@ String lvsLogDescription(Object error) {
   return status == null ? '$type' : '$type (HTTP $status)';
 }
 
-/// Runs [action] with an [LvsService] on the session's logged-in client,
-/// and turns the LVS's errors into [ToolError]s ([lvsToolError]); login and
+/// An [LvsService] on the session's logged-in client that also tells who
+/// the logged-in user is ([userId]): what the LVS tools run with
+/// ([withLvs]).
+final class LvsReads extends LvsService {
+  LvsReads(super.client) : _client = client;
+
+  final SmartschoolClient _client;
+
+  /// The Smartschool user id of the logged-in user (`345` of `12_345_0`),
+  /// as the library takes it (`getCurrentUser`): from the page Smartschool
+  /// sent at login, which the client keeps (the start page, for a session
+  /// that was restored without a login), so no request goes to the LVS.
+  ///
+  /// The id the LVS names the author of an item of a support plan by
+  /// ([LvsPlanItem.authorId], yvanvds/dartschool#189): the items the user
+  /// wrote.
+  Future<int> userId() async => (await _client.getCurrentUser()).id;
+}
+
+/// Runs [action] with an [LvsReads] on the session's logged-in client, and
+/// turns the LVS's errors into [ToolError]s ([lvsToolError]); login and
 /// connection failures stay [SmartschoolProblem]s.
 ///
 /// Like every [SmartschoolSession.run] action, [action] may run twice (when
@@ -130,12 +149,12 @@ String lvsLogDescription(Object error) {
 /// ([lvsToolError]).
 Future<T> withLvs<T>(
   SmartschoolSession session,
-  Future<T> Function(LvsService lvs) action, {
+  Future<T> Function(LvsReads lvs) action, {
   String? part,
 }) async {
   try {
     return await session.run(
-      (client) => action(LvsService(client)),
+      (client) => action(LvsReads(client)),
       describeError: lvsLogDescription,
     );
   } on SmartschoolLvsError catch (error) {

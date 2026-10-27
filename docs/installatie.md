@@ -585,11 +585,11 @@ dan toegang aan de Smartschool-beheerder van je school, of zet
 - "Welke maatregelen heeft Jan in mijn lessen?"
   Claude leest het handelingsplan van Jan: zijn ondersteuningsnoden, zijn
   doelen en de aanpak (de maatregelen), met de vakken waarvoor ze gelden, en
-  zijn profielschets. Zeg erbij welk vak je geeft, bijvoorbeeld "in mijn
-  lessen wiskunde": Claude weet niet welke vakken van jou zijn. Dan toont het
-  wat voor dat vak geldt, en wat voor geen vak apart geldt. Houdt je school de
-  onderwijsbehoeften bij in notities in plaats van in handelingsplannen, dan
-  leest Claude die notities.
+  zijn profielschets. Wat je zelf in het plan schreef, staat eerst. Zeg erbij
+  welk vak je geeft, bijvoorbeeld "in mijn lessen wiskunde": Claude weet niet
+  welke vakken van jou zijn. Dan toont het wat voor dat vak geldt, en wat voor
+  geen vak apart geldt. Houdt je school de onderwijsbehoeften bij in notities
+  in plaats van in handelingsplannen, dan leest Claude die notities.
 - "Hoeveel is Jan afwezig geweest?"
   Claude leest de afwezigheden van Jan van dit schooljaar: per code hoeveel
   halve dagen (een hele dag telt voor twee), en elke afwezigheid met de

@@ -21,11 +21,13 @@ final class LvsToolHarness {
   LvsToolHarness._(this.server, this.cache, this.session, this._now);
 
   /// Connects the LVS tools, with the switch on and [now] as today (for the
-  /// tools' default school year); closed at the end of the test.
+  /// tools' default school year), for the account with the Smartschool user
+  /// id [userId] ([FakeSmartschool.userId]); closed at the end of the test.
   static Future<LvsToolHarness> start({
     DateTime Function() now = DateTime.now,
+    int userId = fakeUserId,
   }) async {
-    final server = FakeSmartschool();
+    final server = FakeSmartschool(userId: userId);
     final cache = await tempCache();
     final session = SmartschoolSession(
       fakeExtensionSettings(),
