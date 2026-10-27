@@ -1863,14 +1863,15 @@ reads, by an allowlist; all of them only read:
   absent) shows each under its absence, as plain text with its lines. No
   absences is a sentence: none in the school year asked for (with the school
   years the LVS gives), none at all, or none and no part of absences in the
-  file. The LVS answered a made-up pupil with HTTP 500 and an error page, a
-  plain `SmartschoolLvsError` that the library cannot tell from an answer
-  it cannot read (yvanvds/dartschool#190, tracked in #164): so after such an
-  error, and when there are no absences at all, the file is read too, and
-  the error says when the LVS does not know the pupil. A refusal with HTTP
-  403 is "no access to the absences" in a sentence, without reading the
-  file. The absences are read and written in `lib/src/lvs/lvs_absences.dart`.
-  The file's read takes today's attendance along, unused: the workaround of
+  file. The LVS answered a made-up pupil with HTTP 500 and an error page:
+  after a 500 the library reads the file itself, without today's attendance,
+  and throws `SmartschoolLvsPupilNotFoundError` for a pupil the LVS does not
+  know (yvanvds/dartschool#190), so the error says so. When there are no
+  absences at all, the file is read here too, to tell an unknown pupil and
+  a file without a part of absences apart. A refusal with HTTP 403 is "no
+  access to the absences" in a sentence, without reading the file. The
+  absences are read and written in `lib/src/lvs/lvs_absences.dart`. The
+  file's read takes today's attendance along, unused: the workaround of
   #160.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;

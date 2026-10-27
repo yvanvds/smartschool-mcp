@@ -405,10 +405,7 @@ void main() {
         expect(lvs.reads, [
           FakeLvsRead.absences,
           // The library's own read of the file after the 500, without
-          // today's status (flutter_smartschool 0.4.0,
-          // yvanvds/dartschool#190), then the server's: the workaround that
-          // #164 removes.
-          FakeLvsRead.pupilFile,
+          // today's status (yvanvds/dartschool#190), and no other (#164).
           FakeLvsRead.pupilFile,
         ]);
       });
@@ -425,11 +422,9 @@ void main() {
       expect(text, isNot(contains('Oeps')));
       expect(lvs.reads, [
         FakeLvsRead.absences,
-        // The library's read of the file after the 500 (yvanvds/dartschool
-        // #190), then the server's, with today's status (#164).
+        // The library's read of the file after the 500, without today's
+        // status (yvanvds/dartschool#190), and no other (#164).
         FakeLvsRead.pupilFile,
-        FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       ]);
     });
   });
@@ -488,8 +483,8 @@ void main() {
       (FakeLvsRefusal.serverError, ' (HTTP 500)'),
       (FakeLvsRefusal.htmlPage, ''),
     ]) {
-      test('${refusal.name}: could not read, after the file says the pupil '
-          'is known', () async {
+      test('${refusal.name}: could not read; only after HTTP 500 is the file '
+          'read, by the library', () async {
         lvs
           ..refusal = refusal
           ..refusedReads = {FakeLvsRead.absences};
@@ -500,11 +495,10 @@ void main() {
         expect(text, isNot(contains('Oeps')));
         expect(lvs.reads, [
           FakeLvsRead.absences,
-          // After a 500 only, the library reads the file itself first
-          // (yvanvds/dartschool#190); the server's read follows (#164).
+          // After a 500 only, the library reads the file, without today's
+          // status (yvanvds/dartschool#190); the server reads nothing more
+          // (#164).
           if (refusal == FakeLvsRefusal.serverError) FakeLvsRead.pupilFile,
-          FakeLvsRead.pupilFile,
-          FakeLvsRead.todayStatus,
         ]);
       });
     }
@@ -512,7 +506,7 @@ void main() {
 
   group('privacy', () {
     test('only the read of the absences, and the file when there are none '
-        'or the answer cannot be read: no other POST, no PUT', () async {
+        'or after HTTP 500: no other POST, no PUT', () async {
       await read(marie());
       await read(marie({'school_year': '2030-2031', 'with_motivation': true}));
       await read(fakeLvsPupilArguments(fakeLvsJan));
