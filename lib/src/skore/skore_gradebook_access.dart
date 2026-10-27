@@ -23,8 +23,8 @@ import 'skore_writes.dart';
 // and no evaluation is created in any shared gradebook.
 //
 // The tools that change a gradebook (`create_skore_evaluation`, #142;
-// `save_skore_grades`, #143; `save_skore_feedback`, #144) run with
-// [withSkoreGradebookWrite].
+// `save_skore_grades`, #143; `save_skore_feedback`, #144;
+// `save_skore_report_comment`, #171) run with [withSkoreGradebookWrite].
 // The library checks the gradebook, the period and the values before each
 // save, refusing a change that does not fit with a
 // `SmartschoolSkoreChangeRefusedError` (nothing saved), sends a save that
@@ -567,6 +567,79 @@ SkoreGradebookPupil skoreGradebookPupil(
     'gradebook.',
   );
 }
+
+/// The report period of [sheet] with [reportId] (#171): one of its
+/// [SkoreGradebookSheet.reports], as `read_skore_gradebook` lists them.
+///
+/// Throws a [ToolError] that lists the gradebook's report periods for a
+/// [reportId] that is not one of them, and says it has none for a gradebook
+/// without; nothing is sent.
+SkoreReportPeriod skoreReportPeriod(SkoreGradebookSheet sheet, int reportId) {
+  for (final report in sheet.reports) {
+    if (report.id == reportId) return report;
+  }
+  final gradebook = formatSkoreGradebookName(sheet.gradebook);
+  if (sheet.reports.isEmpty) {
+    throw ToolError(
+      'The $gradebook has no report with report id $reportId: it has no '
+      'report periods, so it has no course comments to read or write.',
+    );
+  }
+  final reports = [
+    for (final report in sheet.reports)
+      '${skoreName(report.name)} (report id ${report.id}, '
+          '${report.isOpen ? 'open' : 'closed'})',
+  ];
+  throw ToolError(
+    'The $gradebook has no report with report id $reportId. Its report '
+    'periods, in Skore\'s order: ${reports.join(', ')}. Take a report id '
+    'from these, as read_skore_gradebook lists them; a period id is not a '
+    'report id.',
+  );
+}
+
+/// Report [report] of the gradebook of [sheet], as Skore's gradebook shows
+/// it ([SkoreGradebookService.getReport], one `getReportsResults`; #171):
+/// the results so far per component and the course comment of each pupil.
+///
+/// A course that is not on the report is answered by Skore with HTTP 404
+/// and "Course not found in source!" (seen live for a project gradebook,
+/// yvanvds/dartschool#204), which the library throws as a
+/// [SmartschoolSkoreError] that only its message tells apart from an answer
+/// it cannot use. Trying again does not help then, so this throws a
+/// [ToolError] that says so, the library's message in the log only. The
+/// check reads the message text: a workaround until dartschool#204 gives the
+/// case a type of its own (removal tracked in yvanvds/smartschool-mcp#174).
+/// Any other error is passed on.
+Future<SkoreReport> readSkoreReport(
+  SkoreGradebookService gradebooks,
+  SkoreGradebookSheet sheet,
+  SkoreReportPeriod report,
+) async {
+  try {
+    return await gradebooks.getReport(sheet.gradebook, report.id);
+  } on SmartschoolSkoreError catch (error) {
+    if (!_isCourseNotOnReport(error)) rethrow;
+    log('skore gradebook: $error');
+    throw ToolError(
+      'Skore answers that the course of the '
+      '${formatSkoreGradebookName(sheet.gradebook)} is not on '
+      '${formatSkoreReportName(report)}, so the server cannot read its '
+      'results or its course comment there. Skore answers so for a course '
+      'that is on the report through a project (Skore\'s "Projecten"), which '
+      'the server does not read yet. Tell the user so; trying again does not '
+      'help. The user sees the report in Skore in Smartschool itself.',
+    );
+  }
+}
+
+/// Whether [error] is Skore's answer to a report read for a course that is
+/// not on the report: HTTP 404 with the JSON message "Course not found in
+/// source!", which the library names in its message ([readSkoreReport]).
+bool _isCourseNotOnReport(SmartschoolSkoreError error) =>
+    error is! SmartschoolSkoreChangeRefusedError &&
+    error.message.contains('HTTP 404') &&
+    error.message.contains('Course not found in source!');
 
 /// The component [SkoreGradebookService.createEvaluation] gives a new
 /// evaluation when it is called without a `componentId`, of the

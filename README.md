@@ -909,13 +909,14 @@ The gradebook tools work in the user's own gradebooks in Skore
 ("Puntenboek", `/SkoreGradebook`), as every teacher has them, and in those
 colleagues shared with them (see "Gradebooks shared with the user" below),
 with the library's `SkoreGradebookService` (dartschool#148, dartschool#149,
-dartschool#150, dartschool#151, dartschool#152, dartschool#191). They need
-none of the rights of the Skore tools below, so they are offered to every
-account, without a switch, and no message of theirs speaks of
-"Skore-beheer" or of rights. The first four change nothing;
+dartschool#150, dartschool#151, dartschool#152, dartschool#191,
+dartschool#195). They need none of the rights of the Skore tools below, so
+they are offered to every account, without a switch, and no message of
+theirs speaks of "Skore-beheer" or of rights. The first five change nothing;
 `create_skore_evaluation` creates an evaluation, always unpublished,
-`save_skore_grades` saves the grades of one, and `save_skore_feedback` gives
-a pupil the user's feedback on one:
+`save_skore_grades` saves the grades of one, `save_skore_feedback` gives a
+pupil the user's feedback on one, and `save_skore_report_comment` writes a
+pupil's course comment on a report:
 
 - `list_skore_gradebooks`: the user's own gradebooks of one school year
   (`getGradebookYear`), one line each in Skore's order: the class, the
@@ -945,9 +946,17 @@ a pupil the user's feedback on one:
   the gradebook on it (`activePeriod`) and Skore's note on it (the period's
   `info` as one line, without the paragraphs that only repeat its name or
   say `Gesloten!`: what is left is when it opened and the school's note,
-  such as which weeks it covers); and its pupils, each with the class
-  number (when Skore shows one), the name last name first, the pupil id,
-  and whether Skore greys the pupil out as inactive.
+  such as which weeks it covers); its report periods (#171,
+  `SkoreGradebookSheet.reports`, Skore's "Rapporten", such as `R1D: Rapport
+  1`), in Skore's order, each with its report id, whether it is open, its
+  closing time and Skore's note on it (the same rule as for a period), under
+  a line that says each pupil's course comment is written there and
+  `read_skore_report` reads one (none for a gradebook without); and its
+  pupils, each with the class number (when Skore shows one), the name last
+  name first, the pupil id, and whether Skore greys the pupil out as
+  inactive. A gradebook with report periods only also names
+  `read_skore_report` and `save_skore_report_comment` in its sentence on the
+  course comments.
 - `list_skore_evaluations`: the evaluations of one period of a gradebook
   (`gradebook_id`, optional `period_id` and `workyear_id`; `getGradebook`,
   then `getEvaluations` for the period), with their grades. Without
@@ -1025,6 +1034,34 @@ a pupil the user's feedback on one:
   (on a scale, with its level, the scale read once as above).
   No feedback is a sentence. The pupil is looked up in the gradebook first,
   so an unknown pupil is an error before anything else is read.
+- `read_skore_report`: one report period of a gradebook (`gradebook_id`,
+  `report_id` from `read_skore_gradebook`, optional `pupil_id` and
+  `workyear_id`; #171, `getReport`, one `getReportsResults` as Skore's web
+  client opens a report, after `getGradebook` for the report periods and
+  the pupils' names): the report (as `read_skore_gradebook` lists it), the
+  course as the report names it with its components and their class
+  averages (or, for a course without components such as behaviour, that the
+  report has only the course comment), what the course comment is (printed
+  on the report the pupil and their parents get; one per pupil, course and
+  report, shared by the colleagues who give the course, without its author,
+  as Skore keeps it; at most `commentMaxLength` characters), whether the
+  report is open, and per pupil in Skore's order the result per component
+  as Skore shows it (`no result` for `-`, `(low)` for `gbc_low`) and the
+  comment: whether Skore lets the user change it (`isEditable`, and the
+  report open; `closed for this pupil` when Skore does not), then its text,
+  line by line. Since Skore does not say who wrote a comment, the result
+  marks none as the user's. In a gradebook shared with the user to read
+  only, no comment is one the user may change, whatever Skore marks in its
+  owner's name. `pupil_id` gives that pupil only. An unknown
+  report id (also a period id) is an error that lists the gradebook's report
+  periods, and an unknown pupil an error, both before the report is read
+  (`skoreReportPeriod`, `skoreGradebookPupil`). A course that is not on the
+  report, which Skore answers with HTTP 404 and "Course not found in
+  source!" (seen live for a project gradebook, yvanvds/dartschool#204), is
+  an error that says so and that trying again does not help, the library's
+  message in the log only (`readSkoreReport`). The library throws it as a
+  plain `SmartschoolSkoreError`, so the server tells it apart by the
+  message's text; removing that is #174, blocked on dartschool#204.
 - `create_skore_evaluation`: creates an evaluation in points (a column of
   grades out of `max`; the library makes no other type, so one on a scale is
   made in Smartschool) in a
@@ -1109,6 +1146,29 @@ a pupil the user's feedback on one:
   after the save: whether it is new or a change of the user's feedback, its
   times (written, changed) and its text, under the evaluation with its
   publication.
+- `save_skore_report_comment`: writes, changes or clears the course comment
+  of one pupil on a report period of a gradebook of Skore's current school
+  year (`gradebook_id`, `report_id`, `pupil_id`, and `text`, or `clear:
+  true`; `current_comment`, the comment it replaces; #171,
+  `saveReportComment` and `clearReportComment`, dartschool#195 and
+  dartschool#203): the text printed on the report the pupil and their
+  parents get. One pupil per call, as for feedback: each comment is personal
+  and goes on a report, so the user should read and confirm each one, and
+  Claude Desktop's approval of each call is that confirmation. A list would
+  save no requests either (the library writes one comment per call, each
+  with its own checks and reads, and has no list of its own), and it would
+  leave a list half written when one pupil is refused in between. Marked
+  destructive, so Claude Desktop asks for approval before every call, and
+  idempotent: a comment that already is the text is not sent again. Its
+  description tells Claude, as `save_skore_feedback`'s does, to read the
+  pupil's comment with `read_skore_report` first, to show the pupil (class
+  number, name), the report, the comment now and the new text (or that it
+  will be cleared), to tell the user that the comment goes on the report the
+  pupil and their parents get, to name the owner of a shared gradebook, and
+  to call only after explicit confirmation. The text is plain text, sent as
+  the library sends it (trimmed, each line trimmed, no more than one empty
+  line in a row); a blank text, and a text with `clear`, are errors before
+  anything is sent. See below for its checks.
 
 Gradebooks shared with the user (Skore's tab "Gedeeld", #167,
 flutter_smartschool 0.4.0, dartschool#191), such as the behaviour gradebook
@@ -1251,6 +1311,40 @@ a session Smartschool refuses for it is a `SmartschoolSessionExpiredError` at
 once, not handled, and the session repeats the call, which reads the pupil's
 feedback again first and creates it once. A change is sent again by the
 library after a new login, as it sends the whole text.
+
+For `save_skore_report_comment`, the server reads the gradebook (its report
+periods and pupils, `getGradebook`) and the report (`getReport`) before the
+library is asked, and refuses in its own words, with nothing sent: a
+gradebook shared with the user to read only (before it is read, as above),
+an unknown report or pupil, a closed report (before the report is read), a
+report without course comments for the course, a pupil without a comment
+on it, a comment Skore does not let the user change (closed for the pupil),
+a text longer than the report allows (`commentMaxLength`, on the text as
+the library sends it), and a course that is not on the report (see
+`read_skore_report`). Skore keeps one course comment per pupil, course and
+report, shared by the colleagues who give the course, and does not say who
+wrote it. So the call names the comment it replaces (`current_comment`, as
+`read_skore_report` gave it and the user saw it; none for a pupil without
+one), and the server refuses, showing the comment now, when Skore holds
+another one by then: a colleague's comment is never overwritten unseen.
+Comments are compared with their white space collapsed, as the library
+compares them (`sameReportComment`). A comment that already is the text,
+or an empty one to clear, sends nothing; that is also what a repeat of a
+call that saved finds. Then the library reads Skore again (`getNavigation`,
+and `accessableList` for a shared gradebook; `init` for the report
+periods; the report), checks the same (`replacing` for the comment the call
+replaces), sends `saveType` with the type `info` and reads the report again
+to confirm the text; it never closes, unlocks, calculates or publishes a
+report. A refusal of its checks (a comment changed between the two reads,
+say) is passed on with what to read again (`read_skore_report`). A save
+Skore did not confirm (`SmartschoolSkoreReportCommentSaveUnconfirmedError`)
+may or may not have gone through: the result says to read the pupil's
+comment with `read_skore_report` and tell the user, and that saving it
+again (or clearing it again) is harmless, with the comment it shows as
+`current_comment`; the library's message goes to the log only. The library
+sends the save again itself after a new login, as it sends the whole text;
+when Smartschool refuses the session even then, nothing was saved, and the
+session repeats the call, which reads the comment again first.
 
 The library takes an evaluation as `getEvaluations` lists it, so a
 gradebook tool that takes an `evaluation_id` looks it up in its period
@@ -2042,7 +2136,8 @@ call with an error page (`unusable`); it answers any other RPC method with
 HTTP 501.
 
 The writes in a gradebook (`create_skore_evaluation`, `save_skore_grades`,
-`save_skore_feedback`) run with `withSkoreGradebookWrite` in
+`save_skore_feedback`, `save_skore_report_comment`) run with
+`withSkoreGradebookWrite` in
 `skore_gradebook_access.dart`: `withSkoreGradebook` with the reason of a
 change a check refused (`SmartschoolSkoreChangeRefusedError`, before the
 last case of `skoreGradebookToolError`) passed on with what to read again
@@ -2096,6 +2191,27 @@ tests check that none is about another teacher's feedback);
 `feedbackSaveAnswer` answers them without carrying them out (a `4xx`);
 `feedbackSaveAnswerLost` carries one out and answers it with HTTP 500; and
 `onFeedbackSaved` changes what the feedback reads show after a save.
+
+The report periods of a gradebook (#171) are `FakeSkoreReportPeriod`s in
+`init`'s `reports` (`fakeSkoreReportR1D`, open, and `fakeSkoreReportR0`,
+closed), and what a report shows for the course is a `FakeSkoreReport` per
+report id (`reportContents`, `reportOf`: components with each pupil's result
+and the class average, each pupil's comment, the pupils whose comment is
+closed, the `length`; `fakeSkoreReport6EWI` for 6EWI's R1D). The fake
+gradebook answers `getReportsResults` in the shape of dartschool's capture
+of #195 (the comment's line breaks as U+205F, a row of another class along,
+HTTP 404 "Course not found in source!" for a report with `courseOnReport`
+false), and carries out `saveType` as the live Skore did in dartschool#201:
+the text is the pupil's comment from then on, `""` clears it. A save other
+than the web client's (another type than `info`, a closed report, a comment
+closed for the pupil) gets HTTP 400. `reportCommentSaves` holds the
+parameters of every `saveType`, and `onReportCommentSaved` changes what the
+report shows after a save. In `skore_gradebook_access.dart`,
+`skoreReportPeriod` finds a report period of a gradebook by its id, and
+`readSkoreReport` reads a report, saying in its own words when the course is
+not on it (#174); in `skore_gradebook_format.dart`, `formatSkoreReportPeriod`,
+`formatSkoreReportName`, `formatSkoreReportState`, `skoreReportNote` and
+`formatSkoreReportCommentText` show a report and a comment.
 
 Presence helpers live in `lib/src/presence/`. In `presence_access.dart`:
 `withPresence`, which runs an action with a `PresenceService` on the session

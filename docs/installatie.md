@@ -24,14 +24,15 @@ Je vraagt het gewoon in een gesprek:
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
-  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, en
-  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
-  invullen en een leerling feedback geven, ook in een puntenboek dat een
-  collega met je deelde om te wijzigen (een evaluatie maken alleen in je
-  eigen puntenboeken). Telkens pas nadat jij het goedgekeurd hebt. Een
-  nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in
-  Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te
-  zetten.
+  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
+  feedback die een leerling kreeg, en per rapport de resultaten en het
+  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
+  invullen, een leerling feedback geven en het vakcommentaar op het rapport
+  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
+  nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
+  je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je
+  hoeft er niets voor aan te zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 - **Skore-beheer**, alleen voor wie er de rechten voor puntenbeheer heeft,
@@ -391,7 +392,8 @@ Voor elke leerkracht: je hoeft er niets voor aan te zetten, ook niet
 **Skore-beheer**. Claude werkt in je eigen puntenboeken in Skore, zoals je ze
 in Smartschool ziet, en in de puntenboeken die collega's met je deelden.
 Puntenboeken van vorige schooljaren kan Claude lezen. Iets aanpassen kan
-alleen in een puntenboek van dit schooljaar, in een periode die nog open is.
+alleen in een puntenboek van dit schooljaar, in een periode of een rapport
+dat nog open is.
 
 - "Welke puntenboeken heb ik dit schooljaar?"
 - "Welke evaluaties staan er in DW1 van 5WW1?"
@@ -429,17 +431,37 @@ alleen in een puntenboek van dit schooljaar, in een periode die nog open is.
   de oude. Het toont de leerling, de evaluatie en de tekst, en wacht op jouw
   akkoord. Daarna vraagt Claude Desktop nog eens toestemming. Claude geeft
   feedback aan één leerling per keer, want elke tekst is persoonlijk.
+- "Toon het rapport van 5WW1 voor Gedrag."
+  Claude toont per leerling de resultaten tot nu toe per onderdeel (zoals
+  DW), zoals Skore ze berekent, en het vakcommentaar dat op het rapport komt.
+  Het zegt ook of het rapport nog open is, en tot wanneer.
+- "Schrijf dit vakcommentaar voor Jan op Rapport 1: ..."
+  Claude leest eerst het vakcommentaar dat Jan nu op dat rapport heeft. Het
+  toont de leerling, het rapport, het commentaar dat er nu staat en de nieuwe
+  tekst, zegt je dat dat commentaar op het rapport komt dat de leerling en
+  zijn ouders krijgen, en wacht op jouw akkoord. Daarna vraagt Claude Desktop
+  nog eens toestemming. Claude schrijft het vakcommentaar van één leerling
+  per keer, want elke tekst is persoonlijk. Een vakcommentaar wissen kan ook.
 - "Welke puntenboeken deelden collega's met mij?"
   Een puntenboek dat een collega met je deelde (in Skore onder "Gedeeld"),
   zoals het puntenboek Gedrag van je klas als je co-titularis bent, toont
   Claude apart, met van wie het is en of je het alleen mag lezen of ook mag
   wijzigen. Claude leest het zoals je eigen puntenboeken. Mag je het
   wijzigen, dan zet Claude er na jouw akkoord punten en feedback in, en zegt
-  het daarbij van wie het puntenboek is. De feedback van die collega past
-  Claude nooit aan, alleen je eigen feedback. Een nieuwe evaluatie maakt
-  Claude alleen in je eigen puntenboeken. Mag je een gedeeld puntenboek
-  alleen lezen, dan verandert Claude er niets in: vraag het dan aan de
-  collega van wie het is.
+  het daarbij van wie het puntenboek is. Zo schrijf je als co-titularis ook
+  het vakcommentaar Gedrag van je klas op het rapport. De feedback van die
+  collega past Claude nooit aan, alleen je eigen feedback. Een nieuwe
+  evaluatie maakt Claude alleen in je eigen puntenboeken. Mag je een gedeeld
+  puntenboek alleen lezen, dan verandert Claude er niets in: vraag het dan
+  aan de collega van wie het is.
+
+> **Het vakcommentaar komt op het rapport.** Skore houdt één vakcommentaar
+> per leerling, vak en rapport bij, dat je deelt met de collega's die
+> hetzelfde vak geven, en zegt niet wie het schreef. Staat er intussen een
+> ander commentaar dan Claude je toonde, bijvoorbeeld omdat een collega het
+> aanpaste, dan schrijft Claude niets en toont het je het commentaar dat er
+> nu staat. In een gesloten rapport, of bij een leerling voor wie Skore het
+> commentaar afsluit, schrijft Claude niets.
 
 > **Wat je invult bij een gepubliceerde evaluatie, zien je leerlingen
 > meteen.** Vult Claude punten of feedback in bij een evaluatie die al
@@ -862,7 +884,8 @@ in jouw naam in te loggen. Daarom:
 - Vraag je Claude iets over je puntenboek, dan gaan ook de punten van je
   leerlingen naar Claude, en de feedback die jij of collega's hun gaven. Ook
   dat zijn gegevens over leerlingen, en feedback kan iets zeggen over hun
-  zorg of thuissituatie.
+  zorg of thuissituatie. Hetzelfde geldt voor het vakcommentaar op hun
+  rapport.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals

@@ -152,12 +152,65 @@ String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
 
 /// For a gradebook with report periods only ([sheet], see
 /// [formatSkoreMissingPeriods]), the sentence on where its course comments
-/// are, for the tools that read it; null for any other gradebook.
+/// are, and which tools read and write them (#171), for the tools that read
+/// it; null for any other gradebook.
 String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
     sheet.periods.isEmpty && sheet.reports.isNotEmpty
     ? 'Its course comments, one per pupil, are written in its report '
-          'periods and go on the report.'
+          'periods and go on the report: read_skore_report reads them, and '
+          'save_skore_report_comment writes them.'
     : null;
+
+/// One report period of a gradebook (#171): its name (and full name when
+/// Skore gives another), report id, whether it is open and when it closes,
+/// and Skore's note on it ([skoreReportNote]).
+///
+/// For example `R1D (Rapport 1) | report id 2762 | open, closes 2026-10-30
+/// 23:00 | note: Open tot 2026-10-30 23:00. Schrijf hier je commentaar voor
+/// het rapport.`.
+String formatSkoreReportPeriod(SkoreReportPeriod report) {
+  final name = skoreName(report.name);
+  final fullName = skoreName(report.fullName);
+  final note = skoreReportNote(report);
+  return [
+    fullName == name ? name : '$name ($fullName)',
+    'report id ${report.id}',
+    formatSkoreReportState(report),
+    if (note != null) 'note: $note',
+  ].join(' | ');
+}
+
+/// Whether [report] is open, and when it closes (or closed), in the time of
+/// this PC, as [formatSkorePeriodState] says it of a period.
+String formatSkoreReportState(SkoreReportPeriod report) =>
+    switch ((report.isOpen, report.closesAt)) {
+      (true, final time?) => 'open, closes ${formatSkoreTime(time)}',
+      (true, null) => 'open, no closing time',
+      (false, final time?) => 'closed, closing time ${formatSkoreTime(time)}',
+      (false, null) => 'closed',
+    };
+
+/// A report period by its name and id, as a sentence or an error names it:
+/// `report R1D (Rapport 1, report id 2762)`, or `report R1D (report id
+/// 2762)` when its full name is its name.
+String formatSkoreReportName(SkoreReportPeriod report) {
+  final name = skoreName(report.name);
+  final fullName = skoreName(report.fullName);
+  return 'report $name (${fullName == name ? '' : '$fullName, '}report id '
+      '${report.id})';
+}
+
+/// What Skore's description of [report] ([SkoreReportPeriod.info], HTML)
+/// says that the rest of its line does not, as one line, as
+/// [skorePeriodNote] says it of a period; null when nothing is left.
+String? skoreReportNote(SkoreReportPeriod report) =>
+    _note(report.info, report.name, report.fullName);
+
+/// The course comment of a pupil on a report (#171), its text indented line
+/// by line, as [formatSkoreFeedback] shows a feedback text.
+List<String> formatSkoreReportCommentText(String text) => [
+  for (final line in text.trim().split(_newline)) '  ${line.trimRight()}',
+];
 
 /// A gradebook by its class, course and id, as an error names it:
 /// `gradebook of 6EWI for Informaticawetenschappen (2 uur) (6e j DO)
@@ -463,8 +516,13 @@ final _newline = RegExp(r'\r\n?|\n');
 /// Skore gives `<p><u><b>DW1</b></u></p><p>Open van 2026-09-18 15:30<br/>
 /// tot en met 2026-12-18 20:00</p><p>Vul hier je punten ... in!</p>`, and
 /// for a closed period a lock and `Gesloten!` instead of the dates.
-String? skorePeriodNote(SkoreGradebookPeriod period) {
-  final fragment = html_parser.parseFragment(period.info);
+String? skorePeriodNote(SkoreGradebookPeriod period) =>
+    _note(period.info, period.name, period.fullName);
+
+/// The note of [skorePeriodNote] and [skoreReportNote]: the paragraphs of
+/// [info] that are not [name], [fullName] or `Gesloten!`, as one line.
+String? _note(String info, String name, String fullName) {
+  final fragment = html_parser.parseFragment(info);
   final paragraphs = fragment.querySelectorAll('p');
   final texts = [
     for (final text
@@ -476,8 +534,8 @@ String? skorePeriodNote(SkoreGradebookPeriod period) {
   final kept = [
     for (final text in texts)
       if (text.isNotEmpty &&
-          text != period.name.trim() &&
-          text != period.fullName.trim() &&
+          text != name.trim() &&
+          text != fullName.trim() &&
           text != _closed)
         _sentence(text),
   ];

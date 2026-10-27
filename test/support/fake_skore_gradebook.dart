@@ -92,6 +92,30 @@ import 'package:dio/dio.dart';
 // It serves only [fakeSkoreGradebookRpcMethods] and answers any other with
 // HTTP 501.
 //
+// And a report period of a gradebook (#171, dartschool#195), in the shape of
+// dartschool's `test/skore_gradebook_reports_test.dart` (seen live,
+// read-only, 2026-10-27; the save checked live in dartschool#201):
+//   - getReportsResults(pathIds, courses, reportID, userID), the report's ID
+//     a string, as the web client opens a report: `{courses, comps, results,
+//     length, stamp}`, three tables with a `stream`. `comps` has a column per
+//     component of the course (`<courseId>_1`, `div.gbcomps` `DW`) and the
+//     comment's (`<courseId>_info`); in `results`, a component's cell holds
+//     `<div class="gbc">79</div>` (`-` for none, `gbc_low` for a low one),
+//     the row `clavg_<classId>` the class average, and a comment's cell
+//     `<div class="gbinfo readonly extern-editor">` with the text (line
+//     breaks as U+205F) and `p` `[1, reportId]`, or `[0, reportId]` with the
+//     class `gbc_closed` for a comment closed for the pupil. A row of another
+//     class of the group comes along. A course that is not on the report
+//     gets HTTP 404 with `{"message": "Course not found in source!"}`, as
+//     live (dartschool#204);
+//   - saveType("info", "<courseId>_info", "pupil_<id>_<classId>", text,
+//     params, pathIds), the course comment of one pupil, which it carries
+//     out as the live Skore did: the text is the comment from then on (`""`
+//     clears it), answered `{"savedState": 1, "stream": []}`. It refuses
+//     (HTTP 400, which no test expects) a closed report, a comment closed for
+//     the pupil, and any other type than `info`.
+// Both go out in the gradebook's scope, as every call about it (#167).
+//
 // And it serves the school's scale of the evaluations on a scale
 // ("Waarderingen", `evaltype` 2; #169, dartschool#193) as Skore's web client
 // reads it, in the shape of dartschool's captures in
@@ -119,6 +143,8 @@ const fakeSkoreGradebookRpcMethods = {
   'getPosComponents',
   'saveEvaluation',
   'saveGrade',
+  'getReportsResults',
+  'saveType',
 };
 
 /// Skore's REST API of the feedback of a pupil on an evaluation.
@@ -341,6 +367,105 @@ class FakeSkoreReportPeriod {
   }
 }
 
+/// Report 1 of 2026-2027 as `init` lists it (#171): `R1D: Rapport 1`, open
+/// until 2026-10-30 23:00, as seen live.
+const fakeSkoreReportR1D = FakeSkoreReportPeriod(
+  2762,
+  'R1D',
+  'Rapport 1',
+  open: true,
+  timestamp: '2026-10-30T23:00:00+0100',
+  note: 'Schrijf hier je commentaar voor het rapport.',
+);
+
+/// A report of 2026-2027 that is closed (made up, as in dartschool's
+/// tests): `R0: Rapport 0`.
+const fakeSkoreReportR0 = FakeSkoreReportPeriod(
+  2570,
+  'R0',
+  'Rapport 0',
+  open: false,
+  timestamp: '2026-09-30T23:00:00+0200',
+);
+
+/// A component of a course on a report (#171), such as `DW`: the class
+/// average Skore shows for it (`-` for none), and each pupil's result as
+/// Skore shows it, by pupil id (a pupil without one gets `-`), with the
+/// pupils whose result Skore marks as low (`gbc_low`).
+class FakeSkoreReportComponent {
+  const FakeSkoreReportComponent(
+    this.name, {
+    this.classAverage = '-',
+    this.results = const {},
+    this.low = const {},
+  });
+
+  /// The short name (`DW`).
+  final String name;
+  final String classAverage;
+  final Map<int, String> results;
+  final Set<int> low;
+}
+
+/// What a report period of a gradebook shows for its course (#171), as
+/// `getReportsResults` gives it: the components with each pupil's result,
+/// and each pupil's course comment, which `saveType` changes.
+class FakeSkoreReport {
+  FakeSkoreReport({
+    this.components = const [],
+    Map<int, String>? comments,
+    Set<int>? closedFor,
+    this.length = '1600',
+    this.hasComments = true,
+    this.courseOnReport = true,
+  }) : comments = comments ?? {},
+       closedFor = closedFor ?? {};
+
+  /// The components of the course on the report, in Skore's order; none for
+  /// a behaviour course, whose report has the comment only (seen live).
+  final List<FakeSkoreReportComponent> components;
+
+  /// The course comment of each pupil, by pupil id: plain text with its
+  /// lines (`\n`). A pupil without one has an empty comment.
+  final Map<int, String> comments;
+
+  /// The pupils whose comment Skore does not let the user change: `p` `[0,
+  /// reportId]` and the class `gbc_closed` (seen live for some pupils of an
+  /// open report).
+  final Set<int> closedFor;
+
+  /// The most characters of a comment, as Skore gives it (`"1600"`).
+  Object? length;
+
+  /// Whether the report has the course's comment column (`<courseId>_info`).
+  bool hasComments;
+
+  /// False for a course that is not on the report: `getReportsResults` is
+  /// answered with HTTP 404, "Course not found in source!" (dartschool#204).
+  bool courseOnReport;
+}
+
+/// What report R1D ([fakeSkoreReportR1D]) of [fakeSkoreGradebook6EWI] shows
+/// (#171), in the shape of dartschool's capture with fake texts: the
+/// component DW with a class average of 71 (79 for An, 38 for Bart, low,
+/// none for Chloé); An has a comment of two lines, Bart none, and Chloé one
+/// that Skore does not let the user change.
+FakeSkoreReport fakeSkoreReport6EWI() => FakeSkoreReport(
+  components: const [
+    FakeSkoreReportComponent(
+      'DW',
+      classAverage: '71',
+      results: {1201: '79', 1202: '38'},
+      low: {1202},
+    ),
+  ],
+  comments: {
+    1201: 'Goed gewerkt dit trimester.\nBlijf zo verder werken.',
+    1203: 'Vaak afwezig bij de toetsen.',
+  },
+  closedFor: {1203},
+);
+
 /// A pupil of a gradebook's class: a row `pupil_<id>_<classId>`.
 class FakeSkoreGradebookPupil {
   const FakeSkoreGradebookPupil(
@@ -535,8 +660,10 @@ class FakeSkoreOwnGradebook {
     Map<int, List<FakeSkoreEvaluation>>? evaluations,
     List<List<Object>>? components,
     List<FakeSkoreReportPeriod>? reports,
+    Map<int, FakeSkoreReport>? reportContents,
   }) : periods = periods ?? [],
        reports = reports ?? [],
+       reportContents = reportContents ?? {},
        pupils = pupils ?? [],
        evaluations = evaluations ?? {},
        components =
@@ -590,6 +717,15 @@ class FakeSkoreOwnGradebook {
   /// The report periods, in Skore's order (`init`'s `reports`); none by
   /// default.
   final List<FakeSkoreReportPeriod> reports;
+
+  /// What each report period shows for the course (#171), by report id.
+  /// A report period without one shows every pupil an empty comment the
+  /// user may change, and no components ([reportOf]).
+  final Map<int, FakeSkoreReport> reportContents;
+
+  /// What report [id] shows, kept from then on.
+  FakeSkoreReport reportOf(int id) =>
+      reportContents.putIfAbsent(id, FakeSkoreReport.new);
 
   /// The index in [periods] of the period Skore opens the gradebook on
   /// (`activePeriodE`).
@@ -843,16 +979,7 @@ FakeSkoreOwnGradebook fakeSkoreGradebookGedrag() => FakeSkoreOwnGradebook(
   courseId: 1902,
   course: 'Gedrag (A-stroom, D/A en D)',
   writable: false,
-  reports: [
-    const FakeSkoreReportPeriod(
-      2762,
-      'R1D',
-      'Rapport 1',
-      open: true,
-      timestamp: '2026-10-30T23:00:00+0100',
-      note: 'Schrijf hier je commentaar voor het rapport.',
-    ),
-  ],
+  reports: [fakeSkoreReportR1D],
   pupils: [
     const FakeSkoreGradebookPupil(
       1221,
@@ -1191,6 +1318,21 @@ class FakeSkoreGradebook {
       if (request.rpc == 'saveGrade') request.params,
   ];
 
+  /// The parameters of every `saveType` (a pupil's course comment on a
+  /// report, #171) that reached the fake, in order, also those [answers]
+  /// answered (and that were not carried out).
+  List<List<Object?>> get reportCommentSaves => [
+    for (final request in requests)
+      if (request.rpc == 'saveType') request.params,
+  ];
+
+  /// Called with the gradebook, the report and the pupil right after a
+  /// `saveType` was carried out (the comment in [FakeSkoreReport.comments]
+  /// shows from then on): to show another comment than the one saved, as
+  /// when Skore did not keep it.
+  void Function(FakeSkoreOwnGradebook book, int reportId, int pupilId)?
+  onReportCommentSaved;
+
   /// Called with the method and the parameters of every RPC call that
   /// reaches the fake, after it is recorded and before it is answered: to
   /// change the gradebooks between two calls, such as an evaluation that is
@@ -1419,6 +1561,8 @@ class FakeSkoreGradebook {
       'getPosComponents' => _components(method, params, session, workyear),
       'saveEvaluation' => _saveEvaluation(method, params, session, workyear),
       'saveGrade' => _saveGrade(method, params, session, workyear),
+      'getReportsResults' => _report(method, params, session, workyear),
+      'saveType' => _saveReportComment(method, params, session, workyear),
       _ => _context(method, params, session, workyear),
     };
   }
@@ -1708,6 +1852,245 @@ class FakeSkoreGradebook {
       ],
       'grade': kept,
     });
+  }
+
+  /// The gradebook of [workyear] with course [courseId] whose class is the
+  /// last of [path] (`pathIds`: model, group and class, as strings), or null.
+  FakeSkoreOwnGradebook? _bookOfPath(
+    Object? path,
+    int? courseId,
+    FakeSkoreWorkyear workyear,
+  ) => path is List && path.length == 3
+      ? gradebooks
+            .where(
+              (g) =>
+                  g.workyear.id == workyear.id &&
+                  g.courseId == courseId &&
+                  path.join(',') == '${g.modelId},${g.groupId},${g.classId}',
+            )
+            .firstOrNull
+      : null;
+
+  /// `getReportsResults(pathIds, courses, reportID, userID)` for report
+  /// `reportID` (a string) of the gradebook of [workyear] with that course
+  /// and class (#171): the course, its components and the comment's column,
+  /// and per pupil of the class the results and the course comment
+  /// ([FakeSkoreOwnGradebook.reportOf]), in the shape of dartschool's
+  /// capture, with a row of another class of the group. A report of another
+  /// gradebook is answered with HTTP 400, which no test expects; a course
+  /// that is not on the report with HTTP 404, as live.
+  ResponseBody _report(
+    String method,
+    List<Object?> params,
+    Map<String, Object?> session,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final courses = params.length > 1 ? params[1] : null;
+    final courseId = courses is List && courses.length == 1
+        ? int.tryParse('${courses.single}')
+        : null;
+    final book = _bookOfPath(
+      params.isEmpty ? null : params[0],
+      courseId,
+      workyear,
+    );
+    final reportId = params.length > 2 && params[2] is String
+        ? int.tryParse(params[2] as String)
+        : null;
+    if (params.length != 4 ||
+        book == null ||
+        !book.reports.any((r) => r.id == reportId)) {
+      return _json('{"error":"the fake cannot answer $params"}', status: 400);
+    }
+    if (_outOfScope(method, book, session, userId: params[3])
+        case final refused?) {
+      return refused;
+    }
+    final report = book.reportOf(reportId!);
+    if (!report.courseOnReport) {
+      return _json('{"message":"Course not found in source!"}', status: 404);
+    }
+    final course = book.courseId;
+    final columns = [
+      for (final (index, _) in report.components.indexed)
+        '${course}_${index + 1}',
+    ];
+    final info = '${course}_info';
+    const rows = {
+      'orientation': 'byColumn',
+      'rowHeader': {
+        'sort': [0],
+      },
+    };
+    final otherRow = 'pupil_1999_${book.classId + 2}';
+    return _rpc(method, {
+      'courses': {
+        ...rows,
+        'colHeader': {
+          'sort': [course],
+          'widths': [469],
+        },
+        'stream': [
+          {
+            'c': course,
+            'r': 0,
+            'v':
+                '<div class="gbcourse" >${_text.convert(book.course)}</div>'
+                '<div class="gbc_cell_header"><span class="gbc_message_place" '
+                '>&nbsp;&nbsp;</span></div>',
+          },
+        ],
+      },
+      'comps': {
+        ...rows,
+        'colHeader': {
+          'sort': [...columns, if (report.hasComments) info],
+        },
+        'stream': [
+          for (final (index, component) in report.components.indexed)
+            {
+              'c': columns[index],
+              'r': 0,
+              'v':
+                  '<div class="gbcomps" >${_text.convert(component.name)}'
+                  '</div>',
+            },
+          if (report.hasComments)
+            {
+              'c': info,
+              'r': 0,
+              'v': '<div class="gbcomps" >Vakcommentaar</div>',
+            },
+        ],
+      },
+      'results': {
+        'orientation': 'byColumn',
+        'rowHeader': {'sort': <Object?>[]},
+        'colHeader': {'sort': <Object?>[]},
+        'stream': [
+          for (final (index, component) in report.components.indexed) ...[
+            {'c': columns[index], 'r': 'gravg_', 'v': _resultCell('-')},
+            {
+              'c': columns[index],
+              'r': 'clavg_${book.classId}',
+              'v': _resultCell(component.classAverage),
+            },
+            for (final pupil in book.pupils)
+              {
+                'c': columns[index],
+                'r': 'pupil_${pupil.id}_${book.classId}',
+                'v': _resultCell(
+                  component.results[pupil.id] ?? '-',
+                  low: component.low.contains(pupil.id),
+                ),
+              },
+            {'c': columns[index], 'r': otherRow, 'v': _resultCell('50')},
+          ],
+          if (report.hasComments) ...[
+            for (final pupil in book.pupils)
+              {
+                'c': info,
+                'r': 'pupil_${pupil.id}_${book.classId}',
+                'v': _commentCell(
+                  report.comments[pupil.id] ?? '',
+                  closed: report.closedFor.contains(pupil.id),
+                ),
+                'p': [report.closedFor.contains(pupil.id) ? 0 : 1, reportId],
+              },
+            {
+              'c': info,
+              'r': otherRow,
+              'v': _commentCell('Een andere klas.', closed: false),
+              'p': [1, reportId],
+            },
+          ],
+        ],
+      },
+      'length': report.length,
+      'stamp': {'_${book.classId}': null},
+    });
+  }
+
+  /// A result's cell of a report as Skore gives it: [value] (`-` for none)
+  /// in a `div.gbc`, with `gbc_low` when it is [low].
+  static String _resultCell(String value, {bool low = false}) =>
+      '<div class="gbc${low ? ' gbc_low' : ''}" >${_text.convert(value)}</div>'
+      '<div class="gbc_cell_header"><span class="gbc_message_place" >'
+      '&nbsp;&nbsp;</span></div><div class="gbc_presence "><div></div>'
+      '<div></div></div>';
+
+  /// A course comment's cell as Skore gives it: [text] with its line breaks
+  /// as U+205F, also as its tooltip in base64, and the class `gbc_closed`
+  /// when it is [closed] for the pupil.
+  static String _commentCell(String text, {required bool closed}) {
+    final shown = text.replaceAll('\n', '\u205F');
+    final tooltip = text.isEmpty
+        ? ''
+        : '  skoretooltip="true" tooltip="'
+              '${base64.encode(utf8.encode(shown))}" encoding="base64"';
+    return '<div class="gbinfo readonly extern-editor'
+        '${closed ? ' gbc_closed' : ''}"   data-type="separated"$tooltip>'
+        '${_text.convert(shown)}</div>';
+  }
+
+  /// `saveType(type, col, row, value, params, pathIds)` for the course
+  /// comment of one pupil on a report of the gradebook of [workyear] with
+  /// that course and class (#171): carried out as the live Skore did
+  /// (dartschool#201), the text the pupil's comment from then on, `""`
+  /// clearing it. A save the fake cannot carry out (another type than
+  /// `info`, another column, a pupil not in the class, params that are not
+  /// the cell's as strings, a closed report or a comment closed for the
+  /// pupil) is answered with HTTP 400, which no test expects.
+  ResponseBody _saveReportComment(
+    String method,
+    List<Object?> params,
+    Map<String, Object?> session,
+    FakeSkoreWorkyear workyear,
+  ) {
+    final cannot = _json(
+      '{"error":"the fake cannot save $params"}',
+      status: 400,
+    );
+    if (params.length != 6 || params[0] != 'info') return cannot;
+    final column = RegExp(r'^(\d+)_info$').firstMatch('${params[1]}');
+    final row = RegExp(r'^pupil_(\d+)_(\d+)$').firstMatch('${params[2]}');
+    final text = params[3];
+    final cell = params[4];
+    final courseId = int.tryParse(column?.group(1) ?? '');
+    final pupilId = int.tryParse(row?.group(1) ?? '');
+    final book = _bookOfPath(params[5], courseId, workyear);
+    if (book == null ||
+        row == null ||
+        pupilId == null ||
+        int.parse(row.group(2)!) != book.classId ||
+        !book.pupils.any((p) => p.id == pupilId) ||
+        text is! String ||
+        cell is! List ||
+        cell.length != 2 ||
+        cell.any((param) => param is! String)) {
+      return cannot;
+    }
+    // No userID among the parameters: the session's scope only.
+    if (_outOfScope(method, book, session, userId: book.teacherId)
+        case final refused?) {
+      return refused;
+    }
+    final reportId = int.tryParse('${cell[1]}');
+    final period = book.reports.where((r) => r.id == reportId).firstOrNull;
+    if (reportId == null || period == null || !period.open) return cannot;
+    final report = book.reportOf(reportId);
+    if (!report.hasComments ||
+        report.closedFor.contains(pupilId) ||
+        cell[0] != '1') {
+      return cannot;
+    }
+    if (text.isEmpty) {
+      report.comments.remove(pupilId);
+    } else {
+      report.comments[pupilId] = text;
+    }
+    onReportCommentSaved?.call(book, reportId, pupilId);
+    return _rpc(method, {'savedState': 1, 'stream': <Object?>[]});
   }
 
   /// `getEvaluations(periodID, userID, courses, groupID, classID, pathIds)`

@@ -24,14 +24,15 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
-  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, en
-  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
-  invullen en een leerling feedback geven, ook in een puntenboek dat een
-  collega met je deelde om te wijzigen (een evaluatie maken alleen in je
-  eigen puntenboeken). Telkens pas nadat jij het goedgekeurd hebt. Een
-  nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in
-  Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te
-  zetten.
+  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
+  feedback die een leerling kreeg, en per rapport de resultaten en het
+  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
+  invullen, een leerling feedback geven en het vakcommentaar op het rapport
+  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
+  nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
+  je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je
+  hoeft er niets voor aan te zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 
@@ -243,10 +244,10 @@ verschillen:
   Intradesk zetten of weggooien, je puntenboek invullen.** ChatGPT toont
   eerst de tekst en de ontvangers, de berichten die naar de prullenbak gaan,
   de lessen die in je planner komen of verdwijnen, wat er in welke map op
-  Intradesk komt of naar de prullenbak gaat, of de evaluatie, de punten of
-  de feedback die in je puntenboek komen, en wacht op jouw akkoord. Daarna
-  vraagt de app nog eens toestemming. Kies daar niet om het
-  altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
+  Intradesk komt of naar de prullenbak gaat, of de evaluatie, de punten,
+  de feedback of het vakcommentaar die in je puntenboek komen, en wacht op
+  jouw akkoord. Daarna vraagt de app nog eens toestemming. Kies daar niet om
+  het altijd toe te staan. Zet ChatGPT ook niet op **volledige toegang**
   (*Full access*): dan vraagt de app nergens meer toestemming voor.
 - **Afbeeldingen.** Een afbeelding van Intradesk (`.png`, `.jpg`) kan ChatGPT
   niet altijd bekijken. Vraag dan om het bestand te bewaren, en open het
@@ -383,7 +384,8 @@ Het programma zelf staat in
 - Vraag je ChatGPT iets over je puntenboek, dan gaan ook de punten van je
   leerlingen naar ChatGPT, en de feedback die jij of collega's hun gaven. Ook
   dat zijn gegevens over leerlingen, en feedback kan iets zeggen over hun
-  zorg of thuissituatie.
+  zorg of thuissituatie. Hetzelfde geldt voor het vakcommentaar op hun
+  rapport.
 - **Ga na of dat mag volgens het privacybeleid van je school,** en vraag het
   bij twijfel aan je directie of aan de privacyverantwoordelijke (DPO) van je
   school. Wees extra voorzichtig met gevoelige gegevens over leerlingen, zoals

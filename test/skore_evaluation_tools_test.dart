@@ -398,7 +398,8 @@ void main() {
         'It has no evaluation periods, only report periods, so it has no '
         'evaluations.\n'
         'Its course comments, one per pupil, are written in its report '
-        'periods and go on the report.',
+        'periods and go on the report: read_skore_report reads them, and '
+        'save_skore_report_comment writes them.',
       );
       // The report's id is not a period id.
       expect(

@@ -34,9 +34,11 @@ import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -469,7 +471,85 @@ void main() {
           ),
           reason: assistant,
         );
+        expect(
+          _section(guide, '## 8. Veiligheid en privacy'),
+          contains('Hetzelfde geldt voor het vakcommentaar op hun rapport.'),
+          reason: assistant,
+        );
       }
+    });
+
+    test('says Claude reads a report and writes the course comment on it, '
+        'one pupil at a time, only after the user confirmed it, telling them '
+        'it goes on the report, and never over a colleague\'s comment it did '
+        'not show, as the tools do (#171)', () {
+      final report = readSkoreReportTool(session).definition;
+      final comment = saveSkoreReportCommentTool(session).definition;
+      expect(
+        report.description,
+        allOf(
+          contains('the results so far per component of the course'),
+          contains('the pupil\'s course comment (vakcommentaar)'),
+        ),
+      );
+      expect(
+        comment.description,
+        allOf(
+          contains('One pupil per call: each text is personal.'),
+          contains(
+            'tell the user that the comment goes on the report the pupil and '
+            'their parents get; only call this tool after the user has '
+            'explicitly confirmed it.',
+          ),
+          contains(
+            'this tool replaces only that comment, and refuses when Skore '
+            'holds another one by then (a colleague may have written it)',
+          ),
+          contains('A closed report is refused'),
+          contains('also tell the user whose gradebook it is: its owner'),
+        ),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(
+          guide,
+          allOf(
+            contains(
+              'en per rapport de resultaten en het vakcommentaar van elke '
+              'leerling.',
+            ),
+            contains(
+              'een leerling feedback geven en het vakcommentaar op het '
+              'rapport schrijven',
+            ),
+          ),
+        );
+      }
+      expect(
+        section,
+        allOf(
+          contains(
+            'zegt je dat dat commentaar op het rapport komt dat de leerling '
+            'en zijn ouders krijgen, en wacht op jouw akkoord.',
+          ),
+          contains(
+            'Claude schrijft het vakcommentaar van één leerling per keer, '
+            'want elke tekst is persoonlijk.',
+          ),
+          contains(
+            'Staat er intussen een ander commentaar dan Claude je toonde, '
+            'bijvoorbeeld omdat een collega het aanpaste, dan schrijft Claude '
+            'niets',
+          ),
+          contains(
+            'In een gesloten rapport, of bij een leerling voor wie Skore het '
+            'commentaar afsluit, schrijft Claude niets.',
+          ),
+          contains(
+            'Zo schrijf je als co-titularis ook het vakcommentaar Gedrag van '
+            'je klas op het rapport.',
+          ),
+        ),
+      );
     });
   });
 

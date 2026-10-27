@@ -122,9 +122,11 @@ void main() {
       'read_skore_gradebook',
       'list_skore_evaluations',
       'read_skore_feedback',
+      'read_skore_report',
       'create_skore_evaluation',
       'save_skore_grades',
       'save_skore_feedback',
+      'save_skore_report_comment',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -154,11 +156,13 @@ void main() {
       'list_lesfiches',
       'read_lesfiche',
       'read_lesfiche_attachment',
-      // The user's own gradebooks in Skore, without a switch (#140, #141).
+      // The user's own gradebooks in Skore, without a switch (#140, #141),
+      // and their reports (#171).
       'list_skore_gradebooks',
       'read_skore_gradebook',
       'list_skore_evaluations',
       'read_skore_feedback',
+      'read_skore_report',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -446,6 +450,9 @@ void main() {
       ('create_skore_evaluation', false),
       ('save_skore_grades', true),
       ('save_skore_feedback', false),
+      // A course comment on a report (#171): the same text is not sent
+      // again, so a second call gives the same state.
+      ('save_skore_report_comment', true),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -637,7 +644,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(67));
+    expect(tools, hasLength(69));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -711,7 +718,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(49));
+        expect(tools, hasLength(51));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -750,8 +757,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(57));
-      expect([for (final tool in tools.skip(49)) tool['name']], skoreTools);
+      expect(tools, hasLength(59));
+      expect([for (final tool in tools.skip(51)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -944,7 +951,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(49));
+        expect(tools, hasLength(51));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -984,8 +991,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(53));
-      expect([for (final tool in tools.skip(49)) tool['name']], presenceTools);
+      expect(tools, hasLength(55));
+      expect([for (final tool in tools.skip(51)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1181,10 +1188,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(61));
-      expect([for (final tool in tools.skip(57)) tool['name']], presenceTools);
+      expect(tools, hasLength(63));
+      expect([for (final tool in tools.skip(59)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(49).take(8)) tool['name'],
+        for (final tool in tools.skip(51).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1220,7 +1227,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(49));
+        expect(tools, hasLength(51));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1273,8 +1280,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(55));
-      expect([for (final tool in tools.skip(49)) tool['name']], lvsTools);
+      expect(tools, hasLength(57));
+      expect([for (final tool in tools.skip(51)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1457,10 +1464,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(67));
-      expect([for (final tool in tools.skip(61)) tool['name']], lvsTools);
+      expect(tools, hasLength(69));
+      expect([for (final tool in tools.skip(63)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(57).take(4)) tool['name']],
+        [for (final tool in tools.skip(59).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1469,7 +1476,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(49).take(8)) tool['name'],
+        for (final tool in tools.skip(51).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2911,7 +2918,7 @@ void main() {
         'save_lesfiche_attachment',
         {'lesfiche': 'b0000000-0000-4000-8000-000000000001', 'attachment': 2.0},
       ),
-      // The gradebook tools (#140-#144), offered without a switch.
+      // The gradebook tools (#140-#144, #171), offered without a switch.
       ('list_skore_gradebooks', {'workyear_id': 22.0}),
       ('read_skore_gradebook', {'gradebook_id': 32508.0, 'workyear_id': 22.0}),
       (
@@ -2965,6 +2972,26 @@ void main() {
           'pupil_id': 1201.0,
           'text': 'Goed gewerkt.',
           'allow_published': false,
+        },
+      ),
+      (
+        'read_skore_report',
+        {
+          'gradebook_id': 32508.0,
+          'report_id': 2762.0,
+          'pupil_id': 1201.0,
+          'workyear_id': 24.0,
+        },
+      ),
+      (
+        'save_skore_report_comment',
+        {
+          'gradebook_id': 32508.0,
+          'report_id': 2762.0,
+          'pupil_id': 1201.0,
+          'text': 'Goed gewerkt.',
+          'current_comment': 'Goed begonnen.',
+          'clear': false,
         },
       ),
     ]) {
