@@ -130,14 +130,23 @@ String formatSkorePupilFeedback(
   SkoreGradebookPupil pupil,
   List<SkoreFeedback> feedback,
 ) {
-  final grade = found.evaluation.results.gradeOf(pupil.id);
+  final evaluation = found.evaluation;
+  // An evaluation the library could not read has no grades to give
+  // (yvanvds/dartschool#193); its feedback is read all the same.
+  final readable = evaluation.isReadable;
+  final grade = readable ? evaluation.results.gradeOf(pupil.id) : null;
   final count = feedback.length;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
     'Period: ${formatSkorePeriodName(found.period)}.',
-    'Evaluation: ${formatSkoreEvaluation(found.evaluation)}',
+    'Evaluation: ${formatSkoreEvaluation(evaluation)}',
     'Pupil: ${formatSkoreGradebookPupil(pupil)} | '
-        '${grade?.grade == null ? formatSkoreGradeValue(grade) : 'grade ${grade!.grade}'}',
+        '${!readable
+            ? 'grade not read'
+            : grade?.grade == null
+            ? formatSkoreGradeValue(grade)
+            : 'grade ${grade!.grade}'}',
+    if (!readable) formatSkoreUnreadableGrades(evaluation),
     if (feedback.isEmpty)
       'The pupil has no feedback on this evaluation.'
     else ...[

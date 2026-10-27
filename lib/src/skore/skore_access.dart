@@ -79,6 +79,14 @@ Future<T> withSkore<T>(
 /// [SmartschoolSkoreError]) is not a [ToolError]: the write tools report it
 /// themselves, with what to read to check it (`skoreWriteNotConfirmed` in
 /// `skore_writes.dart`).
+///
+/// Nor is a read that Skore sent on to Smartschool's start page at `/`, its
+/// answer to a session it does not accept, as `getClasses` was answered once
+/// right after a login with 2FA (#170): the library asks once more, and when
+/// Skore sends it there again, throws a [SmartschoolSessionExpiredError]
+/// (yvanvds/dartschool#194), which [SmartschoolSession.run] tries once more
+/// and then reports as a session Smartschool did not accept, with "try again
+/// in a moment".
 ToolError? skoreToolError(
   Object error,
   CredentialSource source, {

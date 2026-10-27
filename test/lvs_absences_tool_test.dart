@@ -402,7 +402,15 @@ void main() {
           'may see. Take pupil_id and class_id from the same line of '
           'search_lvs_pupils.',
         );
-        expect(lvs.reads, [FakeLvsRead.absences, FakeLvsRead.pupilFile]);
+        expect(lvs.reads, [
+          FakeLvsRead.absences,
+          // The library's own read of the file after the 500, without
+          // today's status (flutter_smartschool 0.4.0,
+          // yvanvds/dartschool#190), then the server's: the workaround that
+          // #164 removes.
+          FakeLvsRead.pupilFile,
+          FakeLvsRead.pupilFile,
+        ]);
       });
     }
 
@@ -417,6 +425,9 @@ void main() {
       expect(text, isNot(contains('Oeps')));
       expect(lvs.reads, [
         FakeLvsRead.absences,
+        // The library's read of the file after the 500 (yvanvds/dartschool
+        // #190), then the server's, with today's status (#164).
+        FakeLvsRead.pupilFile,
         FakeLvsRead.pupilFile,
         FakeLvsRead.todayStatus,
       ]);
@@ -489,6 +500,9 @@ void main() {
         expect(text, isNot(contains('Oeps')));
         expect(lvs.reads, [
           FakeLvsRead.absences,
+          // After a 500 only, the library reads the file itself first
+          // (yvanvds/dartschool#190); the server's read follows (#164).
+          if (refusal == FakeLvsRefusal.serverError) FakeLvsRead.pupilFile,
           FakeLvsRead.pupilFile,
           FakeLvsRead.todayStatus,
         ]);

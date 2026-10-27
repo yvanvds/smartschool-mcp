@@ -213,8 +213,11 @@ String formatSkorePeriodEvaluations(
           'has feedback on it, which read_skore_feedback reads):',
       for (final evaluation in evaluations) ...[
         '- ${formatSkoreEvaluation(evaluation)}',
-        '  ${formatSkoreEvaluationResults(evaluation.results)}',
-        '  grades: ${_gradesLine(sheet, evaluation.results)}',
+        if (evaluation.isReadable) ...[
+          '  ${formatSkoreEvaluationResults(evaluation.results)}',
+          '  grades: ${_gradesLine(sheet, evaluation.results)}',
+        ] else
+          '  ${formatSkoreUnreadableGrades(evaluation)}',
       ],
       if (pupils.isEmpty)
         'No pupils.'
@@ -237,6 +240,14 @@ String formatSkoreEvaluationGrades(
   SkoreEvaluation evaluation, {
   required String title,
 }) {
+  if (!evaluation.isReadable) {
+    return [
+      title,
+      _periodLine(sheet, period),
+      'Evaluation: ${formatSkoreEvaluation(evaluation)}',
+      formatSkoreUnreadableGrades(evaluation),
+    ].join('\n');
+  }
   final results = evaluation.results;
   final max = evaluation.max;
   final rows = _rows(sheet, results);

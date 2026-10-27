@@ -1,6 +1,5 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
-import '../messages/html_to_text.dart';
 import '../tools/server_tool.dart';
 import 'lvs_access.dart';
 import 'lvs_format.dart';
@@ -663,9 +662,10 @@ DateTime? _feedbackDate(LvsFeedback feedback) =>
 /// on, and its text (as plain text; a text of more lines under the line,
 /// indented), then its attachments by name only (nothing is downloaded).
 ///
-/// The library gives the text as the LVS sends it, HTML, unlike its other
-/// rich texts (yvanvds/dartschool#187), so it goes through the server's
-/// [htmlToText] here, without its empty lines. Tracked for removal in #161.
+/// The library gives the text as plain text with its lines, as its other
+/// rich texts (flutter_smartschool 0.4.0, yvanvds/dartschool#187): it is
+/// shown as it is, never parsed as HTML again, which would drop a `<p>` the
+/// teacher wrote and decode an `&amp;` twice (#170, #161).
 ///
 /// ```text
 /// - 2030-10-15 | by Piet Peeters | on the evaluation Testevaluatie (Testvak) | Testfeedback bij de evaluatie.
@@ -699,7 +699,7 @@ String formatLvsFeedback(LvsFeedback feedback) {
     about,
   ].join(' | ');
   final text = [
-    for (final line in htmlToText(feedback.text).split('\n'))
+    for (final line in feedback.text.split('\n'))
       if (line.trim().isNotEmpty) line.trim(),
   ];
   final attachments = [

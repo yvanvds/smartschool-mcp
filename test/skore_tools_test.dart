@@ -500,6 +500,51 @@ void main() {
     },
   );
 
+  group("a read Skore sends on to Smartschool's start page at /, its answer "
+      'to a session it does not accept (#170)', () {
+    test('once, as list_skore_classes was answered right after a login with '
+        '2FA: the library asks once more (yvanvds/dartschool#194), and the '
+        'tool answers', () async {
+      skore.sentToSiteRoot = 1;
+      expect(
+        await ok('list_skore_classes', {'query': '5WW'}),
+        'Skore finds 1 of its 6 classes in 3 report models for "5WW":\n'
+        '- 5WW1 | class id 2516 | group 5DG | model 3gr D-D/A',
+      );
+      expect(skore.calls, [
+        'GET $fakeSkoreModelsPath',
+        'GET $fakeSkoreModelsPath',
+      ]);
+
+      skore
+        ..requests.clear()
+        ..sentToSiteRoot = 1;
+      expect(await courses(2516), startsWith('Skore class id 2516:'));
+      expect(skore.calls, [
+        'GET $fakeSkoreOwnersPagePath',
+        'GET $fakeSkoreOwnersPagePath',
+      ]);
+    });
+
+    test('every time: a session Smartschool did not accept, not an answer '
+        'the server could not use; the session tries once more, then the '
+        'tool says to try again in a moment', () async {
+      skore.sentToSiteRoot = 100;
+      final text = await error('list_skore_classes');
+      expect(
+        text,
+        startsWith(
+          'Smartschool did not accept the login session. Try again in a '
+          'moment.',
+        ),
+      );
+      expect(text, isNot(contains('could not use')));
+      expect(text, isNot(contains(fakeDisplayName)));
+      // Twice by the library (#194), and that twice more by the session.
+      expect(skore.calls, List.filled(4, 'GET $fakeSkoreModelsPath'));
+    });
+  });
+
   test('logs in again when the session expired, for a page and an RPC '
       'call', () async {
     await ok('list_skore_teachers');

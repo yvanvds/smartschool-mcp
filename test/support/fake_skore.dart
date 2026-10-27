@@ -290,6 +290,15 @@ class FakeSkore {
   /// `SmartschoolSkoreError`, whose message quotes the page).
   bool unusable = false;
 
+  /// How many of the next GETs Skore sends on to the root of the site, `/`
+  /// without a query: its answer to a session it does not accept
+  /// (yvanvds/dartschool#192). The fake gives such a GET the page it ends
+  /// on, Smartschool's start page ([startPage]) with `200`, with the
+  /// redirect it followed in `redirects`, as a list of report models was
+  /// answered once right after a login with 2FA (#170,
+  /// yvanvds/dartschool#194).
+  int sentToSiteRoot = 0;
+
   /// How the fake answers a save (`saveOwner`, `saveShared`), after
   /// [nextSaves].
   SkoreSave save = SkoreSave.confirmed;
@@ -501,6 +510,11 @@ class FakeSkore {
       };
     }
     if (unusable) return _html(_errorPage);
+    if (options.method == 'GET' && sentToSiteRoot > 0) {
+      sentToSiteRoot--;
+      return _html(startPage)
+        ..redirects = [RedirectRecord(302, 'GET', options.uri.resolve('/'))];
+    }
     final query = options.uri.queryParameters;
     switch ((options.method, path)) {
       case ('GET', fakeSkoreModelsPath)
