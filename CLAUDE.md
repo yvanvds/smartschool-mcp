@@ -12,6 +12,10 @@ Whenever something in `flutter_smartschool` doesn't work, behaves unexpectedly o
 
 Link the dartschool issue from the related smartschool-mcp issue or PR. A workaround here is temporary: track its removal in a smartschool-mcp issue labelled `blocked` that references the dartschool issues.
 
+## Tool documentation
+
+Tool documentation lives in `docs/tools/<area>.md` (developer topics in `docs/development.md`; the README stays short): a change to a tool updates its page there, and a new tool also the README's overview table, in the manifest's order.
+
 ## Credentials
 
 `credentials.yml` in the repo root holds real Smartschool credentials for local testing (`--credentials credentials.yml`, see `.mcp.json`). It is git-ignored. Never read, print, log or commit its contents. Keep live logins to a minimum: repeated failed logins can lock the account.
