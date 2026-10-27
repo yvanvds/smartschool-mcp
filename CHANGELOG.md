@@ -8,6 +8,22 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.7.0
+
+- Puntenboek, rapporten: per leerling de punten tot nu toe en het
+  vakcommentaar bekijken, en het vakcommentaar schrijven, wijzigen of wissen
+  dat op het rapport komt (telkens pas na jouw bevestiging).
+- Puntenboek, gedeelde puntenboeken: de puntenboeken die een collega met je
+  deelde, zoals het gedragspuntenboek voor een co-titularis. Je ziet ze apart,
+  met de eigenaar en of je mag lezen of ook schrijven. Wijzigen kan alleen
+  waar je schrijfrecht hebt.
+- Puntenboek: bij evaluaties met een schaal zie je per leerling de waardering
+  met haar naam, en je kunt er feedback geven. Een waardering zelf ingeven
+  kan nog niet.
+- Puntenboek: een puntenboek met alleen rapporten, zoals Gedrag, opent nu
+  gewoon. Is je sessie bij Smartschool verlopen, dan meldt de server zich
+  vanzelf opnieuw aan in plaats van een foutmelding te geven.
+
 ## 0.6.0
 
 - Leerlingvolgsysteem, alleen met Leerlingvolgsysteem aan (het staat
