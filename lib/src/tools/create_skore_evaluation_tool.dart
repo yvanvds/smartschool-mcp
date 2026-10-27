@@ -156,8 +156,9 @@ Future<CallToolResult> _create(
         final period = skoreGradebookPeriod(sheet, periodId);
         if (period == null) {
           throw ToolError(
-            'The ${formatSkoreGradebookName(sheet.gradebook)} has no periods '
-            'yet, so no evaluation can be created in it.',
+            'The ${formatSkoreGradebookName(sheet.gradebook)} has '
+            '${formatSkoreMissingPeriods(sheet)}, so no evaluation can be '
+            'created in it.',
           );
         }
         where =

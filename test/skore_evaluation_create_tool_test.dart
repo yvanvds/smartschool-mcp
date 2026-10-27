@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'package:dart_mcp/client.dart';
 import 'package:dio/dio.dart';
 import 'package:smartschool_mcp/src/session.dart';
+import 'package:smartschool_mcp/src/skore/skore_gradebook_access.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
@@ -562,8 +563,22 @@ void main() {
           'max': 20,
         }),
         'The gradebook of 5WW1 for Project 1 (3e graad) (gradebook id 34582) '
-        'has no periods yet, so no evaluation can be created in it. Nothing '
-        'was changed in Skore.',
+        'has no evaluation periods yet, so no evaluation can be created in '
+        'it. Nothing was changed in Skore.',
+      );
+      // A gradebook with report periods only, as Skore shows the behaviour
+      // gradebook "Gedrag" (#168).
+      skore.gradebooks.add(fakeSkoreGradebookGedrag());
+      expect(
+        await error('create_skore_evaluation', {
+          'gradebook_id': 34901,
+          'title': 'Toets Python',
+          'date': '2026-10-14',
+          'max': 20,
+        }),
+        'The gradebook of 5WW1 for Gedrag (A-stroom, D/A en D) (gradebook id '
+        '34901) has no evaluation periods, only report periods, so no '
+        'evaluation can be created in it. Nothing was changed in Skore.',
       );
       expect(skore.evaluationSaves, isEmpty);
       expect(skore.calls, isNot(contains('getNewEvalDialogBox wy=24')));
@@ -579,10 +594,7 @@ void main() {
       expect(isError, isTrue);
       expect(
         text,
-        'Skore\'s gradebook gave an answer the server could not use. Try '
-        'again in a moment; the technical details are in the server log. An '
-        'account without gradebooks of its own in Skore, such as a pupil\'s, '
-        'may get this answer too. Nothing was changed in Skore.',
+        '$skoreGradebookUnusableAnswer Nothing was changed in Skore.',
       );
       expect(skore.evaluationSaves, isEmpty);
     });

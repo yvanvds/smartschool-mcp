@@ -9,6 +9,7 @@ library;
 import 'dart:convert';
 
 import 'package:dart_mcp/client.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/skore/skore_gradebook_access.dart';
@@ -18,6 +19,7 @@ import 'package:smartschool_mcp/src/tools/server_tool.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_smartschool.dart';
+import 'support/log_capture.dart';
 import 'support/mcp.dart';
 
 /// [iso], a time with its offset as Skore gives it, as the tools show it:
@@ -43,12 +45,13 @@ const _schoolYears =
 void main() {
   late FakeSmartschool server;
   late FakeSkoreGradebook skore;
+  late SmartschoolSession session;
   late ServerConnection connection;
 
   setUp(() async {
     server = FakeSmartschool();
     skore = server.skoreGradebook..loadSchool();
-    final session = SmartschoolSession(
+    session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
     );
@@ -440,8 +443,8 @@ void main() {
         await read(32504),
         'Gradebook id 32504: Informaticawetenschappen (2 uur) (6e j DO), '
         'class 6WEWI2, school year 2026-2027 (workyear id 24).\n'
-        'It has no periods yet, so it takes no grades; Skore was not asked '
-        'whether the user may change it.\n'
+        'It has no evaluation periods yet, so it takes no grades; Skore was '
+        'not asked whether the user may change it.\n'
         '2 pupils, in Skore\'s order:\n'
         '- 1. Goossens, Emma | pupil id 1211\n'
         '- 2. Hermans, Finn | pupil id 1212',
@@ -453,40 +456,128 @@ void main() {
       skore.gradebooks.firstWhere((g) => g.id == 34826).pupils.clear();
       expect(await read(34826), endsWith('\nNo pupils.'));
     });
+
+    test('a gradebook with report periods only, as Skore shows the behaviour '
+        'gradebook "Gedrag" (#168): no evaluation periods, so no evaluations '
+        'and no grades, and its course comments are in its report periods; '
+        'not "no periods yet", and Skore is not asked whether the user may '
+        'change it', () async {
+      skore.gradebooks.add(fakeSkoreGradebookGedrag());
+      expect(
+        await list({'query': 'gedrag'}),
+        startsWith(
+          'Skore finds 1 for "gedrag" among the user\'s 5 gradebooks for '
+          'school year 2026-2027 (workyear id 24), in Skore\'s order:\n'
+          '- 5WW1 | Gedrag (A-stroom, D/A en D) | gradebook id 34901\n',
+        ),
+      );
+      skore.requests.clear();
+      expect(
+        await read(34901),
+        'Gradebook id 34901: Gedrag (A-stroom, D/A en D), class 5WW1, school '
+        'year 2026-2027 (workyear id 24).\n'
+        'It has no evaluation periods, only report periods, so it has no '
+        'evaluations and takes no grades.\n'
+        'Its course comments, one per pupil, are written in its report '
+        'periods and go on the report.\n'
+        '2 pupils, in Skore\'s order:\n'
+        '- 1. Jacobs, Gert | pupil id 1221\n'
+        '- 2. Lemmens, Ilse | pupil id 1222',
+      );
+      // One init, as for any gradebook without evaluation periods.
+      expect(skore.calls, ['init wy=24']);
+    });
+  });
+
+  group('a session Smartschool no longer accepts, which Skore\'s gradebook '
+      'answers with 302 Location: / (#168, yvanvds/dartschool#192)', () {
+    /// Whether [request] is the gradebook's RPC call `init`.
+    bool isInit(RequestOptions request) =>
+        request.uri.path == fakeSkoreGradebookRpcPath &&
+        '${(request.data as Map)['rpc_method']}' == 'init';
+
+    test('expired before init, as the saved session was when "Gedrag" was '
+        'read: the library logs in again and sends init once more, and the '
+        'gradebook is read', () async {
+      skore.gradebooks.add(fakeSkoreGradebookGedrag());
+      final before = await read(34901);
+      expect(server.logins, 1);
+      server
+        ..requests.clear()
+        ..refusedPosts.clear();
+      skore.requests.clear();
+      server.expireSessionBefore(isInit);
+      expect(await read(34901), before);
+      expect(server.logins, 2);
+      // The refused init, answered 302 to / as live (flutter_smartschool
+      // 0.3.9 took that for an answer it could not use), the login, and
+      // init once more, served by the gradebook.
+      expect(server.refusedPosts, ['302 $fakeSkoreGradebookRpcPath']);
+      expect(server.requests.first, 'POST $fakeSkoreGradebookRpcPath');
+      expect(server.requests, contains('POST /login'));
+      expect(server.requests.last, 'POST $fakeSkoreGradebookRpcPath');
+      expect(skore.calls, ['init wy=24']);
+    });
+
+    test('still refused after logging in again: the session\'s message, '
+        'with "try again in a moment", not an answer the server could not '
+        'use', () async {
+      await read(32508);
+      server
+        ..rejectsAfterLogin = 1000
+        ..expireSessionBefore(isInit);
+      final text = await error('read_skore_gradebook', {'gradebook_id': 32508});
+      expect(
+        text,
+        startsWith(
+          'Smartschool did not accept the login session. Try again in a '
+          'moment.',
+        ),
+      );
+      expect(text, isNot(contains('could not use')));
+      expect(text, isNot(contains('pupil')));
+    });
   });
 
   group('an answer Skore\'s gradebook cannot use', () {
-    test('an error page, from the gradebooks or from one gradebook: an error '
-        'that says to try again and that a pupil\'s account may get it, '
-        'without the page', () async {
-      const expected =
-          'Skore\'s gradebook gave an answer the server could not use. Try '
-          'again in a moment; the technical details are in the server log. '
-          'An account without gradebooks of its own in Skore, such as a '
-          'pupil\'s, may get this answer too.';
-      skore.answers['getNavigation'] = (
-        status: 200,
-        body: '<html><body>Lena Vermeulen heeft geen toegang.</body></html>',
-      );
-      expect(await error('list_skore_gradebooks'), expected);
-      expect(
-        await error('read_skore_gradebook', {'gradebook_id': 32508}),
-        expected,
-      );
-      skore.answers.clear();
-      for (final method in ['init', 'getGradebookContext']) {
-        skore.answers[method] = (status: 500, body: 'Oeps');
+    test(
+      'an error page, from the gradebooks or from one gradebook: an error '
+      'that says to try again and, when it keeps happening, to use Skore '
+      'in Smartschool itself, without the page; not that a pupil\'s '
+      'account may get it, which sent a teacher the wrong way (#168)',
+      () async {
+        const expected =
+            'Skore\'s gradebook gave an answer the server could not use. Try '
+            'again in a moment. If it keeps happening, the server cannot read '
+            'this part of Skore yet: use Skore in Smartschool itself. The '
+            'technical details are in the server log.';
+        expect(skoreGradebookUnusableAnswer, expected);
+        skore.answers['getNavigation'] = (
+          status: 200,
+          body: '<html><body>Lena Vermeulen heeft geen toegang.</body></html>',
+        );
+        expect(await error('list_skore_gradebooks'), expected);
         expect(
           await error('read_skore_gradebook', {'gradebook_id': 32508}),
           expected,
-          reason: method,
         );
         skore.answers.clear();
-      }
-    });
+        for (final method in ['init', 'getGradebookContext']) {
+          skore.answers[method] = (status: 500, body: 'Oeps');
+          expect(
+            await error('read_skore_gradebook', {'gradebook_id': 32508}),
+            expected,
+            reason: method,
+          );
+          skore.answers.clear();
+        }
+      },
+    );
 
-    test('a redirect, as Skore sends a request it refuses elsewhere, and an '
-        'answer in another shape: the same error', () async {
+    test('a redirect elsewhere than to / (such as the start page with a '
+        'module, as the admin side of Skore refuses a request), and an '
+        'answer in another shape: the same error, with the redirect\'s '
+        'target in the log only', () async {
       skore.answers['getNavigation'] = (status: 302, body: '');
       expect(
         await error('list_skore_gradebooks'),
@@ -508,6 +599,32 @@ void main() {
           'use.',
         ),
       );
+
+      skore.answers
+        ..clear()
+        ..['init'] = (status: 302, body: '');
+      skore.answerHeaders['init'] = {
+        'location': ['/?module=Homepage'],
+      };
+      // A connection of its own, so that the server's log is captured.
+      final ((result, text), logged) = await captureLog(() async {
+        final (connection, _) = await connect(
+          tools: [readSkoreGradebookTool(session)],
+        );
+        return callTool(connection, 'read_skore_gradebook', {
+          'gradebook_id': 32508,
+        });
+      });
+      expect(result.isError, isTrue, reason: text);
+      expect(text, skoreGradebookUnusableAnswer);
+      expect(
+        logged,
+        contains(
+          'skore gradebook: SmartschoolSkoreError: Skore answered the RPC '
+          'call init of its gradebook with HTTP 302, a redirect to /',
+        ),
+      );
+      expect(logged, contains('Homepage'));
     });
 
     test('a read that failed is tried again on the next call', () async {

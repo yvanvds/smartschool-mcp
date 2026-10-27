@@ -89,9 +89,21 @@ Future<T> withSkoreGradebook<T>(
 /// - [SmartschoolSkoreError]: an answer the server cannot use (an error page,
 ///   another HTTP status, data in an unknown shape). The library's message
 ///   can quote Skore's answer, which may hold names, so it goes to the log
-///   only. What Skore answers an account without gradebooks of its own (a
-///   pupil's) was not captured: this is the message such an account gets
-///   when it is not an empty list, so it says so.
+///   only; for a redirect it names the target, by path and module only
+///   (yvanvds/dartschool#192). The message says to try again, and when it
+///   keeps happening to use Skore in Smartschool itself.
+///
+///   Not a session Smartschool did not accept: Skore's gradebook answers an
+///   RPC call in an expired session with `302 Location: /`, which
+///   flutter_smartschool 0.4.0 takes for a refused session (#168): it logs
+///   in again and sends the call once more. Refused again, that is a
+///   `SmartschoolSessionExpiredError`, which [SmartschoolSession.run] tries
+///   once more and then reports itself as a session Smartschool did not
+///   accept, with "try again in a moment"; it is not passed here. Before
+///   0.4.0 that redirect came here, and the message's remark that a pupil's
+///   account may get this answer too sent the user of a teacher's account
+///   the wrong way: what Skore answers an account without gradebooks of its
+///   own was not captured, and the message no longer guesses.
 ///
 /// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
 ///   save refused the change, so nothing was saved. A [SmartschoolSkoreError],
@@ -133,15 +145,20 @@ ToolError? skoreGradebookToolError(
       );
     case SmartschoolSkoreError():
       log('skore gradebook: $error');
-      return const ToolError(
-        'Skore\'s gradebook gave an answer the server could not use. Try '
-        'again in a moment; the technical details are in the server log. An '
-        'account without gradebooks of its own in Skore, such as a pupil\'s, '
-        'may get this answer too.',
-      );
+      return const ToolError(skoreGradebookUnusableAnswer);
   }
   return null;
 }
+
+/// What the gradebook tools say for an answer of Skore's gradebook the
+/// server could not use ([skoreGradebookToolError]): to try again, and when
+/// it keeps happening, to use Skore in Smartschool itself. The details are
+/// in the server log only.
+const skoreGradebookUnusableAnswer =
+    'Skore\'s gradebook gave an answer the server could not use. Try again '
+    'in a moment. If it keeps happening, the server cannot read this part '
+    'of Skore yet: use Skore in Smartschool itself. The technical details '
+    'are in the server log.';
 
 /// What a gradebook write passes on with a change Skore refused, by
 /// default: what to read again to correct the call.
@@ -420,8 +437,9 @@ SkoreGradebookPeriod? skoreGradebookPeriod(
   final gradebook = formatSkoreGradebookName(sheet.gradebook);
   if (sheet.periods.isEmpty) {
     throw ToolError(
-      'The $gradebook has no period with period id $periodId: it has no '
-      'periods yet, so it has no evaluations. Leave out period_id.',
+      'The $gradebook has no period with period id $periodId: it has '
+      '${formatSkoreMissingPeriods(sheet)}, so it has no evaluations. Leave '
+      'out period_id.',
     );
   }
   final active = sheet.activePeriod;
@@ -518,8 +536,8 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
         ];
   if (periods.isEmpty) {
     throw ToolError(
-      'The $gradebook has no periods yet, so it has no evaluation with '
-      'evaluation id $evaluationId.',
+      'The $gradebook has ${formatSkoreMissingPeriods(sheet)}, so it has no '
+      'evaluation with evaluation id $evaluationId.',
     );
   }
   for (final period in periods) {

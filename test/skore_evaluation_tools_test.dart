@@ -77,11 +77,7 @@ const _components =
     '(component id 2). Default: DW.';
 
 /// The general error of an answer the server cannot use.
-const _unusable =
-    'Skore\'s gradebook gave an answer the server could not use. Try again '
-    'in a moment; the technical details are in the server log. An account '
-    'without gradebooks of its own in Skore, such as a pupil\'s, may get '
-    'this answer too.';
+const _unusable = skoreGradebookUnusableAnswer;
 
 void main() {
   late FakeSmartschool server;
@@ -350,9 +346,59 @@ void main() {
         await list({'gradebook_id': 32504}),
         'Gradebook id 32504: Informaticawetenschappen (2 uur) (6e j DO), '
         'class 6WEWI2, school year 2026-2027 (workyear id 24).\n'
-        'It has no periods yet, so it has no evaluations.',
+        'It has no evaluation periods yet, so it has no evaluations.',
       );
       expect(skore.calls, ['getNavigation', 'init wy=24']);
+    });
+
+    test('a gradebook with report periods only, as Skore shows the behaviour '
+        'gradebook "Gedrag" (#168): no evaluation periods, so no '
+        'evaluations, and its course comments are in its report periods; '
+        'with a period_id or an evaluation_id, and for the feedback, an '
+        'error that says the same; no evaluations are asked for', () async {
+      skore.gradebooks.add(fakeSkoreGradebookGedrag());
+      const gradebook =
+          'gradebook of 5WW1 for Gedrag (A-stroom, D/A en D) (gradebook id '
+          '34901)';
+      expect(
+        await list({'gradebook_id': 34901}),
+        'Gradebook id 34901: Gedrag (A-stroom, D/A en D), class 5WW1, school '
+        'year 2026-2027 (workyear id 24).\n'
+        'It has no evaluation periods, only report periods, so it has no '
+        'evaluations.\n'
+        'Its course comments, one per pupil, are written in its report '
+        'periods and go on the report.',
+      );
+      // The report's id is not a period id.
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34901,
+          'period_id': 2762,
+        }),
+        'The $gradebook has no period with period id 2762: it has no '
+        'evaluation periods, only report periods, so it has no evaluations. '
+        'Leave out period_id.',
+      );
+      const noEvaluation =
+          'The $gradebook has no evaluation periods, only report periods, so '
+          'it has no evaluation with evaluation id 500001.';
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34901,
+          'evaluation_id': 500001,
+        }),
+        noEvaluation,
+      );
+      expect(
+        await error('read_skore_feedback', {
+          'gradebook_id': 34901,
+          'evaluation_id': 500001,
+          'pupil_id': 1221,
+        }),
+        noEvaluation,
+      );
+      expect(evaluationReads(), isEmpty);
+      expect(skore.calls, isNot(contains(startsWith('getGradebookContext'))));
     });
 
     test('a period_id that is not one of the gradebook\'s: an error that '
@@ -378,7 +424,8 @@ void main() {
         }),
         'The gradebook of 6WEWI2 for Informaticawetenschappen (2 uur) (6e j '
         'DO) (gradebook id 32504) has no period with period id 1704: it has '
-        'no periods yet, so it has no evaluations. Leave out period_id.',
+        'no evaluation periods yet, so it has no evaluations. Leave out '
+        'period_id.',
       );
       expect(evaluationReads(), isEmpty);
     });

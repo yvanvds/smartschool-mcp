@@ -80,7 +80,10 @@ Future<CallToolResult> _read(
 
 /// What `read_skore_gradebook` answers: the gradebook of [sheet] (of school
 /// year [workyear]), whether the user may change it, its periods and its
-/// pupils.
+/// pupils. A gradebook without evaluation periods says so instead of
+/// whether the user may change it (Skore is not asked then); one with
+/// report periods only, such as a behaviour gradebook (#168), also where
+/// its course comments are ([skoreReportPeriodsOnlyNote]).
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear,
@@ -91,9 +94,12 @@ String formatSkoreGradebookSheet(
   final active = sheet.activePeriod;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
-    if (periods.isEmpty)
-      'It has no periods yet, so it takes no grades; Skore was not asked '
-          'whether the user may change it.'
+    if (periods.isEmpty && sheet.reports.isEmpty)
+      'It has ${formatSkoreMissingPeriods(sheet)}, so it takes no grades; '
+          'Skore was not asked whether the user may change it.'
+    else if (periods.isEmpty)
+      'It has ${formatSkoreMissingPeriods(sheet)}, so it has no evaluations '
+          'and takes no grades.'
     else if (sheet.isCoordinator)
       'Skore opens it read-only for the user, in coordinator mode.'
     else if (sheet.writable)
@@ -101,6 +107,7 @@ String formatSkoreGradebookSheet(
           '${periods.any((p) => p.isOpen) ? '' : ', but none of its periods is open, so it takes no grades now'}.'
     else
       'Skore opens it read-only for the user: the user may not change it.',
+    ?skoreReportPeriodsOnlyNote(sheet),
     if (periods.isNotEmpty) ...[
       '${periods.length} ${periods.length == 1 ? 'period' : 'periods'}, in '
           'Skore\'s order; only an open period takes grades'

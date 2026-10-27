@@ -929,14 +929,22 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   `workyear_id`; `getGradebook`): whether Skore lets the user change it
   (`writable`; read-only in coordinator mode; not asked for a gradebook
   without periods), and when it does but no period is open, that it takes
-  no grades now; its periods in Skore's order, each with its period id,
-  whether it is open, its closing time (in the time of this PC, Belgium),
-  whether Skore opens the gradebook on it (`activePeriod`) and Skore's note
-  on it (the period's `info` as one line, without the paragraphs that only
-  repeat its name or say `Gesloten!`: what is left is when it opened and the
-  school's note, such as which weeks it covers); and its pupils, each with
-  the class number (when Skore shows one), the name last name first, the
-  pupil id, and whether Skore greys the pupil out as inactive.
+  no grades now. A gradebook without evaluation periods says so instead
+  ("no evaluation periods yet"); one with report periods only
+  (`SkoreGradebookSheet.reports`, flutter_smartschool 0.4.0), as Skore shows
+  a behaviour gradebook such as "Gedrag (A-stroom, D/A en D)" (#168), says
+  that it has no evaluation periods, only report periods, so no evaluations
+  and no grades, and that its course comments, one per pupil, are written
+  in its report periods and go on the report
+  (`formatSkoreMissingPeriods`, `skoreReportPeriodsOnlyNote`). Then its
+  periods in Skore's order, each with its period id, whether it is open,
+  its closing time (in the time of this PC, Belgium), whether Skore opens
+  the gradebook on it (`activePeriod`) and Skore's note on it (the period's
+  `info` as one line, without the paragraphs that only repeat its name or
+  say `Gesloten!`: what is left is when it opened and the school's note,
+  such as which weeks it covers); and its pupils, each with the class
+  number (when Skore shows one), the name last name first, the pupil id,
+  and whether Skore greys the pupil out as inactive.
 - `list_skore_evaluations`: the evaluations of one period of a gradebook
   (`gradebook_id`, optional `period_id` and `workyear_id`; `getGradebook`,
   then `getEvaluations` for the period), with their grades. Without
@@ -963,9 +971,13 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   to line up a column with an evaluation, a question about one evaluation
   ("who has no grade yet?") is one line, and the output stays smaller than
   one line per pupil per evaluation. A period without evaluations, and a
-  gradebook without periods, get a sentence; a `period_id` that is not one
-  of the gradebook's is an error that lists its periods, before any
-  evaluations are read. For an open period, a last line lists the
+  gradebook without evaluation periods, get a sentence (for one with report
+  periods only, the same two sentences as `read_skore_gradebook`); a
+  `period_id` that is not one of the gradebook's is an error that lists its
+  periods, before any evaluations are read. In a gradebook without
+  evaluation periods, a `period_id` (also a report's id) and an
+  `evaluation_id` are errors that say it has none, as are the other
+  gradebook tools' calls on it. For an open period, a last line lists the
   components a new evaluation in it can count for (`getComponents`, one
   small request: `geen` for none and, for instance, `DW`), each with its
   component id, and the default `create_skore_evaluation` takes without a
@@ -1183,11 +1195,29 @@ read that failed is tried again on the next call. A `workyear_id` Skore
 does not offer (Skore answers it with no gradebooks; the library refuses it
 with an `ArgumentError`) is an error that passes on the school years Skore
 offers. Any `SmartschoolSkoreError` is an answer the server could not use
-(also a feedback read Skore refuses, or feedback about another pupil),
-reported with "try again in a moment" and the remark that an account
-without gradebooks of its own, such as a pupil's, may get it too: what
-Skore answers a pupil was not captured. The library's message goes to the
-log only, as it can quote Skore's answer: names, titles and feedback texts.
+(an error page, another HTTP status, also a redirect, or data in a shape
+the library does not know; also a feedback read Skore refuses, or feedback
+about another pupil), reported with "try again in a moment" and, when it
+keeps happening, to use Skore in Smartschool itself
+(`skoreGradebookUnusableAnswer`). The library's message goes to the log
+only, as it can quote Skore's answer: names, titles and feedback texts; for
+a redirect it names the target, by path and module only. What Skore answers
+an account without gradebooks of its own, such as a pupil's, was not
+captured, and the message does not guess: its old remark that a pupil's
+account may get it too sent a teacher the wrong way in #168.
+
+A session Smartschool no longer accepts is not such an answer. Skore's
+gradebook answers an RPC call in an expired session with `302 Location: /`
+and an empty body (seen live, yvanvds/dartschool#192: the cause of #168,
+where `init` of a gradebook was the first call after reusing a saved
+session). flutter_smartschool 0.4.0 takes that for a refused session: it
+logs in again and sends the call once more. Refused again, it is a
+`SmartschoolSessionExpiredError`, which the session tries once more and
+then reports as Smartschool not accepting the session, with "try again in a
+moment". The fake Smartschool of the tests answers the gradebook's RPC
+calls in a refused session that way (`FakeSmartschool.refusedPosts`
+records it), so every test that lets the session expire before such a call
+goes through it.
 
 The Skore tools are offered only when the switch "Skore-beheer" is on (see
 *Opt-in tools* below): they need the rights for score management in Skore

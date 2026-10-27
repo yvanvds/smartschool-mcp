@@ -92,6 +92,26 @@ String formatSkorePeriodState(SkoreGradebookPeriod period) =>
 String formatSkorePeriodName(SkoreGradebookPeriod period) =>
     '${skoreName(period.name)} (period id ${period.id})';
 
+/// What a gradebook without evaluation periods ([sheet], whose `periods`
+/// are empty) has, after "has": `no evaluation periods yet`; or `no
+/// evaluation periods, only report periods` for one with report periods
+/// only, as Skore shows a behaviour gradebook such as "Gedrag (A-stroom,
+/// D/A en D)" (#168, flutter_smartschool 0.4.0). Either way it has no
+/// evaluations and takes no grades.
+String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
+    sheet.reports.isEmpty
+    ? 'no evaluation periods yet'
+    : 'no evaluation periods, only report periods';
+
+/// For a gradebook with report periods only ([sheet], see
+/// [formatSkoreMissingPeriods]), the sentence on where its course comments
+/// are, for the tools that read it; null for any other gradebook.
+String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
+    sheet.periods.isEmpty && sheet.reports.isNotEmpty
+    ? 'Its course comments, one per pupil, are written in its report '
+          'periods and go on the report.'
+    : null;
+
 /// A gradebook by its class, course and id, as an error names it:
 /// `gradebook of 6EWI for Informaticawetenschappen (2 uur) (6e j DO)
 /// (gradebook id 32508)`.

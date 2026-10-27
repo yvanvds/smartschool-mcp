@@ -131,7 +131,12 @@ Future<CallToolResult> _list(
     }
     final period = skoreGradebookPeriod(sheet, periodId);
     if (period == null) {
-      return '$title\nIt has no periods yet, so it has no evaluations.';
+      return [
+        title,
+        'It has ${formatSkoreMissingPeriods(sheet)}, so it has no '
+            'evaluations.',
+        ?skoreReportPeriodsOnlyNote(sheet),
+      ].join('\n');
     }
     final evaluations = await gradebooks.getEvaluations(
       sheet.gradebook,

@@ -14,7 +14,9 @@ import 'package:dio/dio.dart';
 //     empty tree with `currentWorkyear` the year asked for.
 //   - init(courses, owners, userID, pathIds, 0, 0): the periods and the rows
 //     of a gradebook (`left_0`, ...: `1.  Last, First`, or `- Last, First`
-//     without a class number, a `gbc_hidden` span for an inactive pupil).
+//     without a class number, a `gbc_hidden` span for an inactive pupil),
+//     and its report periods (`reports`, dartschool#195), none unless a
+//     test gives the gradebook some.
 //   - getGradebookContext(pathIds, courses, owners, userID, periodId, 0, wy):
 //     whether the user may change the gradebook.
 //   - getEvaluations(periodID, userID, courses, groupID, classID, pathIds)
@@ -155,6 +157,51 @@ class FakeSkoreGradebookPeriod {
               'align="absmiddle"/><span style="margin-left:5px;">'
               'Gesloten!</span>';
     return '<p><u><b>$name</b></u></p><p>$state</p><p>$note</p>';
+  }
+}
+
+/// A report period of a gradebook ("Rapporten | Rapport 1"), as `init`
+/// gives it in `reports` (flutter_smartschool 0.4.0, dartschool#195): where
+/// the teacher writes the course comment of each pupil that goes on the
+/// report. In the shape seen live: `{"name": "R1D", "fullname": "Rapport
+/// 1", "id": "2762", "info": "<p>...", "open": 1, "type": "a", "rating": 0,
+/// "timestamp": "2026-10-30T23:00:00+0100", "lockIcon": 0}`.
+class FakeSkoreReportPeriod {
+  const FakeSkoreReportPeriod(
+    this.id,
+    this.name,
+    this.fullName, {
+    required this.open,
+    required this.timestamp,
+    this.note = '',
+  });
+
+  final int id;
+
+  /// The short name on the tab (`R1D`).
+  final String name;
+
+  /// The full name (`Rapport 1`).
+  final String fullName;
+
+  /// Whether its course comments can be written (`open` 1).
+  final bool open;
+
+  /// When it closes, as Skore writes it (`2026-10-30T23:00:00+0100`); empty
+  /// for none.
+  final String timestamp;
+
+  /// The school's note in Skore's description.
+  final String note;
+
+  /// Skore's description (`info`): the full name, until when it is open
+  /// (or `Gesloten!`) and the note.
+  String get info {
+    final closes = timestamp.isEmpty
+        ? ''
+        : timestamp.substring(0, 16).replaceFirst('T', ' ');
+    final state = open ? 'Open tot $closes' : 'Gesloten!';
+    return '<p><u><b>$fullName</b></u></p><p>$state</p><p>$note</p>';
   }
 }
 
@@ -330,7 +377,9 @@ class FakeSkoreOwnGradebook {
     this.coordinator = false,
     Map<int, List<FakeSkoreEvaluation>>? evaluations,
     List<List<Object>>? components,
+    List<FakeSkoreReportPeriod>? reports,
   }) : periods = periods ?? [],
+       reports = reports ?? [],
        pupils = pupils ?? [],
        evaluations = evaluations ?? {},
        components =
@@ -363,6 +412,10 @@ class FakeSkoreOwnGradebook {
   final List<String> teachers;
 
   final List<FakeSkoreGradebookPeriod> periods;
+
+  /// The report periods, in Skore's order (`init`'s `reports`); none by
+  /// default.
+  final List<FakeSkoreReportPeriod> reports;
 
   /// The index in [periods] of the period Skore opens the gradebook on
   /// (`activePeriodE`).
@@ -599,6 +652,49 @@ FakeSkoreOwnGradebook fakeSkoreGradebook5BW() => FakeSkoreOwnGradebook(
   },
 );
 
+/// A behaviour gradebook of 2026-2027 in the shape seen live for "Gedrag
+/// (A-stroom, D/A en D)" (#168, flutter_smartschool 0.4.0): no evaluation
+/// periods, so no evaluations and nothing for `getGradebookContext` to say,
+/// and one open report period, where the course comment of each pupil is
+/// written. Not in [FakeSkoreGradebook.loadSchool]: a test adds it.
+FakeSkoreOwnGradebook fakeSkoreGradebookGedrag() => FakeSkoreOwnGradebook(
+  workyear: FakeSkoreWorkyear.y2026,
+  id: 34901,
+  modelId: 176,
+  modelName: '3gr D-D/A',
+  groupId: 492,
+  groupName: '5DG',
+  classId: 2516,
+  className: '5WW1',
+  courseId: 1902,
+  course: 'Gedrag (A-stroom, D/A en D)',
+  writable: false,
+  reports: [
+    const FakeSkoreReportPeriod(
+      2762,
+      'R1D',
+      'Rapport 1',
+      open: true,
+      timestamp: '2026-10-30T23:00:00+0100',
+      note: 'Schrijf hier je commentaar voor het rapport.',
+    ),
+  ],
+  pupils: [
+    const FakeSkoreGradebookPupil(
+      1221,
+      'Jacobs, Gert',
+      'Gert Jacobs',
+      number: 1,
+    ),
+    const FakeSkoreGradebookPupil(
+      1222,
+      'Lemmens, Ilse',
+      'Ilse Lemmens',
+      number: 2,
+    ),
+  ],
+);
+
 /// A fake of Skore's gradebook RPC service, served by `FakeSmartschool` to
 /// logged-in requests: the user's gradebooks per school year ([gradebooks],
 /// in the order of the left panel) and the school years Skore offers
@@ -635,6 +731,10 @@ class FakeSkoreGradebook {
   /// Answers that replace the fake's own, by RPC method: the HTTP status and
   /// the body.
   final Map<String, ({int status, String body})> answers = {};
+
+  /// Headers added to the answer of [answers] for an RPC method, such as a
+  /// `location` for a redirect.
+  final Map<String, Map<String, List<String>>> answerHeaders = {};
 
   /// The answer that replaces the fake's own to every feedback read: the
   /// HTTP status and the body.
@@ -865,7 +965,7 @@ class FakeSkoreGradebook {
     requests.add((rpc: method, params: params, session: session));
     beforeAnswer?.call(method, params);
     if (answers[method] case (:final status, :final body)) {
-      return _json(body, status: status);
+      return _json(body, status: status, headers: answerHeaders[method]);
     }
     if (unusable) return _html(_errorPage);
     if (!fakeSkoreGradebookRpcMethods.contains(method)) {
@@ -1735,7 +1835,20 @@ class FakeSkoreGradebook {
             'categoryMode': 1,
           },
       ],
-      'reports': <Object?>[],
+      'reports': [
+        for (final report in book.reports)
+          {
+            'name': report.name,
+            'fullname': report.fullName,
+            'id': '${report.id}',
+            'info': report.info,
+            'open': report.open ? 1 : 0,
+            'type': 'a',
+            'rating': 0,
+            'timestamp': report.timestamp,
+            'lockIcon': report.open ? 0 : 1,
+          },
+      ],
       'activePeriodE': book.activePeriod,
       'activePeriodP': -1,
       'activeReport': 0,
@@ -1842,14 +1955,18 @@ class FakeSkoreGradebook {
     }),
   );
 
-  static ResponseBody _json(String body, {int status = 200}) =>
-      ResponseBody.fromString(
-        body,
-        status,
-        headers: {
-          Headers.contentTypeHeader: ['application/json; charset=utf-8'],
-        },
-      );
+  static ResponseBody _json(
+    String body, {
+    int status = 200,
+    Map<String, List<String>>? headers,
+  }) => ResponseBody.fromString(
+    body,
+    status,
+    headers: {
+      Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+      ...?headers,
+    },
+  );
 
   /// What Skore answered a grade above the max (seen live, dartschool#151):
   /// HTTP 500 with a line of JSON and Smartschool's error page.
