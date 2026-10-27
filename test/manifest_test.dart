@@ -285,27 +285,65 @@ void main() {
     );
   });
 
-  test('lists the tools of the README, in its order', () {
-    final readme = File(
-      'README.md',
-    ).readAsStringSync().replaceAll('\r\n', '\n');
-    final section = RegExp(
-      r'^### Tools\n(.*?)^#',
+  test('lists the tools of the tool pages, in the order the README links '
+      'them', () {
+    String read(String path) =>
+        File(path).readAsStringSync().replaceAll('\r\n', '\n');
+    final overview = RegExp(
+      r'^## Tool areas\n(.*?)^## ',
       multiLine: true,
       dotAll: true,
-    ).firstMatch(readme)!.group(1)!;
-    final readmeTools = [
+    ).firstMatch(read('README.md'))!.group(1)!;
+    final pages = [
       for (final match in RegExp(
-        r'^- `([a-z_]+)`:',
+        r'^\| \[[^\]]+\]\((docs/tools/[a-z_]+\.md)\) \|',
         multiLine: true,
-      ).allMatches(section))
-        match.group(1),
+      ).allMatches(overview))
+        match.group(1)!,
     ];
+    expect(pages, hasLength(pages.toSet().length));
+    expect(
+      Directory('docs/tools').listSync().whereType<File>().map(
+        (file) => 'docs/tools/${file.uri.pathSegments.last}',
+      ),
+      unorderedEquals(pages),
+      reason: 'the README links every tool page',
+    );
 
-    expect(readmeTools, hasLength(69));
+    final documented = <String>[];
+    for (final page in pages) {
+      final text = read(page);
+      // Each tool has a heading of its own under "## Tools", and a row in
+      // the table the page opens with, in the same order.
+      final section = RegExp(
+        r'^## Tools\n(.*?)^## ',
+        multiLine: true,
+        dotAll: true,
+      ).firstMatch(text)!.group(1)!;
+      final headings = [
+        for (final match in RegExp(
+          r'^### `([a-z_]+)`$',
+          multiLine: true,
+        ).allMatches(section))
+          match.group(1)!,
+      ];
+      final table = text.substring(0, text.indexOf('\n## Tools\n'));
+      final rows = [
+        for (final match in RegExp(
+          r'^\| \[`([a-z_]+)`\]\(#([a-z_]+)\) \| [^|]+ \| (No|Yes)[^|]* \|$',
+          multiLine: true,
+        ).allMatches(table))
+          if (match.group(1) == match.group(2)) match.group(1)!,
+      ];
+      expect(headings, isNotEmpty, reason: page);
+      expect(rows, headings, reason: page);
+      documented.addAll(headings);
+    }
+
+    expect(documented, hasLength(69));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
-    ], readmeTools);
+    ], documented);
     for (final tool in manifest['tools'] as List) {
       expect((tool as Map)['description'], isNotEmpty, reason: tool['name']);
     }

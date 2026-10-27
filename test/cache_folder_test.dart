@@ -17,8 +17,18 @@ void main() {
     }
   });
 
-  test('the shared cache folder is .cache/smartschool, as the README '
-      'documents', () {
+  test('the shared cache folder is .cache/smartschool, as '
+      'docs/development.md documents', () {
     expect(sharedCacheDirectory(), endsWith('$sep.cache${sep}smartschool'));
+    expect(
+      File('docs/development.md').readAsStringSync(),
+      allOf(
+        contains(r'`%USERPROFILE%\.cache\smartschool\<username>`'),
+        contains(
+          r'%USERPROFILE%\.cache\smartschool\'
+          'smartschool-mcp-update-check.json',
+        ),
+      ),
+    );
   });
 }

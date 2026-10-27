@@ -156,6 +156,8 @@ Future<void> _serve(ServerOptions options) async {
           planLessonTool(session),
           editPlannedElementTool(session),
           clearLessonTool(session),
+          planAssignmentTool(session),
+          trashAssignmentTool(session),
           listLesfichesTool(session),
           readLesficheTool(session),
           readLesficheAttachmentTool(session),
@@ -169,8 +171,6 @@ Future<void> _serve(ServerOptions options) async {
           removeLesficheAttachmentTool(session),
           trashLesfichesTool(session),
           planLesficheTool(session),
-          planAssignmentTool(session),
-          trashAssignmentTool(session),
           // The user's gradebooks in Skore, their own and those shared with
           // them (#167), with their reports' course comments (#171): no
           // switch, as they need no extra rights (#140, #141, #142, #143,

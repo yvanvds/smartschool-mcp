@@ -145,6 +145,14 @@
       "description": "Maakt een lesuur in je eigen planner weer leeg: de les met haar titel en info verdwijnt. Pas na jouw bevestiging."
     },
     {
+      "name": "plan_assignment",
+      "description": "Plant een toets of taak voor de klassen van een van je eigen lesuren. Je leerlingen zien ze meteen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "trash_assignment",
+      "description": "Verplaatst een eigen toets of taak naar de prullenbak van de planner, waar je ze 30 dagen kunt terugzetten. Pas na jouw bevestiging."
+    },
+    {
       "name": "list_lesfiches",
       "description": "Toont je lesfiches uit de module Lesfiches, op label, naam en soort, om ze in je lesuren te plannen."
     },
@@ -195,14 +203,6 @@
     {
       "name": "plan_lesfiche",
       "description": "Plant een lesfiche als les in een leeg lesuur van je eigen planner. Pas na jouw bevestiging."
-    },
-    {
-      "name": "plan_assignment",
-      "description": "Plant een toets of taak voor de klassen van een van je eigen lesuren. Je leerlingen zien ze meteen. Pas na jouw bevestiging."
-    },
-    {
-      "name": "trash_assignment",
-      "description": "Verplaatst een eigen toets of taak naar de prullenbak van de planner, waar je ze 30 dagen kunt terugzetten. Pas na jouw bevestiging."
     },
     {
       "name": "list_skore_gradebooks",

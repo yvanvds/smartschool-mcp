@@ -9,8 +9,8 @@
 /// messages say. The links within and between the guides must work, and
 /// the README, the release notes and the extension manifest must link to
 /// them. What the guides say about the pupil tracking system (LVS) must
-/// agree with its tools, and the bug template and the README must keep
-/// pupil data out of issues (#158).
+/// agree with its tools, and the bug template and `docs/development.md`
+/// must keep pupil data out of issues (#158).
 library;
 
 import 'dart:convert';
@@ -913,18 +913,18 @@ void main() {
     });
 
     test('gives contributors the rules of the library\'s doc/lvs-privacy.md '
-        'in the README, and names every LVS helper file', () {
+        'in docs/development.md, and names every LVS helper file on the LVS '
+        'tool page', () {
       const rules =
           'https://github.com/yvanvds/dartschool/blob/main/doc/lvs-privacy.md';
-      final readme = _read('README.md');
-      final development = readme.substring(
-        readme.indexOf('## Development'),
-        readme.indexOf('### Build'),
-      );
+      final development = _read('docs/development.md');
+      const heading = '\n## Pupil tracking system (LVS) data\n';
+      final start = development.indexOf(heading);
+      expect(start, isNonNegative);
+      final end = development.indexOf('\n## ', start + heading.length);
       expect(
-        development,
+        development.substring(start, end < 0 ? development.length : end),
         allOf(
-          contains('### Pupil tracking system (LVS) data'),
           contains('[`doc/lvs-privacy.md`]($rules)'),
           contains('(yvanvds/dartschool#159)'),
           contains('`test/fixtures/lvs/FAKES.md`'),
@@ -932,7 +932,8 @@ void main() {
         ),
       );
       expect(_read('test/fixtures/lvs/FAKES.md'), contains('($rules)'));
-      expect(readme, contains('LVS helpers live in `lib/src/lvs/`.'));
+      final page = _read('docs/tools/lvs.md');
+      expect(page, contains('LVS helpers live in `lib/src/lvs/`.'));
       final helpers = [
         for (final file in Directory('lib/src/lvs').listSync())
           if (file is File && file.path.endsWith('.dart'))
@@ -940,7 +941,7 @@ void main() {
       ];
       expect(helpers, isNotEmpty);
       for (final helper in helpers) {
-        expect(readme, contains('`$helper`'), reason: helper);
+        expect(page, contains('`$helper`'), reason: helper);
       }
     });
   });

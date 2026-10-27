@@ -27,8 +27,8 @@ import 'server_tool.dart';
 /// a second call makes a second lesfiche (the module keeps a name that is
 /// taken), so it is not idempotent either; and it sends files from this PC
 /// to Smartschool. Claude Desktop, and Codex too, ask for approval only for
-/// a tool marked destructive (README, "ChatGPT and Codex"), and that
-/// approval is what holds Claude to the confirmation.
+/// a tool marked destructive (`docs/development.md`, "ChatGPT and Codex"),
+/// and that approval is what holds Claude to the confirmation.
 ///
 /// The arguments are checked before anything is sent
 /// (`lesfiche_writes.dart`, the visibilities in `lesfiche_detail.dart`).
