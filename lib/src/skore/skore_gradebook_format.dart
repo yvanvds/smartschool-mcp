@@ -18,18 +18,65 @@ String formatSkoreOwnGradebook(SkoreGradebook gradebook) => [
   'gradebook id ${gradebook.gradebookId}',
 ].join(' | ');
 
+/// A gradebook a colleague shared with the user (#167): its class, its
+/// course as Skore's list of shared gradebooks names it (without a grade),
+/// its gradebook id, its owner by name and user id, and what the user may
+/// do in it.
+///
+/// For example `5WW2 | Gedrag | gradebook id 34980 | owner Céline Dupré
+/// (user id 346) | shared to read and write`, or `... | shared to read
+/// only`.
+String formatSkoreSharedGradebook(SkoreGradebook gradebook) => [
+  skoreName(gradebook.className),
+  skoreName(gradebook.courseName),
+  'gradebook id ${gradebook.gradebookId}',
+  'owner ${formatSkoreGradebookOwner(gradebook)} (user id '
+      '${gradebook.teacherId})',
+  'shared to ${_sharedTo(gradebook)}',
+].join(' | ');
+
+/// The owner of [gradebook], one a colleague shared with the user: the
+/// colleague's name as Skore's list of shared gradebooks gives it (first
+/// name first), or their user id when it gives none. For one of the user's
+/// own gradebooks, `the user`.
+String formatSkoreGradebookOwner(SkoreGradebook gradebook) {
+  if (!gradebook.isShared) return 'the user';
+  final name = gradebook.ownerName.trim();
+  return name.isEmpty
+      ? 'user id ${gradebook.teacherId}'
+      : skoreName(gradebook.ownerName);
+}
+
+/// What the user may do in [gradebook], one a colleague shared with them,
+/// after "shared to": `read and write`, or `read only`.
+String _sharedTo(SkoreGradebook gradebook) =>
+    gradebook.access == SkoreGradebookAccess.read
+    ? 'read only'
+    : 'read and write';
+
 /// [gradebook] in a sentence, for the first line of a tool's result: its
 /// id, course, class and school year. For example `Gradebook id 32508:
 /// Informaticawetenschappen (2 uur) (6e j DO), class 6EWI, school year
 /// 2026-2027 (workyear id 24)`.
+///
+/// For a gradebook a colleague shared with the user (#167), also its owner
+/// and what the user may do in it, as a second sentence: `... (workyear id
+/// 24). Its owner, Céline Dupré (user id 346), shared it with the user to
+/// read and write`, or `to read only`.
 String formatSkoreGradebookTitle(
   SkoreGradebook gradebook,
   SkoreWorkyear workyear,
-) =>
-    'Gradebook id ${gradebook.gradebookId}: '
-    '${skoreName(gradebook.courseName)}, class '
-    '${skoreName(gradebook.className)}, school year '
-    '${formatSkoreWorkyear(workyear)}';
+) {
+  final title =
+      'Gradebook id ${gradebook.gradebookId}: '
+      '${skoreName(gradebook.courseName)}, class '
+      '${skoreName(gradebook.className)}, school year '
+      '${formatSkoreWorkyear(workyear)}';
+  if (!gradebook.isShared) return title;
+  return '$title. Its owner, ${formatSkoreGradebookOwner(gradebook)} (user id '
+      '${gradebook.teacherId}), shared it with the user to '
+      '${_sharedTo(gradebook)}';
+}
 
 /// A school year: its name and workyear id, such as `2026-2027 (workyear
 /// id 24)`.
@@ -92,13 +139,93 @@ String formatSkorePeriodState(SkoreGradebookPeriod period) =>
 String formatSkorePeriodName(SkoreGradebookPeriod period) =>
     '${skoreName(period.name)} (period id ${period.id})';
 
+/// What a gradebook without evaluation periods ([sheet], whose `periods`
+/// are empty) has, after "has": `no evaluation periods yet`; or `no
+/// evaluation periods, only report periods` for one with report periods
+/// only, as Skore shows a behaviour gradebook such as "Gedrag (A-stroom,
+/// D/A en D)" (#168, flutter_smartschool 0.4.0). Either way it has no
+/// evaluations and takes no grades.
+String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
+    sheet.reports.isEmpty
+    ? 'no evaluation periods yet'
+    : 'no evaluation periods, only report periods';
+
+/// For a gradebook with report periods only ([sheet], see
+/// [formatSkoreMissingPeriods]), the sentence on where its course comments
+/// are, and which tools read and write them (#171), for the tools that read
+/// it; null for any other gradebook.
+String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
+    sheet.periods.isEmpty && sheet.reports.isNotEmpty
+    ? 'Its course comments, one per pupil, are written in its report '
+          'periods and go on the report: read_skore_report reads them, and '
+          'save_skore_report_comment writes them.'
+    : null;
+
+/// One report period of a gradebook (#171): its name (and full name when
+/// Skore gives another), report id, whether it is open and when it closes,
+/// and Skore's note on it ([skoreReportNote]).
+///
+/// For example `R1D (Rapport 1) | report id 2762 | open, closes 2026-10-30
+/// 23:00 | note: Open tot 2026-10-30 23:00. Schrijf hier je commentaar voor
+/// het rapport.`.
+String formatSkoreReportPeriod(SkoreReportPeriod report) {
+  final name = skoreName(report.name);
+  final fullName = skoreName(report.fullName);
+  final note = skoreReportNote(report);
+  return [
+    fullName == name ? name : '$name ($fullName)',
+    'report id ${report.id}',
+    formatSkoreReportState(report),
+    if (note != null) 'note: $note',
+  ].join(' | ');
+}
+
+/// Whether [report] is open, and when it closes (or closed), in the time of
+/// this PC, as [formatSkorePeriodState] says it of a period.
+String formatSkoreReportState(SkoreReportPeriod report) =>
+    switch ((report.isOpen, report.closesAt)) {
+      (true, final time?) => 'open, closes ${formatSkoreTime(time)}',
+      (true, null) => 'open, no closing time',
+      (false, final time?) => 'closed, closing time ${formatSkoreTime(time)}',
+      (false, null) => 'closed',
+    };
+
+/// A report period by its name and id, as a sentence or an error names it:
+/// `report R1D (Rapport 1, report id 2762)`, or `report R1D (report id
+/// 2762)` when its full name is its name.
+String formatSkoreReportName(SkoreReportPeriod report) {
+  final name = skoreName(report.name);
+  final fullName = skoreName(report.fullName);
+  return 'report $name (${fullName == name ? '' : '$fullName, '}report id '
+      '${report.id})';
+}
+
+/// What Skore's description of [report] ([SkoreReportPeriod.info], HTML)
+/// says that the rest of its line does not, as one line, as
+/// [skorePeriodNote] says it of a period; null when nothing is left.
+String? skoreReportNote(SkoreReportPeriod report) =>
+    _note(report.info, report.name, report.fullName);
+
+/// The course comment of a pupil on a report (#171), its text indented line
+/// by line, as [formatSkoreFeedback] shows a feedback text.
+List<String> formatSkoreReportCommentText(String text) => [
+  for (final line in text.trim().split(_newline)) '  ${line.trimRight()}',
+];
+
 /// A gradebook by its class, course and id, as an error names it:
 /// `gradebook of 6EWI for Informaticawetenschappen (2 uur) (6e j DO)
-/// (gradebook id 32508)`.
-String formatSkoreGradebookName(SkoreGradebook gradebook) =>
-    'gradebook of ${skoreName(gradebook.className)} for '
-    '${skoreName(gradebook.courseName)} (gradebook id '
-    '${gradebook.gradebookId})';
+/// (gradebook id 32508)`. One a colleague shared with the user also by its
+/// owner (#167), so that every result and refusal of a write names whose
+/// gradebook it is: `gradebook of 5WW2 for Gedrag (gradebook id 34980,
+/// owner Céline Dupré)`.
+String formatSkoreGradebookName(SkoreGradebook gradebook) {
+  final owner = gradebook.isShared
+      ? ', owner ${formatSkoreGradebookOwner(gradebook)}'
+      : '';
+  return 'gradebook of ${skoreName(gradebook.className)} for '
+      '${skoreName(gradebook.courseName)} (gradebook id '
+      '${gradebook.gradebookId}$owner)';
+}
 
 /// One evaluation of a period (#141): its title (and short name), its
 /// evaluation id, Skore's column, its day, its highest grade, its
@@ -130,28 +257,149 @@ String formatSkoreEvaluation(SkoreEvaluation evaluation) {
     switch (evaluation.type) {
       SkoreEvaluationType.points => 'points',
       SkoreEvaluationType.scale => 'a scale',
-      SkoreEvaluationType.unknown => 'type ${evaluation.typeCode}',
+      SkoreEvaluationType.unknown =>
+        'a type the server does not support (evaltype ${evaluation.typeCode})',
     },
     if (evaluation.isPlannerEvaluation) 'from the planner',
     formatSkorePublication(evaluation.publication),
   ].join(' | ');
 }
 
+/// Why the server cannot read the grades of [evaluation], one the library
+/// could not read (not [SkoreEvaluation.isReadable]), for after a colon: a
+/// type it does not know, named by Skore's `evaltype`
+/// ([SkoreEvaluation.typeCode]), in the server's words; or a cell in a
+/// shape it does not recognise, with the library's reason
+/// ([SkoreEvaluation.unreadableReason]), which names a cell by its row (a
+/// pupil id) and quotes nothing of Skore's answer.
+///
+/// For example `it is of a type the server does not support yet (Skore's
+/// evaltype 3; the server reads evaluations in points and on a scale)`.
+String skoreUnreadableReason(SkoreEvaluation evaluation) =>
+    switch (evaluation.type) {
+      SkoreEvaluationType.unknown =>
+        'it is of a type the server does not support yet (Skore\'s evaltype '
+            '${evaluation.typeCode}; the server reads evaluations in points '
+            'and on a scale)',
+      _ =>
+        'Skore gave its grades in a shape the server does not know yet '
+            '(${evaluation.unreadableReason})',
+    };
+
 /// What the gradebook tools say instead of the grades of an [evaluation]
-/// the library could not read (not [SkoreEvaluation.isReadable]: its type
-/// is not one the library knows, or a cell of it is in a shape it does not
-/// recognise), with the library's reason, which names a cell by its row and
-/// quotes nothing of Skore's answer: `The server could not read the grades
-/// of this evaluation: its type, evaltype 7, is not one the library reads
-/// (1, points, or 2, a scale).`
+/// the library could not read (not [SkoreEvaluation.isReadable]), with why
+/// ([skoreUnreadableReason]): `The server cannot read the grades of this
+/// evaluation: it is of a type the server does not support yet (Skore's
+/// evaltype 7; the server reads evaluations in points and on a scale). The
+/// user sees them in Skore in Smartschool itself.`
 ///
 /// Since flutter_smartschool 0.4.0 the library reads the rest of the period
 /// around such an evaluation, and its `results` throw
 /// (yvanvds/dartschool#193): the tools ask [SkoreEvaluation.isReadable]
-/// first (#170). Reading evaluations on a scale with their labels is #169.
+/// first (#170).
 String formatSkoreUnreadableGrades(SkoreEvaluation evaluation) =>
-    'The server could not read the grades of this evaluation: '
-    '${evaluation.unreadableReason}.';
+    'The server cannot read the grades of this evaluation: '
+    '${skoreUnreadableReason(evaluation)}. The user sees them in Skore in '
+    'Smartschool itself.';
+
+/// Whether [evaluation] is one on a scale ("Waarderingen", Skore's
+/// `evaltype` 2) whose grades the library read: the tools show its values
+/// with the levels of the school's scale ([formatSkoreScaleValue]), read
+/// once per call (`readSkoreScaleFor`, #169).
+bool isSkoreScaleEvaluation(SkoreEvaluation evaluation) =>
+    evaluation.type == SkoreEvaluationType.scale && evaluation.isReadable;
+
+/// A pupil's [grade] in [evaluation], as the gradebook tools show it: for an
+/// evaluation on a scale ([isSkoreScaleEvaluation]) with its level on
+/// [scale] ([formatSkoreScaleValue]), else as Skore stores it
+/// ([formatSkoreGradeValue]).
+String formatSkoreGradeIn(
+  SkoreEvaluation evaluation,
+  SkoreGrade? grade,
+  SkoreScale? scale,
+) => isSkoreScaleEvaluation(evaluation)
+    ? formatSkoreScaleValue(evaluation, grade, scale)
+    : formatSkoreGradeValue(grade);
+
+/// A pupil's [grade] in [evaluation], an evaluation on a scale (#169): the
+/// level of [scale] it has ([SkoreScale.levelOf], as Skore's web client
+/// finds it), by its description and abbreviation, and the value Skore
+/// stores, out of the evaluation's max: `Zeer goed (ZG; stored as 10)`.
+///
+/// `no grade` for an empty cell and `no cell` when Skore gave none, as for
+/// points; a value no level covers (not a number, or an evaluation without
+/// a max) says so: `G (no level of the scale)`. Without [scale] (it could
+/// not be read, which [formatSkoreScaleNote] says once), the value as Skore
+/// stores it.
+String formatSkoreScaleValue(
+  SkoreEvaluation evaluation,
+  SkoreGrade? grade,
+  SkoreScale? scale,
+) {
+  final value = grade?.grade;
+  if (grade == null || value == null || scale == null) {
+    return formatSkoreGradeValue(grade);
+  }
+  final level = scale.levelOf(evaluation, grade);
+  if (level == null) return '$value (no level of the scale)';
+  final (label, short) = _scaleLabels(level);
+  return short == null
+      ? '$label (stored as $value)'
+      : '$label ($short; stored as $value)';
+}
+
+/// A level of a scale by its description and abbreviation, `Zeer goed
+/// (ZG)`; one of the two alone when Skore gives no other.
+String formatSkoreScaleLevel(SkoreScaleLevel level) {
+  final (label, short) = _scaleLabels(level);
+  return short == null ? label : '$label ($short)';
+}
+
+/// The label of [level], its description (its abbreviation when it has
+/// none), and its abbreviation next to it, or null when there is not both.
+(String, String?) _scaleLabels(SkoreScaleLevel level) {
+  final description = level.description.trim();
+  final abbreviation = level.abbreviation.trim();
+  if (description.isEmpty) return (skoreName(abbreviation), null);
+  if (abbreviation.isEmpty) return (skoreName(description), null);
+  return (skoreName(description), skoreName(abbreviation));
+}
+
+/// The school's [scale] in a sentence, for a result that shows values on
+/// it (#169): its name and its levels from low to high, each with the
+/// percentage of the max it starts at, and how Skore stores a value. For
+/// example `The scale "Gedragsschaal" of the evaluations on a scale, from
+/// low to high: Onvoldoende (O) from 0% of the max, Voldoende (V) from 50%,
+/// Zeer goed (ZG) from 80%. Skore stores a value on it as a number out of
+/// the evaluation's max.`
+String formatSkoreScale(SkoreScale scale) {
+  final name =
+      'The scale "${skoreName(scale.name)}" of the evaluations on a '
+      'scale';
+  final levels = scale.levels;
+  if (levels.isEmpty) return '$name has no levels.';
+  return '$name, from low to high: '
+      '${[for (final (index, level) in levels.indexed) '${formatSkoreScaleLevel(level)} from '
+            '${formatSkoreNumber(level.lowerThreshold)}%'
+            '${index == 0 ? ' of the max' : ''}'].join(', ')}. Skore stores a value on it as a number out of the '
+      'evaluation\'s max.';
+}
+
+/// The line about the school's scale for a result that shows [evaluations]:
+/// [formatSkoreScale] when one of them is on a scale
+/// ([isSkoreScaleEvaluation]) and [scale] was read, a sentence that it
+/// could not be read when it was not, and null when none is on a scale.
+String? formatSkoreScaleNote(
+  Iterable<SkoreEvaluation> evaluations,
+  SkoreScale? scale,
+) {
+  if (!evaluations.any(isSkoreScaleEvaluation)) return null;
+  if (scale != null) return formatSkoreScale(scale);
+  return 'The scale of the evaluations on a scale could not be read, so '
+      'their values are shown as Skore stores them (a number out of the '
+      'max), without their labels; the technical details are in the server '
+      'log.';
+}
 
 /// An evaluation by its title and id, as a sentence or an error names it:
 /// `evaluation "Toets 1" (evaluation id 500003)`.
@@ -268,8 +516,13 @@ final _newline = RegExp(r'\r\n?|\n');
 /// Skore gives `<p><u><b>DW1</b></u></p><p>Open van 2026-09-18 15:30<br/>
 /// tot en met 2026-12-18 20:00</p><p>Vul hier je punten ... in!</p>`, and
 /// for a closed period a lock and `Gesloten!` instead of the dates.
-String? skorePeriodNote(SkoreGradebookPeriod period) {
-  final fragment = html_parser.parseFragment(period.info);
+String? skorePeriodNote(SkoreGradebookPeriod period) =>
+    _note(period.info, period.name, period.fullName);
+
+/// The note of [skorePeriodNote] and [skoreReportNote]: the paragraphs of
+/// [info] that are not [name], [fullName] or `Gesloten!`, as one line.
+String? _note(String info, String name, String fullName) {
+  final fragment = html_parser.parseFragment(info);
   final paragraphs = fragment.querySelectorAll('p');
   final texts = [
     for (final text
@@ -281,8 +534,8 @@ String? skorePeriodNote(SkoreGradebookPeriod period) {
   final kept = [
     for (final text in texts)
       if (text.isNotEmpty &&
-          text != period.name.trim() &&
-          text != period.fullName.trim() &&
+          text != name.trim() &&
+          text != fullName.trim() &&
           text != _closed)
         _sentence(text),
   ];

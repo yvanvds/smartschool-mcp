@@ -13,10 +13,20 @@ import 'server_tool.dart';
 const _tool = 'save_skore_feedback';
 
 /// `save_skore_feedback`: gives one pupil the user's written feedback on one
-/// evaluation of one of the user's own gradebooks in Skore, or changes the
-/// text of the feedback the user gave them there, with the library's
+/// evaluation of one of the user's gradebooks in Skore, or changes the text
+/// of the feedback the user gave them there, with the library's
 /// [SkoreGradebookService.saveFeedback] (dartschool#152). One pupil per
 /// call: each text is personal, and the user should see each one.
+///
+/// A gradebook a colleague shared with the user to read and write takes
+/// feedback as an own one does (#167, dartschool#191), such as the
+/// behaviour gradebook of a class that its form teacher shared with the
+/// co-titularis. One shared to read only is refused in the tool's own words
+/// before it is read ([checkSkoreGradebookChangeable]); the library refuses
+/// it too. The user's own feedback is the feedback by the logged-in user
+/// ([SkoreGradebooks.userId]), as the library keeps it: in a shared
+/// gradebook, the feedback of its owner (the gradebook's teacher) is
+/// another's, never the user's, and never changed.
 ///
 /// Offered to every account, without a switch, like the other gradebook
 /// tools. Claude Desktop must ask for approval before every call, so the
@@ -36,23 +46,36 @@ const _tool = 'save_skore_feedback';
 /// changed the user's feedback or created one, which the library's result
 /// does not say. Feedback by others is never sent: the library keeps to the
 /// user's own.
+///
+/// Feedback on an evaluation on a scale ("Waarderingen", such as for
+/// behaviour) goes as on one in points, with the same checks (#169): the
+/// library sends it to the same REST API. An evaluation the library could
+/// not read (a type it does not know) is refused in the tool's own words
+/// before the library is asked, which refuses it too.
 ServerTool saveSkoreFeedbackTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: _tool,
     title: 'Give a pupil feedback on an evaluation in Skore',
     description:
         'Gives one pupil the user\'s written feedback on one evaluation (a '
-        'column of grades, such as a test) of one of the user\'s own '
-        'gradebooks in Skore, the Smartschool module for scores and reports, '
-        'or changes the feedback the user gave that pupil there before. One '
+        'column of grades, such as a test, in points or on a scale, such as '
+        'for behaviour) of one of the user\'s gradebooks in Skore, the '
+        'Smartschool module for scores and reports (their own, or one a '
+        'colleague shared with them to read and write), or changes the '
+        'feedback the user gave that pupil there before. One '
         'pupil per call: each text is personal. The text is plain text; line '
         'breaks are kept. Before calling this tool, read the pupil\'s '
         'feedback on the evaluation with read_skore_feedback. When the user '
         'already gave feedback there, this tool replaces its text: show the '
         'user the old text and the new one. Show the user the pupil (class '
         'number and name), the evaluation and the text, and only call this '
-        'tool after the user has explicitly confirmed it. Feedback that '
-        'others gave the pupil is never changed. Only a gradebook of Skore\'s '
+        'tool after the user has explicitly confirmed it. In a gradebook a '
+        'colleague shared with the user, also tell the user whose gradebook '
+        'it is: its owner, as list_skore_gradebooks and read_skore_feedback '
+        'name them. Feedback that others gave the pupil is never changed. '
+        'Nor is the feedback of the owner of a shared gradebook. A gradebook '
+        'shared with the user to read only is refused: the user may read it, '
+        'not change it. Only a gradebook of Skore\'s '
         'current school year can be changed. An evaluation that is published '
         'or scheduled is refused unless allow_published is true: feedback '
         'there is visible to the pupil at once, and the school sends them a '
@@ -162,6 +185,9 @@ Future<CallToolResult> _save(
       reread: _reread(gradebookId, evaluationId, pupilId),
       (gradebooks) async {
         final found = await years.findInCurrentYear(gradebooks, gradebookId);
+        // The library refuses it as well, before anything is sent; this
+        // says it in the server's words, before the gradebook is read.
+        checkSkoreGradebookChangeable(found.gradebook);
         final sheet = await gradebooks.getGradebook(found.gradebook);
         final pupil = skoreGradebookPupil(sheet, pupilId);
         final listed = await findSkoreEvaluation(
@@ -172,6 +198,18 @@ Future<CallToolResult> _save(
         );
         final evaluation = listed.evaluation;
         final where = _where(sheet, listed.period);
+        // The library refuses it as well, after reading Skore again, in
+        // words for a caller of the library (#169). One on a scale it
+        // takes: feedback is not a grade.
+        if (!evaluation.isReadable) {
+          throw ToolError(
+            'The server cannot read the '
+            '${formatSkoreEvaluationName(evaluation)} in $where: '
+            '${skoreUnreadableReason(evaluation)}, so $_tool gives no '
+            'feedback on it. Tell the user so; they can give the feedback in '
+            'Skore in Smartschool itself.',
+          );
+        }
         // The library refuses it as well, but its refusal cannot be told
         // apart from the others (dartschool#157, #148).
         checkSkoreWritePublication(
@@ -182,14 +220,16 @@ Future<CallToolResult> _save(
           allowPublished: allowPublished,
         );
         // The user's own feedback, as the library keeps to it: by the
-        // gradebook's teacher, the user for every gradebook of their own.
+        // logged-in user, not by the gradebook's teacher, who is the owner
+        // of a gradebook shared with the user (#167).
+        final userId = await gradebooks.userId();
         final own = [
           for (final feedback in await gradebooks.getFeedback(
             sheet.gradebook,
             evaluation,
             pupil.id,
           ))
-            if (feedback.teacherId == sheet.gradebook.teacherId) feedback,
+            if (feedback.teacherId == userId) feedback,
         ];
         final to = (
           sheet: sheet,

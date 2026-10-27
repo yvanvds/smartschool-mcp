@@ -24,7 +24,7 @@ ServerTool readLvsResultsTool(
         "Reads one pupil's results in Smartschool's pupil tracking system "
         '(leerlingvolgsysteem, LVS): the Resultaten part of the file, the '
         'results pupils and parents see, in every course, not only the '
-        "user's own gradebooks (read_skore_gradebook). Use it when the user "
+        "user's gradebooks (read_skore_gradebook). Use it when the user "
         'asks how a pupil is doing in their courses. Of one school year, the '
         'current one unless school_year is given, and by default of its '
         'active period: period takes a period_id or a name, or all for every '

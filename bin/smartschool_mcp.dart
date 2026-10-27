@@ -43,6 +43,7 @@ import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_weblink_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
@@ -51,6 +52,7 @@ import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
@@ -169,15 +171,19 @@ Future<void> _serve(ServerOptions options) async {
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
-          // The user's own gradebooks in Skore: no switch, as they need no
-          // extra rights (#140, #141, #142, #143, #144).
+          // The user's gradebooks in Skore, their own and those shared with
+          // them (#167), with their reports' course comments (#171): no
+          // switch, as they need no extra rights (#140, #141, #142, #143,
+          // #144).
           listSkoreGradebooksTool(session),
           readSkoreGradebookTool(session),
           listSkoreEvaluationsTool(session),
           readSkoreFeedbackTool(session),
+          readSkoreReportTool(session),
           createSkoreEvaluationTool(session),
           saveSkoreGradesTool(session),
           saveSkoreFeedbackTool(session),
+          saveSkoreReportCommentTool(session),
           for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,

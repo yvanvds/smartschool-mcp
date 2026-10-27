@@ -8,8 +8,11 @@ import 'arguments.dart';
 import 'server_tool.dart';
 
 /// `read_skore_feedback`: the written feedback of one pupil on one
-/// evaluation of one of the user's own gradebooks in Skore, from everyone
-/// who gave some ([SkoreGradebookService.getFeedback], dartschool#149).
+/// evaluation of one of the user's gradebooks in Skore, their own or one a
+/// colleague shared with them (#167), from everyone who gave some
+/// ([SkoreGradebookService.getFeedback], dartschool#149). The user's own
+/// feedback is marked by the logged-in user's id, never by the gradebook's
+/// teacher, who is the owner of a shared gradebook.
 ///
 /// Offered to every account, without a switch, like the other gradebook
 /// tools.
@@ -26,14 +29,18 @@ ServerTool readSkoreFeedbackTool(SmartschoolSession session) => ServerTool(
     title: 'Read a pupil\'s feedback on an evaluation in Skore',
     description:
         'Reads the written feedback a pupil has on one evaluation of one of '
-        'the user\'s own gradebooks in Skore, the Smartschool module for '
-        'scores and reports: every feedback text on it, whoever wrote it, in '
+        'the user\'s gradebooks in Skore, the Smartschool module for scores '
+        'and reports (their own, or one a colleague shared with them, whose '
+        'owner it names): every feedback text on it, whoever wrote it, in '
         'the order they were written, each with who wrote it (marked when it '
         'is the user), when it was written and last changed (Smartschool '
         'time, Belgium), the names of its attachments, whether Skore lets '
         'the user change it, and its text. It also gives the evaluation (with '
         'its publication: the pupils see the feedback on a published '
-        'evaluation) and the pupil\'s grade. Take the gradebook id, the '
+        'evaluation) and the pupil\'s grade: on an evaluation on a scale, its '
+        'level with its label and abbreviation. It reads the feedback on an '
+        'evaluation in points or on a scale, also on one whose grades the '
+        'server cannot read. Take the gradebook id, the '
         'evaluation id and the pupil id from list_skore_evaluations, which '
         'marks with "feedback" the pupils who have some; pass the period_id '
         'of the evaluation too, so that the other periods need not be read. '
@@ -93,6 +100,7 @@ Future<CallToolResult> _read(
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
   final text = await withSkoreGradebook(session, (gradebooks) async {
+    final userId = await gradebooks.userId();
     final (:sheet, :workyear) = await readSkoreGradebook(
       gradebooks,
       years,
@@ -111,25 +119,38 @@ Future<CallToolResult> _read(
       found.evaluation,
       pupil.id,
     );
-    return formatSkorePupilFeedback(sheet, workyear, found, pupil, feedback);
+    return formatSkorePupilFeedback(
+      sheet,
+      workyear,
+      found,
+      pupil,
+      feedback,
+      userId: userId,
+      scale: await readSkoreScaleFor(gradebooks, [found.evaluation]),
+    );
   });
   return CallToolResult(content: [TextContent(text: text)]);
 }
 
 /// What `read_skore_feedback` answers: the gradebook, the evaluation (of
-/// [found]) and its period, [pupil] with their grade, and [feedback] in
-/// Skore's order (the order written), or a sentence that there is none.
+/// [found]) and its period, [pupil] with their grade (on a scale, with its
+/// level on [scale], #169), and [feedback] in Skore's order (the order
+/// written), or a sentence that there is none.
 ///
-/// The user's own feedback is the one by the gradebook's teacher
-/// ([SkoreGradebook.teacherId]): the user, for every gradebook Skore lists
-/// as the user's own (seen live, dartschool#148).
+/// The user's own feedback is the one by the logged-in user, [userId]
+/// ([SkoreGradebooks.userId]), as the library keeps it: not the one by the
+/// gradebook's teacher ([SkoreGradebook.teacherId]), which is the user for
+/// their own gradebooks, but the colleague who owns a gradebook shared with
+/// them (#167), whose feedback is never the user's.
 String formatSkorePupilFeedback(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear,
   FoundSkoreEvaluation found,
   SkoreGradebookPupil pupil,
-  List<SkoreFeedback> feedback,
-) {
+  List<SkoreFeedback> feedback, {
+  required int userId,
+  SkoreScale? scale,
+}) {
   final evaluation = found.evaluation;
   // An evaluation the library could not read has no grades to give
   // (yvanvds/dartschool#193); its feedback is read all the same.
@@ -145,18 +166,16 @@ String formatSkorePupilFeedback(
             ? 'grade not read'
             : grade?.grade == null
             ? formatSkoreGradeValue(grade)
-            : 'grade ${grade!.grade}'}',
+            : 'grade ${formatSkoreGradeIn(evaluation, grade, scale)}'}',
     if (!readable) formatSkoreUnreadableGrades(evaluation),
+    if (scale == null) ?formatSkoreScaleNote([evaluation], scale),
     if (feedback.isEmpty)
       'The pupil has no feedback on this evaluation.'
     else ...[
       '$count feedback ${count == 1 ? 'text' : 'texts'} on it, in the order '
           '${count == 1 ? 'it was' : 'they were'} written:',
       for (final item in feedback)
-        formatSkoreFeedback(
-          item,
-          byUser: item.teacherId == sheet.gradebook.teacherId,
-        ),
+        formatSkoreFeedback(item, byUser: item.teacherId == userId),
     ],
   ].join('\n');
 }

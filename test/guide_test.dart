@@ -30,11 +30,15 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -318,6 +322,117 @@ void main() {
       );
     });
 
+    test('says Claude shows the level of each pupil on an evaluation on a '
+        'scale, reads and gives feedback on it as on points, but cannot fill '
+        'it in, as save_skore_grades refuses one (#169)', () {
+      expect(
+        listSkoreEvaluationsTool(session).definition.description,
+        contains(
+          'For an evaluation on a scale (Skore\'s "Waarderingen", such as for '
+          'behaviour), each pupil\'s value is its level on the school\'s '
+          'scale, with its label and abbreviation',
+        ),
+      );
+      expect(
+        feedback.description,
+        contains('in points or on a scale, such as for behaviour'),
+      );
+      expect(
+        grades.description,
+        contains(
+          'Only an evaluation in points takes grades: one on a scale '
+          '(Skore\'s "Waarderingen", such as for behaviour; its type in '
+          'list_skore_evaluations) is refused, as the server cannot save a '
+          'value on a scale',
+        ),
+      );
+      expect(
+        section,
+        contains(
+          'Staat een evaluatie op een schaal (waarderingen, zoals bij gedrag), '
+          'dan toont Claude per leerling het niveau met zijn naam en '
+          'afkorting, zoals "Voldoende (V)", en de schaal van je school. '
+          'Feedback lezen en geven gaat zoals bij punten. Een waardering '
+          'invullen kan Claude nog niet: dat doe je zelf in Smartschool.',
+        ),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(guide, contains('de evaluaties met de punten of waarderingen'));
+      }
+    });
+
+    test('says Claude reads the gradebooks colleagues shared with the user, '
+        'writes in one shared to write and names its owner, never changes '
+        'the owner\'s feedback, changes nothing in one shared to read only, '
+        'and creates evaluations in the user\'s own only, as the tools do '
+        '(#167)', () {
+      expect(
+        listSkoreGradebooksTool(session).definition.description,
+        contains(
+          'Then, if any, the gradebooks colleagues shared with the user '
+          '("Gedeeld" in Skore',
+        ),
+      );
+      for (final tool in [grades, feedback]) {
+        expect(
+          tool.description,
+          allOf(
+            contains('also tell the user whose gradebook it is: its owner'),
+            contains(
+              'A gradebook shared with the user to read only is refused: the '
+              'user may read it, not change it.',
+            ),
+          ),
+          reason: tool.name,
+        );
+      }
+      expect(
+        feedback.description,
+        contains('Nor is the feedback of the owner of a shared gradebook.'),
+      );
+      expect(
+        create.description,
+        contains('not in one a colleague shared with them: that is refused'),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(
+          guide,
+          allOf(
+            contains(
+              '- **Puntenboek:** je eigen puntenboeken in Skore bekijken, en '
+              'de puntenboeken die collega\'s met je deelden:',
+            ),
+            contains(
+              'ook in een puntenboek dat een collega met je deelde om te '
+              'wijzigen (een evaluatie maken alleen in je eigen '
+              'puntenboeken).',
+            ),
+          ),
+        );
+      }
+      expect(
+        section,
+        allOf(
+          contains(
+            'Mag je het wijzigen, dan zet Claude er na jouw akkoord punten en '
+            'feedback in, en zegt het daarbij van wie het puntenboek is.',
+          ),
+          contains(
+            'De feedback van die collega past Claude nooit aan, alleen je '
+            'eigen feedback.',
+          ),
+          contains(
+            'Een nieuwe evaluatie maakt Claude alleen in je eigen '
+            'puntenboeken.',
+          ),
+          contains(
+            'Mag je een gedeeld puntenboek alleen lezen, dan verandert Claude '
+            'er niets in: vraag het dan aan de collega van wie het is.',
+          ),
+        ),
+      );
+    });
+
     test('says Claude cannot publish, delete or move an evaluation: no tool '
         'does', () {
       final manifest =
@@ -356,7 +471,85 @@ void main() {
           ),
           reason: assistant,
         );
+        expect(
+          _section(guide, '## 8. Veiligheid en privacy'),
+          contains('Hetzelfde geldt voor het vakcommentaar op hun rapport.'),
+          reason: assistant,
+        );
       }
+    });
+
+    test('says Claude reads a report and writes the course comment on it, '
+        'one pupil at a time, only after the user confirmed it, telling them '
+        'it goes on the report, and never over a colleague\'s comment it did '
+        'not show, as the tools do (#171)', () {
+      final report = readSkoreReportTool(session).definition;
+      final comment = saveSkoreReportCommentTool(session).definition;
+      expect(
+        report.description,
+        allOf(
+          contains('the results so far per component of the course'),
+          contains('the pupil\'s course comment (vakcommentaar)'),
+        ),
+      );
+      expect(
+        comment.description,
+        allOf(
+          contains('One pupil per call: each text is personal.'),
+          contains(
+            'tell the user that the comment goes on the report the pupil and '
+            'their parents get; only call this tool after the user has '
+            'explicitly confirmed it.',
+          ),
+          contains(
+            'this tool replaces only that comment, and refuses when Skore '
+            'holds another one by then (a colleague may have written it)',
+          ),
+          contains('A closed report is refused'),
+          contains('also tell the user whose gradebook it is: its owner'),
+        ),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(
+          guide,
+          allOf(
+            contains(
+              'en per rapport de resultaten en het vakcommentaar van elke '
+              'leerling.',
+            ),
+            contains(
+              'een leerling feedback geven en het vakcommentaar op het '
+              'rapport schrijven',
+            ),
+          ),
+        );
+      }
+      expect(
+        section,
+        allOf(
+          contains(
+            'zegt je dat dat commentaar op het rapport komt dat de leerling '
+            'en zijn ouders krijgen, en wacht op jouw akkoord.',
+          ),
+          contains(
+            'Claude schrijft het vakcommentaar van één leerling per keer, '
+            'want elke tekst is persoonlijk.',
+          ),
+          contains(
+            'Staat er intussen een ander commentaar dan Claude je toonde, '
+            'bijvoorbeeld omdat een collega het aanpaste, dan schrijft Claude '
+            'niets',
+          ),
+          contains(
+            'In een gesloten rapport, of bij een leerling voor wie Skore het '
+            'commentaar afsluit, schrijft Claude niets.',
+          ),
+          contains(
+            'Zo schrijf je als co-titularis ook het vakcommentaar Gedrag van '
+            'je klas op het rapport.',
+          ),
+        ),
+      );
     });
   });
 

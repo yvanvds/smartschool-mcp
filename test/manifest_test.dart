@@ -302,7 +302,7 @@ void main() {
         match.group(1),
     ];
 
-    expect(readmeTools, hasLength(67));
+    expect(readmeTools, hasLength(69));
     expect([
       for (final tool in manifest['tools'] as List) (tool as Map)['name'],
     ], readmeTools);

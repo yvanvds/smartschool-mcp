@@ -28,6 +28,11 @@ const _tool = 'create_skore_evaluation';
 /// ([skoreWriteNotConfirmed]), and a new evaluation Skore shows as public
 /// anyway is reported as created, for the user to check in Smartschool.
 /// The library never publishes, and this tool has no way to.
+///
+/// Only in one of the user's own gradebooks: a gradebook a colleague shared
+/// with the user (#167) is refused in the tool's own words before it is read
+/// ([_checkOwn]), also one shared to read and write, as the library refuses
+/// any shared gradebook (`createEvaluation`, dartschool#191).
 ServerTool createSkoreEvaluationTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: _tool,
@@ -35,8 +40,11 @@ ServerTool createSkoreEvaluationTool(SmartschoolSession session) => ServerTool(
     description:
         'Creates an evaluation (a new column of grades, such as a test or a '
         'task) in a period of one of the user\'s own gradebooks in Skore, '
-        'the Smartschool module for scores and reports, as the "new '
-        'evaluation" dialog of the gradebook does. It is always created '
+        'the Smartschool module for scores and reports (not in one a '
+        'colleague shared with them: that is refused), as the "new '
+        'evaluation" dialog of the gradebook does: an evaluation in points, '
+        'out of its max (one on a scale is made in Smartschool itself). It '
+        'is always created '
         'unpublished: the pupils do not see it until the user publishes it '
         'in Smartschool; this tool cannot publish. Before calling this tool, '
         'read the period with list_skore_evaluations: if it already has an '
@@ -152,12 +160,14 @@ Future<CallToolResult> _create(
       reread: _reread,
       (gradebooks) async {
         final found = await years.findInCurrentYear(gradebooks, gradebookId);
+        _checkOwn(found.gradebook);
         final sheet = await gradebooks.getGradebook(found.gradebook);
         final period = skoreGradebookPeriod(sheet, periodId);
         if (period == null) {
           throw ToolError(
-            'The ${formatSkoreGradebookName(sheet.gradebook)} has no periods '
-            'yet, so no evaluation can be created in it.',
+            'The ${formatSkoreGradebookName(sheet.gradebook)} has '
+            '${formatSkoreMissingPeriods(sheet)}, so no evaluation can be '
+            'created in it.',
           );
         }
         where =
@@ -247,6 +257,23 @@ Future<CallToolResult> _create(
       ],
     );
   }
+}
+
+/// Refuses a new evaluation in [gradebook] when it is not one of the user's
+/// own gradebooks but one a colleague shared with them (#167), to read only
+/// or to read and write: the library creates an evaluation only in an own
+/// gradebook, and refuses any shared one (dartschool#191), in words for a
+/// caller of the library. Throws a [ToolError] that says so and who can
+/// create it, its owner; nothing is sent.
+void _checkOwn(SkoreGradebook gradebook) {
+  if (!gradebook.isShared) return;
+  throw ToolError(
+    'The ${formatSkoreGradebookName(gradebook)} is not one of the user\'s '
+    'own gradebooks: a colleague shared it with them. $_tool creates an '
+    'evaluation only in one of the user\'s own gradebooks. Tell the user so; '
+    'its owner, ${formatSkoreGradebookOwner(gradebook)}, can create the '
+    'evaluation in it.',
+  );
 }
 
 /// What to read again after a change Skore refused, to correct the call.

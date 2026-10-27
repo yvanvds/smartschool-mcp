@@ -81,10 +81,12 @@ List<String> _saveCalls(int count) => [
 ];
 
 /// The tool's own reads before the library is asked, the first time: the
-/// gradebooks of the current school year, the gradebook, and the period
-/// that holds the evaluation.
+/// gradebooks of the current school year (the user's own, and those shared
+/// with them, #167), the gradebook, and the period that holds the
+/// evaluation.
 const _toolReads = [
   'getNavigation',
+  'accessableList',
   'init wy=24',
   'getGradebookContext wy=24',
   'getEvaluations wy=24',
@@ -516,22 +518,15 @@ void main() {
         );
       });
 
-      test('an evaluation from the planner, or not in points', () async {
-        book().evaluations[1704]!.addAll([
+      test('an evaluation from the planner', () async {
+        book().evaluations[1704]!.add(
           FakeSkoreEvaluation(
             500004,
             'Taak uit de planner',
             date: '2026-10-08',
             planner: true,
           ),
-          FakeSkoreEvaluation(
-            500005,
-            'Houding',
-            date: '2026-10-08',
-            evaltype: 2,
-            max: null,
-          ),
-        ]);
+        );
         expect(
           await refused({1201: '15'}, {'evaluation_id': 500004}),
           _refused(
@@ -541,20 +536,92 @@ void main() {
             evaluationId: 500004,
           ),
         );
-        expect(
-          await refused({1201: '15'}, {'evaluation_id': 500005}),
-          _refused(
-            'evaluation 500005 ("Houding") in period DW1 (1704) of gradebook '
-            '32508 is not in points (evaltype 2): the library saves grades in '
-            'points only.',
-            evaluationId: 500005,
-          ),
-        );
       });
 
       tearDown(() {
         expect(skore.gradeSaves, isEmpty);
       });
+    });
+
+    group('an evaluation that is not one in points the server reads: '
+        'refused in the tool\'s own words before the library is asked, '
+        'saving nothing (#169)', () {
+      setUp(() {
+        book().evaluations[1704] = fakeSkoreMixedEvaluations();
+      });
+
+      tearDown(() {
+        // Only the tool's own reads: not the library's checks, no save, and
+        // no scale.
+        expect(skore.calls, _toolReads);
+        expect(skore.gradeSaves, isEmpty);
+        expect(skore.scaleReads, isEmpty);
+      });
+
+      test('one on a scale, also with allow_published: the library saves '
+          'no value on a scale', () async {
+        expect(
+          await refused(
+            {1201: '8', 1202: '5'},
+            {'evaluation_id': 500012, 'allow_published': true},
+          ),
+          'The evaluation "Inzet in de les" (evaluation id 500012) in $_where '
+          'is an evaluation on a scale: its values are levels of the '
+          'school\'s scale, which list_skore_evaluations shows, not points. '
+          'save_skore_grades saves grades in points only, and the server '
+          'cannot save a value on a scale yet. Tell the user so; they can '
+          'enter its values in Skore in Smartschool itself. Feedback on it '
+          'can be given with save_skore_feedback. Nothing was changed in '
+          'Skore.',
+        );
+      });
+
+      test('one of a type the server does not support', () async {
+        expect(
+          await refused({1201: '+'}, {'evaluation_id': 500013}),
+          'The server cannot read the evaluation "Attitudes" (evaluation id '
+          '500013) in $_where: it is of a type the server does not support '
+          'yet (Skore\'s evaltype 3; the server reads evaluations in points '
+          'and on a scale), so save_skore_grades saves no grades in it. Tell '
+          'the user so; they can enter its grades in Skore in Smartschool '
+          'itself. Nothing was changed in Skore.',
+        );
+      });
+
+      test('one in points with a cell in a shape the server does not '
+          'know', () async {
+        book().evaluationWithId(500011)!.cells[1202] =
+            '<div class="gbc_points">9,5</div>';
+        expect(
+          await refused({1201: '15'}, {'evaluation_id': 500011}),
+          'The server cannot read the evaluation "Toets lussen" (evaluation '
+          'id 500011) in $_where: Skore gave its grades in a shape the server '
+          'does not know yet (the cell of row "pupil_1202_2440" has no value '
+          '(a div.gbc with its raw)), so save_skore_grades saves no grades in '
+          'it. Tell the user so; they can enter its grades in Skore in '
+          'Smartschool itself. Nothing was changed in Skore.',
+        );
+      });
+    });
+
+    test('in a period that also holds an evaluation on a scale and one of a '
+        'type the server does not support, the one in points takes grades '
+        'as any, and no scale is read (#169)', () async {
+      book().evaluations[1704] = fakeSkoreMixedEvaluations();
+      expect(
+        await saved({1203: '12,5'}, {'evaluation_id': 500011}),
+        'Saved the grade of 1 pupil in the evaluation "Toets lussen" '
+        '(evaluation id 500011) in $_where.\n'
+        'Evaluation: Toets lussen | evaluation id 500011 | column A | '
+        '2026-10-05 | max 20 | component DW | points | not published: the '
+        'pupils do not see it\n'
+        'Grades out of 20 as Skore lists them after the save, in the order '
+        'given:\n'
+        '- $_chloe | 12.5',
+      );
+      // Sent with a decimal point, as the library sends it.
+      expect(skore.gradeSaves, [_saveParams(1203, '12.5', evaluation: 500011)]);
+      expect(skore.scaleReads, isEmpty);
     });
 
     test('an empty list or a pupil given twice: an error before anything is '
@@ -819,9 +886,9 @@ void main() {
     // year from memory) and saved each grade once.
     final beforeSave = _saveCalls(0).sublist(0, 4);
     expect(skore.calls, [
-      ..._toolReads.skip(1),
+      ..._toolReads.skip(2),
       ...beforeSave,
-      ..._toolReads.skip(1),
+      ..._toolReads.skip(2),
       ..._saveCalls(2),
     ]);
     expect(skore.gradeSaves, [

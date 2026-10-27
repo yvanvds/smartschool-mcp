@@ -6,7 +6,7 @@ import 'lvs_format.dart';
 
 // The results of a pupil's file in the LVS, for `read_lvs_results` (#155):
 // the "Resultaten" part of the file, the results app pupils and parents
-// see, in every course (not only the user's own gradebooks). Read with the
+// see, in every course (not only the user's gradebooks). Read with the
 // library's reads of the results app (yvanvds/dartschool#162): the periods,
 // courses, evaluations, feedback and reports of one school year; chosen
 // (period, course) and written here, with a summary per course computed

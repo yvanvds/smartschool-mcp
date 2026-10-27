@@ -7,9 +7,11 @@ import '../skore/skore_gradebook_format.dart';
 import 'arguments.dart';
 import 'server_tool.dart';
 
-/// `read_skore_gradebook`: one of the user's own gradebooks in Skore, by its
-/// id, with its periods, its pupils and whether Skore lets the user change
-/// it ([SkoreGradebookService.getGradebook], dartschool#148).
+/// `read_skore_gradebook`: one of the user's gradebooks in Skore, their own
+/// or one a colleague shared with them (#167), by its id, with its periods,
+/// its report periods (#171, dartschool#195), its pupils and whether Skore
+/// lets the user change it ([SkoreGradebookService.getGradebook],
+/// dartschool#148).
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -18,13 +20,21 @@ ServerTool readSkoreGradebookTool(SmartschoolSession session) => ServerTool(
     name: 'read_skore_gradebook',
     title: 'Read a gradebook in Skore',
     description:
-        'Reads one of the user\'s own gradebooks in Skore, the Smartschool '
+        'Reads one of the user\'s gradebooks in Skore, the Smartschool '
         'module for scores and reports, by its gradebook id from '
-        'list_skore_gradebooks. It gives the periods of the gradebook (such '
-        'as DW1), in Skore\'s order, each with its period id, whether it is '
+        'list_skore_gradebooks: one of their own, or one a colleague shared '
+        'with them, whose owner it names, with whether it is shared to read '
+        'and write or to read only. It gives the periods of the gradebook '
+        '(such as DW1), in Skore\'s order, each with its period id, whether '
+        'it is '
         'open (only an open period takes grades), when it closes '
         '(Smartschool time, Belgium), Skore\'s note on it, and which one '
-        'Skore opens the gradebook on (active); the pupils of its class, '
+        'Skore opens the gradebook on (active); its report periods (Skore\'s '
+        '"Rapporten", such as R1D, Rapport 1), each with its report id, '
+        'whether it is open and until when, and Skore\'s note on it: there '
+        'each pupil\'s course comment is written that goes on the report '
+        '(read_skore_report reads a report, save_skore_report_comment '
+        'writes the comment); the pupils of its class, '
         'each with the class number, the name (last name first) and the '
         'pupil id, and whether Skore greys the pupil out as inactive; and '
         'whether Skore lets the user change the gradebook. For a gradebook '
@@ -79,21 +89,34 @@ Future<CallToolResult> _read(
 }
 
 /// What `read_skore_gradebook` answers: the gradebook of [sheet] (of school
-/// year [workyear]), whether the user may change it, its periods and its
-/// pupils.
+/// year [workyear]; for one a colleague shared with the user, its owner and
+/// what the user may do in it), whether the user may change it, its periods,
+/// its report periods (#171) and its pupils. One shared to read only says the user may not change it,
+/// whatever Skore answers (#167): the write tools refuse it. A gradebook
+/// without evaluation periods says so instead of whether the user may
+/// change it (Skore is not asked then); one with
+/// report periods only, such as a behaviour gradebook (#168), also where
+/// its course comments are ([skoreReportPeriodsOnlyNote]).
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear,
 ) {
   final periods = sheet.periods;
+  final reports = sheet.reports;
   final pupils = sheet.pupils;
   final inactive = pupils.where((p) => !p.isActive).length;
   final active = sheet.activePeriod;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
-    if (periods.isEmpty)
-      'It has no periods yet, so it takes no grades; Skore was not asked '
-          'whether the user may change it.'
+    if (periods.isEmpty && sheet.reports.isEmpty)
+      'It has ${formatSkoreMissingPeriods(sheet)}, so it takes no grades; '
+          'Skore was not asked whether the user may change it.'
+    else if (periods.isEmpty)
+      'It has ${formatSkoreMissingPeriods(sheet)}, so it has no evaluations '
+          'and takes no grades.'
+    else if (sheet.gradebook.access == SkoreGradebookAccess.read)
+      'The user may read it, not change it: it is shared with them to read '
+          'only.'
     else if (sheet.isCoordinator)
       'Skore opens it read-only for the user, in coordinator mode.'
     else if (sheet.writable)
@@ -101,6 +124,7 @@ String formatSkoreGradebookSheet(
           '${periods.any((p) => p.isOpen) ? '' : ', but none of its periods is open, so it takes no grades now'}.'
     else
       'Skore opens it read-only for the user: the user may not change it.',
+    ?skoreReportPeriodsOnlyNote(sheet),
     if (periods.isNotEmpty) ...[
       '${periods.length} ${periods.length == 1 ? 'period' : 'periods'}, in '
           'Skore\'s order; only an open period takes grades'
@@ -108,6 +132,13 @@ String formatSkoreGradebookSheet(
                     '${active.name} (active)'}:',
       for (final period in periods)
         '- ${formatSkoreGradebookPeriod(period, active: period.id == active?.id)}',
+    ],
+    if (reports.isNotEmpty) ...[
+      '${reports.length} report ${reports.length == 1 ? 'period' : 'periods'} '
+          '(Rapporten), in Skore\'s order, where each pupil\'s course comment '
+          'is written that goes on the report, while the report is open; '
+          'read_skore_report reads one by its report id:',
+      for (final report in reports) '- ${formatSkoreReportPeriod(report)}',
     ],
     if (pupils.isEmpty)
       'No pupils.'

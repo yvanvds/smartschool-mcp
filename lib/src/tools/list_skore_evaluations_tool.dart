@@ -10,7 +10,8 @@ import 'arguments.dart';
 import 'server_tool.dart';
 
 /// `list_skore_evaluations`: the evaluations of one period of one of the
-/// user's own gradebooks in Skore, with their publication and the pupils'
+/// user's gradebooks in Skore (their own, or one a colleague shared with
+/// them, #167), with their publication and the pupils'
 /// grades ([SkoreGradebookService.getEvaluations], dartschool#149); or one
 /// evaluation, with a line per pupil.
 ///
@@ -30,15 +31,22 @@ import 'server_tool.dart';
 /// can count for ([SkoreGradebookService.getComponents], one small request),
 /// with the one `create_skore_evaluation` takes without a component (#142):
 /// the period's list is what Claude reads before it creates an evaluation,
-/// so the user sees the component before confirming.
+/// so the user sees the component before confirming. Not for a gradebook a
+/// colleague shared with the user: no evaluation is created in one (#167).
+///
+/// When an evaluation it shows is on a scale ("Waarderingen", such as for
+/// behaviour), it reads the school's scale once ([readSkoreScaleFor], two
+/// GETs; #169), so that each pupil's value comes with its level's label and
+/// abbreviation, and lists the scale's levels once.
 ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'list_skore_evaluations',
     title: 'List the evaluations of a period in Skore',
     description:
         'Lists the evaluations (the columns of grades, such as tests and '
-        'tasks) of one period of one of the user\'s own gradebooks in Skore, '
-        'the Smartschool module for scores and reports, with the pupils\' '
+        'tasks) of one period of one of the user\'s gradebooks in Skore, '
+        'the Smartschool module for scores and reports (their own, or one a '
+        'colleague shared with them, whose owner it names), with the pupils\' '
         'grades. Without period_id, the period Skore opens the gradebook on '
         '(active); read_skore_gradebook lists the periods with their period '
         'ids. Per evaluation: its evaluation id (the id to use: Skore\'s '
@@ -51,13 +59,21 @@ ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
         'Then the class and group averages and each pupil\'s grade as Skore '
         'stores it (with a decimal point), marked "feedback" when the pupil '
         'has feedback on it, which read_skore_feedback reads; the pupil ids '
-        'are listed once, after the evaluations. With evaluation_id, only '
+        'are listed once, after the evaluations. For an evaluation on a scale '
+        '(Skore\'s "Waarderingen", such as for behaviour), each pupil\'s value '
+        'is its level on the school\'s scale, with its label and '
+        'abbreviation, and the value Skore stores; the scale itself, with its '
+        'levels, is listed once. An evaluation of a type the server does not '
+        'support yet is listed with that reason instead of its grades. With '
+        'evaluation_id, only '
         'that evaluation, one line per pupil with the pupil id; without '
         'period_id, it is looked for in every period. A period without '
         'evaluations gets a sentence saying so. For an open period, it also '
         'lists the components a new evaluation in it can count for (such as '
         'DW, or geen for none) and the default, for '
-        'create_skore_evaluation. Reading changes nothing in Skore.',
+        'create_skore_evaluation; not for a gradebook shared with the user, '
+        'in which no evaluation is created. Reading changes nothing in '
+        'Skore.',
     inputSchema: Schema.object(
       properties: {
         'gradebook_id': Schema.int(
@@ -127,11 +143,17 @@ Future<CallToolResult> _list(
         found.period,
         found.evaluation,
         title: title,
+        scale: await readSkoreScaleFor(gradebooks, [found.evaluation]),
       );
     }
     final period = skoreGradebookPeriod(sheet, periodId);
     if (period == null) {
-      return '$title\nIt has no periods yet, so it has no evaluations.';
+      return [
+        title,
+        'It has ${formatSkoreMissingPeriods(sheet)}, so it has no '
+            'evaluations.',
+        ?skoreReportPeriodsOnlyNote(sheet),
+      ].join('\n');
     }
     final evaluations = await gradebooks.getEvaluations(
       sheet.gradebook,
@@ -142,7 +164,8 @@ Future<CallToolResult> _list(
       period,
       evaluations,
       title: title,
-      components: period.isOpen
+      scale: await readSkoreScaleFor(gradebooks, evaluations),
+      components: period.isOpen && !sheet.gradebook.isShared
           ? await _components(gradebooks, sheet.gradebook, period)
           : null,
     );
@@ -184,14 +207,16 @@ Future<String> _components(
 
 /// What `list_skore_evaluations` answers for a period: [title], the period,
 /// its [evaluations] in Skore's order, each with its averages and its
-/// grades on one line, the pupils with their ids, the line about the
-/// [components] a new evaluation can count for (for an open period), and
-/// the gradebook's other periods.
+/// grades on one line, the school's [scale] when one of them is on a scale
+/// (#169: each value with its level; [formatSkoreScaleNote]), the pupils
+/// with their ids, the line about the [components] a new evaluation can
+/// count for (for an open period), and the gradebook's other periods.
 String formatSkorePeriodEvaluations(
   SkoreGradebookSheet sheet,
   SkoreGradebookPeriod period,
   List<SkoreEvaluation> evaluations, {
   required String title,
+  SkoreScale? scale,
   String? components,
 }) {
   final pupils = sheet.pupils;
@@ -215,10 +240,11 @@ String formatSkorePeriodEvaluations(
         '- ${formatSkoreEvaluation(evaluation)}',
         if (evaluation.isReadable) ...[
           '  ${formatSkoreEvaluationResults(evaluation.results)}',
-          '  grades: ${_gradesLine(sheet, evaluation.results)}',
+          '  grades: ${_gradesLine(sheet, evaluation, scale)}',
         ] else
           '  ${formatSkoreUnreadableGrades(evaluation)}',
       ],
+      ?formatSkoreScaleNote(evaluations, scale),
       if (pupils.isEmpty)
         'No pupils.'
       else
@@ -233,12 +259,15 @@ String formatSkorePeriodEvaluations(
 
 /// What `list_skore_evaluations` answers for one evaluation: [title], its
 /// period, the evaluation with its averages, and one line per pupil with
-/// the pupil id, the grade and whether the pupil has feedback on it.
+/// the pupil id, the grade and whether the pupil has feedback on it. For an
+/// evaluation on a scale, the school's [scale] comes first, and each value
+/// with its level (#169).
 String formatSkoreEvaluationGrades(
   SkoreGradebookSheet sheet,
   SkoreGradebookPeriod period,
   SkoreEvaluation evaluation, {
   required String title,
+  SkoreScale? scale,
 }) {
   if (!evaluation.isReadable) {
     return [
@@ -250,22 +279,33 @@ String formatSkoreEvaluationGrades(
   }
   final results = evaluation.results;
   final max = evaluation.max;
+  final outOf = max == null ? '' : ' out of ${formatSkoreNumber(max)}';
   final rows = _rows(sheet, results);
   return [
     title,
     _periodLine(sheet, period),
     'Evaluation: ${formatSkoreEvaluation(evaluation)}',
     formatSkoreEvaluationResults(results),
+    ?formatSkoreScaleNote([evaluation], scale),
     if (rows.isEmpty)
       'No pupils.'
     else ...[
-      'Grades${max == null ? '' : ' out of ${formatSkoreNumber(max)}'}, one '
-          'line per pupil in Skore\'s order ("feedback": the pupil has '
-          'feedback on it, which read_skore_feedback reads):',
+      if (isSkoreScaleEvaluation(evaluation) && scale != null)
+        'Values on the scale, one line per pupil in Skore\'s order: the '
+            'level, with its abbreviation, and the value Skore stores$outOf '
+            '("feedback": the pupil has feedback on it, which '
+            'read_skore_feedback reads):'
+      else if (isSkoreScaleEvaluation(evaluation))
+        'Values on the scale as Skore stores them$outOf, one line per pupil '
+            'in Skore\'s order ("feedback": the pupil has feedback on it, '
+            'which read_skore_feedback reads):'
+      else
+        'Grades$outOf, one line per pupil in Skore\'s order ("feedback": the '
+            'pupil has feedback on it, which read_skore_feedback reads):',
       for (final (pupil, grade) in rows)
         [
           '- ${pupil == null ? 'pupil id ${grade!.pupilId}' : formatSkoreGradebookPupil(pupil)}',
-          formatSkoreGradeValue(grade),
+          formatSkoreGradeIn(evaluation, grade, scale),
           if (grade?.hasFeedback ?? false) 'feedback',
         ].join(' | '),
     ],
@@ -281,10 +321,16 @@ String _periodLine(SkoreGradebookSheet sheet, SkoreGradebookPeriod period) {
       '${active ? '; Skore opens the gradebook on it (active)' : ''}.';
 }
 
-/// The grades of an evaluation on one line, pupils in Skore's order:
-/// `1. Aerts, An: 79 (feedback); 3. Dupont, Chloé: no grade`.
-String _gradesLine(SkoreGradebookSheet sheet, SkoreEvaluationResults results) {
-  final rows = _rows(sheet, results);
+/// The grades of [evaluation] on one line, pupils in Skore's order:
+/// `1. Aerts, An: 79 (feedback); 3. Dupont, Chloé: no grade`. On a scale,
+/// each value with its level on [scale] ([formatSkoreGradeIn]): `1. Aerts,
+/// An: Zeer goed (ZG; stored as 10)`.
+String _gradesLine(
+  SkoreGradebookSheet sheet,
+  SkoreEvaluation evaluation,
+  SkoreScale? scale,
+) {
+  final rows = _rows(sheet, evaluation.results);
   if (rows.isEmpty) return 'no pupils';
   return [
     for (final (pupil, grade) in rows)
@@ -292,7 +338,7 @@ String _gradesLine(SkoreGradebookSheet sheet, SkoreEvaluationResults results) {
             null => 'pupil id ${grade!.pupilId}',
             SkoreGradebookPupil(isActive: true) => _pupilName(pupil),
             _ => '${_pupilName(pupil)} (inactive)',
-          }}: ${formatSkoreGradeValue(grade)}'
+          }}: ${formatSkoreGradeIn(evaluation, grade, scale)}'
           '${grade?.hasFeedback ?? false ? ' (feedback)' : ''}',
   ].join('; ');
 }

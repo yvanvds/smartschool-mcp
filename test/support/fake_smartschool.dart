@@ -69,8 +69,9 @@ class FakeSmartschool implements HttpClientAdapter {
   bool unreachable = false;
 
   /// How many requests right after a successful login Smartschool still
-  /// refuses (a GET sent to `/login`, a POST answered with 401) although the
-  /// login went through.
+  /// refuses (a GET sent to `/login`, a POST answered with 401, or with
+  /// `302 Location: /` for Skore's gradebook) although the login went
+  /// through.
   ///
   /// Not seen live: the refusal seen live after a login with an old cookie
   /// cache was the library sending the refused session id along with the
@@ -98,6 +99,10 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// Every request, as `METHOD path`.
   final List<String> requests = [];
+
+  /// Every POST refused for its session, as `STATUS path`: `401 /...`, or
+  /// `302 /modules/Skore/backend/gradebook/rpc.php` ([_refusedPost]).
+  final List<String> refusedPosts = [];
 
   /// The Messages module, served to logged-in requests. The attachments of
   /// a message go through the shared [uploads].
@@ -232,13 +237,14 @@ class FakeSmartschool implements HttpClientAdapter {
 
     if (options.method == 'POST') {
       // An XML or form POST without a session gets a bare 401 (observed on
-      // the live platform), not a redirect to /login.
+      // the live platform), not a redirect to /login; an RPC call of
+      // Skore's gradebook gets `302 Location: /` ([_refusedPost]).
       if (!loggedIn || path == '/always-401') {
-        return ResponseBody.fromString('', 401);
+        return _refusedPost(path);
       }
       if (_rejectsLeft > 0) {
         _rejectsLeft--;
-        return ResponseBody.fromString('', 401);
+        return _refusedPost(path);
       }
       return lvs.respond(options) ??
           uploads.respond(options) ??
@@ -291,6 +297,19 @@ class FakeSmartschool implements HttpClientAdapter {
     _rejectsLeft = rejectsAfterLogin;
     _startPageAfterTwoFactor = false;
     return 'PHPSESSID=$_validSession; path=/';
+  }
+
+  /// Smartschool's answer to a POST to [path] in a session it does not
+  /// accept: a bare 401, or for an RPC call of Skore's gradebook
+  /// ([fakeSkoreGradebookRpcPath]) `302 Location: /` with an empty body, as
+  /// seen live (yvanvds/dartschool#192, the cause of #168), which
+  /// flutter_smartschool 0.4.0 takes for a refused session too.
+  ResponseBody _refusedPost(String path) {
+    final gradebook = path == fakeSkoreGradebookRpcPath;
+    refusedPosts.add('${gradebook ? 302 : 401} $path');
+    return gradebook
+        ? _html('', status: 302, location: '/')
+        : ResponseBody.fromString('', 401);
   }
 
   ResponseBody _html(

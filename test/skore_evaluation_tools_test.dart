@@ -17,6 +17,7 @@ import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_smartschool.dart';
+import 'support/log_capture.dart';
 import 'support/mcp.dart';
 
 /// [iso], a time with its offset, as the tools show it: `2026-12-18 20:00`
@@ -77,21 +78,45 @@ const _components =
     '(component id 2). Default: DW.';
 
 /// The general error of an answer the server cannot use.
-const _unusable =
-    'Skore\'s gradebook gave an answer the server could not use. Try again '
-    'in a moment; the technical details are in the server log. An account '
-    'without gradebooks of its own in Skore, such as a pupil\'s, may get '
-    'this answer too.';
+const _unusable = skoreGradebookUnusableAnswer;
+
+/// The fake's scale (`fakeSkoreScale`), as the tools list it (#169).
+const _scale =
+    'The scale "Gedragsschaal" of the evaluations on a scale, from low to '
+    'high: Onvoldoende (O) from 0% of the max, Voldoende (V) from 50%, Zeer '
+    'goed (ZG) from 80%. Skore stores a value on it as a number out of the '
+    'evaluation\'s max.';
+
+/// The evaluations of a period that mixes points, a scale and a type the
+/// library does not know (see `fakeSkoreMixedEvaluations`), as the tools
+/// list them (#169).
+const _toetsLussen =
+    'Toets lussen | evaluation id 500011 | column A | 2026-10-05 | max 20 | '
+    'component DW | points | not published: the pupils do not see it';
+const _inzet =
+    'Inzet in de les (short name inzet) | evaluation id 500012 | column B | '
+    '2026-10-06 | max 10 | no component | a scale | not published: the '
+    'pupils do not see it';
+const _attitudes =
+    'Attitudes | evaluation id 500013 | column C | 2026-10-07 | no max | no '
+    'component | a type the server does not support (evaltype 3) | not '
+    'published: the pupils do not see it';
+const _attitudesNotRead =
+    'The server cannot read the grades of this evaluation: it is of a type '
+    'the server does not support yet (Skore\'s evaltype 3; the server reads '
+    'evaluations in points and on a scale). The user sees them in Skore in '
+    'Smartschool itself.';
 
 void main() {
   late FakeSmartschool server;
   late FakeSkoreGradebook skore;
+  late SmartschoolSession session;
   late ServerConnection connection;
 
   setUp(() async {
     server = FakeSmartschool();
     skore = server.skoreGradebook..loadSchool();
-    final session = SmartschoolSession(
+    session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
     );
@@ -255,6 +280,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -268,7 +294,7 @@ void main() {
         '2264',
         ['176', '472', '2440'],
       ]);
-      final read = skore.requests[3];
+      final read = skore.requests[4];
       expect(read.params, [
         1704,
         fakeSkoreGradebookUser,
@@ -308,6 +334,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation wy=22',
+        'accessableList wy=22',
         'init wy=22',
         'getGradebookContext wy=22',
         'getEvaluations wy=22',
@@ -350,9 +377,60 @@ void main() {
         await list({'gradebook_id': 32504}),
         'Gradebook id 32504: Informaticawetenschappen (2 uur) (6e j DO), '
         'class 6WEWI2, school year 2026-2027 (workyear id 24).\n'
-        'It has no periods yet, so it has no evaluations.',
+        'It has no evaluation periods yet, so it has no evaluations.',
       );
-      expect(skore.calls, ['getNavigation', 'init wy=24']);
+      expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
+    });
+
+    test('a gradebook with report periods only, as Skore shows the behaviour '
+        'gradebook "Gedrag" (#168): no evaluation periods, so no '
+        'evaluations, and its course comments are in its report periods; '
+        'with a period_id or an evaluation_id, and for the feedback, an '
+        'error that says the same; no evaluations are asked for', () async {
+      skore.gradebooks.add(fakeSkoreGradebookGedrag());
+      const gradebook =
+          'gradebook of 5WW1 for Gedrag (A-stroom, D/A en D) (gradebook id '
+          '34901)';
+      expect(
+        await list({'gradebook_id': 34901}),
+        'Gradebook id 34901: Gedrag (A-stroom, D/A en D), class 5WW1, school '
+        'year 2026-2027 (workyear id 24).\n'
+        'It has no evaluation periods, only report periods, so it has no '
+        'evaluations.\n'
+        'Its course comments, one per pupil, are written in its report '
+        'periods and go on the report: read_skore_report reads them, and '
+        'save_skore_report_comment writes them.',
+      );
+      // The report's id is not a period id.
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34901,
+          'period_id': 2762,
+        }),
+        'The $gradebook has no period with period id 2762: it has no '
+        'evaluation periods, only report periods, so it has no evaluations. '
+        'Leave out period_id.',
+      );
+      const noEvaluation =
+          'The $gradebook has no evaluation periods, only report periods, so '
+          'it has no evaluation with evaluation id 500001.';
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34901,
+          'evaluation_id': 500001,
+        }),
+        noEvaluation,
+      );
+      expect(
+        await error('read_skore_feedback', {
+          'gradebook_id': 34901,
+          'evaluation_id': 500001,
+          'pupil_id': 1221,
+        }),
+        noEvaluation,
+      );
+      expect(evaluationReads(), isEmpty);
+      expect(skore.calls, isNot(contains(startsWith('getGradebookContext'))));
     });
 
     test('a period_id that is not one of the gradebook\'s: an error that '
@@ -378,7 +456,8 @@ void main() {
         }),
         'The gradebook of 6WEWI2 for Informaticawetenschappen (2 uur) (6e j '
         'DO) (gradebook id 32504) has no period with period id 1704: it has '
-        'no periods yet, so it has no evaluations. Leave out period_id.',
+        'no evaluation periods yet, so it has no evaluations. Leave out '
+        'period_id.',
       );
       expect(evaluationReads(), isEmpty);
     });
@@ -401,6 +480,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -485,7 +565,7 @@ void main() {
         'name or component, from the planner, and a type Skore does not '
         'name, whose grades the library does not read: the evaluation with '
         'the reason, the rest of the period read (flutter_smartschool 0.4.0, '
-        'yvanvds/dartschool#193; #170)', () async {
+        'yvanvds/dartschool#193; #170, #169)', () async {
       book(32508).evaluations[1704] = [
         FakeSkoreEvaluation(
           500005,
@@ -502,6 +582,7 @@ void main() {
         FakeSkoreEvaluation(500006, 'Project', date: '2026-10-06', evaltype: 7),
       ];
       final text = await list({'gradebook_id': 32508});
+      // A value of a scale without a max has no level.
       expect(
         text,
         contains(
@@ -510,18 +591,21 @@ void main() {
           'pupils see it and its grades\n'
           '  no class average | no group average | 1 of 3 pupils have a '
           'grade\n'
-          '  grades: 1. Aerts, An: G; 2. Claes, Bart: no grade; 3. Dupont, '
-          'Chloé: no grade\n',
+          '  grades: 1. Aerts, An: G (no level of the scale); 2. Claes, Bart: '
+          'no grade; 3. Dupont, Chloé: no grade\n',
         ),
       );
       const project =
           'Project | evaluation id 500006 | column B | 2026-10-06 | max 20 | '
-          'component DW | type 7 | not published: the pupils do not see it';
+          'component DW | a type the server does not support (evaltype 7) | '
+          'not published: the pupils do not see it';
       const notRead =
-          'The server could not read the grades of this evaluation: its '
-          'type, evaltype 7, is not one the library reads (1, points, or 2, '
-          'a scale).';
-      expect(text, contains('\n- $project\n  $notRead\nPupils: '));
+          'The server cannot read the grades of this evaluation: it is of a '
+          'type the server does not support yet (Skore\'s evaltype 7; the '
+          'server reads evaluations in points and on a scale). The user sees '
+          'them in Skore in Smartschool itself.';
+      expect(text, contains('\n- $project\n  $notRead\n$_scale\nPupils: '));
+      skore.scaleReads.clear();
       expect(
         await list({'gradebook_id': 32508, 'evaluation_id': 500006}),
         endsWith('\nEvaluation: $project\n$notRead'),
@@ -539,12 +623,19 @@ void main() {
           'The pupil has no feedback on this evaluation.',
         ),
       );
+      // Not on a scale: the scale is not read.
+      expect(skore.scaleReads, isEmpty);
       expect(
         await list({'gradebook_id': 32508, 'evaluation_id': 500005}),
-        contains(
-          '\nGrades, one line per pupil in Skore\'s order ("feedback": the '
-          'pupil has feedback on it, which read_skore_feedback reads):\n'
-          '- 1. Aerts, An | pupil id 1201 | G\n',
+        endsWith(
+          '\n$_scale\n'
+          'Values on the scale, one line per pupil in Skore\'s order: the '
+          'level, with its abbreviation, and the value Skore stores '
+          '("feedback": the pupil has feedback on it, which '
+          'read_skore_feedback reads):\n'
+          '- 1. Aerts, An | pupil id 1201 | G (no level of the scale)\n'
+          '- 2. Claes, Bart | pupil id 1202 | no grade\n'
+          '- 3. Dupont, Chloé | pupil id 1203 | no grade',
         ),
       );
     });
@@ -583,6 +674,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -671,12 +763,268 @@ void main() {
       expect(
         await error('list_skore_evaluations', {'gradebook_id': 99999}),
         startsWith(
-          'None of the user\'s own gradebooks in Skore of school year '
-          '2026-2027 (workyear id 24) has gradebook id 99999. Take the '
-          'gradebook id from list_skore_gradebooks',
+          'None of the user\'s gradebooks in Skore of school year 2026-2027 '
+          '(workyear id 24), their own or those colleagues shared with them, '
+          'has gradebook id 99999. Take the gradebook id from '
+          'list_skore_gradebooks',
         ),
       );
       expect(evaluationReads(), isEmpty);
+    });
+  });
+
+  group('evaluations on a scale (#169, flutter_smartschool 0.4.0)', () {
+    test('a period that mixes points, a scale and a type the server does '
+        'not support: the points as Skore stores them, each value on the '
+        'scale with its level\'s label and abbreviation, the scale once '
+        '(read once per call: the page and the frame of Skore\'s '
+        'gradebook), and the other type with why; a period in points only '
+        'reads no scale', () async {
+      await list({'gradebook_id': 32508});
+      expect(skore.scaleReads, isEmpty);
+
+      book(32508).evaluations[1704] = fakeSkoreMixedEvaluations();
+      expect(
+        await list({'gradebook_id': 32508}),
+        '$_ewiTitle\n'
+        '$_dw1\n'
+        '${_evaluationsHeader(3)}\n'
+        '- $_toetsLussen\n'
+        '  class average 11.8 | group average 11.8 | 2 of 3 pupils have a '
+        'grade\n'
+        '  grades: 1. Aerts, An: 14; 2. Claes, Bart: 9.5; 3. Dupont, Chloé: '
+        'no grade\n'
+        '- $_inzet\n'
+        '  class average 7.5 | group average 7.5 | 2 of 3 pupils have a '
+        'grade\n'
+        '  grades: 1. Aerts, An: Zeer goed (ZG; stored as 10) (feedback); '
+        '2. Claes, Bart: Voldoende (V; stored as 5); 3. Dupont, Chloé: no '
+        'grade (feedback)\n'
+        '- $_attitudes\n'
+        '  $_attitudesNotRead\n'
+        '$_scale\n'
+        'Pupils: 1. Aerts, An (pupil id 1201); 2. Claes, Bart (pupil id '
+        '1202); 3. Dupont, Chloé (pupil id 1203).\n'
+        '$_components',
+      );
+      // The frame answers `not good` to another secret than the page's.
+      expect(skore.scaleReads, ['page', 'frame']);
+
+      // One evaluation on the scale, one line per pupil.
+      skore.scaleReads.clear();
+      expect(
+        await list({
+          'gradebook_id': 32508,
+          'evaluation_id': 500012,
+          'period_id': 1704,
+        }),
+        '$_ewiTitle\n'
+        '$_dw1\n'
+        'Evaluation: $_inzet\n'
+        'class average 7.5 | group average 7.5 | 2 of 3 pupils have a '
+        'grade\n'
+        '$_scale\n'
+        'Values on the scale, one line per pupil in Skore\'s order: the '
+        'level, with its abbreviation, and the value Skore stores out of 10 '
+        '("feedback": the pupil has feedback on it, which '
+        'read_skore_feedback reads):\n'
+        '- 1. Aerts, An | pupil id 1201 | Zeer goed (ZG; stored as 10) | '
+        'feedback\n'
+        '- 2. Claes, Bart | pupil id 1202 | Voldoende (V; stored as 5)\n'
+        '- 3. Dupont, Chloé | pupil id 1203 | no grade | feedback',
+      );
+      expect(skore.scaleReads, ['page', 'frame']);
+
+      // The others of the period read no scale.
+      skore.scaleReads.clear();
+      expect(
+        await list({'gradebook_id': 32508, 'evaluation_id': 500011}),
+        endsWith(
+          '\nGrades out of 20, one line per pupil in Skore\'s order '
+          '("feedback": the pupil has feedback on it, which '
+          'read_skore_feedback reads):\n'
+          '- 1. Aerts, An | pupil id 1201 | 14\n'
+          '- 2. Claes, Bart | pupil id 1202 | 9.5\n'
+          '- 3. Dupont, Chloé | pupil id 1203 | no grade',
+        ),
+      );
+      expect(
+        await list({'gradebook_id': 32508, 'evaluation_id': 500013}),
+        endsWith('\nEvaluation: $_attitudes\n$_attitudesNotRead'),
+      );
+      expect(skore.scaleReads, isEmpty);
+    });
+
+    test('read_skore_feedback on an evaluation on the scale: the pupil\'s '
+        'level with its label, and every feedback, whoever wrote it; the '
+        'scale is read once, and not for an evaluation in points', () async {
+      book(32508).evaluations[1704] = fakeSkoreMixedEvaluations();
+      expect(
+        await feedback({
+          'gradebook_id': 32508,
+          'evaluation_id': 500012,
+          'pupil_id': 1201,
+          'period_id': 1704,
+        }),
+        '$_ewiTitle\n'
+        'Period: DW1 (period id 1704).\n'
+        'Evaluation: $_inzet\n'
+        'Pupil: 1. Aerts, An | pupil id 1201 | grade Zeer goed (ZG; stored '
+        'as 10)\n'
+        '1 feedback text on it, in the order it was written:\n'
+        '- by the user, Jan Peeters (user id 345) | written '
+        '${_time('2026-10-06T15:10:00+02:00')} | the user may change it\n'
+        '  Werkt elke les goed mee.',
+      );
+      expect(skore.scaleReads, ['page', 'frame']);
+      expect(
+        skore.feedbackReads.single.path,
+        '/skore/api/v1/gradebook/feedback/12_500012/student/12_1201_0/class/'
+        '12_2440/teacher/12_345_0/context/176_472_2440',
+      );
+      expect(
+        await feedback({
+          'gradebook_id': 32508,
+          'evaluation_id': 500012,
+          'pupil_id': 1203,
+          'period_id': 1704,
+        }),
+        endsWith(
+          '\nPupil: 3. Dupont, Chloé | pupil id 1203 | no grade\n'
+          '1 feedback text on it, in the order it was written:\n'
+          '- by Céline Dupré (user id 346) | written '
+          '${_time('2026-10-06T16:00:00+02:00')} | the user may not change '
+          'it\n'
+          '  Komt vaak te laat in de les.',
+        ),
+      );
+      skore.scaleReads.clear();
+      expect(
+        await feedback({
+          'gradebook_id': 32508,
+          'evaluation_id': 500011,
+          'pupil_id': 1202,
+          'period_id': 1704,
+        }),
+        contains('\nPupil: 2. Claes, Bart | pupil id 1202 | grade 9.5\n'),
+      );
+      expect(skore.scaleReads, isEmpty);
+    });
+
+    test('a scale the library cannot read: the values as Skore stores '
+        'them, with a sentence that the labels could not be read, and the '
+        'reason in the server log only', () async {
+      book(32508).evaluations[1704] = fakeSkoreMixedEvaluations();
+      skore.frameAnswer =
+          '<!DOCTYPE html><html><head><title>Skore</title></head><body>'
+          '</body></html>';
+      const notRead =
+          'The scale of the evaluations on a scale could not be read, so '
+          'their values are shown as Skore stores them (a number out of the '
+          'max), without their labels; the technical details are in the '
+          'server log.';
+      // A connection of its own, so that the server's log is captured.
+      final (texts, logged) = await captureLog(() async {
+        final (connection, _) = await connect(
+          tools: [
+            listSkoreEvaluationsTool(session),
+            readSkoreFeedbackTool(session),
+          ],
+        );
+        return [
+          for (final (tool, arguments) in [
+            ('list_skore_evaluations', {'gradebook_id': 32508}),
+            (
+              'list_skore_evaluations',
+              {'gradebook_id': 32508, 'evaluation_id': 500012},
+            ),
+            (
+              'read_skore_feedback',
+              {
+                'gradebook_id': 32508,
+                'evaluation_id': 500012,
+                'pupil_id': 1201,
+              },
+            ),
+          ])
+            (await callTool(connection, tool, arguments)).$2,
+        ];
+      });
+      expect(
+        texts[0],
+        contains(
+          '\n  grades: 1. Aerts, An: 10 (feedback); 2. Claes, Bart: 5; 3. '
+          'Dupont, Chloé: no grade (feedback)\n'
+          '- $_attitudes\n'
+          '  $_attitudesNotRead\n'
+          '$notRead\n'
+          'Pupils: ',
+        ),
+      );
+      expect(
+        texts[1],
+        endsWith(
+          '\n$notRead\n'
+          'Values on the scale as Skore stores them out of 10, one line per '
+          'pupil in Skore\'s order ("feedback": the pupil has feedback on '
+          'it, which read_skore_feedback reads):\n'
+          '- 1. Aerts, An | pupil id 1201 | 10 | feedback\n'
+          '- 2. Claes, Bart | pupil id 1202 | 5\n'
+          '- 3. Dupont, Chloé | pupil id 1203 | no grade | feedback',
+        ),
+      );
+      expect(
+        texts[2],
+        contains(
+          '\nPupil: 1. Aerts, An | pupil id 1201 | grade 10\n'
+          '$notRead\n'
+          '1 feedback text on it',
+        ),
+      );
+      expect(
+        logged,
+        contains(
+          'skore gradebook: the scale of the evaluations on a scale: '
+          'SmartschoolSkoreError: The frame of Skore\'s gradebook '
+          '($fakeSkoreGradebookFramePath) holds no defaultScale',
+        ),
+      );
+
+      // Skore does not take the start-up secret: the library asks for the
+      // page and the frame once more.
+      skore
+        ..frameAnswer = 'not good'
+        ..scaleReads.clear();
+      expect(
+        await list({'gradebook_id': 32508, 'evaluation_id': 500012}),
+        contains('\n$notRead\n'),
+      );
+      expect(skore.scaleReads, ['page', 'frame', 'page', 'frame']);
+    });
+
+    test('a cell of an evaluation on a scale in a shape the server does '
+        'not know: that evaluation with why, the rest of the period read, '
+        'and no scale read', () async {
+      final evaluations = fakeSkoreMixedEvaluations();
+      evaluations[1].cells[1202] = '<div class="gbc_scale">V</div>';
+      book(32508).evaluations[1704] = evaluations;
+      final text = await list({'gradebook_id': 32508});
+      expect(
+        text,
+        contains(
+          '\n  grades: 1. Aerts, An: 14; 2. Claes, Bart: 9.5; 3. Dupont, '
+          'Chloé: no grade\n'
+          '- $_inzet\n'
+          '  The server cannot read the grades of this evaluation: Skore '
+          'gave its grades in a shape the server does not know yet (the '
+          'cell of row "pupil_1202_2440" has no value (a div.gbc with its '
+          'raw)). The user sees them in Skore in Smartschool itself.\n'
+          '- $_attitudes\n'
+          '  $_attitudesNotRead\n'
+          'Pupils: ',
+        ),
+      );
+      expect(skore.scaleReads, isEmpty);
     });
   });
 
@@ -710,6 +1058,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',

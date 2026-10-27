@@ -7,15 +7,24 @@ import 'skore_format.dart';
 import 'skore_gradebook_format.dart';
 import 'skore_writes.dart';
 
-// Reaching the user's own gradebooks in Skore ("Puntenboek",
-// `/SkoreGradebook`) for the gradebook tools: the session runner, the
-// library's errors as ToolErrors, the gradebooks of a school year kept in
-// memory per session, to find a gradebook by its id, and finding a period,
-// a pupil and an evaluation of a gradebook by their ids.
+// Reaching the user's gradebooks in Skore ("Puntenboek", `/SkoreGradebook`)
+// for the gradebook tools: their own, and those colleagues shared with them
+// (Skore's tab "Gedeeld", #167, yvanvds/dartschool#191). The session
+// runner, the library's errors as ToolErrors, the gradebooks of a school
+// year kept in memory per session, to find a gradebook by its id, and
+// finding a period, a pupil and an evaluation of a gradebook by their ids.
+//
+// A gradebook a colleague shared with the user is the colleague's: its
+// teacher (`SkoreGradebook.teacherId`) is that colleague, its owner, not
+// the user. So "the user's own feedback" is the feedback by the logged-in
+// user ([SkoreGradebooks.userId]), as the library keeps it, never the
+// feedback by the gradebook's teacher. One shared to read only is refused
+// for a change before anything is sent ([checkSkoreGradebookChangeable]),
+// and no evaluation is created in any shared gradebook.
 //
 // The tools that change a gradebook (`create_skore_evaluation`, #142;
-// `save_skore_grades`, #143; `save_skore_feedback`, #144) run with
-// [withSkoreGradebookWrite].
+// `save_skore_grades`, #143; `save_skore_feedback`, #144;
+// `save_skore_report_comment`, #171) run with [withSkoreGradebookWrite].
 // The library checks the gradebook, the period and the values before each
 // save, refusing a change that does not fit with a
 // `SmartschoolSkoreChangeRefusedError` (nothing saved), sends a save that
@@ -44,11 +53,33 @@ import 'skore_writes.dart';
 //
 // Unlike the Skore tools of `skore_access.dart` (`SkoreService`, the admin
 // side of Skore, behind the switch "Skore-beheer"), the gradebook needs no
-// extra rights: every teacher has gradebooks of their own. So the gradebook
+// extra rights: every teacher has gradebooks of their own, and reaches the
+// ones colleagues shared with them with their own login. So the gradebook
 // tools are offered to every account, and nothing here speaks of rights or
 // of that switch.
 
-/// Runs [action] with a [SkoreGradebookService] on the session's logged-in
+/// A [SkoreGradebookService] on the session's logged-in client that also
+/// tells who the logged-in user is ([userId]): what the gradebook tools run
+/// with ([withSkoreGradebook], [withSkoreGradebookWrite]).
+final class SkoreGradebooks extends SkoreGradebookService {
+  SkoreGradebooks(super.client) : _client = client;
+
+  final SmartschoolClient _client;
+
+  /// The Smartschool user id of the logged-in user (`345` of `12_345_0`),
+  /// as the library takes it (`getCurrentUser`): from the page Smartschool
+  /// sent at login, which the client keeps, so no request is sent.
+  ///
+  /// The user whose feedback is "the user's own": the library keeps to the
+  /// feedback whose teacher is this user (`teacherId == userId`), also in a
+  /// gradebook a colleague shared with them, whose own teacher
+  /// ([SkoreGradebook.teacherId]) is that colleague (#167). A user id
+  /// Smartschool did not give in that form is a [SmartschoolParsingError]
+  /// ([skoreGradebookToolError]).
+  Future<int> userId() async => (await _client.getCurrentUser()).id;
+}
+
+/// Runs [action] with a [SkoreGradebooks] on the session's logged-in
 /// client.
 ///
 /// Like every [SmartschoolSession.run] action, [action] may run twice (when
@@ -60,10 +91,10 @@ import 'skore_writes.dart';
 /// connection failures stay `SmartschoolProblem`s.
 Future<T> withSkoreGradebook<T>(
   SmartschoolSession session,
-  Future<T> Function(SkoreGradebookService gradebooks) action,
+  Future<T> Function(SkoreGradebooks gradebooks) action,
 ) async {
   try {
-    return await session.run((client) => action(SkoreGradebookService(client)));
+    return await session.run((client) => action(SkoreGradebooks(client)));
   } catch (error) {
     final toolError = skoreGradebookToolError(error);
     if (toolError == null) rethrow;
@@ -89,10 +120,28 @@ Future<T> withSkoreGradebook<T>(
 /// - [SmartschoolSkoreError]: an answer the server cannot use (an error page,
 ///   another HTTP status, data in an unknown shape). The library's message
 ///   can quote Skore's answer, which may hold names, so it goes to the log
-///   only. What Skore answers an account without gradebooks of its own (a
-///   pupil's) was not captured: this is the message such an account gets
-///   when it is not an empty list, so it says so.
+///   only; for a redirect it names the target, by path and module only
+///   (yvanvds/dartschool#192). The message says to try again, and when it
+///   keeps happening to use Skore in Smartschool itself.
 ///
+///   Not a session Smartschool did not accept: Skore's gradebook answers an
+///   RPC call in an expired session with `302 Location: /`, which
+///   flutter_smartschool 0.4.0 takes for a refused session (#168): it logs
+///   in again and sends the call once more. Refused again, that is a
+///   `SmartschoolSessionExpiredError`, which [SmartschoolSession.run] tries
+///   once more and then reports itself as a session Smartschool did not
+///   accept, with "try again in a moment"; it is not passed here. Before
+///   0.4.0 that redirect came here, and the message's remark that a pupil's
+///   account may get this answer too sent the user of a teacher's account
+///   the wrong way: what Skore answers an account without gradebooks of its
+///   own was not captured, and the message no longer guesses.
+///
+/// - [SmartschoolSkoreGradebookReadOnlyError], from a write: the gradebook
+///   is one a colleague shared with the user to read only, as Skore lists
+///   it right before the save (#167), so nothing was saved. Said in the
+///   server's own words, with its owner to ask
+///   ([skoreReadOnlyGradebookRefusal]), not as a call to correct. A
+///   [SmartschoolSkoreChangeRefusedError], so it comes before the next case.
 /// - [SmartschoolSkoreChangeRefusedError], from a write: a check before the
 ///   save refused the change, so nothing was saved. A [SmartschoolSkoreError],
 ///   so it comes before the last case. Its message, which the library writes
@@ -125,6 +174,9 @@ ToolError? skoreGradebookToolError(
         'Skore\'s gradebook needs, so the gradebook could not be read. Try '
         'again in a moment; the technical details are in the server log.',
       );
+    case SmartschoolSkoreGradebookReadOnlyError(:final gradebook):
+      log('skore gradebook: $error');
+      return ToolError(skoreReadOnlyGradebookRefusal(gradebook));
     case SmartschoolSkoreChangeRefusedError(:final message):
       log('skore gradebook: $error');
       return ToolError(
@@ -133,15 +185,20 @@ ToolError? skoreGradebookToolError(
       );
     case SmartschoolSkoreError():
       log('skore gradebook: $error');
-      return const ToolError(
-        'Skore\'s gradebook gave an answer the server could not use. Try '
-        'again in a moment; the technical details are in the server log. An '
-        'account without gradebooks of its own in Skore, such as a pupil\'s, '
-        'may get this answer too.',
-      );
+      return const ToolError(skoreGradebookUnusableAnswer);
   }
   return null;
 }
+
+/// What the gradebook tools say for an answer of Skore's gradebook the
+/// server could not use ([skoreGradebookToolError]): to try again, and when
+/// it keeps happening, to use Skore in Smartschool itself. The details are
+/// in the server log only.
+const skoreGradebookUnusableAnswer =
+    'Skore\'s gradebook gave an answer the server could not use. Try again '
+    'in a moment. If it keeps happening, the server cannot read this part '
+    'of Skore yet: use Skore in Smartschool itself. The technical details '
+    'are in the server log.';
 
 /// What a gradebook write passes on with a change Skore refused, by
 /// default: what to read again to correct the call.
@@ -149,9 +206,9 @@ const rereadSkoreGradebookContents =
     'Read the gradebook again with read_skore_gradebook (its periods) and '
     'list_skore_evaluations (a period\'s evaluations)';
 
-/// Runs the gradebook write [write] with a [SkoreGradebookService] on the
+/// Runs the gradebook write [write] with a [SkoreGradebooks] on the
 /// session's logged-in client, for a tool that changes one of the user's
-/// gradebooks.
+/// gradebooks, or one a colleague shared with them to write.
 ///
 /// Like [withSkoreGradebook], with the library's errors as [ToolError]s
 /// ([skoreGradebookToolError]); a change a check refused is passed on with
@@ -168,11 +225,11 @@ const rereadSkoreGradebookContents =
 /// comment at the top of this file for why that makes no change twice.
 Future<T> withSkoreGradebookWrite<T>(
   SmartschoolSession session,
-  Future<T> Function(SkoreGradebookService gradebooks) write, {
+  Future<T> Function(SkoreGradebooks gradebooks) write, {
   String reread = rereadSkoreGradebookContents,
 }) async {
   try {
-    return await session.run((client) => write(SkoreGradebookService(client)));
+    return await session.run((client) => write(SkoreGradebooks(client)));
   } on ToolError catch (error) {
     throw ToolError('${error.message} $nothingChangedInSkore');
   } catch (error) {
@@ -180,6 +237,36 @@ Future<T> withSkoreGradebookWrite<T>(
     if (toolError == null) rethrow;
     throw ToolError('${toolError.message} $nothingChangedInSkore');
   }
+}
+
+/// Refuses a change in [gradebook] when a colleague shared it with the user
+/// to read only ([SkoreGradebookAccess.read], #167): the user may read it,
+/// not change it.
+///
+/// Throws a [ToolError] that says so in the server's own words and names
+/// its owner, whom the user can ask ([skoreReadOnlyGradebookRefusal]). The
+/// tools that change a gradebook call it right after finding the gradebook
+/// ([SkoreGradebookYears.findInCurrentYear]), so that nothing more is read
+/// and nothing is sent. The library refuses it as well, before anything is
+/// sent, and also a gradebook shared to write that Skore lists as shared to
+/// read only right before the save, with a
+/// `SmartschoolSkoreGradebookReadOnlyError`, which [skoreGradebookToolError]
+/// words the same way.
+void checkSkoreGradebookChangeable(SkoreGradebook gradebook) {
+  if (gradebook.access != SkoreGradebookAccess.read) return;
+  throw ToolError(skoreReadOnlyGradebookRefusal(gradebook));
+}
+
+/// Why a change in [gradebook], a gradebook a colleague shared with the
+/// user to read only, is refused: that Skore lists it so, that the user may
+/// read it but not change it, and that its owner can make the change or
+/// share it to write (#167). The write tools add that nothing was changed.
+String skoreReadOnlyGradebookRefusal(SkoreGradebook gradebook) {
+  final owner = formatSkoreGradebookOwner(gradebook);
+  return 'Skore lists the ${formatSkoreGradebookName(gradebook)} as shared '
+      'with the user to read only: the user may read it, not change it. Tell '
+      'the user so; its owner, $owner, can make the change, or share the '
+      'gradebook with the user to write.';
 }
 
 /// The arguments of [SkoreGradebookService]'s methods whose [ArgumentError]
@@ -218,22 +305,27 @@ String _reason(Object? message) {
   return text.endsWith('.') ? text : '$text.';
 }
 
-/// A gradebook of the user, with the school year it is of.
+/// A gradebook of the user (their own, or one a colleague shared with them),
+/// with the school year it is of.
 typedef FoundSkoreGradebook = ({
   SkoreGradebook gradebook,
   SkoreWorkyear workyear,
 });
 
-/// The user's own gradebooks per school year
-/// ([SkoreGradebookService.getGradebookYear]), kept in memory for the
-/// session, so that the gradebook tools find a gradebook by its id without
-/// reading them for every call.
+/// The user's gradebooks per school year, their own and those colleagues
+/// shared with them ([SkoreGradebookService.getGradebookYear] with
+/// `includeShared`, #167), kept in memory for the session, so that the
+/// gradebook tools find a gradebook by its id without reading them for every
+/// call.
 ///
 /// Skore's answer is big (some 270 KB for 22 gradebooks, 1.7 MB for 50, as
 /// it sends the colleagues of every gradebook along): the library says to
-/// read it once, not per gradebook. A gradebook id that is not in memory is
-/// read again ([find]); gradebooks rarely change during a school year
-/// (Skore's administrators make them).
+/// read it once, not per gradebook. The gradebooks shared with the user are
+/// a second, small request (`accessableList`), read with it every time, so
+/// that a shared gradebook's id is found like an own one's and
+/// `list_skore_gradebooks` lists both. A gradebook id that is not in memory
+/// is read again ([find]); gradebooks rarely change during a school year
+/// (Skore's administrators make and share them).
 final class SkoreGradebookYears {
   SkoreGradebookYears._();
 
@@ -249,10 +341,10 @@ final class SkoreGradebookYears {
   final Map<int?, Future<SkoreGradebookYear>> _years = {};
 
   /// The gradebooks of school year [workyearId] (Skore's current school
-  /// year without it), with the school years Skore offers: from memory, or
-  /// read with [gradebooks] on the first call for that year, and with
-  /// [again]. Calls at the same time share one read; a read that failed is
-  /// tried again on the next call.
+  /// year without it), the user's own and those shared with them, with the
+  /// school years Skore offers: from memory, or read with [gradebooks] on
+  /// the first call for that year, and with [again]. Calls at the same time
+  /// share one read; a read that failed is tried again on the next call.
   Future<SkoreGradebookYear> read(
     SkoreGradebookService gradebooks, {
     int? workyearId,
@@ -260,7 +352,11 @@ final class SkoreGradebookYears {
   }) async {
     final known = again ? null : _years[workyearId];
     final pending =
-        known ?? gradebooks.getGradebookYear(workyearId: workyearId);
+        known ??
+        gradebooks.getGradebookYear(
+          workyearId: workyearId,
+          includeShared: true,
+        );
     _years[workyearId] = pending;
     try {
       final year = await pending;
@@ -272,10 +368,11 @@ final class SkoreGradebookYears {
     }
   }
 
-  /// The user's gradebook with [gradebookId], of school year [workyearId],
-  /// or without it of any school year in memory, Skore's current one first.
-  /// When it is not in memory, the school year is read again with
-  /// [gradebooks] (Skore's current one without [workyearId]).
+  /// The user's gradebook with [gradebookId], their own or one shared with
+  /// them, of school year [workyearId], or without it of any school year in
+  /// memory, Skore's current one first. When it is not in memory, the school
+  /// year is read again with [gradebooks] (Skore's current one without
+  /// [workyearId]).
   ///
   /// Throws a [ToolError] that says to take the id from
   /// `list_skore_gradebooks` when that read does not hold it either.
@@ -293,8 +390,9 @@ final class SkoreGradebookYears {
         'school year ${year.workyear.name} (workyear id '
         '${year.workyear.id})';
     throw ToolError(
-      'None of the user\'s own gradebooks in Skore of $where has gradebook '
-      'id $gradebookId. Take the gradebook id from list_skore_gradebooks'
+      'None of the user\'s gradebooks in Skore of $where, their own or those '
+      'colleagues shared with them, has gradebook id $gradebookId. Take the '
+      'gradebook id from list_skore_gradebooks'
       '${workyearId == null ? '; for a gradebook of an earlier school year, '
                 'pass its workyear_id too, as list_skore_gradebooks lists the '
                 'school years' : ' with workyear_id $workyearId'}.',
@@ -302,8 +400,10 @@ final class SkoreGradebookYears {
   }
 
   /// The user's gradebook with [gradebookId] of Skore's current school year,
-  /// the only one the library changes a gradebook in: from memory, or when
-  /// it is not there, read again with [gradebooks].
+  /// the only one the library changes a gradebook in, their own or one
+  /// shared with them: from memory, or when it is not there, read again with
+  /// [gradebooks]. Whether the user may change a shared one is for the
+  /// caller to check ([checkSkoreGradebookChangeable]).
   ///
   /// Throws a [ToolError] that says to take the id from
   /// `list_skore_gradebooks` without `workyear_id` when that read does not
@@ -334,8 +434,9 @@ final class SkoreGradebookYears {
       }
     }
     throw ToolError(
-      'None of the user\'s own gradebooks of $current, has gradebook id '
-      '$gradebookId. Take the gradebook id from list_skore_gradebooks, '
+      'None of the user\'s gradebooks of $current, their own or those '
+      'colleagues shared with them, has gradebook id $gradebookId. Take the '
+      'gradebook id from list_skore_gradebooks, '
       'without workyear_id: only a gradebook of the current school year can '
       'be changed.',
     );
@@ -367,22 +468,29 @@ final class SkoreGradebookYears {
     return years;
   }
 
+  /// The gradebook with [id] in [year]: one of the user's own, else one
+  /// shared with them.
   static FoundSkoreGradebook? _found(SkoreGradebookYear year, int id) =>
-      switch (year.gradebooks.where((g) => g.gradebookId == id).firstOrNull) {
+      switch ([
+        ...year.gradebooks,
+        ...year.sharedGradebooks,
+      ].where((g) => g.gradebookId == id).firstOrNull) {
         final gradebook? => (gradebook: gradebook, workyear: year.workyear),
         null => null,
       };
 }
 
-/// One of the user's gradebooks read with its periods and pupils
-/// ([SkoreGradebookService.getGradebook]), with the school year it is of.
+/// One of the user's gradebooks (their own, or one shared with them) read
+/// with its periods and pupils ([SkoreGradebookService.getGradebook]), with
+/// the school year it is of.
 typedef ReadSkoreGradebook = ({
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear,
 });
 
 /// Reads the user's gradebook [gradebookId] of school year [workyearId]
-/// with its periods, its pupils and whether Skore lets the user change it:
+/// (their own, or one shared with them) with its periods, its pupils and
+/// whether Skore lets the user change it:
 /// found in [years] ([SkoreGradebookYears.find], which throws a [ToolError]
 /// for an unknown id), then read with [gradebooks] (Skore's `init` and
 /// `getGradebookContext`).
@@ -420,8 +528,9 @@ SkoreGradebookPeriod? skoreGradebookPeriod(
   final gradebook = formatSkoreGradebookName(sheet.gradebook);
   if (sheet.periods.isEmpty) {
     throw ToolError(
-      'The $gradebook has no period with period id $periodId: it has no '
-      'periods yet, so it has no evaluations. Leave out period_id.',
+      'The $gradebook has no period with period id $periodId: it has '
+      '${formatSkoreMissingPeriods(sheet)}, so it has no evaluations. Leave '
+      'out period_id.',
     );
   }
   final active = sheet.activePeriod;
@@ -458,6 +567,79 @@ SkoreGradebookPupil skoreGradebookPupil(
     'gradebook.',
   );
 }
+
+/// The report period of [sheet] with [reportId] (#171): one of its
+/// [SkoreGradebookSheet.reports], as `read_skore_gradebook` lists them.
+///
+/// Throws a [ToolError] that lists the gradebook's report periods for a
+/// [reportId] that is not one of them, and says it has none for a gradebook
+/// without; nothing is sent.
+SkoreReportPeriod skoreReportPeriod(SkoreGradebookSheet sheet, int reportId) {
+  for (final report in sheet.reports) {
+    if (report.id == reportId) return report;
+  }
+  final gradebook = formatSkoreGradebookName(sheet.gradebook);
+  if (sheet.reports.isEmpty) {
+    throw ToolError(
+      'The $gradebook has no report with report id $reportId: it has no '
+      'report periods, so it has no course comments to read or write.',
+    );
+  }
+  final reports = [
+    for (final report in sheet.reports)
+      '${skoreName(report.name)} (report id ${report.id}, '
+          '${report.isOpen ? 'open' : 'closed'})',
+  ];
+  throw ToolError(
+    'The $gradebook has no report with report id $reportId. Its report '
+    'periods, in Skore\'s order: ${reports.join(', ')}. Take a report id '
+    'from these, as read_skore_gradebook lists them; a period id is not a '
+    'report id.',
+  );
+}
+
+/// Report [report] of the gradebook of [sheet], as Skore's gradebook shows
+/// it ([SkoreGradebookService.getReport], one `getReportsResults`; #171):
+/// the results so far per component and the course comment of each pupil.
+///
+/// A course that is not on the report is answered by Skore with HTTP 404
+/// and "Course not found in source!" (seen live for a project gradebook,
+/// yvanvds/dartschool#204), which the library throws as a
+/// [SmartschoolSkoreError] that only its message tells apart from an answer
+/// it cannot use. Trying again does not help then, so this throws a
+/// [ToolError] that says so, the library's message in the log only. The
+/// check reads the message text: a workaround until dartschool#204 gives the
+/// case a type of its own (removal tracked in yvanvds/smartschool-mcp#174).
+/// Any other error is passed on.
+Future<SkoreReport> readSkoreReport(
+  SkoreGradebookService gradebooks,
+  SkoreGradebookSheet sheet,
+  SkoreReportPeriod report,
+) async {
+  try {
+    return await gradebooks.getReport(sheet.gradebook, report.id);
+  } on SmartschoolSkoreError catch (error) {
+    if (!_isCourseNotOnReport(error)) rethrow;
+    log('skore gradebook: $error');
+    throw ToolError(
+      'Skore answers that the course of the '
+      '${formatSkoreGradebookName(sheet.gradebook)} is not on '
+      '${formatSkoreReportName(report)}, so the server cannot read its '
+      'results or its course comment there. Skore answers so for a course '
+      'that is on the report through a project (Skore\'s "Projecten"), which '
+      'the server does not read yet. Tell the user so; trying again does not '
+      'help. The user sees the report in Skore in Smartschool itself.',
+    );
+  }
+}
+
+/// Whether [error] is Skore's answer to a report read for a course that is
+/// not on the report: HTTP 404 with the JSON message "Course not found in
+/// source!", which the library names in its message ([readSkoreReport]).
+bool _isCourseNotOnReport(SmartschoolSkoreError error) =>
+    error is! SmartschoolSkoreChangeRefusedError &&
+    error.message.contains('HTTP 404') &&
+    error.message.contains('Course not found in source!');
 
 /// The component [SkoreGradebookService.createEvaluation] gives a new
 /// evaluation when it is called without a `componentId`, of the
@@ -518,8 +700,8 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
         ];
   if (periods.isEmpty) {
     throw ToolError(
-      'The $gradebook has no periods yet, so it has no evaluation with '
-      'evaluation id $evaluationId.',
+      'The $gradebook has ${formatSkoreMissingPeriods(sheet)}, so it has no '
+      'evaluation with evaluation id $evaluationId.',
     );
   }
   for (final period in periods) {
@@ -554,6 +736,31 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
     '$where. Take the evaluation id from list_skore_evaluations, with the '
     'period_id of its period.',
   );
+}
+
+/// The school's scale, for a result that shows [evaluations]: read once
+/// with [gradebooks] ([SkoreGradebookService.getScale], two `GET`s of HTML
+/// pages) when one of them is an evaluation on a scale whose grades the
+/// library read ([isSkoreScaleEvaluation]), so that each pupil's value comes
+/// with its level (#169); null when none is, and nothing is sent then.
+///
+/// Skore's web client has one scale for every evaluation on a scale of
+/// every gradebook, so a tool reads it once per call, not per evaluation or
+/// pupil. A scale the library cannot read (a [SmartschoolSkoreError]) is
+/// logged and gives null too: the grades are what was asked for, and the
+/// result says that the labels could not be read ([formatSkoreScaleNote]).
+/// Login and connection failures are passed on.
+Future<SkoreScale?> readSkoreScaleFor(
+  SkoreGradebookService gradebooks,
+  Iterable<SkoreEvaluation> evaluations,
+) async {
+  if (!evaluations.any(isSkoreScaleEvaluation)) return null;
+  try {
+    return await gradebooks.getScale();
+  } on SmartschoolSkoreError catch (error) {
+    log('skore gradebook: the scale of the evaluations on a scale: $error');
+    return null;
+  }
 }
 
 /// Refuses [what] (such as `the grades`), which [tool] would write into
