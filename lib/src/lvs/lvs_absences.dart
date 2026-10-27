@@ -41,8 +41,8 @@ typedef LvsAbsencesRead = ({LvsAbsences absences, bool fileHasAbsences});
 /// The file ([LvsService.getPupilFile]) is read here only when the absences
 /// hold nothing, to tell an unknown pupil apart there as well, and a file
 /// without a part of absences ([LvsSectionType.absences]) from a pupil
-/// without absences. That read takes today's attendance along, unused
-/// (yvanvds/dartschool#186, tracked in #160).
+/// without absences. That read leaves today's attendance out
+/// (`withTodayStatus: false`), as the library's own read after a 500 does.
 Future<LvsAbsencesRead> readLvsAbsences(
   LvsService lvs, {
   required int pupilId,
@@ -50,7 +50,11 @@ Future<LvsAbsencesRead> readLvsAbsences(
 }) async {
   final absences = await lvs.getAbsences(pupilId: pupilId, classId: classId);
   if (!absences.isEmpty) return (absences: absences, fileHasAbsences: true);
-  final file = await lvs.getPupilFile(pupilId: pupilId, classId: classId);
+  final file = await lvs.getPupilFile(
+    pupilId: pupilId,
+    classId: classId,
+    withTodayStatus: false,
+  );
   return (
     absences: absences,
     fileHasAbsences: file.allSections.any(

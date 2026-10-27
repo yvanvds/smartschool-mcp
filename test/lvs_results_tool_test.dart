@@ -71,11 +71,10 @@ String _configurationCall({FakeLvsPupil pupil = fakeLvsJan}) =>
     'GET /LVS/Results/getConfiguration?pupilId=${pupil.pupilId}'
     '&groupId=${pupil.classId}';
 
-/// The two requests of [pupil]'s file.
-List<String> _fileCalls(FakeLvsPupil pupil) => [
-  'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=${pupil.pupilId}',
-];
+/// The request of [pupil]'s file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+String _fileCall(FakeLvsPupil pupil) =>
+    'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}';
 
 /// The feedback of the active period, of all courses.
 const _feedback =
@@ -353,7 +352,7 @@ void main() {
       );
       expect(h.lvs.calls, [
         ..._calls(filters: '', year: 'startDate=2031-09-01&endDate=2032-08-31'),
-        ..._fileCalls(fakeLvsJan),
+        _fileCall(fakeLvsJan),
       ]);
     });
 
@@ -593,7 +592,7 @@ void main() {
         ),
       );
       expect(text, isNot(contains('Skore')));
-      expect(lvs.calls.skip(lvs.calls.length - 2), _fileCalls(fakeLvsJan));
+      expect(lvs.calls.last, _fileCall(fakeLvsJan));
     });
 
     test('a file that shows the older Skore part instead of Resultaten: the '
@@ -614,7 +613,7 @@ void main() {
       );
       expect(lvs.calls, [
         ..._calls(filters: '', pupil: fakeLvsMarie),
-        ..._fileCalls(fakeLvsMarie),
+        _fileCall(fakeLvsMarie),
       ]);
     });
 
@@ -803,7 +802,8 @@ void main() {
 
   group('privacy', () {
     test("only the reads of the results app, with the app's headers, and the "
-        'file when the results hold nothing: no PUT, no other POST', () async {
+        'file when the results hold nothing: GETs only, no PUT, no '
+        'POST', () async {
       await read(jan());
       await read(jan({'school_year': '2029-2030', 'course': 'Testvak'}));
       await read(fakeLvsPupilArguments(fakeLvsMarie));
@@ -819,15 +819,8 @@ void main() {
         FakeLvsRead.resultsFeedback,
         FakeLvsRead.reports,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       });
-      expect(
-        {
-          for (final r in lvs.requests)
-            if (r.method != 'GET') '${r.method} ${r.path}',
-        },
-        {'POST /LVS/Pupilxhr/getStatusInfo'},
-      );
+      expect({for (final r in lvs.requests) r.method}, {'GET'});
     });
 
     test('nothing is kept on disk: the cache folder holds the same files '

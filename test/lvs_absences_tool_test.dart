@@ -37,11 +37,10 @@ String _call([FakeLvsPupil pupil = fakeLvsMarie]) =>
     'POST /LVS/Pupilpresences pupilID=${pupil.pupilId} '
     'groupID=${pupil.classId}';
 
-/// The two requests of [pupil]'s file.
-List<String> _fileCalls(FakeLvsPupil pupil) => [
-  'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=${pupil.pupilId}',
-];
+/// The request of [pupil]'s file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+String _fileCall(FakeLvsPupil pupil) =>
+    'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}';
 
 /// Marie's absences in 2031-2032, the current school year, as listed.
 const _currentList =
@@ -367,7 +366,7 @@ void main() {
         'The LVS gives no absences for the pupil with pupil_id 900002 '
         '(class_id 900102), in any school year.',
       );
-      expect(lvs.calls, [_call(), ..._fileCalls(fakeLvsMarie)]);
+      expect(lvs.calls, [_call(), _fileCall(fakeLvsMarie)]);
     });
 
     test('a pupil whose file has no part of absences: a sentence that says '
@@ -381,7 +380,7 @@ void main() {
         'absences for this pupil: the school may not keep absences in the '
         'LVS, or this account may not see them.',
       );
-      expect(lvs.calls, [_call(fakeLvsJan), ..._fileCalls(fakeLvsJan)]);
+      expect(lvs.calls, [_call(fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     for (final (what, arguments) in [
@@ -513,17 +512,13 @@ void main() {
       await refused(fakeLvsPupilArguments(fakeLvsNoor));
 
       expect(lvs.reads, everyElement(isNotNull));
-      expect(lvs.reads.toSet(), {
-        FakeLvsRead.absences,
-        FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
-      });
+      expect(lvs.reads.toSet(), {FakeLvsRead.absences, FakeLvsRead.pupilFile});
       expect(
         {
           for (final r in lvs.requests)
             if (r.method != 'GET') '${r.method} ${r.path}',
         },
-        {'POST /LVS/Pupilpresences', 'POST /LVS/Pupilxhr/getStatusInfo'},
+        {'POST /LVS/Pupilpresences'},
       );
     });
 

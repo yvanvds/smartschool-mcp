@@ -42,11 +42,10 @@ List<String> _calls({FakeLvsPupil pupil = fakeLvsMarie, int period = 0}) => [
       'exportID=0',
 ];
 
-/// The two requests of [pupil]'s file.
-List<String> _fileCalls(FakeLvsPupil pupil) => [
-  'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=${pupil.pupilId}',
-];
+/// The request of [pupil]'s file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+String _fileCall(FakeLvsPupil pupil) =>
+    'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}';
 
 /// The line on what the tool does not read.
 const _notRead =
@@ -462,10 +461,7 @@ void main() {
         'Profile sketch (profielschets): none in this period.\n'
         '$_periods',
       );
-      expect(lvs.calls, [
-        ..._calls(pupil: fakeLvsJan),
-        ..._fileCalls(fakeLvsJan),
-      ]);
+      expect(lvs.calls, [..._calls(pupil: fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     test('a pupil without a plan, but with a profile sketch: the sketch, '
@@ -503,10 +499,7 @@ void main() {
         'voor deze klas"). There is no plan to read.\n'
         'The LVS lists no periods of the support plans to choose from.',
       );
-      expect(lvs.calls, [
-        ..._calls(pupil: fakeLvsJan),
-        ..._fileCalls(fakeLvsJan),
-      ]);
+      expect(lvs.calls, [..._calls(pupil: fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     test('no period for a period chosen from the menu: the sentence names '
@@ -540,13 +533,12 @@ void main() {
         });
 
         expect(text, _noSupportPlans);
-        expect(lvs.reads.last, FakeLvsRead.todayStatus);
+        expect(lvs.reads.last, FakeLvsRead.pupilFile);
         if (more.containsKey('period')) {
           // No period to pick from: the plan is not read.
           expect(lvs.reads, [
             FakeLvsRead.supportPlanPeriods,
             FakeLvsRead.pupilFile,
-            FakeLvsRead.todayStatus,
           ]);
         }
       });
@@ -566,7 +558,6 @@ void main() {
       expect(lvs.reads, [
         FakeLvsRead.supportPlanPeriods,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       ]);
     });
 
@@ -684,7 +675,6 @@ void main() {
         FakeLvsRead.supportPlan,
         FakeLvsRead.profileSketch,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       });
       String post(FakeLvsRequest r) =>
           [r.method, r.path, ?r.query['file'], ?r.query['function']].join(' ');
@@ -697,7 +687,6 @@ void main() {
           'POST / jqDispatcher_settings getLVSspecificTitles',
           'POST / jqDispatcher_hp getIHP',
           'POST / jqDispatcher_hp getProfielSchets',
-          'POST /LVS/Pupilxhr/getStatusInfo',
         },
       );
       // Only the live plan, never an archived export.

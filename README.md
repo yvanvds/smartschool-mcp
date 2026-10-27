@@ -1735,12 +1735,11 @@ reads, by an allowlist; all of them only read:
   and why: older than `since`, confidential (counted only, nothing of them
   shown) or over the limit. The library sends no "viewed" flag; whether the
   LVS takes a read note as seen was not captured (yvanvds/dartschool#168),
-  and the description says so. Two workarounds, tracked in #160: the
-  Belgian day comes from the library's `LvsSchoolYear.includesDay`
-  (`lvsDay` in `lib/src/lvs/lvs_format.dart`), as the library does not
-  export it (yvanvds/dartschool#185); and the file's read for the
-  categories takes today's attendance along, unused
-  (yvanvds/dartschool#186). The notes are read and written in
+  and the description says so. A note's Belgian day is the library's
+  (`lvsDayOf`, yvanvds/dartschool#185), the very day it keeps the notes of
+  a school year by; and the file is read without today's attendance
+  (`withTodayStatus: false`, yvanvds/dartschool#186), which the tool does
+  not show (#160). The notes are read and written in
   `lib/src/lvs/lvs_notes.dart`; `lvsSchoolYearArgument` and
   `lvsSchoolYearSchema` in `lvs_access.dart` are the `school_year` argument
   of the LVS tools that read a school year.
@@ -1797,8 +1796,8 @@ reads, by an allowlist; all of them only read:
   `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
   `lvsIdIn` and `lvsNameKey` in `lvs_access.dart` are an argument that
   names a part of the file by its id or name (the notes' `category` too).
-  The file's read takes today's attendance along, unused, and the Belgian
-  day is `lvsDay`'s: the workarounds of #160.
+  As for `read_lvs_notes`, the file is read without today's attendance, and
+  the Belgian day is the library's (`lvsDayOf`).
 - `read_lvs_support_plan`: one pupil's support plan (`pupil_id`,
   `class_id`), the "handelingsplannen" part of the file, for schools that
   use the LVS's support plans: the individual plan (IHP) and the profile
@@ -1842,8 +1841,8 @@ reads, by an allowlist; all of them only read:
   `lib/src/lvs/lvs_support_plan.dart`; `lvsNamed` in `lvs_access.dart`
   finds a period or a course by name (the results' too). No real pupil's
   plan was captured (yvanvds/dartschool#168): the fixtures are in the shapes
-  of the LVS's JavaScript. The file's read takes today's attendance along,
-  unused: the workaround of #160.
+  of the LVS's JavaScript. As for `read_lvs_notes`, the file is read without
+  today's attendance.
 - `read_lvs_absences`: one pupil's absences (`pupil_id`, `class_id`), the
   "Afwezigheden" part of the file: the half-days the school registered with
   an absence code (`getAbsences`, one read). The library sends no school
@@ -1870,9 +1869,9 @@ reads, by an allowlist; all of them only read:
   absences at all, the file is read here too, to tell an unknown pupil and
   a file without a part of absences apart. A refusal with HTTP 403 is "no
   access to the absences" in a sentence, without reading the file. The
-  absences are read and written in `lib/src/lvs/lvs_absences.dart`. The
-  file's read takes today's attendance along, unused: the workaround of
-  #160.
+  absences are read and written in `lib/src/lvs/lvs_absences.dart`. As the
+  library's read after a 500, the file is read here without today's
+  attendance.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's
@@ -2263,9 +2262,10 @@ share (`lvsPupilArguments` with `lvsPupilIdSchema` and `lvsClassIdSchema`,
 `checkLvsAccess`, the access check of `smartschool_status`. In
 `lvs_format.dart`: the lines of `search_lvs_pupils` and `read_lvs_pupil`
 (`formatLvsMatches`, `formatLvsPupilFile`, with `lvsSectionReaders`, the
-tool that reads each part), a school year (`formatLvsSchoolYear`) and a
-Belgian day (`lvsDay`). Each part of the file the tools read has a file of
-its own, which reads it, picks from it and writes the answer:
+tool that reads each part) and a school year (`formatLvsSchoolYear`); a
+Belgian day is the library's `lvsDayOf`. Each part of the file the tools
+read has a file of its own, which reads it, picks from it and writes the
+answer:
 `lvs_notes.dart` (`readLvsNotes`, `selectLvsNotes`, `formatLvsNotes`),
 `lvs_results.dart` (`readLvsResults`, `formatLvsResults`),
 `lvs_support_plan.dart` (`readLvsSupportPlan`, `formatLvsSupportPlan`) and

@@ -59,8 +59,8 @@ typedef LvsSupportPlanRead = ({
 /// period to pick from: it tells an unknown pupil apart (a
 /// [SmartschoolLvsPupilNotFoundError]), and a file without a part of
 /// support plans ([LvsPupilFile.supportPlanSections]), as at a school that
-/// does not use them, from a pupil without a plan. That read takes today's
-/// attendance along, unused (yvanvds/dartschool#186, tracked in #160).
+/// does not use them, from a pupil without a plan. That read leaves today's
+/// attendance out (`withTodayStatus: false`).
 ///
 /// Throws a [ToolError] when [period] names no period of the menu, or more
 /// than one; the LVS's errors as the library throws them.
@@ -75,6 +75,7 @@ Future<LvsSupportPlanRead> readLvsSupportPlan(
       fileHasSupportPlans ??= (await lvs.getPupilFile(
         pupilId: pupilId,
         classId: classId,
+        withTodayStatus: false,
       )).supportPlanSections.isNotEmpty;
 
   final periods = await lvs.getSupportPlanPeriods(

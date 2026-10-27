@@ -37,13 +37,12 @@ typedef LvsNotesRead = ({LvsCategory? category, List<LvsNote> notes});
 /// for its categories, then each of the category and its sub-categories on
 /// its own ([LvsService.getNotes]: a category's own notes, never those of
 /// its sub-categories), but headings, which hold no notes of their own.
-/// The file's read takes today's attendance along, which is not used: the
-/// library has no read of the categories alone (yvanvds/dartschool#186,
-/// tracked in #160).
 /// Of all categories, the "all items" view ([LvsService.getAllNotes]); as
 /// it answers a pupil it does not know with no notes at all, an empty
 /// answer has the file read too, which tells the two apart (a
 /// [SmartschoolLvsPupilNotFoundError]).
+/// The file is read without today's attendance (`withTodayStatus: false`),
+/// which the tool does not show.
 ///
 /// Throws a [ToolError] when [category] names no category of the file, or
 /// more than one; the LVS's errors as the library throws them.
@@ -61,11 +60,19 @@ Future<LvsNotesRead> readLvsNotes(
       schoolYear: schoolYear,
     );
     if (notes.isEmpty) {
-      await lvs.getPupilFile(pupilId: pupilId, classId: classId);
+      await lvs.getPupilFile(
+        pupilId: pupilId,
+        classId: classId,
+        withTodayStatus: false,
+      );
     }
     return (category: null, notes: notes);
   }
-  final file = await lvs.getPupilFile(pupilId: pupilId, classId: classId);
+  final file = await lvs.getPupilFile(
+    pupilId: pupilId,
+    classId: classId,
+    withTodayStatus: false,
+  );
   final picked = pickLvsCategory(file.noteCategories, category);
   final notes = <LvsNote>[];
   final seen = <int>{};
@@ -172,7 +179,7 @@ typedef LvsNoteSelection = ({
 
 /// The notes of [notes] to show, newest first (by their date; notes of the
 /// same moment in their order): those of [since] on (a day, `YYYY-MM-DD`,
-/// in Belgian time: [lvsDay]), but confidential ones unless
+/// in Belgian time: [lvsDayOf]), but confidential ones unless
 /// [includeConfidential], at most [limit].
 ///
 /// Each note left out counts once, for the first reason in that order: a
@@ -193,7 +200,7 @@ LvsNoteSelection selectLvsNotes(
   var confidential = 0;
   final kept = <LvsNote>[];
   for (final (_, note) in newestFirst) {
-    if (since != null && lvsDay(note.date).compareTo(since) < 0) {
+    if (since != null && lvsDayOf(note.date).compareTo(since) < 0) {
       older++;
     } else if (note.isConfidential && !includeConfidential) {
       confidential++;
@@ -286,7 +293,7 @@ String formatLvsNote(LvsNote note) {
   final title = _oneLine(note.title);
   final author = _oneLine(note.author);
   final head = [
-    lvsDay(note.date),
+    lvsDayOf(note.date),
     _noteCategory(note),
     title.isEmpty ? '(no title)' : title,
     if (author.isNotEmpty) 'by $author',
