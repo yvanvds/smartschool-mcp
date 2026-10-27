@@ -75,8 +75,17 @@ class FakeSmartschool implements HttpClientAdapter {
   /// Not seen live: the refusal seen live after a login with an old cookie
   /// cache was the library sending the refused session id along with the
   /// new one (yvanvds/dartschool#9), which [_hasSession] models.
+  ///
+  /// The start page the library opens right after the 2FA step, as a
+  /// browser does with the 2FA answer's `redirectTo` (flutter_smartschool
+  /// 0.4.0, yvanvds/dartschool#192), is part of the login: it is served,
+  /// and does not count as one of these requests.
   int rejectsAfterLogin = 0;
   int _rejectsLeft = 0;
+
+  /// Whether the 2FA step just completed a login, and the library's opening
+  /// of the start page (`GET /`) that ends it has not come yet.
+  bool _startPageAfterTwoFactor = false;
 
   /// The session id the server currently accepts, set by a completed login
   /// as the `PHPSESSID` cookie.
@@ -216,7 +225,9 @@ class FakeSmartschool implements HttpClientAdapter {
       if (!twoFactorAccepted) {
         return _json('{"success":false,"error":"invalid code"}');
       }
-      return _json('{"success":true,"redirectTo":"/"}', cookie: _logIn());
+      final cookie = _logIn();
+      _startPageAfterTwoFactor = true;
+      return _json('{"success":true,"redirectTo":"/"}', cookie: cookie);
     }
 
     if (options.method == 'POST') {
@@ -247,6 +258,10 @@ class FakeSmartschool implements HttpClientAdapter {
           ? _followedTo('/2fa', '<html><body>2fa</body></html>')
           : _followedTo('/login', _loginPage);
     }
+    if (_startPageAfterTwoFactor && path == '/') {
+      _startPageAfterTwoFactor = false;
+      return _html(_homePage);
+    }
     if (_rejectsLeft > 0) {
       _rejectsLeft--;
       return _followedTo('/login', _loginPage);
@@ -274,6 +289,7 @@ class FakeSmartschool implements HttpClientAdapter {
     _validSession = 'session$logins';
     _passwordDone = false;
     _rejectsLeft = rejectsAfterLogin;
+    _startPageAfterTwoFactor = false;
     return 'PHPSESSID=$_validSession; path=/';
   }
 

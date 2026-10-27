@@ -85,7 +85,7 @@ const _feedback =
     '  Testopmerking van de klassenraad.\n'
     '  Testregel twee.\n'
     '- 2030-12-20 | on the report Testrapport, for Testvak | Testopmerking '
-    'voor het vak.\n'
+    'voor het vak: kent <p> en <br>, schrijft &amp; voor &.\n'
     '- 2030-12-20 | on the report Testrapport, for Testvak 2 | Testopmerking '
     'voor het tweede vak.\n'
     '- 2030-10-15 | by Piet Peeters | on the evaluation Testevaluatie '
@@ -1027,8 +1027,10 @@ void main() {
       );
     });
 
-    test('feedback without text, author or date, and a text of one line '
-        'given as HTML', () {
+    test('feedback without text, author or date, and a text as the library '
+        'gives it, plain text with its lines (flutter_smartschool 0.4.0, '
+        'yvanvds/dartschool#187): shown as it is, never parsed as HTML '
+        'again (#170)', () {
       expect(
         formatLvsFeedback(
           const LvsFeedback(
@@ -1044,7 +1046,8 @@ void main() {
           LvsFeedback(
             identifier: '00000000-0000-0000-0000-000000901003',
             kind: LvsFeedbackKind.evaluation,
-            text: '<p>Testfeedback &amp; meer.</p>',
+            text: 'Testfeedback & meer.',
+            html: '<p>Testfeedback &amp; meer.</p>',
             evaluation: LvsFeedbackEvaluation(
               identifier: '900000_900001_0_normal_900601',
               name: 'Testevaluatie',
@@ -1053,6 +1056,23 @@ void main() {
           ),
         ),
         '- 2030-10-15 | on the evaluation Testevaluatie | Testfeedback & meer.',
+      );
+      // What a teacher wrote about markup stays as written: the tags are
+      // not taken for HTML, nor the entity decoded a second time.
+      expect(
+        formatLvsFeedback(
+          const LvsFeedback(
+            identifier: '00000000-0000-0000-0000-000000901004',
+            kind: LvsFeedbackKind.course,
+            text: 'Testfeedback: kent <p> en <br>,\nschrijft &amp; voor &.',
+            html:
+                '<p>Testfeedback: kent &lt;p&gt; en &lt;br&gt;,</p>'
+                '<p>schrijft &amp;amp; voor &amp;.</p>',
+          ),
+        ),
+        '- (no date) | on a report\n'
+        '  Testfeedback: kent <p> en <br>,\n'
+        '  schrijft &amp; voor &.',
       );
     });
 

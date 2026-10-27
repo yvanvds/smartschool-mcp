@@ -21,7 +21,7 @@
   },
   {
     "identifier": "00000000-0000-0000-0000-000000901002",
-    "text": "Testopmerking voor het vak.",
+    "text": "Testopmerking voor het vak: kent &lt;p&gt; en &lt;br&gt;, schrijft &amp;amp; voor &amp;.",
     "course": {
       "id": 900301,
       "name": "Testvak",

@@ -92,6 +92,20 @@ void main() {
     expect(server.requests, ['POST /some/form']);
   });
 
+  test("a login with 2FA opens Smartschool's start page right after the 2FA "
+      'step, as a browser does, before the request it logged in for: until '
+      'then, Skore refused the new session (yvanvds/dartschool#192, #194; '
+      'list_skore_classes in #170)', () async {
+    final session = newSession();
+
+    expect(await session.run(_post), '<ok/>');
+    final requests = server.requests;
+    final twoFactor = requests.indexOf('POST /2fa/api/v1/google-authenticator');
+    expect(twoFactor, isNonNegative);
+    expect(requests[twoFactor + 1], 'GET /');
+    expect(requests.last, 'POST /some/form');
+  });
+
   test('concurrent first calls share a single login', () async {
     final session = newSession();
 

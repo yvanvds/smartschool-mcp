@@ -483,7 +483,9 @@ void main() {
 
     test('a scale without a max, published without a time, without a short '
         'name or component, from the planner, and a type Skore does not '
-        'name', () async {
+        'name, whose grades the library does not read: the evaluation with '
+        'the reason, the rest of the period read (flutter_smartschool 0.4.0, '
+        'yvanvds/dartschool#193; #170)', () async {
       book(32508).evaluations[1704] = [
         FakeSkoreEvaluation(
           500005,
@@ -512,12 +514,29 @@ void main() {
           'Chloé: no grade\n',
         ),
       );
+      const project =
+          'Project | evaluation id 500006 | column B | 2026-10-06 | max 20 | '
+          'component DW | type 7 | not published: the pupils do not see it';
+      const notRead =
+          'The server could not read the grades of this evaluation: its '
+          'type, evaltype 7, is not one the library reads (1, points, or 2, '
+          'a scale).';
+      expect(text, contains('\n- $project\n  $notRead\nPupils: '));
       expect(
-        text,
-        contains(
-          '\n- Project | evaluation id 500006 | column B | 2026-10-06 | max 20 '
-          '| component DW | type 7 | not published: the pupils do not see '
-          'it\n',
+        await list({'gradebook_id': 32508, 'evaluation_id': 500006}),
+        endsWith('\nEvaluation: $project\n$notRead'),
+      );
+      expect(
+        await feedback({
+          'gradebook_id': 32508,
+          'evaluation_id': 500006,
+          'pupil_id': 1201,
+        }),
+        endsWith(
+          '\nEvaluation: $project\n'
+          'Pupil: 1. Aerts, An | pupil id 1201 | grade not read\n'
+          '$notRead\n'
+          'The pupil has no feedback on this evaluation.',
         ),
       );
       expect(

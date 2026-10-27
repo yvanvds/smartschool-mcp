@@ -137,6 +137,22 @@ String formatSkoreEvaluation(SkoreEvaluation evaluation) {
   ].join(' | ');
 }
 
+/// What the gradebook tools say instead of the grades of an [evaluation]
+/// the library could not read (not [SkoreEvaluation.isReadable]: its type
+/// is not one the library knows, or a cell of it is in a shape it does not
+/// recognise), with the library's reason, which names a cell by its row and
+/// quotes nothing of Skore's answer: `The server could not read the grades
+/// of this evaluation: its type, evaltype 7, is not one the library reads
+/// (1, points, or 2, a scale).`
+///
+/// Since flutter_smartschool 0.4.0 the library reads the rest of the period
+/// around such an evaluation, and its `results` throw
+/// (yvanvds/dartschool#193): the tools ask [SkoreEvaluation.isReadable]
+/// first (#170). Reading evaluations on a scale with their labels is #169.
+String formatSkoreUnreadableGrades(SkoreEvaluation evaluation) =>
+    'The server could not read the grades of this evaluation: '
+    '${evaluation.unreadableReason}.';
+
 /// An evaluation by its title and id, as a sentence or an error names it:
 /// `evaluation "Toets 1" (evaluation id 500003)`.
 String formatSkoreEvaluationName(SkoreEvaluation evaluation) =>

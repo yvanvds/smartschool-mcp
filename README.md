@@ -975,7 +975,13 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   dartschool#156, to be removed in #147). Components Skore gives in a shape
   the library does not know leave the evaluations listed, with a line that
   says the components could not be read. A closed period gets no line, and
-  its components are not read: no evaluation can be created in it.
+  its components are not read: no evaluation can be created in it. An
+  evaluation whose grades the library cannot read (`isReadable` false: a
+  type other than points or a scale, or a cell in a shape it does not
+  know) is listed with the library's reason instead of its grades, and the
+  rest of the period is read around it (flutter_smartschool 0.4.0,
+  yvanvds/dartschool#193; #170); `read_skore_feedback` reads its feedback
+  with "grade not read". Evaluations on a scale with their labels are #169.
 - `read_skore_feedback`: the feedback of one pupil on one evaluation
   (`gradebook_id`, `evaluation_id`, `pupil_id`, optional `period_id` and
   `workyear_id`; `getFeedback`, one `GET` of Skore's REST API as the
@@ -1336,8 +1342,16 @@ that error (as it does HTTP 403). Any other `SmartschoolSkoreError` is an
 answer the server could not use, and is reported as such, with "try again
 in a moment"; the library's message goes to the log only, as it can quote
 the page. From a write, each of these errors also says that nothing was
-changed in Skore. What Skore answers a pupil, and an account with only one
-of the two parts of the rights, was not captured.
+changed in Skore. A read that Skore sends on to Smartschool's start page at
+`/` without a query, its answer to a session it does not accept (once, the
+list of report models right after a login with 2FA, #170), the library
+asks once more; sent there again, it is a refused session
+(yvanvds/dartschool#194), which the session tries once more and then
+reports as Smartschool not accepting the session, with "try again in a
+moment". The library's login with 2FA opens the start page after the 2FA
+step, as a browser does (yvanvds/dartschool#192): until it was loaded once,
+Skore refused the new session that way. What Skore answers a pupil, and an
+account with only one of the two parts of the rights, was not captured.
 
 The presence tools are offered only when the switch "Aanwezigheden" is on
 (see *Opt-in tools* below): they need the right to record half-day
@@ -1570,10 +1584,12 @@ reads, by an allowlist; all of them only read:
   that shows the older Skore part instead of Resultaten, which the library
   does not read, is said so. The comments on reports (`/LVS/Skorecomments`)
   are not read: the library does not read them, nor that older part
-  (yvanvds/dartschool#169). The library gives the feedback's text as HTML,
-  unlike its other LVS texts, so the server makes it plain text with its own
-  `htmlToText` (yvanvds/dartschool#187, tracked in #161). The results are
-  read and written in `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
+  (yvanvds/dartschool#169). The library gives the feedback's text as plain
+  text with its lines, as its other LVS texts (flutter_smartschool 0.4.0,
+  yvanvds/dartschool#187), and it is shown as it is: never parsed as HTML
+  again, which would drop markup a teacher wrote about and decode an
+  entity twice (#170, #161). The results are read and written in
+  `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
   `lvsIdIn` and `lvsNameKey` in `lvs_access.dart` are an argument that
   names a part of the file by its id or name (the notes' `category` too).
   The file's read takes today's attendance along, unused, and the Belgian
