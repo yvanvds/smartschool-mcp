@@ -29,6 +29,11 @@ export 'fake_uploads.dart';
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
 
+/// The Smartschool user id of the fake's account by default
+/// ([FakeSmartschool.userId]): `345` of the `authenticatedUser.id`
+/// `12_345_0` on its pages.
+const fakeUserId = 345;
+
 /// A valid Base32 TOTP secret (not anyone's).
 const fakeTotpSecret = 'JBSWY3DPEHPK3PXP';
 const fakePassword = 'hunter2-not-real';
@@ -59,7 +64,17 @@ class FakeSmartschool implements HttpClientAdapter {
     this.passwordAccepted = true,
     this.secondStep = SecondStep.twoFactor,
     this.twoFactorAccepted = true,
+    this.userId = fakeUserId,
   });
+
+  /// The Smartschool user id of the account that logs in: the
+  /// `authenticatedUser.id` of the fake's pages is `12_<userId>_0`. The LVS
+  /// tests log in as a teacher of the LVS's fakes (`FAKES.md`), to be the
+  /// author of items of a support plan (#163).
+  final int userId;
+
+  /// Smartschool's start page for the account [userId].
+  late final String _homePage = _homePageOf(userId);
 
   bool passwordAccepted;
   SecondStep secondStep;
@@ -124,7 +139,7 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
-  final FakeSkore skore = FakeSkore(startPage: _homePage);
+  late final FakeSkore skore = FakeSkore(startPage: _homePage);
 
   /// The user's own gradebooks in Skore (`/SkoreGradebook`), served to
   /// logged-in requests (its RPC POSTs, and the feedback GETs of Skore's
@@ -138,7 +153,7 @@ class FakeSmartschool implements HttpClientAdapter {
 
   /// The pupil tracking system (LVS), served to logged-in requests, with
   /// the hand-written fixtures of `test/fixtures/lvs/`.
-  final FakeLvs lvs = FakeLvs(startPage: _homePage);
+  late final FakeLvs lvs = FakeLvs(startPage: _homePage);
 
   /// How long every request takes, so that concurrent requests overlap.
   Duration latency = Duration.zero;
@@ -362,10 +377,12 @@ const _accountVerificationPage = '''
 </body></html>
 ''';
 
-const _homePage =
+/// Smartschool's start page, with the account [userId] as the
+/// `authenticatedUser` the library reads at login.
+String _homePageOf(int userId) =>
     '''
 <html><head>
-<script type="text/javascript">\$.extend(true, SMSC, JSON.parse('{"vars":{"authenticatedUser":{"id":"12_345_0","name":{"startingWithFirstName":"$fakeDisplayName"}}}}'));</script>
+<script type="text/javascript">\$.extend(true, SMSC, JSON.parse('{"vars":{"authenticatedUser":{"id":"12_${userId}_0","name":{"startingWithFirstName":"$fakeDisplayName"}}}}'));</script>
 </head><body>home</body></html>
 ''';
 

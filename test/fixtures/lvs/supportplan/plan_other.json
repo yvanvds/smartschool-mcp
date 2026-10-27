@@ -122,5 +122,8 @@
   "filters": {"groupBy": 0, "filterTeacher": 0, "filterCourse": 0},
   "OV": 0,
   "canWrite": false,
-  "courses": []
+  "courses": [
+    {"courseID": 900301, "title": "Testvak"},
+    {"courseID": 900302, "title": "Testvak 2"}
+  ]
 }

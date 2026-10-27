@@ -1735,12 +1735,11 @@ reads, by an allowlist; all of them only read:
   and why: older than `since`, confidential (counted only, nothing of them
   shown) or over the limit. The library sends no "viewed" flag; whether the
   LVS takes a read note as seen was not captured (yvanvds/dartschool#168),
-  and the description says so. Two workarounds, tracked in #160: the
-  Belgian day comes from the library's `LvsSchoolYear.includesDay`
-  (`lvsDay` in `lib/src/lvs/lvs_format.dart`), as the library does not
-  export it (yvanvds/dartschool#185); and the file's read for the
-  categories takes today's attendance along, unused
-  (yvanvds/dartschool#186). The notes are read and written in
+  and the description says so. A note's Belgian day is the library's
+  (`lvsDayOf`, yvanvds/dartschool#185), the very day it keeps the notes of
+  a school year by; and the file is read without today's attendance
+  (`withTodayStatus: false`, yvanvds/dartschool#186), which the tool does
+  not show (#160). The notes are read and written in
   `lib/src/lvs/lvs_notes.dart`; `lvsSchoolYearArgument` and
   `lvsSchoolYearSchema` in `lvs_access.dart` are the `school_year` argument
   of the LVS tools that read a school year.
@@ -1797,8 +1796,8 @@ reads, by an allowlist; all of them only read:
   `lib/src/lvs/lvs_results.dart`; `lvsIdOrNameArgument`,
   `lvsIdIn` and `lvsNameKey` in `lvs_access.dart` are an argument that
   names a part of the file by its id or name (the notes' `category` too).
-  The file's read takes today's attendance along, unused, and the Belgian
-  day is `lvsDay`'s: the workarounds of #160.
+  As for `read_lvs_notes`, the file is read without today's attendance, and
+  the Belgian day is the library's (`lvsDayOf`).
 - `read_lvs_support_plan`: one pupil's support plan (`pupil_id`,
   `class_id`), the "handelingsplannen" part of the file, for schools that
   use the LVS's support plans: the individual plan (IHP) and the profile
@@ -1807,8 +1806,14 @@ reads, by an allowlist; all of them only read:
   current period (`periodID` 0); `period` takes a `period_id` or a name of
   the period menu (ignoring case, or else the period whose name holds it;
   several matches, or none, are an error that lists them with their ids and
-  the menu's heading). The items in the LVS's order, each with its kind,
-  author, date (as the LVS shows it) and courses: an item of support needs
+  the menu's heading). The items the user wrote first, marked "by the
+  user" (an item's author by user id, `LvsPlanItem.authorId`, against the
+  logged-in user's, `getCurrentUser`, which sends nothing to the LVS;
+  yvanvds/dartschool#189, #163), and the answer's first line says how
+  many; then the others, each part in the LVS's order. Each item with its
+  kind, author, date (as the LVS shows it) and courses (those the LVS names
+  for it, and those of its course ids, `courseIds`, that the plan names; a
+  course id the plan does not name is counted): an item of support needs
   with its support needs (ondersteuningsnoden), main and work goals,
   approach and the comment on it; an item of goals (from the class's group
   plan, or chosen for the pupil, and the school's own goals or those of
@@ -1820,12 +1825,17 @@ reads, by an allowlist; all of them only read:
   lines keep their lines; empty fields are left out, and an item with
   nothing filled in says so. Then the profile sketch (profielschets) with its
   last change, and the periods to ask for. `course` is a filter by name
-  (ignoring case, or else the courses whose name holds it): the items that
-  name it among their courses or their goals' planning, and the items that
-  name no course, which may concern every course; the others are counted.
-  The plan names its courses without ids, and the library cannot tell which
-  courses are the user's own (yvanvds/dartschool#189, #163): the
-  description says to pass the user's course as `course`. The three cases
+  (ignoring case, or else the courses whose name holds it), among the
+  plan's courses (`LvsSupportPlan.courses`) and those its items name: the
+  items planned in it by its id (an item's `courseIds`, and the course ids
+  of its goals' planning, `LvsPlanGoal.moments`, as the LVS's web client
+  filters them), or that name it among their courses or their goals'
+  planning, and the items tied to no course, which may concern every
+  course; the others are counted. `course` takes no id: the answer prints
+  none, and the LVS's course ids need not be those of `read_lvs_results`.
+  Which courses the user teaches the library does not read yet
+  (yvanvds/dartschool#196): the description says to pass the user's course
+  as `course`. The three cases
   without a plan each get a sentence: a file without a part of support plans
   (a school that does not use them, or an account that may not see them:
   the sentence points to the note categories and `read_lvs_notes`), a pupil
@@ -1842,8 +1852,8 @@ reads, by an allowlist; all of them only read:
   `lib/src/lvs/lvs_support_plan.dart`; `lvsNamed` in `lvs_access.dart`
   finds a period or a course by name (the results' too). No real pupil's
   plan was captured (yvanvds/dartschool#168): the fixtures are in the shapes
-  of the LVS's JavaScript. The file's read takes today's attendance along,
-  unused: the workaround of #160.
+  of the LVS's JavaScript. As for `read_lvs_notes`, the file is read without
+  today's attendance.
 - `read_lvs_absences`: one pupil's absences (`pupil_id`, `class_id`), the
   "Afwezigheden" part of the file: the half-days the school registered with
   an absence code (`getAbsences`, one read). The library sends no school
@@ -1863,15 +1873,16 @@ reads, by an allowlist; all of them only read:
   absent) shows each under its absence, as plain text with its lines. No
   absences is a sentence: none in the school year asked for (with the school
   years the LVS gives), none at all, or none and no part of absences in the
-  file. The LVS answered a made-up pupil with HTTP 500 and an error page, a
-  plain `SmartschoolLvsError` that the library cannot tell from an answer
-  it cannot read (yvanvds/dartschool#190, tracked in #164): so after such an
-  error, and when there are no absences at all, the file is read too, and
-  the error says when the LVS does not know the pupil. A refusal with HTTP
-  403 is "no access to the absences" in a sentence, without reading the
-  file. The absences are read and written in `lib/src/lvs/lvs_absences.dart`.
-  The file's read takes today's attendance along, unused: the workaround of
-  #160.
+  file. The LVS answered a made-up pupil with HTTP 500 and an error page:
+  after a 500 the library reads the file itself, without today's attendance,
+  and throws `SmartschoolLvsPupilNotFoundError` for a pupil the LVS does not
+  know (yvanvds/dartschool#190), so the error says so. When there are no
+  absences at all, the file is read here too, to tell an unknown pupil and
+  a file without a part of absences apart. A refusal with HTTP 403 is "no
+  access to the absences" in a sentence, without reading the file. The
+  absences are read and written in `lib/src/lvs/lvs_absences.dart`. As the
+  library's read after a 500, the file is read here without today's
+  attendance.
 
 Privacy, for every LVS tool (`lib/src/lvs/lvs_access.dart`): read-only;
 nothing on disk (no cache, no downloads); nothing in the log but an error's
@@ -2248,7 +2259,8 @@ not know and a day after `today` without pupils, with `saveIsAllowed:
 false` and the module's reason.
 
 LVS helpers live in `lib/src/lvs/`. In `lvs_access.dart`: `withLvs`, which
-runs an action with an `LvsService` on the session and turns the LVS's
+runs an action with an `LvsReads` (an `LvsService` that also tells the
+logged-in user's id, `userId`) on the session and turns the LVS's
 errors into `ToolError`s that say what to do (`lvsToolError`, with `lvsFix`
 for an account without access); `lvsTool`, which every LVS tool is, so that
 nothing of an error reaches the log but its type and HTTP status
@@ -2262,9 +2274,10 @@ share (`lvsPupilArguments` with `lvsPupilIdSchema` and `lvsClassIdSchema`,
 `checkLvsAccess`, the access check of `smartschool_status`. In
 `lvs_format.dart`: the lines of `search_lvs_pupils` and `read_lvs_pupil`
 (`formatLvsMatches`, `formatLvsPupilFile`, with `lvsSectionReaders`, the
-tool that reads each part), a school year (`formatLvsSchoolYear`) and a
-Belgian day (`lvsDay`). Each part of the file the tools read has a file of
-its own, which reads it, picks from it and writes the answer:
+tool that reads each part) and a school year (`formatLvsSchoolYear`); a
+Belgian day is the library's `lvsDayOf`. Each part of the file the tools
+read has a file of its own, which reads it, picks from it and writes the
+answer:
 `lvs_notes.dart` (`readLvsNotes`, `selectLvsNotes`, `formatLvsNotes`),
 `lvs_results.dart` (`readLvsResults`, `formatLvsResults`),
 `lvs_support_plan.dart` (`readLvsSupportPlan`, `formatLvsSupportPlan`) and

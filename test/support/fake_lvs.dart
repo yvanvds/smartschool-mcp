@@ -52,6 +52,16 @@ const fakeLvsLars = (pupilId: 900005, classId: 900103);
 /// its note categories instead (#156).
 const fakeLvsNoor = (pupilId: 900003, classId: 900103);
 
+/// The Smartschool user id of Piet Peeters, a teacher of the fixtures: the
+/// author (`authorID`, a document's `author`) of three items of Marie's
+/// support plan in the current period, and two in the second (#163).
+const fakeLvsPietUserId = 900201;
+
+/// The Smartschool user id of Céline Dupré, a teacher of the fixtures: the
+/// author of one item of Marie's support plan in the current period, and
+/// two in the second (#163).
+const fakeLvsCelineUserId = 900202;
+
 /// The reads of `LvsService` the fake answers.
 enum FakeLvsRead {
   /// The root of the class tree (`checkAccess`):
@@ -319,8 +329,11 @@ class FakeLvs {
   /// The fixtures of each pupil's support plan, by pupil id and the
   /// `periodID` asked for (`0` for the current period) (#156): Marie
   /// Peeters has a plan in both periods (the current one with every kind of
-  /// item; the second closed, with items for other courses, an item of an
-  /// unknown kind and an empty one), each with a profile sketch; Jan
+  /// item, one of them for Testvak 2 by its course id only; the second
+  /// closed, with items for other courses, an item of an unknown kind and an
+  /// empty one), each with a profile sketch and the plan's courses with
+  /// their ids, and items by two authors ([fakeLvsPietUserId],
+  /// [fakeLvsCelineUserId]); Jan
   /// Janssens has no plan and no sketch in the current period. Any other
   /// pupil or period, or a pupil asked for in another class than their
   /// file's, gets a period error ([_noSupportPlan]), as the LVS answered a

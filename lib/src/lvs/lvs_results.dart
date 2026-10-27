@@ -93,8 +93,7 @@ typedef LvsResultsRead = ({
 /// came, or before saying that the LVS lists no periods or courses to pick
 /// from: it tells the two apart (a [SmartschoolLvsPupilNotFoundError]), and
 /// whether the file shows the older Skore part instead of Resultaten. That
-/// read takes today's attendance along, unused (yvanvds/dartschool#186,
-/// tracked in #160).
+/// read leaves today's attendance out (`withTodayStatus: false`).
 ///
 /// Throws a [ToolError] when [period] or [course] names nothing of the
 /// results, [period] more than one period, or the account may not see
@@ -111,7 +110,11 @@ Future<LvsResultsRead> readLvsResults(
   bool? olderSkorePart;
   Future<void> readFile() async {
     if (olderSkorePart != null) return;
-    final file = await lvs.getPupilFile(pupilId: pupilId, classId: classId);
+    final file = await lvs.getPupilFile(
+      pupilId: pupilId,
+      classId: classId,
+      withTodayStatus: false,
+    );
     final types = {for (final section in file.allSections) section.type};
     olderSkorePart =
         types.contains(LvsSectionType.skore) &&
@@ -545,7 +548,7 @@ String formatLvsEvaluation(
       for (final course in evaluation.courses)
         if (course.id != courseId) _label(course.name),
   ];
-  return '- ${[if (evaluation.date case final date?) lvsDay(date) else '(no date)', name.isEmpty ? '(no name)' : name, formatLvsScore(evaluation.score), if (evaluation.doesCount case final counts?) counts ? 'counts' : 'does not count', if (evaluation.isPublished == false) 'not published to the pupil', if (component.isNotEmpty) component, if (withPeriod && evaluation.period != null) _label(evaluation.period!.name), if (others.isNotEmpty) 'also for ${others.join(', ')}', if (evaluation.feedbackCount > 0) 'with feedback'].join(' | ')}';
+  return '- ${[if (evaluation.date case final date?) lvsDayOf(date) else '(no date)', name.isEmpty ? '(no name)' : name, formatLvsScore(evaluation.score), if (evaluation.doesCount case final counts?) counts ? 'counts' : 'does not count', if (evaluation.isPublished == false) 'not published to the pupil', if (component.isNotEmpty) component, if (withPeriod && evaluation.period != null) _label(evaluation.period!.name), if (others.isNotEmpty) 'also for ${others.join(', ')}', if (evaluation.feedbackCount > 0) 'with feedback'].join(' | ')}';
 }
 
 /// [score] as the LVS gives it: points with their percentage (`7/10
@@ -694,7 +697,7 @@ String formatLvsFeedback(LvsFeedback feedback) {
   };
   final date = _feedbackDate(feedback);
   final head = [
-    date == null ? '(no date)' : lvsDay(date),
+    date == null ? '(no date)' : lvsDayOf(date),
     if (author.isNotEmpty) 'by $author',
     about,
   ].join(' | ');
@@ -726,7 +729,7 @@ List<String> _reportsBlock(List<LvsReport> reports, String year) {
     'Reports of school year $year (${reports.length}), newest first, by name '
         'and day only: the server does not open them.',
     for (final report in _newestFirst(reports, (report) => report.date))
-      '- ${report.date == null ? '(no date)' : lvsDay(report.date!)} | '
+      '- ${report.date == null ? '(no date)' : lvsDayOf(report.date!)} | '
           '${_label(report.name)}',
   ];
 }

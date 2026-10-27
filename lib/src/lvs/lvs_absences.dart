@@ -31,48 +31,30 @@ typedef LvsAbsencesRead = ({LvsAbsences absences, bool fileHasAbsences});
 /// Reads the absences of the pupil [pupilId] in class [classId]
 /// ([LvsService.getAbsences]), of every school year the LVS answers with.
 ///
-/// The LVS answered a made-up pupil in a made-up class with HTTP 500 and
-/// Smartschool's error page (seen live, yvanvds/dartschool#164), which the
-/// library throws as a plain [SmartschoolLvsError], as it does any answer
-/// it cannot read. So after such an error the pupil's file is read
-/// ([LvsService.getPupilFile]): for a pupil the LVS does not know it throws
-/// a [SmartschoolLvsPupilNotFoundError], which is thrown instead; else the
-/// error of the absences stands (yvanvds/dartschool#190, tracked in #164).
-/// The file is read too when the absences hold nothing, to tell an unknown
-/// pupil apart there as well, and a file without a part of absences
-/// ([LvsSectionType.absences]) from a pupil without absences. That read
-/// takes today's attendance along, unused (yvanvds/dartschool#186, tracked
-/// in #160).
+/// The library tells a pupil the LVS does not know in that class apart: the
+/// LVS answers the absences of such a pupil with HTTP 500 and Smartschool's
+/// error page, so after a 500 the library reads the pupil's file itself and
+/// throws a [SmartschoolLvsPupilNotFoundError] for a pupil it does not know
+/// (yvanvds/dartschool#190). Its errors, a refusal
+/// ([SmartschoolLvsAccessDeniedError]) too, are thrown as they come.
 ///
-/// A refusal ([SmartschoolLvsAccessDeniedError]) is thrown as it comes,
-/// without reading the file.
+/// The file ([LvsService.getPupilFile]) is read here only when the absences
+/// hold nothing, to tell an unknown pupil apart there as well, and a file
+/// without a part of absences ([LvsSectionType.absences]) from a pupil
+/// without absences. That read leaves today's attendance out
+/// (`withTodayStatus: false`), as the library's own read after a 500 does.
 Future<LvsAbsencesRead> readLvsAbsences(
   LvsService lvs, {
   required int pupilId,
   required int classId,
 }) async {
-  Future<LvsPupilFile> readFile() =>
-      lvs.getPupilFile(pupilId: pupilId, classId: classId);
-
-  final LvsAbsences absences;
-  try {
-    absences = await lvs.getAbsences(pupilId: pupilId, classId: classId);
-  } on SmartschoolLvsError catch (error, stackTrace) {
-    if (error is SmartschoolLvsAccessDeniedError ||
-        error is SmartschoolLvsRequestNotAllowedError) {
-      rethrow;
-    }
-    try {
-      await readFile();
-    } on SmartschoolLvsPupilNotFoundError {
-      rethrow;
-    } on SmartschoolLvsError {
-      // The file cannot tell either: the error of the absences stands.
-    }
-    Error.throwWithStackTrace(error, stackTrace);
-  }
+  final absences = await lvs.getAbsences(pupilId: pupilId, classId: classId);
   if (!absences.isEmpty) return (absences: absences, fileHasAbsences: true);
-  final file = await readFile();
+  final file = await lvs.getPupilFile(
+    pupilId: pupilId,
+    classId: classId,
+    withTodayStatus: false,
+  );
   return (
     absences: absences,
     fileHasAbsences: file.allSections.any(

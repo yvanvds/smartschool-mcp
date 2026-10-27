@@ -37,11 +37,10 @@ String _call([FakeLvsPupil pupil = fakeLvsMarie]) =>
     'POST /LVS/Pupilpresences pupilID=${pupil.pupilId} '
     'groupID=${pupil.classId}';
 
-/// The two requests of [pupil]'s file.
-List<String> _fileCalls(FakeLvsPupil pupil) => [
-  'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=${pupil.pupilId}',
-];
+/// The request of [pupil]'s file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+String _fileCall(FakeLvsPupil pupil) =>
+    'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}';
 
 /// Marie's absences in 2031-2032, the current school year, as listed.
 const _currentList =
@@ -367,7 +366,7 @@ void main() {
         'The LVS gives no absences for the pupil with pupil_id 900002 '
         '(class_id 900102), in any school year.',
       );
-      expect(lvs.calls, [_call(), ..._fileCalls(fakeLvsMarie)]);
+      expect(lvs.calls, [_call(), _fileCall(fakeLvsMarie)]);
     });
 
     test('a pupil whose file has no part of absences: a sentence that says '
@@ -381,7 +380,7 @@ void main() {
         'absences for this pupil: the school may not keep absences in the '
         'LVS, or this account may not see them.',
       );
-      expect(lvs.calls, [_call(fakeLvsJan), ..._fileCalls(fakeLvsJan)]);
+      expect(lvs.calls, [_call(fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     for (final (what, arguments) in [
@@ -405,10 +404,7 @@ void main() {
         expect(lvs.reads, [
           FakeLvsRead.absences,
           // The library's own read of the file after the 500, without
-          // today's status (flutter_smartschool 0.4.0,
-          // yvanvds/dartschool#190), then the server's: the workaround that
-          // #164 removes.
-          FakeLvsRead.pupilFile,
+          // today's status (yvanvds/dartschool#190), and no other (#164).
           FakeLvsRead.pupilFile,
         ]);
       });
@@ -425,11 +421,9 @@ void main() {
       expect(text, isNot(contains('Oeps')));
       expect(lvs.reads, [
         FakeLvsRead.absences,
-        // The library's read of the file after the 500 (yvanvds/dartschool
-        // #190), then the server's, with today's status (#164).
+        // The library's read of the file after the 500, without today's
+        // status (yvanvds/dartschool#190), and no other (#164).
         FakeLvsRead.pupilFile,
-        FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       ]);
     });
   });
@@ -488,8 +482,8 @@ void main() {
       (FakeLvsRefusal.serverError, ' (HTTP 500)'),
       (FakeLvsRefusal.htmlPage, ''),
     ]) {
-      test('${refusal.name}: could not read, after the file says the pupil '
-          'is known', () async {
+      test('${refusal.name}: could not read; only after HTTP 500 is the file '
+          'read, by the library', () async {
         lvs
           ..refusal = refusal
           ..refusedReads = {FakeLvsRead.absences};
@@ -500,11 +494,10 @@ void main() {
         expect(text, isNot(contains('Oeps')));
         expect(lvs.reads, [
           FakeLvsRead.absences,
-          // After a 500 only, the library reads the file itself first
-          // (yvanvds/dartschool#190); the server's read follows (#164).
+          // After a 500 only, the library reads the file, without today's
+          // status (yvanvds/dartschool#190); the server reads nothing more
+          // (#164).
           if (refusal == FakeLvsRefusal.serverError) FakeLvsRead.pupilFile,
-          FakeLvsRead.pupilFile,
-          FakeLvsRead.todayStatus,
         ]);
       });
     }
@@ -512,24 +505,20 @@ void main() {
 
   group('privacy', () {
     test('only the read of the absences, and the file when there are none '
-        'or the answer cannot be read: no other POST, no PUT', () async {
+        'or after HTTP 500: no other POST, no PUT', () async {
       await read(marie());
       await read(marie({'school_year': '2030-2031', 'with_motivation': true}));
       await read(fakeLvsPupilArguments(fakeLvsJan));
       await refused(fakeLvsPupilArguments(fakeLvsNoor));
 
       expect(lvs.reads, everyElement(isNotNull));
-      expect(lvs.reads.toSet(), {
-        FakeLvsRead.absences,
-        FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
-      });
+      expect(lvs.reads.toSet(), {FakeLvsRead.absences, FakeLvsRead.pupilFile});
       expect(
         {
           for (final r in lvs.requests)
             if (r.method != 'GET') '${r.method} ${r.path}',
         },
-        {'POST /LVS/Pupilpresences', 'POST /LVS/Pupilxhr/getStatusInfo'},
+        {'POST /LVS/Pupilpresences'},
       );
     });
 

@@ -4,11 +4,15 @@
 /// system (LVS) answers with the hand-written fixtures of
 /// `test/fixtures/lvs/supportplan/` (the fakes of `FAKES.md` only, checked
 /// by `test/lvs_fixtures_guard_test.dart`): the plan of the current period
-/// and of a chosen one, a course, the three cases without a plan (a school
+/// and of a chosen one, the items the user wrote first (#163), a course,
+/// by its name and by its id, the three cases without a plan (a school
 /// without support plans, a pupil without a plan, no period), "no access to
 /// the support plans", and the privacy rules every LVS tool follows (#153):
 /// only reads, nothing on disk, nothing of an answer or an error's message
 /// in the log.
+///
+/// The account is Céline Dupré ([fakeLvsCelineUserId]), a teacher of the
+/// fixtures who wrote some of the items, unless a test logs in as another.
 ///
 /// No real pupil's plan was captured (yvanvds/dartschool#168): the fixtures
 /// are in the shapes of the LVS's JavaScript, the library's own and some
@@ -42,11 +46,10 @@ List<String> _calls({FakeLvsPupil pupil = fakeLvsMarie, int period = 0}) => [
       'exportID=0',
 ];
 
-/// The two requests of [pupil]'s file.
-List<String> _fileCalls(FakeLvsPupil pupil) => [
-  'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=${pupil.pupilId}',
-];
+/// The request of [pupil]'s file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+String _fileCall(FakeLvsPupil pupil) =>
+    'GET /LVS/Spotlight/${pupil.pupilId}?classID=${pupil.classId}';
 
 /// The line on what the tool does not read.
 const _notRead =
@@ -59,7 +62,9 @@ const _periods =
     'Testperiode (period_id 900501, in Testschooljaar), Testperiode 2 '
     '(period_id 900502, in Testschooljaar).';
 
-/// The items of the current period of Marie's plan for Testvak.
+/// The items of the current period of Marie's plan, in the LVS's order: for
+/// Testvak; for Testvak and, by its course id only, Testvak 2 (by Céline,
+/// [_groupPlanItemByUser]); and two tied to no course.
 const _needsItem =
     '- Support needs and approach | by Piet Peeters | 14/10/2030 | for '
     'Testvak\n'
@@ -73,9 +78,8 @@ const _needsItem =
     '  Approach (aanpak): Testaanpak\n'
     '  Comment on the approach: Testcommentaar bij de aanpak.';
 
-const _groupPlanItem =
-    "- Goals taken over from the class's group plan (groepswerkplan) | by "
-    'Céline Dupré | 21/10/2030 | theme Testthema\n'
+const _groupPlanItemRest =
+    '21/10/2030 | for Testvak, Testvak 2 | theme Testthema\n'
     '  Start situation (beginsituatie): Testbeginsituatie van de leerling.\n'
     '  - Goal: Testdoel | domain Testdomein > Testsubdomein\n'
     '    Objectives (doelstellingen): Testdoelstelling\n'
@@ -83,7 +87,14 @@ const _groupPlanItem =
     '    Planning: Testvak\n'
     '  - Goal: Testdoel uit het leerplan | no longer in its curriculum';
 
-/// The items of the current period of Marie's plan tied to no course.
+const _groupPlanItemByUser =
+    "- Goals taken over from the class's group plan (groepswerkplan) | by "
+    'the user, Céline Dupré | $_groupPlanItemRest';
+
+const _groupPlanItem =
+    "- Goals taken over from the class's group plan (groepswerkplan) | by "
+    'Céline Dupré | $_groupPlanItemRest';
+
 const _ownGoalsItem =
     '- Goals chosen for the pupil | by Piet Peeters | 28/10/2030 | the '
     "school's own goals\n"
@@ -97,22 +108,29 @@ const _sketch =
     'Profile sketch (profielschets; last change: Testversie van 01/10/2030):\n'
     '  Testprofielschets van de leerling: sterk in testen.';
 
-/// The answer for the current period of Marie's plan.
-const _currentAnswer =
+/// The line on whose plan, of the current period, up to how many items.
+const _currentPeriodHead =
     'The support plan (handelingsplan) of the pupil with pupil_id 900002 '
     '(class_id 900102) in the LVS, the current period Testperiode (period_id '
-    "900501, in Testschooljaar): 4 items, in the LVS's order.\n"
+    '900501, in Testschooljaar): 4 items';
+
+/// The answer for the current period of Marie's plan, for Céline: the item
+/// she wrote first.
+const _currentAnswer =
+    '$_currentPeriodHead: first the item the user wrote, marked "by the '
+    'user", then the others, each in the LVS\'s order.\n'
     '$_notRead\n'
+    '$_groupPlanItemByUser\n'
     '$_needsItem\n'
-    '$_groupPlanItem\n'
     '$_ownGoalsItem\n'
     '$_documentItem\n'
     '$_sketch\n'
     '$_periods';
 
-/// The items of the second period of Marie's plan: for two courses, for
-/// Testvak, goals planned in Testvak 2, a kind the library does not know,
-/// and one with nothing filled in.
+/// The items of the second period of Marie's plan, in the LVS's order: for
+/// two courses, for Testvak and goals planned in Testvak 2 (both by
+/// Céline), a kind the library does not know, and one with nothing filled
+/// in.
 const _twoCoursesItem =
     '- Support needs and approach | by Piet Peeters | 03/02/2031 | for '
     'Testvak, Testvak 2\n'
@@ -128,14 +146,14 @@ const _twoCoursesItem =
     '    twee regels';
 
 const _vakItem =
-    '- Support needs and approach | by Céline Dupré | 10/02/2031 | for '
-    'Testvak\n'
+    '- Support needs and approach | by the user, Céline Dupré | 10/02/2031 | '
+    'for Testvak\n'
     '  Support needs (ondersteuningsnoden): Testnood voor het vak\n'
     '  Approach (aanpak): Testaanpak voor het vak';
 
 const _vak2GoalsItem =
-    '- Goals chosen for the pupil | by Céline Dupré | 17/02/2031 | goals of '
-    'special primary education (BuBaO)\n'
+    '- Goals chosen for the pupil | by the user, Céline Dupré | 17/02/2031 | '
+    'goals of special primary education (BuBaO)\n'
     '  - Goal: Testdoel voor het tweede vak\n'
     '    Objectives (doelstellingen):\n'
     '      - Testdoelstelling een.\n'
@@ -159,20 +177,22 @@ const _sketchLines =
     '  Sterk in testen\n'
     '  Test graag';
 
-/// The line on whose plan, of the second period, closed.
+/// The line on whose plan, of the second period, closed, for Céline: the
+/// items she wrote first.
 const _secondPeriodHead =
     'The support plan (handelingsplan) of the pupil with pupil_id 900002 '
     '(class_id 900102) in the LVS, the period Testperiode 2 (period_id 900502, '
-    'in Testschooljaar), closed (read only in Smartschool): 5 items, in the '
-    "LVS's order.";
+    'in Testschooljaar), closed (read only in Smartschool): 5 items: first the '
+    '2 items the user wrote, marked "by the user", then the others, each in '
+    "the LVS's order.";
 
-/// The answer for the second period of Marie's plan.
+/// The answer for the second period of Marie's plan, for Céline.
 const _secondAnswer =
     '$_secondPeriodHead\n'
     '$_notRead\n'
-    '$_twoCoursesItem\n'
     '$_vakItem\n'
     '$_vak2GoalsItem\n'
+    '$_twoCoursesItem\n'
     '$_unknownItem\n'
     '$_emptyItem\n'
     '$_sketchLines\n'
@@ -210,7 +230,7 @@ void main() {
   late FakeLvs lvs;
 
   setUp(() async {
-    h = await LvsToolHarness.start();
+    h = await LvsToolHarness.start(userId: fakeLvsCelineUserId);
     lvs = h.lvs;
   });
 
@@ -262,9 +282,9 @@ void main() {
     });
 
     test('its description: the privacy rules of every LVS tool, what it does '
-        'not read (the evaluation), that the user\'s own courses are not '
-        'known, and the note categories of schools without support '
-        'plans', () {
+        'not read (the evaluation), the items the user wrote first, the '
+        "user's course as course, and the note categories of schools without "
+        'support plans', () {
       final description = tool.description!;
       expect(
         description,
@@ -273,14 +293,17 @@ void main() {
       for (final part in [
         "Not read yet: the plan's evaluation and its report, and the earlier "
             'versions of its items.',
-        "The server cannot tell which courses are the user's own: to see what "
-            "concerns the user's course, pass it as course.",
+        'The items the user wrote come first, marked "by the user".',
+        'to see what concerns the user\'s lessons, pass the user\'s course as '
+            'course.',
         'a school that keeps educational needs in note categories instead is '
             'read with read_lvs_notes',
         'an uploaded plan by its file name only (not opened)',
       ]) {
         expect(description, contains(part));
       }
+      // The sentence of #156 is gone: the user's own items come first.
+      expect(description, isNot(contains('cannot tell')));
       // Students sign in too: the LVS tools speak of the user, and of an
       // item's author (an exe e2e test checks every tool).
       expect(jsonEncode(tool).toLowerCase(), isNot(contains('teacher')));
@@ -301,9 +324,10 @@ void main() {
   });
 
   group('a plan', () {
-    test('of the current period: every item in the LVS\'s order, each with '
-        'what it holds, then the profile sketch and the periods; three reads, '
-        'of period 0 and the live plan (exportID 0)', () async {
+    test('of the current period: the item the user wrote first, marked, then '
+        "the others in the LVS's order, each with what it holds, then the "
+        'profile sketch and the periods; three reads, of period 0 and the '
+        'live plan (exportID 0)', () async {
       final text = await read(marie());
 
       expect(text, _currentAnswer);
@@ -313,6 +337,49 @@ void main() {
         FakeLvsRead.supportPlan,
         FakeLvsRead.profileSketch,
       ]);
+    });
+
+    test('for another author, Piet Peeters: his three items first, the '
+        'uploaded plan too (its author by id), then the one by Céline; the '
+        'reads are the same', () async {
+      final piet = await LvsToolHarness.start(userId: fakeLvsPietUserId);
+
+      final text = await piet.ok('read_lvs_support_plan', marie());
+
+      expect(
+        text,
+        '$_currentPeriodHead: first the 3 items the user wrote, marked "by '
+        'the user", then the others, each in the LVS\'s order.\n'
+        '$_notRead\n'
+        '${_needsItem.replaceFirst('by Piet', 'by the user, Piet')}\n'
+        '${_ownGoalsItem.replaceFirst('by Piet', 'by the user, Piet')}\n'
+        '${_documentItem.replaceFirst('by Piet', 'by the user, Piet')}\n'
+        '$_groupPlanItem\n'
+        '$_sketch\n'
+        '$_periods',
+      );
+      expect(piet.lvs.calls, _calls());
+    });
+
+    test('for an account that wrote none of the items: all in the LVS\'s '
+        'order, said so, none marked', () async {
+      final other = await LvsToolHarness.start();
+
+      final text = await other.ok('read_lvs_support_plan', marie());
+
+      expect(
+        text,
+        "$_currentPeriodHead, in the LVS's order; the user wrote none of "
+        'them.\n'
+        '$_notRead\n'
+        '$_needsItem\n'
+        '$_groupPlanItem\n'
+        '$_ownGoalsItem\n'
+        '$_documentItem\n'
+        '$_sketch\n'
+        '$_periods',
+      );
+      expect(text, isNot(contains('by the user')));
     });
 
     for (final period in <Object>[
@@ -373,7 +440,8 @@ void main() {
 
   group('a course', () {
     test('by its name, ignoring case: the items for it and those tied to no '
-        'course, with the items for other courses counted', () async {
+        'course, the one the user wrote first, with the items for other '
+        'courses counted', () async {
       final text = await read(marie({'period': 900502, 'course': 'testvak'}));
 
       expect(
@@ -383,16 +451,39 @@ void main() {
         'which may concern every course: 4 of the 5. Not shown: 1 item for '
         'other courses only; leave course out to see it.\n'
         '$_notRead\n'
-        '$_twoCoursesItem\n'
         '$_vakItem\n'
+        '$_twoCoursesItem\n'
         '$_unknownItem\n'
         '$_emptyItem\n'
         '$_sketchLines\n'
         '$_periods',
       );
-      // The course is not sent to the LVS: the plan names its courses
-      // without their ids.
+      // The course is not sent to the LVS: the items are kept here, as the
+      // LVS's web client filters them.
       expect(lvs.calls, _calls(period: 900502));
+    });
+
+    test('by its id: an item planned in the course by its course id only, '
+        'which names no course of that name, is kept; the plan names the '
+        'course', () async {
+      final text = await read(marie({'course': 'Testvak 2'}));
+
+      expect(
+        text,
+        '$_currentPeriodHead: first the item the user wrote, marked "by the '
+        'user", then the others, each in the LVS\'s order.\n'
+        'Only the items for the course Testvak 2, and those tied to no '
+        'course, which may concern every course: 3 of the 4. Not shown: 1 '
+        'item for other courses only; leave course out to see it.\n'
+        '$_notRead\n'
+        '$_groupPlanItemByUser\n'
+        '$_ownGoalsItem\n'
+        '$_documentItem\n'
+        '$_sketch\n'
+        '$_periods',
+      );
+      // Its goal is planned in Testvak only: by name, it would not be kept.
+      expect(_groupPlanItemByUser, contains('Planning: Testvak\n'));
     });
 
     test('by part of its name, when no course is named that: also the items '
@@ -406,8 +497,8 @@ void main() {
         'course, which may concern every course: 4 of the 5. Not shown: 1 '
         'item for other courses only; leave course out to see it.\n'
         '$_notRead\n'
-        '$_twoCoursesItem\n'
         '$_vak2GoalsItem\n'
+        '$_twoCoursesItem\n'
         '$_unknownItem\n'
         '$_emptyItem\n'
         '$_sketchLines\n'
@@ -434,12 +525,11 @@ void main() {
 
       expect(
         text,
-        'The support plan (handelingsplan) of the pupil with pupil_id 900002 '
-        '(class_id 900102) in the LVS, the current period Testperiode '
-        "(period_id 900501, in Testschooljaar): 4 items, in the LVS's order.\n"
+        '$_currentPeriodHead: first the item the user wrote, marked "by the '
+        'user", then the others, each in the LVS\'s order.\n'
         'No item of this plan names a course "Testvak 3"; its items name: '
-        'Testvak. Shown: only the 2 items tied to no course, which may '
-        'concern every course; leave course out to see all 4.\n'
+        'Testvak, Testvak 2. Shown: only the 2 items tied to no course, which '
+        'may concern every course; leave course out to see all 4.\n'
         '$_notRead\n'
         '$_ownGoalsItem\n'
         '$_documentItem\n'
@@ -462,10 +552,7 @@ void main() {
         'Profile sketch (profielschets): none in this period.\n'
         '$_periods',
       );
-      expect(lvs.calls, [
-        ..._calls(pupil: fakeLvsJan),
-        ..._fileCalls(fakeLvsJan),
-      ]);
+      expect(lvs.calls, [..._calls(pupil: fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     test('a pupil without a plan, but with a profile sketch: the sketch, '
@@ -503,10 +590,7 @@ void main() {
         'voor deze klas"). There is no plan to read.\n'
         'The LVS lists no periods of the support plans to choose from.',
       );
-      expect(lvs.calls, [
-        ..._calls(pupil: fakeLvsJan),
-        ..._fileCalls(fakeLvsJan),
-      ]);
+      expect(lvs.calls, [..._calls(pupil: fakeLvsJan), _fileCall(fakeLvsJan)]);
     });
 
     test('no period for a period chosen from the menu: the sentence names '
@@ -540,13 +624,12 @@ void main() {
         });
 
         expect(text, _noSupportPlans);
-        expect(lvs.reads.last, FakeLvsRead.todayStatus);
+        expect(lvs.reads.last, FakeLvsRead.pupilFile);
         if (more.containsKey('period')) {
           // No period to pick from: the plan is not read.
           expect(lvs.reads, [
             FakeLvsRead.supportPlanPeriods,
             FakeLvsRead.pupilFile,
-            FakeLvsRead.todayStatus,
           ]);
         }
       });
@@ -566,7 +649,6 @@ void main() {
       expect(lvs.reads, [
         FakeLvsRead.supportPlanPeriods,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       ]);
     });
 
@@ -684,7 +766,6 @@ void main() {
         FakeLvsRead.supportPlan,
         FakeLvsRead.profileSketch,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       });
       String post(FakeLvsRequest r) =>
           [r.method, r.path, ?r.query['file'], ?r.query['function']].join(' ');
@@ -697,7 +778,6 @@ void main() {
           'POST / jqDispatcher_settings getLVSspecificTitles',
           'POST / jqDispatcher_hp getIHP',
           'POST / jqDispatcher_hp getProfielSchets',
-          'POST /LVS/Pupilxhr/getStatusInfo',
         },
       );
       // Only the live plan, never an archived export.
@@ -818,9 +898,11 @@ void main() {
       LvsPlanItemKind kind, {
       String type = 'ihp',
       String author = '',
+      int? authorId,
       String date = '',
       String versionType = '',
       List<String> courses = const [],
+      List<int> courseIds = const [],
       List<String> supportNeeds = const [],
       List<LvsPlanGoal> goals = const [],
       String fileName = '',
@@ -830,13 +912,25 @@ void main() {
       type: type,
       kind: kind,
       author: author,
+      authorId: authorId,
       date: date,
       versionType: versionType,
       courses: courses,
+      courseIds: courseIds,
       supportNeeds: supportNeeds,
       goals: goals,
       fileName: fileName,
       mimeType: mimeType,
+    );
+
+    /// A plan of [items], with [courses] as the plan's courses.
+    LvsSupportPlan planOf(
+      List<LvsPlanItem> items, {
+      List<LvsPlanCourse> courses = const [],
+    }) => LvsSupportPlan(
+      period: const LvsPlanPeriodInfo(id: 900501, hasError: false),
+      items: items,
+      courses: courses,
     );
 
     test('empty fields left out; an item without anything, a document '
@@ -926,19 +1020,222 @@ void main() {
         item(LvsPlanItemKind.unknown, type: 'testsoort'),
       ];
 
-      final all = selectLvsPlanItems(items, null);
+      final plan = planOf(items);
+
+      final all = selectLvsPlanItems(plan, null, userId: null);
       expect(all.shown, items);
       expect(all.otherCourses, 0);
 
-      final vak2 = selectLvsPlanItems(items, 'testvak  2');
+      final vak2 = selectLvsPlanItems(plan, 'testvak  2', userId: null);
       expect(vak2.matched, ['Testvak 2']);
       expect(vak2.shown, [items[1], items[2], items[3]]);
       expect(vak2.otherCourses, 1);
 
-      final none = selectLvsPlanItems(items, 'Testvak 9');
+      final none = selectLvsPlanItems(plan, 'Testvak 9', userId: null);
       expect(none.matched, isEmpty);
       expect(none.shown, [items[2], items[3]]);
       expect(none.otherCourses, 2);
+    });
+
+    test('a course keeps the items planned in it by its id: their own course '
+        "ids, named by the plan's courses or by a goal's planning, and the "
+        "courses of their goals' planning; a course id the plan does not name "
+        'ties an item to a course all the same', () {
+      final items = [
+        // By its own course id, which the plan's courses name.
+        item(LvsPlanItemKind.goals, courseIds: [900302]),
+        // By the course id of its goal's planning, under another name.
+        item(
+          LvsPlanItemKind.goals,
+          goals: const [
+            LvsPlanGoal(
+              name: 'Testdoel',
+              planning: ['TV2'],
+              moments: [LvsPlanMoment(type: 'course', id: 900302, name: 'TV2')],
+            ),
+          ],
+        ),
+        // By the id of a course only a goal's planning names.
+        item(LvsPlanItemKind.needs, courseIds: [900303]),
+        // A course id nothing names: tied to a course, but not this one.
+        item(LvsPlanItemKind.needs, courseIds: [900309]),
+        // Another moment of the planning with an id: not a course id.
+        item(
+          LvsPlanItemKind.goals,
+          goals: const [
+            LvsPlanGoal(
+              name: 'Testdoel',
+              planning: ['Testmoment'],
+              moments: [
+                LvsPlanMoment(type: 'other', id: 900302, name: 'Testmoment'),
+              ],
+            ),
+          ],
+        ),
+        item(LvsPlanItemKind.needs, courseIds: [900301]),
+        item(
+          LvsPlanItemKind.goals,
+          goals: const [
+            LvsPlanGoal(
+              name: 'Testdoel',
+              planning: ['Testvak 3'],
+              moments: [
+                LvsPlanMoment(type: 'course', id: 900303, name: 'Testvak 3'),
+              ],
+            ),
+          ],
+        ),
+      ];
+      final plan = planOf(
+        items,
+        courses: const [
+          LvsPlanCourse(id: 900301, name: 'Testvak'),
+          LvsPlanCourse(id: 900302, name: 'Testvak 2'),
+        ],
+      );
+
+      final vak2 = selectLvsPlanItems(plan, 'Testvak 2', userId: null);
+      expect(vak2.matched, ['Testvak 2']);
+      expect(vak2.shown, [items[0], items[1]]);
+      expect(vak2.otherCourses, 5);
+
+      final vak3 = selectLvsPlanItems(plan, 'testvak 3', userId: null);
+      expect(vak3.matched, ['Testvak 3']);
+      expect(vak3.shown, [items[2], items[6]]);
+
+      // Testvak itself, not the courses whose name holds it.
+      final vak = selectLvsPlanItems(plan, 'Testvak', userId: null);
+      expect(vak.matched, ['Testvak']);
+      expect(vak.shown, [items[5]]);
+    });
+
+    test('the items the user wrote first, each part in the LVS\'s order, also '
+        'among the items of a course; none for an unknown user', () {
+      final items = [
+        item(LvsPlanItemKind.needs, authorId: 900201, courses: ['Testvak']),
+        item(LvsPlanItemKind.needs, authorId: 900202, courses: ['Testvak']),
+        item(LvsPlanItemKind.document, authorId: 900202),
+        item(LvsPlanItemKind.needs, courses: ['Testvak 2']),
+        item(LvsPlanItemKind.needs, authorId: 900202, courses: ['Testvak 2']),
+      ];
+      final plan = planOf(items);
+
+      expect(selectLvsPlanItems(plan, null, userId: 900202).shown, [
+        items[1],
+        items[2],
+        items[4],
+        items[0],
+        items[3],
+      ]);
+      expect(selectLvsPlanItems(plan, 'Testvak', userId: 900202).shown, [
+        items[1],
+        items[2],
+        items[0],
+      ]);
+      expect(selectLvsPlanItems(plan, null, userId: null).shown, items);
+      expect(lvsPlanItemByUser(items[3], null), isFalse);
+    });
+
+    test('an item by the user, with its author or without; the courses of '
+        'its course ids by name, a course id the plan does not name '
+        'counted', () {
+      const names = {900301: 'Testvak', 900302: 'Testvak 2'};
+      expect(
+        formatLvsPlanItem(
+          item(LvsPlanItemKind.needs, author: 'Céline Dupré', authorId: 900202),
+          byUser: true,
+        ),
+        startsWith(
+          '- Support needs and approach | by the user, Céline Dupré | tied to '
+          'no course',
+        ),
+      );
+      expect(
+        formatLvsPlanItem(item(LvsPlanItemKind.document), byUser: true),
+        startsWith('- An uploaded plan | by the user | '),
+      );
+      // The names the LVS gives, then those of its other course ids.
+      expect(
+        formatLvsPlanItem(
+          item(
+            LvsPlanItemKind.needs,
+            courses: ['Testvak'],
+            courseIds: [900301, 900302, 900309],
+          ),
+          courseNames: names,
+        ),
+        startsWith('- Support needs and approach | for Testvak, Testvak 2\n'),
+      );
+      expect(
+        formatLvsPlanItem(
+          item(LvsPlanItemKind.goals, courseIds: [900302]),
+          courseNames: names,
+        ),
+        startsWith('- Goals chosen for the pupil | for Testvak 2\n'),
+      );
+      expect(
+        formatLvsPlanItem(
+          item(LvsPlanItemKind.needs, courseIds: [900308, 900309]),
+          courseNames: names,
+        ),
+        startsWith(
+          '- Support needs and approach | for 2 courses the plan does not '
+          'name\n',
+        ),
+      );
+      expect(
+        formatLvsPlanItem(
+          item(LvsPlanItemKind.goals, courseIds: [900309]),
+          courseNames: names,
+        ),
+        startsWith(
+          '- Goals chosen for the pupil | for 1 course the plan does ',
+        ),
+      );
+    });
+
+    test('the first line says how many items the user wrote: some, none, all '
+        'of them, one that is all; and only the order for an unknown '
+        'user', () {
+      String head(List<int?> authors, int? userId) => formatLvsSupportPlan(
+        (
+          periods: const [],
+          period: null,
+          plan: planOf([
+            for (final author in authors)
+              item(LvsPlanItemKind.document, authorId: author),
+          ]),
+          sketch: null,
+          fileHasSupportPlans: true,
+          userId: userId,
+        ),
+        pupilId: 900002,
+        classId: 900102,
+        course: null,
+      ).split('\n').first;
+
+      const lead =
+          'The support plan (handelingsplan) of the pupil with pupil_id 900002 '
+          '(class_id 900102) in the LVS, the current period (period_id '
+          '900501): ';
+      expect(
+        head([900201, 900202, 900202], 900202),
+        '${lead}3 items: first the 2 items the user wrote, marked "by the '
+        'user", then the others, each in the LVS\'s order.',
+      );
+      expect(
+        head([900201, null], 900202),
+        "${lead}2 items, in the LVS's order; the user wrote none of them.",
+      );
+      expect(
+        head([900202, 900202], 900202),
+        "${lead}2 items, in the LVS's order; the user wrote all of them.",
+      );
+      expect(
+        head([900202], 900202),
+        "${lead}1 item, in the LVS's order; the user wrote it.",
+      );
+      expect(head([900202], null), "${lead}1 item, in the LVS's order.");
     });
 
     test('a course no item names, in a plan whose items all name a course: '
@@ -947,17 +1244,15 @@ void main() {
         (
           periods: const [],
           period: null,
-          plan: LvsSupportPlan(
-            period: const LvsPlanPeriodInfo(id: 900501, hasError: false),
-            items: [
-              item(LvsPlanItemKind.needs, courses: ['Testvak']),
-            ],
-          ),
+          plan: planOf([
+            item(LvsPlanItemKind.needs, courses: ['Testvak']),
+          ]),
           sketch: const LvsProfileSketch(
             period: LvsPlanPeriodInfo(hasError: false),
             hasSketch: false,
           ),
           fileHasSupportPlans: true,
+          userId: null,
         ),
         pupilId: 900002,
         classId: 900102,

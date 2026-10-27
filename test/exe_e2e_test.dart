@@ -1342,7 +1342,8 @@ void main() {
         contains('a summary line computed from the scores given'),
       );
       // The support plan (#156): of one pupil and a period, with the items
-      // of every course or of one; its evaluation is not read yet.
+      // of every course or of one, those the user wrote first (#163); its
+      // evaluation is not read yet.
       final plan = byName['read_lvs_support_plan']!['inputSchema'] as Map;
       expect(plan['required'], ['pupil_id', 'class_id']);
       expect((plan['properties'] as Map).keys, [
@@ -1355,7 +1356,7 @@ void main() {
         byName['read_lvs_support_plan']!['description'],
         allOf(
           contains("Not read yet: the plan's evaluation"),
-          contains("The server cannot tell which courses are the user's own"),
+          contains('The items the user wrote come first'),
           contains('read with read_lvs_notes'),
         ),
       );

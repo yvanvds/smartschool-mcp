@@ -31,23 +31,6 @@ String formatLvsSchoolYear(LvsSchoolYear schoolYear) {
       : '${schoolYear.firstDay} to ${schoolYear.lastDay}';
 }
 
-/// The day of [instant] in Belgian time, the LVS's, as `YYYY-MM-DD`: the
-/// day the LVS shows a note on, also on a computer in another time zone.
-///
-/// The library has the Belgian day of a note but does not export it
-/// (yvanvds/dartschool#185), so this asks its [LvsSchoolYear.includesDay],
-/// which tells the Belgian day: Belgian time is one or two hours ahead of
-/// UTC, so the day there is the day in UTC or the one after. Tracked for
-/// removal in #160.
-String lvsDay(DateTime instant) {
-  final utc = instant.toUtc();
-  final next = DateTime.utc(utc.year, utc.month, utc.day + 1);
-  final day = LvsSchoolYear(from: next, until: next).includesDay(instant)
-      ? next
-      : DateTime.utc(utc.year, utc.month, utc.day);
-  return LvsSchoolYear(from: day, until: day).firstDay;
-}
-
 /// What a part of a pupil's file is, in a few words, by its type.
 const _sectionKinds = {
   LvsSectionType.items: 'note category',

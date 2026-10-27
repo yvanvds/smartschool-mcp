@@ -40,11 +40,9 @@ String _allCall(FakeLvsPupil pupil, {String range = _range2030}) =>
     'userID=${pupil.pupilId} toolbarType=main groupID=${pupil.classId} '
     '$range viewAllFilter=[] filterData=0';
 
-/// The two requests of Jan Janssens's file.
-const _janFileCalls = [
-  'GET /LVS/Spotlight/900001?classID=900101',
-  'POST /LVS/Pupilxhr/getStatusInfo pupilID=900001',
-];
+/// The request of Jan Janssens's file: the file only, without today's
+/// attendance (`getStatusInfo`), which the tool does not show.
+const _janFileCall = 'GET /LVS/Spotlight/900001?classID=900101';
 
 /// The notes of Jan Janssens as `read_lvs_notes` shows them, newest first
 /// (`notes/category.xml`, `subcategory.xml`, `subcategory_deep.xml`), the
@@ -274,7 +272,7 @@ void main() {
           fakeLvsJan,
           range: 'syRange={"from":"2027-09-01","until":"2028-08-31"}',
         ),
-        ..._janFileCalls,
+        _janFileCall,
       ]);
     });
 
@@ -384,11 +382,7 @@ void main() {
         '900102) in school year 2030-2031, in all note categories. Pass '
         'school_year for the notes of another school year.',
       );
-      expect(lvs.reads, [
-        FakeLvsRead.allNotes,
-        FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
-      ]);
+      expect(lvs.reads, [FakeLvsRead.allNotes, FakeLvsRead.pupilFile]);
     });
 
     for (final (what, asked) in [
@@ -436,7 +430,7 @@ void main() {
       }
       expect(text, isNot(contains('Testveld leeg')), reason: 'empty fields');
       expect(lvs.calls, [
-        ..._janFileCalls,
+        _janFileCall,
         _categoryCall(900401),
         _categoryCall(900402),
         _categoryCall(900404),
@@ -458,7 +452,7 @@ void main() {
           '1 note in total, shown.',
           reason: '$category',
         );
-        expect(lvs.calls, [..._janFileCalls, _categoryCall(900402)]);
+        expect(lvs.calls, [_janFileCall, _categoryCall(900402)]);
       }
       final printed = await read(jan({'category': 'category_id 900404'}));
       expect(printed, contains('\n$_deep\n'));
@@ -476,7 +470,7 @@ void main() {
         '$_deep\n'
         '1 note in total, shown.',
       );
-      expect(lvs.calls, [..._janFileCalls, _categoryCall(900404)]);
+      expect(lvs.calls, [_janFileCall, _categoryCall(900404)]);
     });
 
     test('with include_confidential, school_year, since and limit, as for '
@@ -505,7 +499,7 @@ void main() {
       );
       const range = 'syRange={"from":"2029-09-01","until":"2030-08-31"}';
       expect(lvs.calls, [
-        ..._janFileCalls,
+        _janFileCall,
         _categoryCall(900401, range: range),
         _categoryCall(900402, range: range),
         _categoryCall(900404, range: range),
@@ -560,7 +554,7 @@ void main() {
         '(category_id 900404). Pass the one you mean as category, by its '
         'category_id.',
       );
-      expect(lvs.calls, _janFileCalls);
+      expect(lvs.calls, [_janFileCall]);
     });
 
     for (final category in <Object>['Gedrag', 900499]) {
@@ -578,7 +572,7 @@ void main() {
           'of them as category, by its category_id or its name, or leave '
           'category out to read all notes.',
         );
-        expect(lvs.calls, _janFileCalls);
+        expect(lvs.calls, [_janFileCall]);
       });
     }
 
@@ -688,13 +682,11 @@ void main() {
       expect(lvs.reads, [
         FakeLvsRead.allNotes,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
         FakeLvsRead.categoryNotes,
         FakeLvsRead.categoryNotes,
         FakeLvsRead.categoryNotes,
         FakeLvsRead.allNotes,
         FakeLvsRead.pupilFile,
-        FakeLvsRead.todayStatus,
       ]);
       expect({for (final r in lvs.requests) r.method}, {'GET', 'POST'});
       expect(
@@ -820,6 +812,20 @@ void main() {
       rawOptionValue: '',
     );
 
+    LvsNote note(int id, DateTime date, {bool confidential = false}) => LvsNote(
+      id: id,
+      categoryId: 900401,
+      categoryName: 'Testcategorie',
+      title: 'Testnotitie.',
+      date: date,
+      author: 'Peeters Piet',
+      isConfidential: confidential,
+      isNew: false,
+      viewed: false,
+      schoolYear: '2030-2031',
+      fields: const [],
+    );
+
     test('a field: nothing when it holds nothing; the label when it has '
         'none; a heading without text left out', () {
       expect(formatLvsNoteField(field(LvsNoteFieldType.text)), isEmpty);
@@ -853,8 +859,8 @@ void main() {
       );
     });
 
-    test('the Belgian day of a moment, also across summer time and the '
-        'year', () {
+    test("a note on its Belgian day, the library's (lvsDayOf), also across "
+        'summer time and the year: in its line, and for since', () {
       for (final (instant, day) in [
         (DateTime.utc(2030, 3, 31, 0, 30), '2030-03-31'), // 01:30 CET
         (DateTime.utc(2030, 3, 31, 22, 30), '2030-04-01'), // 00:30 CEST
@@ -864,7 +870,22 @@ void main() {
         (DateTime.utc(2030, 6, 30, 21, 59), '2030-06-30'), // 23:59 CEST
         (DateTime(2030, 6, 30, 12), '2030-06-30'), // local time, noon
       ]) {
-        expect(lvsDay(instant), day, reason: '$instant');
+        final dated = note(900301, instant);
+        expect(
+          formatLvsNote(dated),
+          startsWith('- $day | '),
+          reason: '$instant',
+        );
+        expect(
+          selectLvsNotes(
+            [dated],
+            since: day,
+            includeConfidential: false,
+            limit: 1,
+          ).shown,
+          [dated],
+          reason: '$instant',
+        );
       }
     });
 
@@ -912,20 +933,6 @@ void main() {
 
     test('the choice of notes: a confidential note before since counts as '
         'older; notes of the same moment keep their order', () {
-      LvsNote note(int id, DateTime date, {bool confidential = false}) =>
-          LvsNote(
-            id: id,
-            categoryId: 900401,
-            categoryName: 'Testcategorie',
-            title: 'Testnotitie.',
-            date: date,
-            author: 'Peeters Piet',
-            isConfidential: confidential,
-            isNew: false,
-            viewed: false,
-            schoolYear: '2030-2031',
-            fields: const [],
-          );
       final notes = [
         note(900301, DateTime.utc(2030, 10, 1)),
         note(900302, DateTime.utc(2030, 9, 20), confidential: true),
