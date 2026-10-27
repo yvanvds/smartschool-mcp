@@ -22,13 +22,16 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
-- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de
-  evaluaties met de punten of waarderingen van je leerlingen en of ze
-  gepubliceerd zijn, en de feedback die een leerling kreeg. Een nieuwe
-  evaluatie maken, punten invullen en een leerling feedback geven. Telkens
-  pas nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft
-  ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke
-  leerkracht: je hoeft er niets voor aan te zetten.
+- **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
+  puntenboeken die collega's met je deelden: de periodes, de evaluaties met
+  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, en
+  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
+  invullen en een leerling feedback geven, ook in een puntenboek dat een
+  collega met je deelde om te wijzigen (een evaluatie maken alleen in je
+  eigen puntenboeken). Telkens pas nadat jij het goedgekeurd hebt. Een
+  nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in
+  Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te
+  zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   ChatGPT of jijzelf ze kan openen.
 

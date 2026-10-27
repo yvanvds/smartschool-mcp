@@ -272,6 +272,7 @@ void main() {
       // library's.
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         ..._createCalls,
@@ -522,9 +523,10 @@ void main() {
           'date': '2026-10-14',
           'max': 20,
         }),
-        'None of the user\'s own gradebooks of Skore\'s current school year, '
-        '2026-2027 (workyear id 24), has gradebook id 99999. Take the '
-        'gradebook id from list_skore_gradebooks, without workyear_id: only a '
+        'None of the user\'s gradebooks of Skore\'s current school year, '
+        '2026-2027 (workyear id 24), their own or those colleagues shared '
+        'with them, has gradebook id 99999. Take the gradebook id from '
+        'list_skore_gradebooks, without workyear_id: only a '
         'gradebook of the current school year can be changed. Nothing was '
         'changed in Skore.',
       );

@@ -12,9 +12,14 @@ import 'server_tool.dart';
 const _tool = 'save_skore_grades';
 
 /// `save_skore_grades`: saves the grades of pupils in one evaluation of one
-/// of the user's own gradebooks in Skore, or clears them, with the library's
+/// of the user's gradebooks in Skore, or clears them, with the library's
 /// [SkoreGradebookService.saveGrades] (dartschool#151): the whole list in
 /// one call, so one approval for a list the user saw.
+///
+/// A gradebook a colleague shared with the user to read and write takes
+/// grades as an own one does (#167, dartschool#191); one shared to read only
+/// is refused in the tool's own words before it is read
+/// ([checkSkoreGradebookChangeable]), and the library refuses it too.
 ///
 /// Offered to every account, without a switch, like the other gradebook
 /// tools. Claude Desktop must ask for approval before every call, so the
@@ -40,10 +45,11 @@ ServerTool saveSkoreGradesTool(SmartschoolSession session) => ServerTool(
     title: 'Save the grades of an evaluation in Skore',
     description:
         'Saves the grades of pupils in one evaluation (a column of grades, '
-        'such as a test) of one of the user\'s own gradebooks in Skore, the '
-        'Smartschool module for scores and reports, as typing them into the '
-        'gradebook does: the whole list in one call, such as the grades of a '
-        'test the user gives as names with grades or as a pasted table. A '
+        'such as a test) of one of the user\'s gradebooks in Skore, the '
+        'Smartschool module for scores and reports (their own, or one a '
+        'colleague shared with them to read and write), as typing them into '
+        'the gradebook does: the whole list in one call, such as the grades '
+        'of a test the user gives as names with grades or as a pasted table. A '
         'grade is a number from 0 up to the evaluation\'s max, with a '
         'decimal point or comma (15, 15.5 or 15,5); an empty grade or null '
         'clears it. Before calling this tool, read the evaluation with '
@@ -52,7 +58,12 @@ ServerTool saveSkoreGradesTool(SmartschoolSession session) => ServerTool(
         'that matches no pupil or more than one: ask the user. Show the user '
         'the full list, each pupil with class number and name, the current '
         'grade and the new grade, out of the max, and only call this tool '
-        'after the user has explicitly confirmed it. Only a gradebook of '
+        'after the user has explicitly confirmed it. In a gradebook a '
+        'colleague shared with the user, also tell the user whose gradebook '
+        'it is: its owner, as list_skore_gradebooks and '
+        'list_skore_evaluations name them. A gradebook shared with the user '
+        'to read only is refused: the user may read it, not change it. Only '
+        'a gradebook of '
         'Skore\'s current school year can be changed. An evaluation that is '
         'published or scheduled is refused unless allow_published is true: '
         'a grade there is visible to its pupils at once, and the school '
@@ -170,6 +181,9 @@ Future<CallToolResult> _save(
       reread: _reread(gradebookId, evaluationId),
       (gradebooks) async {
         final found = await years.findInCurrentYear(gradebooks, gradebookId);
+        // The library refuses it as well, before anything is sent; this
+        // says it in the server's words, before the gradebook is read.
+        checkSkoreGradebookChangeable(found.gradebook);
         final sheet = await gradebooks.getGradebook(found.gradebook);
         final pupils = _pupils(sheet, grades.keys);
         final listed = await findSkoreEvaluation(

@@ -169,7 +169,8 @@ Future<void> _serve(ServerOptions options) async {
           planLesficheTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
-          // The user's own gradebooks in Skore: no switch, as they need no
+          // The user's gradebooks in Skore, their own and those shared with
+          // them (#167): no switch, as they need no
           // extra rights (#140, #141, #142, #143, #144).
           listSkoreGradebooksTool(session),
           readSkoreGradebookTool(session),

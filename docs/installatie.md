@@ -22,13 +22,16 @@ Je vraagt het gewoon in een gesprek:
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
-- **Puntenboek:** je eigen puntenboeken in Skore bekijken: de periodes, de
-  evaluaties met de punten of waarderingen van je leerlingen en of ze
-  gepubliceerd zijn, en de feedback die een leerling kreeg. Een nieuwe
-  evaluatie maken, punten invullen en een leerling feedback geven. Telkens
-  pas nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft
-  ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke
-  leerkracht: je hoeft er niets voor aan te zetten.
+- **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
+  puntenboeken die collega's met je deelden: de periodes, de evaluaties met
+  de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, en
+  de feedback die een leerling kreeg. Een nieuwe evaluatie maken, punten
+  invullen en een leerling feedback geven, ook in een puntenboek dat een
+  collega met je deelde om te wijzigen (een evaluatie maken alleen in je
+  eigen puntenboeken). Telkens pas nadat jij het goedgekeurd hebt. Een
+  nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in
+  Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te
+  zetten.
 - **Bestanden bewaren:** bijlagen en Intradesk-bestanden op je pc zetten, zodat
   Claude of jijzelf ze kan openen.
 - **Skore-beheer**, alleen voor wie er de rechten voor puntenbeheer heeft,
@@ -386,9 +389,9 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
 
 Voor elke leerkracht: je hoeft er niets voor aan te zetten, ook niet
 **Skore-beheer**. Claude werkt in je eigen puntenboeken in Skore, zoals je ze
-in Smartschool ziet. Puntenboeken van vorige schooljaren kan Claude lezen.
-Iets aanpassen kan alleen in een puntenboek van dit schooljaar, in een
-periode die nog open is.
+in Smartschool ziet, en in de puntenboeken die collega's met je deelden.
+Puntenboeken van vorige schooljaren kan Claude lezen. Iets aanpassen kan
+alleen in een puntenboek van dit schooljaar, in een periode die nog open is.
 
 - "Welke puntenboeken heb ik dit schooljaar?"
 - "Welke evaluaties staan er in DW1 van 5WW1?"
@@ -426,6 +429,17 @@ periode die nog open is.
   de oude. Het toont de leerling, de evaluatie en de tekst, en wacht op jouw
   akkoord. Daarna vraagt Claude Desktop nog eens toestemming. Claude geeft
   feedback aan één leerling per keer, want elke tekst is persoonlijk.
+- "Welke puntenboeken deelden collega's met mij?"
+  Een puntenboek dat een collega met je deelde (in Skore onder "Gedeeld"),
+  zoals het puntenboek Gedrag van je klas als je co-titularis bent, toont
+  Claude apart, met van wie het is en of je het alleen mag lezen of ook mag
+  wijzigen. Claude leest het zoals je eigen puntenboeken. Mag je het
+  wijzigen, dan zet Claude er na jouw akkoord punten en feedback in, en zegt
+  het daarbij van wie het puntenboek is. De feedback van die collega past
+  Claude nooit aan, alleen je eigen feedback. Een nieuwe evaluatie maakt
+  Claude alleen in je eigen puntenboeken. Mag je een gedeeld puntenboek
+  alleen lezen, dan verandert Claude er niets in: vraag het dan aan de
+  collega van wie het is.
 
 > **Wat je invult bij een gepubliceerde evaluatie, zien je leerlingen
 > meteen.** Vult Claude punten of feedback in bij een evaluatie die al

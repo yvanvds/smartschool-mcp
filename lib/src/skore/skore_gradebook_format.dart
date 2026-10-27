@@ -18,18 +18,65 @@ String formatSkoreOwnGradebook(SkoreGradebook gradebook) => [
   'gradebook id ${gradebook.gradebookId}',
 ].join(' | ');
 
+/// A gradebook a colleague shared with the user (#167): its class, its
+/// course as Skore's list of shared gradebooks names it (without a grade),
+/// its gradebook id, its owner by name and user id, and what the user may
+/// do in it.
+///
+/// For example `5WW2 | Gedrag | gradebook id 34980 | owner Céline Dupré
+/// (user id 346) | shared to read and write`, or `... | shared to read
+/// only`.
+String formatSkoreSharedGradebook(SkoreGradebook gradebook) => [
+  skoreName(gradebook.className),
+  skoreName(gradebook.courseName),
+  'gradebook id ${gradebook.gradebookId}',
+  'owner ${formatSkoreGradebookOwner(gradebook)} (user id '
+      '${gradebook.teacherId})',
+  'shared to ${_sharedTo(gradebook)}',
+].join(' | ');
+
+/// The owner of [gradebook], one a colleague shared with the user: the
+/// colleague's name as Skore's list of shared gradebooks gives it (first
+/// name first), or their user id when it gives none. For one of the user's
+/// own gradebooks, `the user`.
+String formatSkoreGradebookOwner(SkoreGradebook gradebook) {
+  if (!gradebook.isShared) return 'the user';
+  final name = gradebook.ownerName.trim();
+  return name.isEmpty
+      ? 'user id ${gradebook.teacherId}'
+      : skoreName(gradebook.ownerName);
+}
+
+/// What the user may do in [gradebook], one a colleague shared with them,
+/// after "shared to": `read and write`, or `read only`.
+String _sharedTo(SkoreGradebook gradebook) =>
+    gradebook.access == SkoreGradebookAccess.read
+    ? 'read only'
+    : 'read and write';
+
 /// [gradebook] in a sentence, for the first line of a tool's result: its
 /// id, course, class and school year. For example `Gradebook id 32508:
 /// Informaticawetenschappen (2 uur) (6e j DO), class 6EWI, school year
 /// 2026-2027 (workyear id 24)`.
+///
+/// For a gradebook a colleague shared with the user (#167), also its owner
+/// and what the user may do in it, as a second sentence: `... (workyear id
+/// 24). Its owner, Céline Dupré (user id 346), shared it with the user to
+/// read and write`, or `to read only`.
 String formatSkoreGradebookTitle(
   SkoreGradebook gradebook,
   SkoreWorkyear workyear,
-) =>
-    'Gradebook id ${gradebook.gradebookId}: '
-    '${skoreName(gradebook.courseName)}, class '
-    '${skoreName(gradebook.className)}, school year '
-    '${formatSkoreWorkyear(workyear)}';
+) {
+  final title =
+      'Gradebook id ${gradebook.gradebookId}: '
+      '${skoreName(gradebook.courseName)}, class '
+      '${skoreName(gradebook.className)}, school year '
+      '${formatSkoreWorkyear(workyear)}';
+  if (!gradebook.isShared) return title;
+  return '$title. Its owner, ${formatSkoreGradebookOwner(gradebook)} (user id '
+      '${gradebook.teacherId}), shared it with the user to '
+      '${_sharedTo(gradebook)}';
+}
 
 /// A school year: its name and workyear id, such as `2026-2027 (workyear
 /// id 24)`.
@@ -114,11 +161,18 @@ String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
 
 /// A gradebook by its class, course and id, as an error names it:
 /// `gradebook of 6EWI for Informaticawetenschappen (2 uur) (6e j DO)
-/// (gradebook id 32508)`.
-String formatSkoreGradebookName(SkoreGradebook gradebook) =>
-    'gradebook of ${skoreName(gradebook.className)} for '
-    '${skoreName(gradebook.courseName)} (gradebook id '
-    '${gradebook.gradebookId})';
+/// (gradebook id 32508)`. One a colleague shared with the user also by its
+/// owner (#167), so that every result and refusal of a write names whose
+/// gradebook it is: `gradebook of 5WW2 for Gedrag (gradebook id 34980,
+/// owner Céline Dupré)`.
+String formatSkoreGradebookName(SkoreGradebook gradebook) {
+  final owner = gradebook.isShared
+      ? ', owner ${formatSkoreGradebookOwner(gradebook)}'
+      : '';
+  return 'gradebook of ${skoreName(gradebook.className)} for '
+      '${skoreName(gradebook.courseName)} (gradebook id '
+      '${gradebook.gradebookId}$owner)';
+}
 
 /// One evaluation of a period (#141): its title (and short name), its
 /// evaluation id, Skore's column, its day, its highest grade, its

@@ -99,16 +99,19 @@ String _refused(String reason, {int pupil = 1201}) =>
     'call. Nothing was changed in Skore.';
 
 /// The tool's own reads before the library is asked, the first time: the
-/// gradebooks of the current school year, the gradebook, and the period
-/// that holds the evaluation (the pupil's feedback is a GET).
+/// gradebooks of the current school year (the user's own, and those shared
+/// with them, #167), the gradebook, and the period that holds the
+/// evaluation (the pupil's feedback is a GET).
 const _toolReads = [
   'getNavigation',
+  'accessableList',
   'init wy=24',
   'getGradebookContext wy=24',
   'getEvaluations wy=24',
 ];
 
-/// The RPC calls of the library's saveFeedback: its checks.
+/// The RPC calls of the library's saveFeedback: its checks (in one of the
+/// user's own gradebooks, without the gradebooks shared with them).
 const _libraryReads = [
   'getNavigation',
   'init wy=24',
@@ -375,7 +378,7 @@ void main() {
       // The tool's reads (the school year from memory) and its read of the
       // pupil's feedback; then the library's checks, its read of the
       // feedback, the create, and the feedback read again to check it.
-      expect(skore.calls, [..._toolReads.skip(1), ..._libraryReads]);
+      expect(skore.calls, [..._toolReads.skip(2), ..._libraryReads]);
       expect([
         for (final read in skore.feedbackReads)
           (read.evaluationId, read.pupilId),

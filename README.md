@@ -906,19 +906,22 @@ repeats the call, which reads the element again (a lesson hour filled
 meanwhile is gone, so nothing is sent).
 
 The gradebook tools work in the user's own gradebooks in Skore
-("Puntenboek", `/SkoreGradebook`), as every teacher has them, with the
-library's `SkoreGradebookService` (dartschool#148, dartschool#149,
-dartschool#150, dartschool#151, dartschool#152). They need none of the
-rights of the Skore tools below, so they are offered to every account,
-without a switch, and no message of theirs speaks of "Skore-beheer" or of
-rights. The first four change nothing; `create_skore_evaluation` creates an
-evaluation, always unpublished, `save_skore_grades` saves the grades of one,
-and `save_skore_feedback` gives a pupil the user's feedback on one:
+("Puntenboek", `/SkoreGradebook`), as every teacher has them, and in those
+colleagues shared with them (see "Gradebooks shared with the user" below),
+with the library's `SkoreGradebookService` (dartschool#148, dartschool#149,
+dartschool#150, dartschool#151, dartschool#152, dartschool#191). They need
+none of the rights of the Skore tools below, so they are offered to every
+account, without a switch, and no message of theirs speaks of
+"Skore-beheer" or of rights. The first four change nothing;
+`create_skore_evaluation` creates an evaluation, always unpublished,
+`save_skore_grades` saves the grades of one, and `save_skore_feedback` gives
+a pupil the user's feedback on one:
 
 - `list_skore_gradebooks`: the user's own gradebooks of one school year
   (`getGradebookYear`), one line each in Skore's order: the class, the
   course as Skore's left panel names it (with the grade, such as
-  `(6e j DO)`) and the gradebook id; then the school years Skore offers,
+  `(6e j DO)`) and the gradebook id; then those shared with the user, in a
+  section of their own (see below); then the school years Skore offers,
   each with its workyear id. `workyear_id` asks for an earlier school year
   (Skore's current one without it); `query` keeps the gradebooks whose class
   or course holds every word, as for `list_skore_classes`. A school year
@@ -1013,7 +1016,8 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   `workyear_id`; `getFeedback`, one `GET` of Skore's REST API as the
   feedback panel reads it): every feedback text, whoever wrote it, in the
   order written, each with its author (marked when it is the user: the
-  gradebook's teacher, the user for every gradebook of their own), when it
+  logged-in user, by the session's user id, not the gradebook's teacher,
+  who is the owner of a shared gradebook; see below), when it
   was written and last changed (Belgian time), the names of its
   attachments, whether Skore lets the user change it (`canEdit`) and its
   text, line by line. Above it the evaluation (with its publication: the
@@ -1106,12 +1110,59 @@ and `save_skore_feedback` gives a pupil the user's feedback on one:
   times (written, changed) and its text, under the evaluation with its
   publication.
 
+Gradebooks shared with the user (Skore's tab "Gedeeld", #167,
+flutter_smartschool 0.4.0, dartschool#191), such as the behaviour gradebook
+("Gedrag") of a class that its form teacher shared with the co-titularis,
+work as the user's own, with these differences:
+
+- `list_skore_gradebooks` lists them after the user's own, in a section of
+  their own, each with its owner (name and user id) and whether it is
+  shared to read and write or to read only; with none shared, it says
+  nothing of them. They are read with the user's own
+  (`getGradebookYear(includeShared: true)`: one more, small request,
+  `accessableList`, next to the big `getNavigation`, and kept in memory with
+  it for the session), not behind an option: a user does not think of a
+  gradebook a colleague shared with them as another kind and would not know
+  to ask for it, and the other tools need the list anyway to find a shared
+  gradebook's id. `query` looks in them too.
+- The other tools take a shared gradebook's id as an own one's
+  (`SkoreGradebookYears` finds it among both, and says "their own or those
+  colleagues shared with them" when it finds neither). The library opens it
+  as Skore's web client does, in the name of its owner and restricted to
+  it. Every result names the owner: its first line (`Its owner, ... (user
+  id ...), shared it with the user to read and write`, or `to read only`),
+  and the gradebook in every sentence of a write (`gradebook of 5WW2 for
+  Gedrag (gradebook id 34980, owner ...)`). `read_skore_gradebook` says of
+  one shared to read only that the user may not change it, whatever Skore
+  answers. `list_skore_evaluations` lists no components for a shared
+  gradebook: no evaluation is created in one.
+- "The user's own feedback" is the logged-in user's, by the session's user
+  id (`SkoreGradebooks.userId`; `teacherId == userId`, as the library keeps
+  it), never the feedback of the gradebook's teacher, who is the owner of a
+  shared gradebook. `read_skore_feedback` marks only the user's;
+  `save_skore_feedback` changes only the user's, never the owner's, and
+  creates the user's own next to it.
+- `save_skore_feedback` and `save_skore_grades` save in a gradebook shared
+  to read and write, with the same checks; their descriptions tell Claude
+  to name the owner too when it asks the user to confirm. One shared to read
+  only is refused in the server's own words, right after it is found and
+  before it is read, with its owner to ask (`checkSkoreGradebookChangeable`):
+  nothing is sent. The library refuses it too, also one Skore lists as
+  shared to read only by the time of the save
+  (`SmartschoolSkoreGradebookReadOnlyError`), which the server words the
+  same way (`skoreReadOnlyGradebookRefusal`).
+- `create_skore_evaluation` refuses any shared gradebook, also one shared
+  to read and write, before it is read, as the library does: an evaluation
+  is created only in one of the user's own gradebooks; its owner can create
+  it.
+
 The library checks a new evaluation before it saves it (`saveEvaluation`)
 and reads the period again afterwards to confirm it, and the tool reports
 each outcome with what to do next:
 
 - A check that refused the change (`SmartschoolSkoreChangeRefusedError`: a
-  gradebook that is not one of the user's own of the current school year, a
+  gradebook that is not one of the user's own of the current school year,
+  nor one shared with them to write, a
   closed or read-only period, a date outside the school year, a course or
   component Skore does not offer) is passed on with the library's reason
   and what to read again to correct the call (`read_skore_gradebook`,

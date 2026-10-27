@@ -7,9 +7,10 @@ import '../skore/skore_gradebook_format.dart';
 import 'arguments.dart';
 import 'server_tool.dart';
 
-/// `read_skore_gradebook`: one of the user's own gradebooks in Skore, by its
-/// id, with its periods, its pupils and whether Skore lets the user change
-/// it ([SkoreGradebookService.getGradebook], dartschool#148).
+/// `read_skore_gradebook`: one of the user's gradebooks in Skore, their own
+/// or one a colleague shared with them (#167), by its id, with its periods,
+/// its pupils and whether Skore lets the user change it
+/// ([SkoreGradebookService.getGradebook], dartschool#148).
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -18,10 +19,13 @@ ServerTool readSkoreGradebookTool(SmartschoolSession session) => ServerTool(
     name: 'read_skore_gradebook',
     title: 'Read a gradebook in Skore',
     description:
-        'Reads one of the user\'s own gradebooks in Skore, the Smartschool '
+        'Reads one of the user\'s gradebooks in Skore, the Smartschool '
         'module for scores and reports, by its gradebook id from '
-        'list_skore_gradebooks. It gives the periods of the gradebook (such '
-        'as DW1), in Skore\'s order, each with its period id, whether it is '
+        'list_skore_gradebooks: one of their own, or one a colleague shared '
+        'with them, whose owner it names, with whether it is shared to read '
+        'and write or to read only. It gives the periods of the gradebook '
+        '(such as DW1), in Skore\'s order, each with its period id, whether '
+        'it is '
         'open (only an open period takes grades), when it closes '
         '(Smartschool time, Belgium), Skore\'s note on it, and which one '
         'Skore opens the gradebook on (active); the pupils of its class, '
@@ -79,9 +83,12 @@ Future<CallToolResult> _read(
 }
 
 /// What `read_skore_gradebook` answers: the gradebook of [sheet] (of school
-/// year [workyear]), whether the user may change it, its periods and its
-/// pupils. A gradebook without evaluation periods says so instead of
-/// whether the user may change it (Skore is not asked then); one with
+/// year [workyear]; for one a colleague shared with the user, its owner and
+/// what the user may do in it), whether the user may change it, its periods
+/// and its pupils. One shared to read only says the user may not change it,
+/// whatever Skore answers (#167): the write tools refuse it. A gradebook
+/// without evaluation periods says so instead of whether the user may
+/// change it (Skore is not asked then); one with
 /// report periods only, such as a behaviour gradebook (#168), also where
 /// its course comments are ([skoreReportPeriodsOnlyNote]).
 String formatSkoreGradebookSheet(
@@ -100,6 +107,9 @@ String formatSkoreGradebookSheet(
     else if (periods.isEmpty)
       'It has ${formatSkoreMissingPeriods(sheet)}, so it has no evaluations '
           'and takes no grades.'
+    else if (sheet.gradebook.access == SkoreGradebookAccess.read)
+      'The user may read it, not change it: it is shared with them to read '
+          'only.'
     else if (sheet.isCoordinator)
       'Skore opens it read-only for the user, in coordinator mode.'
     else if (sheet.writable)

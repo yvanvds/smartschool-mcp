@@ -145,7 +145,9 @@ void main() {
   group('list_skore_gradebooks', () {
     test('lists the gradebooks of Skore\'s current school year in Skore\'s '
         'order, each once, with the school years Skore offers; one '
-        'getNavigation as the user, without a school year', () async {
+        'getNavigation as the user, without a school year, and the '
+        'gradebooks shared with the user (none here: nothing is said of '
+        'them)', () async {
       expect(
         await list(),
         'The user has 4 gradebooks of their own in Skore for school year '
@@ -158,11 +160,14 @@ void main() {
         '- 5WW1 | Project 1 (3e graad) | gradebook id 34582\n'
         '$_schoolYears',
       );
-      expect(skore.calls, ['getNavigation']);
-      final call = skore.requests.single;
-      expect(call.params, [fakeSkoreGradebookUser, 0]);
-      expect(call.session['teacher'], fakeSkoreGradebookUser);
-      expect(call.session['restriction'], 0);
+      expect(skore.calls, ['getNavigation', 'accessableList']);
+      final [navigation, shared] = skore.requests;
+      expect(navigation.params, [fakeSkoreGradebookUser, 0]);
+      expect(shared.params, [fakeSkoreGradebookUser]);
+      for (final call in skore.requests) {
+        expect(call.session['teacher'], fakeSkoreGradebookUser);
+        expect(call.session['restriction'], 0);
+      }
     });
 
     test('an earlier school year by its workyear_id', () async {
@@ -175,7 +180,7 @@ void main() {
         'School years in Skore: 2026-2027 (workyear id 24), 2025-2026 '
         '(workyear id 22, listed here), 2024-2025 (workyear id 20).',
       );
-      expect(skore.calls, ['getNavigation wy=22']);
+      expect(skore.calls, ['getNavigation wy=22', 'accessableList wy=22']);
     });
 
     test('a school year without gradebooks: a sentence naming it, not an '
@@ -283,10 +288,11 @@ void main() {
         );
         expect(skore.calls, [
           'getNavigation',
+          'accessableList',
           'init wy=24',
           'getGradebookContext wy=24',
         ]);
-        expect(skore.requests[1].params, [
+        expect(skore.requests[2].params, [
           ['2264'],
           ['32508'],
           fakeSkoreGradebookUser,
@@ -294,7 +300,7 @@ void main() {
           0,
           0,
         ]);
-        expect(skore.requests[2].params, [
+        expect(skore.requests[3].params, [
           ['176', '472', '2440'],
           ['2264'],
           ['32508'],
@@ -331,6 +337,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation wy=22',
+        'accessableList wy=22',
         'init wy=22',
         'getGradebookContext wy=22',
       ]);
@@ -343,6 +350,7 @@ void main() {
       expect(await read(28998), startsWith('Gradebook id 28998: '));
       expect(skore.calls, [
         'getNavigation wy=22',
+        'accessableList wy=22',
         'init wy=22',
         'getGradebookContext wy=22',
       ]);
@@ -390,20 +398,25 @@ void main() {
       await list();
       expect(
         await error('read_skore_gradebook', {'gradebook_id': 99999}),
-        'None of the user\'s own gradebooks in Skore of school year 2026-2027 '
-        '(workyear id 24) has gradebook id 99999. Take the gradebook id from '
+        'None of the user\'s gradebooks in Skore of school year 2026-2027 '
+        '(workyear id 24), their own or those colleagues shared with them, '
+        'has gradebook id 99999. Take the gradebook id from '
         'list_skore_gradebooks; for a gradebook of an earlier school year, '
         'pass its workyear_id too, as list_skore_gradebooks lists the school '
         'years.',
       );
-      expect(skore.calls, ['getNavigation', 'getNavigation']);
+      expect(skore.calls.where((c) => c.startsWith('getNavigation')), [
+        'getNavigation',
+        'getNavigation',
+      ]);
       expect(
         await error('read_skore_gradebook', {
           'gradebook_id': 32508,
           'workyear_id': 22,
         }),
-        'None of the user\'s own gradebooks in Skore of school year 2025-2026 '
-        '(workyear id 22) has gradebook id 32508. Take the gradebook id from '
+        'None of the user\'s gradebooks in Skore of school year 2025-2026 '
+        '(workyear id 22), their own or those colleagues shared with them, '
+        'has gradebook id 32508. Take the gradebook id from '
         'list_skore_gradebooks with workyear_id 22.',
       );
     });
@@ -415,7 +428,7 @@ void main() {
         contains('pass its workyear_id too'),
       );
       // Nothing was in memory: one read of Skore's current school year.
-      expect(skore.calls, ['getNavigation']);
+      expect(skore.calls, ['getNavigation', 'accessableList']);
     });
 
     test('read-only for the user, in coordinator mode, or without periods '
@@ -632,7 +645,7 @@ void main() {
       await error('list_skore_gradebooks');
       skore.unusable = false;
       expect(await list(), startsWith('The user has 4 gradebooks'));
-      expect(skore.calls, ['getNavigation', 'getNavigation']);
+      expect(skore.calls, ['getNavigation', 'getNavigation', 'accessableList']);
     });
   });
 

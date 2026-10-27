@@ -81,10 +81,12 @@ List<String> _saveCalls(int count) => [
 ];
 
 /// The tool's own reads before the library is asked, the first time: the
-/// gradebooks of the current school year, the gradebook, and the period
-/// that holds the evaluation.
+/// gradebooks of the current school year (the user's own, and those shared
+/// with them, #167), the gradebook, and the period that holds the
+/// evaluation.
 const _toolReads = [
   'getNavigation',
+  'accessableList',
   'init wy=24',
   'getGradebookContext wy=24',
   'getEvaluations wy=24',
@@ -884,9 +886,9 @@ void main() {
     // year from memory) and saved each grade once.
     final beforeSave = _saveCalls(0).sublist(0, 4);
     expect(skore.calls, [
-      ..._toolReads.skip(1),
+      ..._toolReads.skip(2),
       ...beforeSave,
-      ..._toolReads.skip(1),
+      ..._toolReads.skip(2),
       ..._saveCalls(2),
     ]);
     expect(skore.gradeSaves, [

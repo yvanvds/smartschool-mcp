@@ -280,6 +280,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -293,7 +294,7 @@ void main() {
         '2264',
         ['176', '472', '2440'],
       ]);
-      final read = skore.requests[3];
+      final read = skore.requests[4];
       expect(read.params, [
         1704,
         fakeSkoreGradebookUser,
@@ -333,6 +334,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation wy=22',
+        'accessableList wy=22',
         'init wy=22',
         'getGradebookContext wy=22',
         'getEvaluations wy=22',
@@ -377,7 +379,7 @@ void main() {
         'class 6WEWI2, school year 2026-2027 (workyear id 24).\n'
         'It has no evaluation periods yet, so it has no evaluations.',
       );
-      expect(skore.calls, ['getNavigation', 'init wy=24']);
+      expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
     });
 
     test('a gradebook with report periods only, as Skore shows the behaviour '
@@ -477,6 +479,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -670,6 +673,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',
@@ -758,9 +762,10 @@ void main() {
       expect(
         await error('list_skore_evaluations', {'gradebook_id': 99999}),
         startsWith(
-          'None of the user\'s own gradebooks in Skore of school year '
-          '2026-2027 (workyear id 24) has gradebook id 99999. Take the '
-          'gradebook id from list_skore_gradebooks',
+          'None of the user\'s gradebooks in Skore of school year 2026-2027 '
+          '(workyear id 24), their own or those colleagues shared with them, '
+          'has gradebook id 99999. Take the gradebook id from '
+          'list_skore_gradebooks',
         ),
       );
       expect(evaluationReads(), isEmpty);
@@ -1052,6 +1057,7 @@ void main() {
       );
       expect(skore.calls, [
         'getNavigation',
+        'accessableList',
         'init wy=24',
         'getGradebookContext wy=24',
         'getEvaluations wy=24',

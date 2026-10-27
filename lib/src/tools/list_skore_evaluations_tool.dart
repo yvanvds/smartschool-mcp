@@ -10,7 +10,8 @@ import 'arguments.dart';
 import 'server_tool.dart';
 
 /// `list_skore_evaluations`: the evaluations of one period of one of the
-/// user's own gradebooks in Skore, with their publication and the pupils'
+/// user's gradebooks in Skore (their own, or one a colleague shared with
+/// them, #167), with their publication and the pupils'
 /// grades ([SkoreGradebookService.getEvaluations], dartschool#149); or one
 /// evaluation, with a line per pupil.
 ///
@@ -30,7 +31,8 @@ import 'server_tool.dart';
 /// can count for ([SkoreGradebookService.getComponents], one small request),
 /// with the one `create_skore_evaluation` takes without a component (#142):
 /// the period's list is what Claude reads before it creates an evaluation,
-/// so the user sees the component before confirming.
+/// so the user sees the component before confirming. Not for a gradebook a
+/// colleague shared with the user: no evaluation is created in one (#167).
 ///
 /// When an evaluation it shows is on a scale ("Waarderingen", such as for
 /// behaviour), it reads the school's scale once ([readSkoreScaleFor], two
@@ -42,8 +44,9 @@ ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
     title: 'List the evaluations of a period in Skore',
     description:
         'Lists the evaluations (the columns of grades, such as tests and '
-        'tasks) of one period of one of the user\'s own gradebooks in Skore, '
-        'the Smartschool module for scores and reports, with the pupils\' '
+        'tasks) of one period of one of the user\'s gradebooks in Skore, '
+        'the Smartschool module for scores and reports (their own, or one a '
+        'colleague shared with them, whose owner it names), with the pupils\' '
         'grades. Without period_id, the period Skore opens the gradebook on '
         '(active); read_skore_gradebook lists the periods with their period '
         'ids. Per evaluation: its evaluation id (the id to use: Skore\'s '
@@ -68,7 +71,9 @@ ServerTool listSkoreEvaluationsTool(SmartschoolSession session) => ServerTool(
         'evaluations gets a sentence saying so. For an open period, it also '
         'lists the components a new evaluation in it can count for (such as '
         'DW, or geen for none) and the default, for '
-        'create_skore_evaluation. Reading changes nothing in Skore.',
+        'create_skore_evaluation; not for a gradebook shared with the user, '
+        'in which no evaluation is created. Reading changes nothing in '
+        'Skore.',
     inputSchema: Schema.object(
       properties: {
         'gradebook_id': Schema.int(
@@ -160,7 +165,7 @@ Future<CallToolResult> _list(
       evaluations,
       title: title,
       scale: await readSkoreScaleFor(gradebooks, evaluations),
-      components: period.isOpen
+      components: period.isOpen && !sheet.gradebook.isShared
           ? await _components(gradebooks, sheet.gradebook, period)
           : null,
     );
