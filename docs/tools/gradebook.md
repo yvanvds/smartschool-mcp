@@ -435,15 +435,15 @@ The library reads the gradebook, the period and the evaluation again, checks
 every pupil and grade first, and refuses the whole list when one does not
 fit (`SmartschoolSkoreChangeRefusedError`: a grade that is not a number or
 is above the max, a pupil without a cell in the class, a closed or
-read-only period, an evaluation from the planner, a published or scheduled
-one without `allow_published`; one not in points the server refuses first):
-nothing was saved, and the reason is passed on with what to read again
-(`list_skore_evaluations` with the `evaluation_id`, `read_skore_gradebook`).
-The server checks the publication itself first, from the evaluation it has
-just read, so that the refusal says what the pupils would see: the
-library's refusal cannot be told apart from its other ones (dartschool#157,
-removal tracked in #148). When the evaluation is published between the two
-reads, the library's own reason is passed on.
+read-only period, an evaluation from the planner; one not in points the
+server refuses first): nothing was saved, and the reason is passed on with
+what to read again (`list_skore_evaluations` with the `evaluation_id`,
+`read_skore_gradebook`). A published or scheduled evaluation without
+`allow_published` is refused with a `SmartschoolSkoreEvaluationPublishedError`
+(dartschool#157), which carries the evaluation as the library read it right
+before the save: the server words that refusal itself, from that
+evaluation, as above (what the pupils would see), also when the evaluation
+was published after the server's own read.
 
 Then the library sends `saveGrade` for each pupil in turn (a failed one does
 not stop the others) and reads the period again once. When it cannot
@@ -490,10 +490,9 @@ result is the feedback as Skore lists it after the save: whether it is new
 or a change of the user's feedback, its times (written, changed) and its
 text, under the evaluation with its publication.
 
-The server reads the gradebook, the pupil, the evaluation (refusing a
-published or scheduled one without `allow_published`, as for the grades)
-and the pupil's feedback (`getFeedback`) before the library is asked, and
-keeps the user's own feedback (by the gradebook's teacher, the user). Two
+The server reads the gradebook, the pupil, the evaluation and the pupil's
+feedback (`getFeedback`) before the library is asked, and keeps the user's
+own feedback (by the gradebook's teacher, the user). Two
 cases get their own words, and nothing is sent: the user has **more than
 one** feedback of their own for the pupil there (the library changes none of
 them, as it cannot tell which one is meant: the user keeps one in
@@ -507,10 +506,13 @@ both (dartschool#158, removal tracked in #149).
 Then the library reads the gradebook, the evaluation and the pupil's
 feedback again and creates the user's feedback
 (`POST /skore/api/v1/gradebook/feedback`) or changes its text
-(`POST .../feedback/{id}`, its attachments sent back as they are). A refusal
-of its checks (also when the feedback changed between the two reads) is
-passed on with what to read again (`read_skore_feedback`,
-`read_skore_gradebook`); a `SmartschoolSkoreError` from the save (Skore
+(`POST .../feedback/{id}`, its attachments sent back as they are). It
+refuses a published or scheduled evaluation without `allow_published`
+before it reads the feedback, and the server words that refusal itself, as
+for the grades (dartschool#157). Another refusal of its checks (also when the
+feedback changed between the two reads) is passed on with what to read
+again (`read_skore_feedback`, `read_skore_gradebook`); a
+`SmartschoolSkoreError` from the save (Skore
 refused it with a `4xx`, whose `title` and `detail` can quote the text, or a
 read before it gave an answer the library cannot use) means nothing was
 saved: the library's message goes to the log only, and the result says Skore
@@ -925,12 +927,14 @@ which are not carried out); `saveAnswerLost` carries a save out and answers
 it with HTTP 500; `onEvaluationSaved` changes how the new evaluation is
 listed (public, or not at all).
 
-A write into an evaluation (the grades, the feedback) first calls
-`checkSkoreWritePublication` (in `skore_gradebook_access.dart`) with the
-evaluation as the tool read it, what it writes and its name: for one that is
-published or scheduled, without `allow_published`, a `ToolError` that says
-what the pupils would see and that `allow_published: true` comes only after
-the user said yes to exactly that (dartschool#157, #148).
+A write into an evaluation (the grades, the feedback) catches the library's
+`SmartschoolSkoreEvaluationPublishedError` around its save and throws
+`skorePublishedEvaluationToolError` (in `skore_gradebook_access.dart`) with
+what it writes and its name: from the evaluation as the library read it
+right before the save (published or scheduled, without `allow_published`),
+a `ToolError` that says what the pupils would see and that
+`allow_published: true` comes only after the user said yes to exactly that
+(dartschool#157).
 `formatSkoreEvaluationName` (in `skore_gradebook_format.dart`) names an
 evaluation in such a sentence. The fake gradebook carries out `saveGrade` as
 the live Skore did in dartschool#151: a grade with a comma is kept with a

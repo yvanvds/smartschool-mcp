@@ -50,7 +50,7 @@ import 'skore_writes.dart';
 // in Skore's current school year only, as the library does
 // ([SkoreGradebookYears.findInCurrentYear]), and into an evaluation its
 // pupils see only when the user said yes to that
-// ([checkSkoreWritePublication]).
+// ([skorePublishedEvaluationToolError]).
 //
 // Unlike the Skore tools of `skore_access.dart` (`SkoreService`, the admin
 // side of Skore, behind the switch "Skore-beheer"), the gradebook needs no
@@ -165,6 +165,10 @@ Future<T> withSkoreGradebook<T>(
 ///   from what it read (ids, a period's name, an evaluation's title) and
 ///   quotes nothing else of Skore's answers, is the reason passed on, with
 ///   [reread] (what to read again), so that Claude can correct the call.
+///   The refusal of a published or scheduled evaluation
+///   (`SmartschoolSkoreEvaluationPublishedError`) is one too, which the
+///   write tools word themselves before it gets here
+///   ([skorePublishedEvaluationToolError]).
 ///
 /// The save that Skore did not confirm
 /// (`SmartschoolSkoreSaveUnconfirmedError` and its subtypes) and a new
@@ -867,36 +871,32 @@ Future<SkoreScale?> readSkoreScaleFor(
   }
 }
 
-/// Refuses [what] (such as `the grades`), which [tool] would write into
-/// [evaluation] of [where] (its period and gradebook, as in `period DW1
-/// (period id 1704) of the gradebook of ...`), when Skore lists the
-/// evaluation as published or scheduled ([SkorePublication.isPublic]),
-/// unless [allowPublished]. What is written into a published evaluation is
+/// The [ToolError] for the library's refusal of [what] (such as `the
+/// grades`), which [tool] would write into an evaluation of [where] (its
+/// period and gradebook, as in `period DW1 (period id 1704) of the gradebook
+/// of ...`) without `allow_published`, as Skore lists the evaluation as
+/// published or scheduled ([SmartschoolSkoreEvaluationPublishedError],
+/// yvanvds/dartschool#157). What is written into a published evaluation is
 /// visible to its pupils at once, and the school sends them a notification;
 /// into a scheduled one, from its publication time on.
 ///
-/// Throws a [ToolError] that says so, and that [tool] takes
+/// The library refuses it from the evaluation as it reads it right before
+/// the save, which [error] carries: nothing was saved. The [ToolError] says
+/// what the pupils would see, from that evaluation, and that [tool] takes
 /// `allow_published: true` only after the user was told exactly that and
-/// said yes to it; nothing is sent. [evaluation] is as the tool read it
-/// right before the write.
-///
-/// The library refuses such a write as well (`allowPublished`), from the
-/// evaluation as it reads it right before the save, but with a
-/// `SmartschoolSkoreChangeRefusedError` that cannot be told apart from its
-/// other refusals, worded for a caller of the library. This check comes
-/// first, so that the refusal tells the user what the pupils would see
-/// (yvanvds/dartschool#157, removal tracked in yvanvds/smartschool-mcp#148).
-/// When the evaluation is published between the two reads, the library's
-/// refusal is passed on as any other.
-void checkSkoreWritePublication(
-  SkoreEvaluation evaluation, {
+/// said yes to it. The library's message, worded for its caller
+/// (`allowPublished`), goes to the log. The write tools catch the error
+/// around the library's save, as only they know [where], [what] and [tool]:
+/// [skoreGradebookToolError] would pass it on as any other refusal.
+ToolError skorePublishedEvaluationToolError(
+  SmartschoolSkoreEvaluationPublishedError error, {
   required String where,
   required String what,
   required String tool,
-  required bool allowPublished,
 }) {
+  log('skore gradebook: $error');
+  final evaluation = error.evaluation;
   final publication = evaluation.publication;
-  if (!publication.isPublic || allowPublished) return;
   final at = publication.at;
   final time = at == null ? null : formatSkoreTime(at);
   final state = switch (publication.state) {
@@ -907,7 +907,7 @@ void checkSkoreWritePublication(
       'PUBLISHED${time == null ? '' : ' since $time'}: its pupils would see '
           '$what at once, and the school sends them a notification',
   };
-  throw ToolError(
+  return ToolError(
     'The ${formatSkoreEvaluationName(evaluation)} in $where is $state. Tell '
     'the user exactly that, and only if the user explicitly says yes to it, '
     'call $tool again with allow_published: true.',

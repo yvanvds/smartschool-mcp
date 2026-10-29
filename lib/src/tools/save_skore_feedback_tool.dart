@@ -36,7 +36,9 @@ const _tool = 'save_skore_feedback';
 /// which the description says.
 ///
 /// An evaluation its pupils see (published or scheduled) is refused unless
-/// `allow_published` is true ([checkSkoreWritePublication]). The tool reads
+/// `allow_published` is true: the library refuses it right before the save,
+/// and the tool says what the pupil would see
+/// ([skorePublishedEvaluationToolError]). The tool reads
 /// the pupil's feedback itself before the library is asked, and refuses in
 /// its own words when the user has more than one feedback of their own
 /// there or one Skore does not let them change ([_checkOwnFeedback]): the
@@ -214,15 +216,6 @@ Future<CallToolResult> _save(
             'Skore in Smartschool itself.',
           );
         }
-        // The library refuses it as well, but its refusal cannot be told
-        // apart from the others (dartschool#157, #148).
-        checkSkoreWritePublication(
-          evaluation,
-          where: where,
-          what: 'the feedback',
-          tool: _tool,
-          allowPublished: allowPublished,
-        );
         // The user's own feedback, as the library keeps to it: by the
         // logged-in user, not by the gradebook's teacher, who is the owner
         // of a gradebook shared with the user (#167).
@@ -255,6 +248,13 @@ Future<CallToolResult> _save(
             allowPublished: allowPublished,
           );
           return (to, saved);
+        } on SmartschoolSkoreEvaluationPublishedError catch (error) {
+          throw skorePublishedEvaluationToolError(
+            error,
+            where: where,
+            what: 'the feedback',
+            tool: _tool,
+          );
         } on SmartschoolSkoreChangeRefusedError {
           rethrow;
         } on SmartschoolSkoreError catch (error) {

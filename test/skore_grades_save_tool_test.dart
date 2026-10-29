@@ -68,14 +68,20 @@ List<Object?> _saveParams(int pupil, String grade, {int evaluation = 500003}) =>
       '32508',
     ];
 
-/// The calls of the library's saveGrades for [count] pupils, after the
-/// tool's own reads: its checks, a saveGrade per pupil, and the period read
-/// again.
-List<String> _saveCalls(int count) => [
+/// The RPC calls of the library's checks before it saves (in one of the
+/// user's own gradebooks, without the gradebooks shared with them).
+const _libraryReads = [
   'getNavigation',
   'init wy=24',
   'getGradebookContext wy=24',
   'getEvaluations wy=24',
+];
+
+/// The calls of the library's saveGrades for [count] pupils, after the
+/// tool's own reads: its checks, a saveGrade per pupil, and the period read
+/// again.
+List<String> _saveCalls(int count) => [
+  ..._libraryReads,
   for (var i = 0; i < count; i++) 'saveGrade wy=24',
   'getEvaluations wy=24',
 ];
@@ -378,8 +384,8 @@ void main() {
     });
 
     group('a published or scheduled evaluation without allow_published: '
-        'refused before the library is asked, saying what the pupils would '
-        'see and that the user must say yes to it', () {
+        'refused by the library right before the save, saying what the '
+        'pupils would see and that the user must say yes to it', () {
       test('published', () async {
         expect(
           await refused({1201: '15'}, {'evaluation_id': 500002}),
@@ -416,7 +422,10 @@ void main() {
 
       tearDown(() {
         expect(skore.gradeSaves, isEmpty);
-        expect(skore.calls, _toolReads, reason: 'the library was not asked');
+        expect(skore.calls, [
+          ..._toolReads,
+          ..._libraryReads,
+        ], reason: 'the library refused it after its checks, saving none');
       });
     });
 
@@ -441,7 +450,8 @@ void main() {
     });
 
     test('published between the tool\'s read and the library\'s: the '
-        'library refuses it, and its reason is passed on', () async {
+        'library refuses it, and the tool says what the pupils would see, '
+        'from the evaluation as the library read it', () async {
       var reads = 0;
       skore.beforeAnswer = (rpc, params) {
         if (rpc == 'getEvaluations' && ++reads == 2) {
@@ -451,15 +461,14 @@ void main() {
 
       expect(
         await refused({1201: '15'}),
-        _refused(
-          'evaluation 500003 ("Toets 1") in period DW1 (1704) of gradebook '
-          '32508 is published (public "1", publicdatetime ""): its pupils see '
-          'what is written in it at once. Pass allowPublished: true to write '
-          'in it anyway.',
-        ),
+        'The $_toetsName in $_where is PUBLISHED: its pupils would see the '
+        'grades at once, and the school sends them a notification. Tell the '
+        'user exactly that, and only if the user explicitly says yes to it, '
+        'call save_skore_grades again with allow_published: true. Nothing was '
+        'changed in Skore.',
       );
       expect(skore.gradeSaves, isEmpty);
-      expect(skore.calls.last, 'getEvaluations wy=24');
+      expect(skore.calls, [..._toolReads, ..._libraryReads]);
     });
 
     group('passes on why Skore refused the change, with what to read again, '
