@@ -8,6 +8,18 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.7.1
+
+- Planner en puntenboek werken weer. Sinds Smartschool onlangs zijn pagina's
+  veranderde, lukte het niet meer om je eigen planner te bekijken, er iets in
+  te plannen of te wijzigen, je puntenboeken te openen en de verbinding te
+  controleren.
+- Verandert Smartschool zijn pagina's nog eens zo, dan zegt Claude dat, en
+  dat een nieuwere versie kan helpen, in plaats van een onverwachte fout te
+  melden.
+- Leerlingvolgsysteem, handelingsplan: de punten die je zelf schreef, staan
+  eerst. Zoeken op een vak vindt ook de punten die voor dat vak gepland zijn.
+
 ## 0.7.0
 
 - Puntenboek, rapporten: per leerling de punten tot nu toe en het
