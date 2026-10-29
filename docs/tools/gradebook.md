@@ -289,10 +289,10 @@ gradebook tools' calls on it.
 For an open period, a last line lists the components a new evaluation in it
 can count for (`getComponents`, one small request: `geen` for none and, for
 instance, `DW`), each with its component id, and the default
-`create_skore_evaluation` takes without a component: the library's rule, the
-second when Skore offers exactly two, else `geen` (none when it offers no
-`geen`). The library keeps that rule private, so the server repeats it
-(`skoreDefaultComponent`, dartschool#156, to be removed in #147). Components
+`create_skore_evaluation` takes without a component, as the library picks it
+(`SkoreGradebookService.defaultComponent`, flutter_smartschool 0.4.1,
+dartschool#156): the second when Skore offers exactly two, else `geen` (none
+when it offers no `geen`). Components
 Skore gives in a shape the library does not know leave the evaluations
 listed, with a line that says the components could not be read. A closed
 period gets no line, and its components are not read: no evaluation can be
@@ -914,8 +914,7 @@ for the tool to report: the first with `skoreWriteNotConfirmed` of
 library's method name and closing sentence off a refusal, for the Skore
 tools and the gradebook tools alike.
 `SkoreGradebookYears.findInCurrentYear` finds a gradebook of Skore's current
-school year, the only one the library writes in, and `skoreDefaultComponent`
-repeats the library's default component (dartschool#156, #147). The fake
+school year, the only one the library writes in. The fake
 gradebook answers the "new evaluation" dialog (`getNewEvalDialogBox`, the
 gradebook's course; `getPosComponents`, a gradebook's `components`) and
 carries out `saveEvaluation` as the live Skore did in dartschool#150: the

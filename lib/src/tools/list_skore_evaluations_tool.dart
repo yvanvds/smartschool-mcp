@@ -180,7 +180,8 @@ Future<CallToolResult> _list(
 }
 
 /// The line about the components a new evaluation in the open [period] of
-/// [gradebook] can count for, and the default (`skoreDefaultComponent`).
+/// [gradebook] can count for, and the default
+/// ([SkoreGradebookService.defaultComponent]).
 ///
 /// An answer the library cannot use is logged, and the line says the
 /// components could not be read: the evaluations are what was asked for,
@@ -201,7 +202,7 @@ Future<String> _components(
   if (components.isEmpty) {
     return 'Skore offers no components for a new evaluation in this period.';
   }
-  final byDefault = skoreDefaultComponent(components);
+  final byDefault = SkoreGradebookService.defaultComponent(components);
   return 'Components a new evaluation in this period can count for '
       '(create_skore_evaluation\'s component): '
       '${formatSkoreComponents(components)}. '

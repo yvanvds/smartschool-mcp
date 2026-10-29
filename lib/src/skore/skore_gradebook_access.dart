@@ -758,25 +758,6 @@ Future<SkoreReport> readSkoreReport(
   }
 }
 
-/// The component [SkoreGradebookService.createEvaluation] gives a new
-/// evaluation when it is called without a `componentId`, of the
-/// [components] Skore offers for the period
-/// ([SkoreGradebookService.getComponents]): the second when Skore offers
-/// exactly two (`geen` and the period's component, such as `DW`), else
-/// `geen`. Null when it offers no `geen` either: the library then refuses a
-/// new evaluation without a component.
-///
-/// The library's rule, as its doc comment states it, repeated here because
-/// the library keeps it private (`_component`): yvanvds/dartschool#156.
-/// Remove it for the library's own once that is released
-/// (yvanvds/smartschool-mcp#147).
-SkoreEvaluationComponent? skoreDefaultComponent(
-  List<SkoreEvaluationComponent> components,
-) {
-  if (components.length == 2) return components[1];
-  return components.where((c) => c.isNone).firstOrNull;
-}
-
 /// An evaluation of a gradebook found by its id ([findSkoreEvaluation]):
 /// the period it is in, the evaluations of that period as Skore listed them
 /// in the same answer, and the evaluation, with its publication and grades.

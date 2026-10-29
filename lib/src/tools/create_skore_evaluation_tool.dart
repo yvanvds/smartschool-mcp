@@ -338,7 +338,7 @@ SkoreEvaluationComponent _component(
       'can be asked for.',
     );
   }
-  final byDefault = skoreDefaultComponent(components);
+  final byDefault = SkoreGradebookService.defaultComponent(components);
   final orDefault = byDefault == null
       ? ''
       : ', or leave out component for ${skoreName(byDefault.name)} (the '
