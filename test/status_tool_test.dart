@@ -328,6 +328,25 @@ void main() {
       );
     });
 
+    test('when the start page holds no signed-in user: NOT working, says '
+        'that Smartschool probably changed its pages (#181)', () async {
+      server.userOnPages = false;
+
+      final (result, text) = await status();
+
+      expect(result.isError, isNot(true));
+      expect(
+        text,
+        startsWith(
+          'Smartschool connection: NOT working\n'
+          'Problem: Smartschool accepted the login, but its page does not '
+          'say who is signed in.',
+        ),
+      );
+      expect(text, isNot(contains('unexpected error')));
+      expectNoSecretsOrTraces(text);
+    });
+
     test('when Smartschool asks for a 2FA code: NOT working, says the '
         'account uses 2FA and names "2FA-sleutel"; a second call does not '
         'contact Smartschool', () async {

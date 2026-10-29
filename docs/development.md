@@ -618,6 +618,17 @@ step of the send that Smartschool refused the session for, the upload of an
 attachment and the submit included, sent nothing, so `run` may repeat it
 (see `submitOnce` in `lib/src/tools/message_sending.dart`).
 
+Some tools need the signed-in user, which `flutter_smartschool` reads from
+the data a Smartschool page hands to its JavaScript: the own planner and the
+planner writes, the gradebooks, and `smartschool_status`. When Smartschool
+accepts the session, but its page does not name the user
+(`SmartschoolAuthenticatedUserNotFoundError`, yvanvds/dartschool#214), those
+tools say that Smartschool probably changed its pages, and that
+`smartschool_status` shows whether a newer version is available. That is
+not "an unexpected error", and logging in again does not help, so `run` does
+not repeat it. It happened in 2026-10, when Smartschool changed the scripts
+that hand the data over (yvanvds/dartschool#212, #181).
+
 ## Update check
 
 At startup, in the background (startup never waits for it), the server asks
