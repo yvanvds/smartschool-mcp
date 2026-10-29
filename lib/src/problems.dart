@@ -54,6 +54,13 @@ enum ProblemKind {
   /// example in the web client ([SmartschoolPagingRestartedError]).
   listingRestarted(permanent: false),
 
+  /// Smartschool accepted the session, but its page holds no signed-in user
+  /// in its page data ([SmartschoolAuthenticatedUserNotFoundError],
+  /// yvanvds/dartschool#214): Smartschool changed how its pages hand their
+  /// data to their JavaScript, as it did in 2026-10 (yvanvds/dartschool#212),
+  /// or it served an error page instead. Logging in again does not help.
+  userNotOnPage(permanent: false),
+
   /// Anything else.
   unexpected(permanent: false);
 
@@ -141,6 +148,13 @@ final class SmartschoolProblem implements Exception {
             'the same box is opened or listed elsewhere on the account at the '
             'same time, for example in Smartschool in the browser or in '
             'another app. Try again in a moment.',
+      ProblemKind.userNotOnPage =>
+        'Smartschool accepted the login, but its page does not say who is '
+            'signed in. Smartschool has probably changed its pages in a way '
+            'this version of the extension cannot read: smartschool_status '
+            'says whether a newer version is available. Trying again only '
+            'helps when Smartschool briefly showed an error page instead. The '
+            'technical details are in the server log.',
       ProblemKind.unexpected =>
         'Talking to Smartschool failed with an unexpected error. Try again '
             'in a moment. If it keeps happening, $restart; the technical '
@@ -196,9 +210,11 @@ final class SmartschoolProblem implements Exception {
 /// [SmartschoolAuthenticationError] (yvanvds/dartschool#11), an unreachable
 /// Smartschool as a [SmartschoolConnectionError], and a session Smartschool
 /// refused, also after the library logged in again where it could, as a
-/// [SmartschoolSessionExpiredError]. Any other
-/// [SmartschoolAuthenticationError] (an unknown step in the login chain, an
-/// HTML page where data was expected) is [ProblemKind.unexpected].
+/// [SmartschoolSessionExpiredError]. A page without the signed-in user in a
+/// session Smartschool accepted is a
+/// [SmartschoolAuthenticatedUserNotFoundError] (yvanvds/dartschool#214). Any
+/// other [SmartschoolAuthenticationError] (an unknown step in the login
+/// chain, an HTML page where data was expected) is [ProblemKind.unexpected].
 /// `test/problems_test.dart` drives the library's real login chain against a
 /// fake Smartschool, so a library update that throws another type fails a
 /// test. A request made on `client.dio` directly still fails with the plain
@@ -243,6 +259,9 @@ ProblemKind? classifyFailure(Object error) {
     case SmartschoolAccountVerificationRequiredError() ||
         SmartschoolAccountVerificationRejectedError():
       return ProblemKind.accountVerification;
+    // Before its superclass, SmartschoolAuthenticationError.
+    case SmartschoolAuthenticatedUserNotFoundError():
+      return ProblemKind.userNotOnPage;
     case SmartschoolAuthenticationError():
       return ProblemKind.unexpected;
   }

@@ -83,6 +83,15 @@ class FakeSmartschool implements HttpClientAdapter {
   /// When set, every request fails the way an unreachable host does.
   bool unreachable = false;
 
+  /// When cleared, the start page holds no signed-in user in its page data,
+  /// as when Smartschool changes how its pages hand their data to their
+  /// JavaScript (yvanvds/dartschool#212) or serves an error page: the
+  /// library then throws a `SmartschoolAuthenticatedUserNotFoundError`
+  /// (yvanvds/dartschool#214).
+  bool userOnPages = true;
+
+  String get _startPage => userOnPages ? _homePage : _homePageWithoutUser;
+
   /// How many requests right after a successful login Smartschool still
   /// refuses (a GET sent to `/login`, a POST answered with 401, or with
   /// `302 Location: /` for Skore's gradebook) although the login went
@@ -281,7 +290,7 @@ class FakeSmartschool implements HttpClientAdapter {
     }
     if (_startPageAfterTwoFactor && path == '/') {
       _startPageAfterTwoFactor = false;
-      return _html(_homePage);
+      return _html(_startPage);
     }
     if (_rejectsLeft > 0) {
       _rejectsLeft--;
@@ -297,7 +306,7 @@ class FakeSmartschool implements HttpClientAdapter {
         planner.respond(options, cancelled: cancelled) ??
         skore.respond(options) ??
         skoreGradebook.respond(options) ??
-        _html(_homePage);
+        _html(_startPage);
   }
 
   @override
@@ -379,10 +388,29 @@ const _accountVerificationPage = '''
 
 /// Smartschool's start page, with the account [userId] as the
 /// `authenticatedUser` the library reads at login.
-String _homePageOf(int userId) =>
+String _homePageOf(int userId) => _pageWithData(
+  '{"vars":{"authenticatedUser":{"id":"12_${userId}_0",'
+  '"name":{"startingWithFirstName":"$fakeDisplayName"}}}}',
+);
+
+/// Smartschool's start page without a signed-in user in its page data
+/// ([FakeSmartschool.userOnPages]).
+final _homePageWithoutUser = _pageWithData('{"vars":{"schoolName":"School"}}');
+
+/// A Smartschool page that hands [json] to its JavaScript the way
+/// Smartschool's pages do since 2026-10 (`smscMergeJsVariables`), which
+/// flutter_smartschool reads since 0.4.1 (yvanvds/dartschool#212). Before,
+/// they did so with `extend`, the only form 0.4.0 read.
+String _pageWithData(String json) =>
     '''
 <html><head>
-<script type="text/javascript">\$.extend(true, SMSC, JSON.parse('{"vars":{"authenticatedUser":{"id":"12_${userId}_0","name":{"startingWithFirstName":"$fakeDisplayName"}}}}'));</script>
+<script type="text/javascript" nonce="fake-nonce">
+    (function (data) {
+        if (data && typeof data === 'object') {
+            window.smscMergeJsVariables(window.SMSC, data);
+        }
+    })(JSON.parse('$json'));
+</script>
 </head><body>home</body></html>
 ''';
 

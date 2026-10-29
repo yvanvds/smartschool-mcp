@@ -97,6 +97,21 @@ void main() {
       expect(classifyFailure(error), ProblemKind.sessionRejected);
     });
 
+    test('a start page without the signed-in user after the login: its own '
+        'kind, not "unexpected" (#181)', () async {
+      final server = FakeSmartschool()..userOnPages = false;
+      final client = await fakeClientFactory(server, await tempCache())(
+        FakeCredentials(),
+      );
+      final error = await client.getCurrentUser().then<Object>(
+        (_) => fail('the user was found'),
+        onError: (Object error) => error,
+      );
+      expect(error, isA<SmartschoolAuthenticatedUserNotFoundError>());
+      expect(server.logins, 1);
+      expect(classifyFailure(error), ProblemKind.userNotOnPage);
+    });
+
     test('a 2FA key that is not a key: its own type, before the password is '
         'posted (yvanvds/dartschool#79)', () async {
       // The 6-digit code of the app, and a key with a "1".
@@ -397,6 +412,23 @@ void main() {
           contains('listed elsewhere on the account'),
           contains('in the browser'),
           contains('Try again in a moment.'),
+        ),
+      );
+      expect(text, isNot(contains('restart Claude Desktop')));
+      expect(text, isNot(contains('SMARTSCHOOL_')));
+    });
+
+    test('a page without the signed-in user says that Smartschool probably '
+        'changed its pages and where to look for a newer version, not to '
+        'fix a setting (#181)', () {
+      final text = message(ProblemKind.userNotOnPage);
+      expect(
+        text,
+        allOf(
+          contains('does not say who is signed in'),
+          contains('Smartschool has probably changed its pages'),
+          contains('smartschool_status says whether a newer version'),
+          contains('server log'),
         ),
       );
       expect(text, isNot(contains('restart Claude Desktop')));
