@@ -462,6 +462,19 @@ void main() {
     expect(status, contains('\nSettings: $_settingsLabel (all filled in)'));
     expect(listError, isTrue);
     expect(list, startsWith(unreachable));
+    // On Linux there is no PC with Windows and no extension (#201).
+    final problem = status.split('\n')[1];
+    final computer = Platform.isLinux ? 'this computer' : 'this PC';
+    expect(
+      problem,
+      contains('Check the internet connection of $computer, and check that '),
+    );
+    if (Platform.isLinux) {
+      for (final text in [problem, list]) {
+        expect(text, isNot(contains('Windows')));
+        expect(text, isNot(contains('extension')));
+      }
+    }
 
     await server.stop();
     final log = await server.stderr;

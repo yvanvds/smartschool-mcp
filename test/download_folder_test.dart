@@ -263,7 +263,15 @@ void main() {
       final stat = File(saved.path).statSync();
       expect(manifest(path), {
         'format': DownloadFolder.manifestFormat,
-        'about': contains('never touches other files'),
+        // On Linux there is no extension (#201).
+        'about': allOf(
+          contains(
+            Platform.isLinux
+                ? 'The files the Smartschool MCP server saved'
+                : 'The files the Smartschool extension saved',
+          ),
+          contains('never touches other files'),
+        ),
         'cleaned_at': now.toIso8601String(),
         'files': [
           {

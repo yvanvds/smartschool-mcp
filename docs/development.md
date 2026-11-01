@@ -263,7 +263,11 @@ calls itself, the messages name only the variable (`SMARTSCHOOL_MFA`), say
 to set it in the server's configuration in the MCP client (with a link to
 `docs/installatie-linux.md`) and to "restart the MCP client" (#199). Which
 of the three applies is `SettingsHome` in `lib/src/settings.dart`, from the
-app and `ClientContext.platform` (`ServerPlatform`).
+app and `ClientContext.platform` (`ServerPlatform`). The login problem
+messages (`lib/src/problems.dart`) also read the platform, from
+`CredentialSource.platform`: on Linux they name "the Smartschool MCP server"
+instead of the extension and give `timedatectl set-ntp true` instead of
+Windows Settings for the clock (#201).
 
 **Mistyped keys.** Codex starts a server with a cleared environment: a fixed
 list of Windows variables (`WINDOWS_CORE_ENV_VARS` in openai/codex) plus the

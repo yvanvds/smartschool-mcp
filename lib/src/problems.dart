@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import 'client_app.dart' show ServerPlatform;
 import 'settings.dart';
 
 /// Why logging in to or talking to Smartschool failed.
@@ -89,6 +90,15 @@ final class SmartschoolProblem implements Exception {
     final source = settings.source;
     String name(Setting setting) => source.name(setting);
     final restart = source.restart;
+    // On Linux the binary runs in an MCP client: no extension, no Windows
+    // Settings (#201).
+    final linux = source.platform == ServerPlatform.linux;
+    final computer = linux ? 'this computer' : 'this PC';
+    final server = linux ? 'the Smartschool MCP server' : 'the extension';
+    final clockHint = linux
+        ? 'turn on its automatic time, for example with timedatectl '
+              'set-ntp true'
+        : 'Windows Settings → Time & language → Set time automatically';
     return SmartschoolProblem(kind, switch (kind) {
       ProblemKind.missingSettings => _missing(source, settings.missing),
       ProblemKind.credentialsFileMissing ||
@@ -113,9 +123,8 @@ final class SmartschoolProblem implements Exception {
         'Smartschool rejected the two-factor authentication (2FA) code. '
             'Check ${name(Setting.mfa)} ${source.where}: it must be the key '
             'Smartschool shows when you add an authenticator app, not a '
-            '6-digit code. Also check that the clock of this PC is correct '
-            '(Windows Settings → Time & language → Set time automatically): '
-            'the codes depend on it. Then $restart.',
+            '6-digit code. Also check that the clock of $computer is correct '
+            '($clockHint): the codes depend on it. Then $restart.',
       ProblemKind.twoFactorKeyMissing =>
         'This Smartschool account uses two-factor authentication (2FA): '
             'after the password, Smartschool asks for a code from an '
@@ -124,10 +133,11 @@ final class SmartschoolProblem implements Exception {
             'authenticator app, not the 6-digit code the app shows. Then '
             '$restart.',
       ProblemKind.twoFactorUnsupported =>
-        'Smartschool asks for a kind of two-factor authentication (2FA) this '
-            'extension cannot handle. It only works with an authenticator '
-            'app: set one up in your Smartschool profile, enter its key in '
-            '${name(Setting.mfa)} ${source.where}, then $restart.',
+        'Smartschool asks for a kind of two-factor authentication (2FA) '
+            '${linux ? server : 'this extension'} cannot handle. It only '
+            'works with an authenticator app: set one up in your Smartschool '
+            'profile, enter its key in ${name(Setting.mfa)} ${source.where}, '
+            'then $restart.',
       ProblemKind.accountVerification =>
         'Smartschool asks for account verification (a date of birth) after '
             'the password. That usually means two-factor authentication (2FA) '
@@ -136,7 +146,7 @@ final class SmartschoolProblem implements Exception {
             '${name(Setting.mfa)} ${source.where}, then $restart.',
       ProblemKind.unreachable =>
         'Could not reach Smartschool at ${settings.host}. Check the internet '
-            'connection of this PC, and check that ${name(Setting.mainUrl)} '
+            'connection of $computer, and check that ${name(Setting.mainUrl)} '
             '${source.where} is the address of your school\'s Smartschool '
             '(like school.smartschool.be).',
       ProblemKind.sessionRejected =>
@@ -151,9 +161,9 @@ final class SmartschoolProblem implements Exception {
       ProblemKind.userNotOnPage =>
         'Smartschool accepted the login, but its page does not say who is '
             'signed in. Smartschool has probably changed its pages in a way '
-            'this version of the extension cannot read: smartschool_status '
-            'says whether a newer version is available. Trying again only '
-            'helps when Smartschool briefly showed an error page instead. The '
+            'this version of $server cannot read: smartschool_status says '
+            'whether a newer version is available. Trying again only helps '
+            'when Smartschool briefly showed an error page instead. The '
             'technical details are in the server log.',
       ProblemKind.unexpected =>
         'Talking to Smartschool failed with an unexpected error. Try again '

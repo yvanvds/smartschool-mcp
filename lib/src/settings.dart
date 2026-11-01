@@ -223,6 +223,11 @@ sealed class CredentialSource {
   /// What the teacher restarts after fixing a setting.
   String get restart;
 
+  /// The system the server runs on, for messages that name more than the
+  /// settings: on Linux there is no extension and no Windows Settings
+  /// (`SmartschoolProblem`, #201).
+  ServerPlatform get platform;
+
   /// One line for the startup log saying which source is used.
   String get logDescription;
 
@@ -262,6 +267,10 @@ final class ExtensionSettings extends CredentialSource {
     final client? => SettingsHome.of(client.app, client.platform),
     null => SettingsHome.claudeDesktop,
   };
+
+  /// [ClientContext.platform]; without [client], Windows, as for [home].
+  @override
+  ServerPlatform get platform => client?.platform ?? ServerPlatform.windows;
 
   @override
   Credentials read() => (_read ?? EnvCredentials.new)();
@@ -442,11 +451,17 @@ final class MisnamedSetting {
 /// back to searching the working directory, its parents and the home
 /// directory, so the file's existence is checked first.
 final class CredentialsFile extends CredentialSource {
-  /// [path] is resolved against the current directory.
-  CredentialsFile(String path) : path = File(path).absolute.path;
+  /// [path] is resolved against the current directory. [platform] is
+  /// [ServerPlatform.current] by default; tests pass their own.
+  CredentialsFile(String path, {ServerPlatform? platform})
+    : path = File(path).absolute.path,
+      platform = platform ?? ServerPlatform.current;
 
   /// The absolute path of the file.
   final String path;
+
+  @override
+  final ServerPlatform platform;
 
   @override
   Credentials read() {
