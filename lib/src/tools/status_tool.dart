@@ -133,7 +133,7 @@ String _describeUpdate(
   null => 'Updates: not checked (the update check is turned off)',
   UpdateAvailable(:final release, :final newer) => [
     'Updates: version ${release.version} is available.',
-    UpdateChecker.howToUpdate(release, app),
+    UpdateChecker.howToUpdate(release, app, platform: updates?.platform),
     if (updates != null) ?UpdateChecker.whatIsNew(newer, updates.current),
   ].join('\n'),
   UpToDate(latest: null) => 'Updates: up to date (no release published yet)',

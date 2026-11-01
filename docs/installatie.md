@@ -71,7 +71,8 @@ Je vraagt het gewoon in een gesprek:
   [Veiligheid en privacy](#8-veiligheid-en-privacy).
 
 Gebruik je de ChatGPT-app in plaats van Claude Desktop? Volg dan de
-[installatiegids voor ChatGPT](installatie-chatgpt.md).
+[installatiegids voor ChatGPT](installatie-chatgpt.md). Werk je op Linux?
+Volg dan de [gids voor Linux](installatie-linux.md).
 
 Deze gids legt uit hoe je de extensie installeert, test, gebruikt, bijwerkt en
 weer verwijdert. Lees zeker ook [Veiligheid en privacy](#8-veiligheid-en-privacy)

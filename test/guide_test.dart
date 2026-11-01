@@ -6,7 +6,10 @@
 /// server does it. `docs/installatie-chatgpt.md` must name the release exe,
 /// the folder the installer uses, the keys and the server name the
 /// installer shows, and where ChatGPT keeps the settings, as the server's
-/// messages say. The links within and between the guides must work, and
+/// messages say. `docs/installatie-linux.md` must name the Linux binary the
+/// release publishes and the notice links on Linux, and the settings by
+/// their environment variables. The links within and between the guides
+/// must work, and
 /// the README, the release notes and the extension manifest must link to
 /// them. What the guides say about the pupil tracking system (LVS) must
 /// agree with its tools, and the bug template and `docs/development.md`
@@ -55,6 +58,8 @@ const _chatGptGuidePath = 'docs/installatie-chatgpt.md';
 const _repository = 'https://github.com/yvanvds/smartschool-mcp';
 const _guideUrl = '$_repository/blob/main/$_guidePath';
 const _chatGptGuideUrl = '$_repository/blob/main/$_chatGptGuidePath';
+const _linuxGuidePath = 'docs/installatie-linux.md';
+const _linuxGuideUrl = '$_repository/blob/main/$_linuxGuidePath';
 const _releases = '$_repository/releases';
 const _latestRelease = '$_releases/latest';
 
@@ -1163,6 +1168,51 @@ void main() {
       expect(chatGptGuideUrl, _chatGptGuideUrl);
     });
   });
+
+  group('the Linux guide (#185)', () {
+    final linux = _read(_linuxGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+
+    test('downloads the Linux binary the update notice names on Linux, from '
+        'the latest release, and the release publishes it', () {
+      const asset = UpdateChecker.linuxAssetName;
+      expect(linux, contains('($_latestRelease/download/$asset)'));
+      expect(linux, contains('`$asset`'));
+      expect(linux, contains('chmod +x'));
+      final workflow = _read('.github/workflows/release.yml');
+      expect(workflow, contains('-o $asset'));
+      expect(workflow, contains('linux/$asset'));
+      for (final app in ClientApp.values) {
+        expect(
+          UpdateChecker.assetFor(app, platform: ServerPlatform.linux),
+          asset,
+        );
+        _expectNoticeGives(app, asset, platform: ServerPlatform.linux);
+      }
+    });
+
+    test('is the page the installer names on Linux, and the other guides, '
+        'the README and the release notes link to it', () {
+      expect(linuxGuideUrl, _linuxGuideUrl);
+      expect(notOnWindows.join('\n'), contains(_linuxGuideUrl));
+      expect(_read('README.md'), contains('](docs/installatie-linux.md)'));
+      expect(_read(_guidePath), contains('](installatie-linux.md)'));
+      expect(_read(installNotesFile), contains('($_linuxGuideUrl)'));
+    });
+
+    test('names every setting by its environment variable, and the default '
+        'download folder', () {
+      for (final setting in Setting.values) {
+        expect(linux, contains('| `${setting.envVar}` |'), reason: '$setting');
+      }
+      expect(linux, contains('`~/Downloads/Smartschool`'));
+      expect(
+        DownloadFolder.defaultPath({'HOME': '~'}),
+        Platform.isWindows
+            ? r'~\Downloads\Smartschool'
+            : '~/Downloads/Smartschool',
+      );
+    });
+  });
 }
 
 /// The part of [text] (a guide with every run of white space as one space)
@@ -1185,7 +1235,11 @@ String _subsection(String text, String heading) {
 
 /// Checks that the update notice in [app] gives what the guides say: the
 /// download link of [asset], on GitHub's release pages, and what is new.
-void _expectNoticeGives(ClientApp app, String asset) {
+void _expectNoticeGives(
+  ClientApp app,
+  String asset, {
+  ServerPlatform platform = ServerPlatform.windows,
+}) {
   final link = downloadLink('v9.9.9', asset);
   expect(link, startsWith('$_releases/'));
   final release = Release(
@@ -1196,7 +1250,7 @@ void _expectNoticeGives(ClientApp app, String asset) {
     notes: '- Iets nieuws.',
   );
   expect(
-    UpdateChecker.howToUpdate(release, app),
+    UpdateChecker.howToUpdate(release, app, platform: platform),
     startsWith('Give the user this download link: $link\n'),
   );
   expect(

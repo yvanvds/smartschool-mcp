@@ -7,6 +7,8 @@ build/
 
 # Compiled executables (`dart compile exe` writes bin/smartschool_mcp.exe)
 *.exe
+bin/smartschool_mcp
+smartschool-mcp-linux-x64
 
 # Claude Desktop extension packaging
 *.mcpb

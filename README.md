@@ -10,14 +10,18 @@ executable that installs itself for ChatGPT (see
 It is written in Dart on top of
 [`flutter_smartschool`](https://github.com/yvanvds/dartschool) and
 [`dart_mcp`](https://pub.dev/packages/dart_mcp), and compiles to a standalone
-Windows executable, so users do not need Node, Python or Dart installed.
+executable for Windows and Linux x64, so users do not need Node, Python or
+Dart installed.
 
 **Colleagues:** the installation guide, in Dutch, is
 [docs/installatie.md](docs/installatie.md). It covers what you need, finding
 the 2FA key (only for an account with 2FA), installing, testing, example
 questions, updating, troubleshooting, security and privacy, and uninstalling.
 For the ChatGPT app it is
-[docs/installatie-chatgpt.md](docs/installatie-chatgpt.md).
+[docs/installatie-chatgpt.md](docs/installatie-chatgpt.md). On Linux, where
+each release also ships a standalone binary (`smartschool-mcp-linux-x64`)
+that you configure in your MCP client, it is
+[docs/installatie-linux.md](docs/installatie-linux.md).
 
 ## Tool areas
 

@@ -11,6 +11,20 @@ import 'log.dart';
 import 'release_notes.dart' as release_notes;
 import 'version.dart';
 
+/// The system the server runs on, which decides the file an update needs.
+enum ServerPlatform {
+  /// Windows: the Claude Desktop extension and the self-installing exe.
+  windows,
+
+  /// Linux (x64): the standalone binary, configured in the MCP client.
+  linux;
+
+  /// The system this process runs on. Anything but Linux counts as
+  /// Windows: releases only have files for these two.
+  static ServerPlatform get current =>
+      Platform.isLinux ? ServerPlatform.linux : ServerPlatform.windows;
+}
+
 /// A release of this server published on GitHub.
 final class Release {
   const Release(
@@ -26,14 +40,14 @@ final class Release {
   /// The release's tag, e.g. `v0.2.0`.
   final String tag;
 
-  /// The release page (GitHub's `html_url`), where the `.mcpb` and `.exe`
-  /// files are.
+  /// The release page (GitHub's `html_url`), where the `.mcpb`, `.exe` and
+  /// Linux files are.
   final Uri url;
 
   /// The direct download links (GitHub's `browser_download_url`) of the
-  /// files the update needs ([UpdateChecker.assetName] and
-  /// [UpdateChecker.exeAssetName]), by file name; a file the release does not
-  /// have is missing.
+  /// files the update needs ([UpdateChecker.assetName],
+  /// [UpdateChecker.exeAssetName] and [UpdateChecker.linuxAssetName]), by
+  /// file name; a file the release does not have is missing.
   final Map<String, Uri> assets;
 
   /// What is new in this release, for the user: the section under
@@ -42,9 +56,11 @@ final class Release {
   /// have no such section (releases from before `CHANGELOG.md`).
   final String? notes;
 
-  /// The direct download link of the file the user needs in [app], or null
-  /// when the release does not have it.
-  Uri? download(ClientApp app) => assets[UpdateChecker.assetFor(app)];
+  /// The direct download link of the file the user needs in [app] on
+  /// [platform] ([ServerPlatform.current] by default), or null when the
+  /// release does not have it.
+  Uri? download(ClientApp app, {ServerPlatform? platform}) =>
+      assets[UpdateChecker.assetFor(app, platform: platform)];
 
   /// The version in a release [tag] such as `v1.2.3` (the `v` is optional),
   /// or null when the tag is not a semantic version.
@@ -116,7 +132,9 @@ final class UpdateChecker {
     this.timeout = const Duration(seconds: 5),
     this.interval = const Duration(hours: 24),
     DateTime Function()? clock,
+    ServerPlatform? platform,
   }) : endpoint = endpoint ?? defaultEndpoint,
+       platform = platform ?? ServerPlatform.current,
        current = Version.parse(currentVersion),
        _clock = clock ?? DateTime.now;
 
@@ -187,6 +205,13 @@ final class UpdateChecker {
   /// (`lib/src/install.dart`).
   static const exeAssetName = 'smartschool-mcp.exe';
 
+  /// The name of the Linux x64 binary attached to every release (since
+  /// #185), which the user configures in their MCP client.
+  static const linuxAssetName = 'smartschool-mcp-linux-x64';
+
+  /// The files of a release the update check keeps the links of.
+  static const assetNames = {assetName, exeAssetName, linuxAssetName};
+
   /// The heading of the section of a release's notes that says what is new
   /// in it, for the user: [release_notes.notesHeading], which
   /// `tool/release_notes.dart` puts at the top of the notes.
@@ -204,23 +229,38 @@ final class UpdateChecker {
   /// ignored and overwritten.
   static const stateFormat = 2;
 
-  /// The file the user downloads to update in [app].
-  static String assetFor(ClientApp app) => switch (app) {
-    ClientApp.claudeDesktop => assetName,
-    ClientApp.codex => exeAssetName,
-  };
+  /// The file the user downloads to update in [app] on [platform]
+  /// ([ServerPlatform.current] by default). On Linux that is always the
+  /// Linux binary: the extension and the exe are Windows only.
+  static String assetFor(ClientApp app, {ServerPlatform? platform}) =>
+      switch ((platform ?? ServerPlatform.current, app)) {
+        (ServerPlatform.linux, _) => linuxAssetName,
+        (ServerPlatform.windows, ClientApp.claudeDesktop) => assetName,
+        (ServerPlatform.windows, ClientApp.codex) => exeAssetName,
+      };
 
-  /// What the user needs to update to [release] in [app], in lines for a
-  /// tool result: the direct download link of the file for [app] (the
-  /// release page when the release does not have that file), what to do
-  /// with it, and the release page.
-  static String howToUpdate(Release release, ClientApp app) {
-    final asset = assetFor(app);
-    final download = release.download(app);
+  /// What the user needs to update to [release] in [app] on [platform]
+  /// ([ServerPlatform.current] by default), in lines for a tool result: the
+  /// direct download link of the file for [app] (the release page when the
+  /// release does not have that file), what to do with it, and the release
+  /// page.
+  static String howToUpdate(
+    Release release,
+    ClientApp app, {
+    ServerPlatform? platform,
+  }) {
+    final on = platform ?? ServerPlatform.current;
+    final asset = assetFor(app, platform: on);
+    final download = release.download(app, platform: on);
     final from = download == null ? 'from the release page' : 'with that link';
-    final steps = switch (app) {
-      ClientApp.claudeDesktop => 'download $asset $from and double-click it',
-      ClientApp.codex =>
+    final steps = switch ((on, app)) {
+      (ServerPlatform.linux, _) =>
+        'download $asset $from, put it in place of the old binary (same '
+            'path and name), make it executable with chmod +x, then restart '
+            'the MCP client',
+      (ServerPlatform.windows, ClientApp.claudeDesktop) =>
+        'download $asset $from and double-click it',
+      (ServerPlatform.windows, ClientApp.codex) =>
         'download $asset $from, double-click it to install it over the old '
             'version (the settings in ChatGPT stay), then restart ChatGPT (or '
             'Codex)',
@@ -328,6 +368,9 @@ final class UpdateChecker {
   final Uri endpoint;
   final File stateFile;
 
+  /// The system the server runs on: the notice links its file.
+  final ServerPlatform platform;
+
   /// The version of this server.
   final Version current;
   final Duration timeout;
@@ -410,7 +453,8 @@ final class UpdateChecker {
   /// the user has not been told about it in this process (not by an earlier
   /// notice, nor by `smartschool_status`, see [announced]); null otherwise.
   /// It gives the download link for [app], says how to update there, and
-  /// what is new ([howToUpdate], [whatIsNew]).
+  /// what is new ([howToUpdate], [whatIsNew]). On Linux there is no
+  /// extension, so it names the server.
   ///
   /// Also starts a background check when the last one is a day old, so a
   /// server that keeps running learns about later releases. Never waits.
@@ -423,10 +467,13 @@ final class UpdateChecker {
       return null;
     }
     _announced = latest.version;
+    final product = platform == ServerPlatform.linux
+        ? ClientApp.codex.product
+        : app.product;
     return [
-      'Update available: version ${latest.version} of ${app.product} has '
+      'Update available: version ${latest.version} of $product has '
           'been released (this is version $current). Please tell the user.',
-      howToUpdate(latest, app),
+      howToUpdate(latest, app, platform: platform),
       ?whatIsNew(_releases, current),
     ].join('\n');
   }
@@ -624,7 +671,7 @@ final class UpdateChecker {
         if (asset case {
           'name': final String name,
           'browser_download_url': final String address,
-        } when name == assetName || name == exeAssetName)
+        } when assetNames.contains(name))
           if (Uri.tryParse(address) case final url? when _isWebAddress(url))
             name: url,
   };
