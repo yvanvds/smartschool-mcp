@@ -19,7 +19,9 @@ Je vraagt het gewoon in een gesprek:
   Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken,
   kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
   weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
-  prullenbak van de module verplaatsen en er weer uit terugzetten. Je eigen
+  prullenbak van de module verplaatsen en er weer uit terugzetten.
+  Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en
+  leerdoelen, en een jaarplan weer verwijderen. Je eigen
   lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
   lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
   als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
@@ -409,6 +411,14 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   na jouw akkoord. Elke kopie die Claude maakt, is een nieuwe lesfiche: het
   kopieert een lesfiche maar één keer. Een lesfiche in de prullenbak zet
   het eerst terug.
+- "Maak een jaarplan Informatica 5 met een cluster Lussen, en zet daarin
+  de titel Week 1 en mijn lesfiches Lussen 1 en Lussen 2."
+  Claude toont het jaarplan, de cluster, de titel en de lesfiches, en maakt
+  ze na jouw akkoord, in de volgorde die je vraagt. De lesfiches zelf
+  blijven zoals ze zijn: de cluster verwijst ernaar. Een cluster kan ook
+  leerdoelen krijgen. Een jaarplan verwijderen kan, na jouw akkoord, maar
+  niet ongedaan maken: een jaarplan heeft geen prullenbak. De lesfiches
+  erin blijven in je bibliotheek.
 - "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
   uur."
   Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken
@@ -724,7 +734,9 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in
   je eigen bibliotheek, met hun weblinks en bijlagen, en verplaatst ze
   lesfiches naar de prullenbak en zet ze eruit terug; ze kopieert
-  lesfiches, zet er labels op en maakt eigen labels. Lesfiches voor altijd
+  lesfiches, zet er labels op en maakt eigen labels. Ze maakt jaarplannen
+  met lesclusters uit je lesfiches, en verwijdert een jaarplan. Een cluster
+  voor een klas plannen kan ze nog niet. Lesfiches voor altijd
   verwijderen, en een label aanpassen of verwijderen, kan ze niet.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of

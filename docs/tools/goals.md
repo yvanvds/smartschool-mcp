@@ -12,7 +12,10 @@ a lesfiche or a lesson has; [`create_lesfiche`](lesfiches.md#create_lesfiche),
 [`edit_lesfiche`](lesfiches.md#edit_lesfiche) and
 [`edit_planned_element`](planner.md#edit_planned_element) set them, with the
 goals as `read_curriculum` shows them (see [How goals are
-set](#how-goals-are-set)).
+set](#how-goals-are-set)). The lesson clusters of a year plan have goals
+too: [`read_year_plan`](lesfiches.md#read_year_plan) shows them and
+[`set_lesson_cluster_goals`](lesfiches.md#set_lesson_cluster_goals) sets
+them, the same way.
 
 | Tool | What it does | Changes Smartschool? |
 | --- | --- | --- |

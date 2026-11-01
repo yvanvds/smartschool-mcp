@@ -19,7 +19,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken,
   kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
   weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
-  prullenbak van de module verplaatsen en er weer uit terugzetten. Je eigen
+  prullenbak van de module verplaatsen en er weer uit terugzetten.
+  Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en
+  leerdoelen, en een jaarplan weer verwijderen. Je eigen
   lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
   lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
   als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.

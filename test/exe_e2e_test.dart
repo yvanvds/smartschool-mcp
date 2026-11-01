@@ -124,6 +124,13 @@ void main() {
       'plan_lesfiche',
       'save_lesson_as_lesfiche',
       'create_lesfiche_label',
+      'list_year_plans',
+      'read_year_plan',
+      'create_year_plan',
+      'add_lesson_cluster',
+      'add_to_lesson_cluster',
+      'set_lesson_cluster_goals',
+      'delete_year_plan',
       'list_curricula',
       'read_curriculum',
       'list_skore_gradebooks',
@@ -168,6 +175,9 @@ void main() {
       'list_lesfiche_labels',
       // The lesfiches in the trash (#189).
       'list_trashed_lesfiches',
+      // The year plans and their clusters (#191).
+      'list_year_plans',
+      'read_year_plan',
       // The learning goals of the goal selector (#186).
       'list_curricula',
       'read_curriculum',
@@ -465,6 +475,14 @@ void main() {
       // An own label (#188): a second call is refused, not made twice, but
       // it is a create.
       ('create_lesfiche_label', false),
+      // The year plans (#191): a create or an add makes another one each
+      // call; the goals of a cluster are set, and a deleted plan is no
+      // longer listed the second time.
+      ('create_year_plan', false),
+      ('add_lesson_cluster', false),
+      ('add_to_lesson_cluster', false),
+      ('set_lesson_cluster_goals', true),
+      ('delete_year_plan', true),
       ('plan_assignment', false),
       ('trash_assignment', false),
       // The gradebook's first write (#142): a create, so not idempotent;
@@ -699,7 +717,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(77));
+    expect(tools, hasLength(84));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -773,7 +791,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(59));
+        expect(tools, hasLength(66));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -812,8 +830,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(67));
-      expect([for (final tool in tools.skip(59)) tool['name']], skoreTools);
+      expect(tools, hasLength(74));
+      expect([for (final tool in tools.skip(66)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -1006,7 +1024,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(59));
+        expect(tools, hasLength(66));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -1046,8 +1064,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(63));
-      expect([for (final tool in tools.skip(59)) tool['name']], presenceTools);
+      expect(tools, hasLength(70));
+      expect([for (final tool in tools.skip(66)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1243,10 +1261,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(71));
-      expect([for (final tool in tools.skip(67)) tool['name']], presenceTools);
+      expect(tools, hasLength(78));
+      expect([for (final tool in tools.skip(74)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(59).take(8)) tool['name'],
+        for (final tool in tools.skip(66).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1282,7 +1300,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(59));
+        expect(tools, hasLength(66));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1335,8 +1353,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(65));
-      expect([for (final tool in tools.skip(59)) tool['name']], lvsTools);
+      expect(tools, hasLength(72));
+      expect([for (final tool in tools.skip(66)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1520,10 +1538,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(77));
-      expect([for (final tool in tools.skip(71)) tool['name']], lvsTools);
+      expect(tools, hasLength(84));
+      expect([for (final tool in tools.skip(78)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(67).take(4)) tool['name']],
+        [for (final tool in tools.skip(74).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1532,7 +1550,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(59).take(8)) tool['name'],
+        for (final tool in tools.skip(66).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -3074,6 +3092,116 @@ void main() {
     final (isError, text) = await server.callTool('list_trashed_lesfiches');
     expect(isError, isTrue);
     expect(text, startsWith('Not all Smartschool settings are filled in.'));
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('the year plans (#191): their schemas; without settings: an error '
+      'result that names the missing settings; a year plan or cluster that is '
+      'not an id, and a name over 50 characters: an error that says what to '
+      'fix, before any login', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const plan = 'c0000000-0000-4000-8000-000000000001';
+    const cluster = 'c0000000-0000-4000-8000-000000000002';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    Map<String, Object?> schemaOf(String name) =>
+        (tools[name]!['inputSchema'] as Map).cast();
+    expect(schemaOf('list_year_plans')['properties'], anyOf(isNull, isEmpty));
+    expect(schemaOf('read_year_plan')['required'], ['year_plan']);
+    expect((schemaOf('read_year_plan')['properties'] as Map).keys, [
+      'year_plan',
+      'cluster',
+    ]);
+    expect(schemaOf('create_year_plan')['required'], ['name']);
+    expect(schemaOf('add_lesson_cluster')['required'], ['year_plan', 'name']);
+    expect(schemaOf('add_to_lesson_cluster')['required'], [
+      'year_plan',
+      'cluster',
+    ]);
+    expect(
+      (schemaOf('add_to_lesson_cluster')['properties'] as Map)['lesfiches'],
+      allOf(containsPair('minItems', 1), containsPair('maxItems', 20)),
+    );
+    expect(schemaOf('set_lesson_cluster_goals')['required'], [
+      'year_plan',
+      'cluster',
+      'goals',
+    ]);
+    expect(schemaOf('delete_year_plan')['required'], ['year_plan']);
+    expect(
+      tools['delete_year_plan']!['description'],
+      allOf(contains('cannot be undone'), contains('stay in the user')),
+    );
+
+    for (final (name, arguments) in [
+      ('list_year_plans', <String, Object?>{}),
+      ('read_year_plan', {'year_plan': plan}),
+      ('create_year_plan', {'name': 'Informatica 5'}),
+      ('add_lesson_cluster', {'year_plan': plan, 'name': 'Lussen'}),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster, 'title': 'Week 1'},
+      ),
+      (
+        'set_lesson_cluster_goals',
+        {'year_plan': plan, 'cluster': cluster, 'goals': <Object?>[]},
+      ),
+      ('delete_year_plan', {'year_plan': plan}),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+    }
+
+    for (final (name, arguments, refusal) in [
+      (
+        'read_year_plan',
+        {'year_plan': 'Informatica 5'},
+        'year_plan must be the id of a year plan as list_year_plans shows it',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': 'Lussen', 'title': 'Week 1'},
+        'cluster must be the id of a lesson cluster as read_year_plan shows it',
+      ),
+      (
+        'create_year_plan',
+        {'name': 'x' * 51},
+        'takes at most 50 for the year plan',
+      ),
+      (
+        'add_lesson_cluster',
+        {'year_plan': plan, 'name': 'x' * 51},
+        'takes at most 50 for the lesson cluster',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster, 'title': 'x' * 51},
+        'takes at most 50 for the title',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster},
+        'there is nothing to add',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(text, contains(refusal), reason: name);
+    }
 
     await server.stop();
     expect(await server.stderr, isNot(contains('sending username')));

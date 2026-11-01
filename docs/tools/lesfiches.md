@@ -3,7 +3,8 @@
 [Back to the overview](../../README.md)
 
 The Lesfiches module: your own library of lesson and assignment lesfiches,
-with their info, weblinks and attachments, and planning them as lessons. For
+with their info, weblinks and attachments, planning them as lessons, and
+year plans built from them. For
 everyone, without a switch. Tools that change something follow the
 [shared rules](../../README.md#changes-and-approval).
 
@@ -28,6 +29,13 @@ everyone, without a switch. Tools that change something follow the
 | [`plan_lesfiche`](#plan_lesfiche) | Plans a lesfiche as a lesson in one or more lesson hours, replacing a lesson only when asked | Yes, asks approval |
 | [`save_lesson_as_lesfiche`](#save_lesson_as_lesfiche) | Saves a lesson of your planner as a new lesfiche | Yes, asks approval |
 | [`create_lesfiche_label`](#create_lesfiche_label) | Makes an own label, with its colour | Yes, asks approval |
+| [`list_year_plans`](#list_year_plans) | Lists your year plans, with their lesson clusters | No |
+| [`read_year_plan`](#read_year_plan) | Reads a year plan: each cluster with its goals, titles and lesfiches in order | No |
+| [`create_year_plan`](#create_year_plan) | Makes an empty year plan | Yes, asks approval |
+| [`add_lesson_cluster`](#add_lesson_cluster) | Adds a lesson cluster to a year plan | Yes, asks approval |
+| [`add_to_lesson_cluster`](#add_to_lesson_cluster) | Adds a title and lesfiches to a cluster | Yes, asks approval |
+| [`set_lesson_cluster_goals`](#set_lesson_cluster_goals) | Sets the learning goals of a cluster | Yes, asks approval |
+| [`delete_year_plan`](#delete_year_plan) | Deletes a year plan with its clusters; its lesfiches stay | Yes, asks approval, cannot be undone |
 
 ## Tools
 
@@ -191,6 +199,57 @@ Makes a new own label with a text (at most 50 characters) and one of the web
 client's 18 colours (`steel` by default), to put on lesfiches. A text one of
 your own labels has already is refused, in plain words. Asks for approval.
 The server does not change or remove a label: do that in Smartschool.
+
+### `list_year_plans`
+
+Lists your year plans ("leeropdrachten", teaching assignments): each a
+collection of your lesfiches split into lesson clusters, the units of the
+year. One line each: name, which lesfiches it takes (all yours, for a plan
+made here), its clusters by name, hidden or a favourite, and its id.
+
+### `read_year_plan`
+
+Reads one year plan, by its id: each lesson cluster with its number of
+lesson and assignment lesfiches and of goals, its estimate of teaching
+hours, its learning goals by name (see [Learning goals](goals.md)), and its
+content in order: titles such as "Week 1", and lesfiches with their
+teaching hours, number of goals and id. With `cluster`, only that cluster.
+
+### `create_year_plan`
+
+Makes a new, empty year plan with a name (at most 50 characters) that takes
+all your lesfiches. Every call makes a new one, also when one of that name
+exists. Asks for approval; the result gives its id.
+
+### `add_lesson_cluster`
+
+Adds a new, empty lesson cluster with a name (at most 50 characters) to the
+end of a year plan. Every call adds a new one. Asks for approval; the result
+gives its id.
+
+### `add_to_lesson_cluster`
+
+Adds a title (at most 50 characters), lesfiches (1 to 20, by their ids from
+`list_lesfiches`), or a title followed by lesfiches to the end of a lesson
+cluster, in the order given. The lesfiches are not copied or changed: the
+cluster refers to them. A lesfiche the year plan does not take is refused
+before anything is sent. Every call adds them again, also a lesfiche that is
+in the cluster already. Asks for approval; the result shows the cluster as
+it is now.
+
+### `set_lesson_cluster_goals`
+
+Sets the learning goals of a lesson cluster, as `edit_lesfiche` does for a
+lesfiche: the list replaces the goals, and a goal the goal selector does not
+know is refused. The goals of the lesfiches in the cluster stay as they are.
+Asks for approval; the result shows the cluster with its goals.
+
+### `delete_year_plan`
+
+Deletes a year plan with its lesson clusters, their titles and goals. **It
+cannot be undone**: a year plan has no trash. The lesfiches in it stay in
+your library, unchanged. Asks for approval, after Claude shows you the year
+plan with its clusters and says that it cannot be undone.
 
 ## How it works
 
@@ -686,6 +745,62 @@ refused so. A create the module does not confirm is maybe made, with
 `list_lesfiche_labels` to check it and not to call again. The result gives
 the label with its colour and id, and how to put it on a lesfiche. The
 library does not change or remove a label, so neither does the server.
+
+### How the year plans work
+
+The year-plan tools (#191) use the library's `TeachingAssignmentService`
+(dartschool#229), under `/lesson-content/api/v1/teaching-assignments`. A
+year plan is a teaching assignment; a cluster is a lesson cluster of it.
+The tools take a year plan and a cluster by their ids (UUIDs) only, as
+`list_year_plans` and `read_year_plan` print them. Every tool reads the
+user's year plans first (`getTeachingAssignments`, which gives each plan's
+platform and its clusters in short), and refuses a year plan or a cluster
+that is not in them, listing the ones there are, before anything is sent.
+A text that is not a UUID is refused before any login.
+
+- `read_year_plan` reads the clusters in full (`getClusters`, with their
+  counts, teaching hours and goals), the content of each
+  (`getClusterContent`, titles and lesfiches in order), and names the goals
+  of all clusters with one request to the goal selector (`nameGoals`, at
+  `GoalLocation.lessonContent`). The lesfiches of a cluster come without
+  course names; `read_lesfiche` reads one in full.
+- `create_year_plan` sends `createTeachingAssignment` with the content
+  filter `all` (the web client's default), so that every lesfiche of the
+  user can be added; with `none` the module refuses each one (seen live).
+- `add_lesson_cluster` sends `addCluster`.
+- `add_to_lesson_cluster` reads the lesfiches the year plan takes
+  (`getLessonContent`) and matches the ids given with them, so that one it
+  does not take, one in the trash and one that is not the user's are refused
+  before anything is sent. The title (`addTitle`) and the lesfiches
+  (`addLessonContent`, one request for all) each go out in a session action
+  of their own, so that a repeat after a refused session never sends the
+  title again. When the lesfiches fail after the title, the result says
+  that the title was added. The module answers a lesfiche it refuses with
+  an exception for it (`403`); the library makes that a refusal when it
+  added none. The result reads the cluster back, in a session action of its
+  own.
+- `set_lesson_cluster_goals` reads the cluster (`getCluster`), sends
+  nothing when it has those goals already, checks the goals it does not
+  have yet with the goal selector (`checkGoals`, as the goal writes of
+  #187), and sends `changeClusterGoals`.
+- `delete_year_plan` sends `deleteTeachingAssignment` (`DELETE`, answered
+  `204`). The lesfiches stay in the library.
+
+The names, the cluster names and the titles are refused above 50
+characters (`TeachingAssignmentService.maxNameLength`; the module answers a
+longer one with a bare `400`, seen live) before anything is sent. The
+creates and adds are not idempotent and the library sends them once, never
+again after logging in again: a write the module does not confirm is
+reported as maybe made, with `list_year_plans` or `read_year_plan` to check
+and not to call again. Setting goals and the delete name what they change,
+so the library retries them after logging in again, and they are marked
+idempotent. A write the module refuses says so: a `404` that the year plan
+or cluster is gone, a `403` that the year plan does not take the lesfiches.
+The helpers live in `lib/src/planner/year_plans.dart`; the tests in
+`test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`.
+
+Planning a cluster for classes is not here yet: it is #196, part two of
+#191.
 
 ### Helpers and tests
 

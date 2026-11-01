@@ -17,6 +17,7 @@ import 'fake_presence.dart';
 import 'fake_skore.dart';
 import 'fake_skore_gradebook.dart';
 import 'fake_uploads.dart';
+import 'fake_year_plans.dart';
 
 export 'fake_goals.dart';
 export 'fake_intradesk.dart';
@@ -27,6 +28,7 @@ export 'fake_presence.dart';
 export 'fake_skore.dart';
 export 'fake_skore_gradebook.dart';
 export 'fake_uploads.dart';
+export 'fake_year_plans.dart';
 
 const fakeHost = 'school.smartschool.be';
 const fakeDisplayName = 'Jan Peeters';
@@ -147,6 +149,10 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The planner, served to logged-in requests. Its own account is
   /// [fakePlannerMe], the user of the fake's pages.
   late final FakePlanner planner = FakePlanner(uploads: uploads);
+
+  /// The year plans of the Lesfiches module (dartschool#229), served to
+  /// logged-in requests; their lesfiches are those of [planner].
+  late final FakeYearPlans yearPlans = FakeYearPlans(planner);
 
   /// The goal selector (dartschool#222), served to logged-in requests:
   /// empty until a test fills it (`FakeGoalSelector.loadSample`).
@@ -280,6 +286,7 @@ class FakeSmartschool implements HttpClientAdapter {
           uploads.respond(options) ??
           mailbox.respond(options) ??
           intradesk.respond(options) ??
+          yearPlans.respond(options) ??
           planner.respond(options) ??
           goals.respond(options) ??
           skore.respond(options) ??
@@ -310,6 +317,7 @@ class FakeSmartschool implements HttpClientAdapter {
         uploads.respond(options) ??
         mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
+        yearPlans.respond(options) ??
         planner.respond(options, cancelled: cancelled) ??
         goals.respond(options) ??
         skore.respond(options) ??
