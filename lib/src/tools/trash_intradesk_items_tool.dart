@@ -262,6 +262,19 @@ Future<_Stop?> _move(
           'was not moved. Check its kind and id with list_intradesk_folder '
           'or search_intradesk, and tell the user.',
     );
+  } on SmartschoolIntradeskAccessDeniedError {
+    // Before its superclass, the refusal: HTTP 403, the user may not manage
+    // the item (dartschool#139). The library's message names the id: the
+    // log does not.
+    log('trash_intradesk_items: not allowed (HTTP 403)');
+    return (
+      item: item,
+      maybeMoved: false,
+      reason:
+          'Intradesk does not let you move $what to the trash (HTTP 403): '
+          'you may not manage it. Only someone who manages it, such as an '
+          'Intradesk administrator, can. It was not moved. Tell the user.',
+    );
   } on SmartschoolIntradeskWriteRefusedError catch (error) {
     // The library's messages name the item: the log never shows a name.
     log(

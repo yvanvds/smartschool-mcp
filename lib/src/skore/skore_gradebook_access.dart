@@ -124,6 +124,11 @@ Future<T> withSkoreGradebook<T>(
 ///   (yvanvds/dartschool#192). The message says to try again, and when it
 ///   keeps happening to use Skore in Smartschool itself.
 ///
+///   Skore's refusal of its gradebook to the account (a redirect to the
+///   start page, `/?module=Homepage`), which the library throws as a
+///   [SmartschoolSkoreAccessDeniedError] with [SkoreAccessArea.gradebook]
+///   since flutter_smartschool 0.4.2, comes first: [skoreNoGradebook].
+///
 ///   Not a session Smartschool did not accept: Skore's gradebook answers an
 ///   RPC call in an expired session with `302 Location: /`, which
 ///   flutter_smartschool 0.4.0 takes for a refused session (#168): it logs
@@ -134,7 +139,8 @@ Future<T> withSkoreGradebook<T>(
 ///   0.4.0 that redirect came here, and the message's remark that a pupil's
 ///   account may get this answer too sent the user of a teacher's account
 ///   the wrong way: what Skore answers an account without gradebooks of its
-///   own was not captured, and the message no longer guesses.
+///   own was not captured then. It is now (a pupil's account, sent on to
+///   the start page with a module, dartschool#168): the case above.
 ///
 /// - [SmartschoolSkoreGradebookReadOnlyError], from a write: the gradebook
 ///   is one a colleague shared with the user to read only, as Skore lists
@@ -183,12 +189,25 @@ ToolError? skoreGradebookToolError(
         'Skore refused the change before saving it: '
         '${skoreRefusalReason(message)} $reread to correct the call.',
       );
+    case SmartschoolSkoreAccessDeniedError(area: SkoreAccessArea.gradebook):
+      log('skore gradebook: $error');
+      return const ToolError(skoreNoGradebook);
     case SmartschoolSkoreError():
       log('skore gradebook: $error');
       return const ToolError(skoreGradebookUnusableAnswer);
   }
   return null;
 }
+
+/// What the gradebook tools say when Skore refused its gradebook to the
+/// account ([skoreGradebookToolError]): Skore sends the calls of an account
+/// without a gradebook of its own, such as a pupil's, on to Smartschool's
+/// start page (seen live, yvanvds/dartschool#168).
+const skoreNoGradebook =
+    'Skore refused its gradebook (Puntenboek) to this account: it has no '
+    'gradebook in Skore, as an account of a pupil has none. The gradebook '
+    'tools work only for a teacher with gradebooks in Skore. Tell the user '
+    'so; trying again does not help.';
 
 /// What the gradebook tools say for an answer of Skore's gradebook the
 /// server could not use ([skoreGradebookToolError]): to try again, and when
@@ -604,13 +623,12 @@ SkoreReportPeriod skoreReportPeriod(SkoreGradebookSheet sheet, int reportId) {
 ///
 /// A course that is not on the report is answered by Skore with HTTP 404
 /// and "Course not found in source!" (seen live for a project gradebook,
-/// yvanvds/dartschool#204), which the library throws as a
-/// [SmartschoolSkoreError] that only its message tells apart from an answer
-/// it cannot use. Trying again does not help then, so this throws a
-/// [ToolError] that says so, the library's message in the log only. The
-/// check reads the message text: a workaround until dartschool#204 gives the
-/// case a type of its own (removal tracked in yvanvds/smartschool-mcp#174).
-/// Any other error is passed on.
+/// yvanvds/dartschool#204) or "No courses found in results!" (seen live for
+/// an account without Skore's admin rights for the course, dartschool#168),
+/// which the library throws as a [SmartschoolSkoreCourseNotOnReportError].
+/// Trying again does not help then, so this throws a [ToolError] that says
+/// so, the library's message in the log only (#174). Any other error is
+/// passed on.
 Future<SkoreReport> readSkoreReport(
   SkoreGradebookService gradebooks,
   SkoreGradebookSheet sheet,
@@ -618,8 +636,7 @@ Future<SkoreReport> readSkoreReport(
 ) async {
   try {
     return await gradebooks.getReport(sheet.gradebook, report.id);
-  } on SmartschoolSkoreError catch (error) {
-    if (!_isCourseNotOnReport(error)) rethrow;
+  } on SmartschoolSkoreCourseNotOnReportError catch (error) {
     log('skore gradebook: $error');
     throw ToolError(
       'Skore answers that the course of the '
@@ -632,14 +649,6 @@ Future<SkoreReport> readSkoreReport(
     );
   }
 }
-
-/// Whether [error] is Skore's answer to a report read for a course that is
-/// not on the report: HTTP 404 with the JSON message "Course not found in
-/// source!", which the library names in its message ([readSkoreReport]).
-bool _isCourseNotOnReport(SmartschoolSkoreError error) =>
-    error is! SmartschoolSkoreChangeRefusedError &&
-    error.message.contains('HTTP 404') &&
-    error.message.contains('Course not found in source!');
 
 /// The component [SkoreGradebookService.createEvaluation] gives a new
 /// evaluation when it is called without a `componentId`, of the

@@ -178,8 +178,12 @@ for (an unknown id, the id of an item of another kind, also one in the
 trash, or of an item that does not exist any more) is reported as no such
 item, not moved: Intradesk answers it with `404` and moves nothing, which the
 library throws as `SmartschoolIntradeskItemNotFoundError` (dartschool#133,
-#124). Any other refusal (HTTP 400 to 499) is reported as not moved, with
-Intradesk's reasons; any other failure as maybe moved, with the folder to
+#124). A move Intradesk refuses with `403` (an item the user may not
+manage, seen live for a weblink with `canManage` false), which the library
+throws as `SmartschoolIntradeskAccessDeniedError` (dartschool#139), is
+reported as not moved: only someone who manages the item can move it. Any other
+refusal (HTTP 400 to 499) is reported as not moved, with Intradesk's
+reasons; any other failure as maybe moved, with the folder to
 list to check it, as for the writes that add to Intradesk (see
 [`create_intradesk_folder`](#how-create_intradesk_folder-works)). Items are named by their path
 when the index knows them, and the result says what the index had in a

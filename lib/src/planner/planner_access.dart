@@ -180,6 +180,9 @@ String _refused(SmartschoolPlannerWriteRefusedError error) {
     PlannerWriteRefusalReason.linkedEvaluation =>
       '$lead: $the is linked to a Skore evaluation, which has to be unlinked '
           'in Smartschool first: only then can it be moved to the trash.',
+    PlannerWriteRefusalReason.unknownLessonCluster =>
+      '$lead: you have no lesson cluster with the id given (any more) in '
+          'your year plans in Lesfiches.',
     null => '$lead. The technical details are in the server log.',
   };
 }

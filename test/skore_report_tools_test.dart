@@ -632,6 +632,27 @@ void main() {
       expect(logged, contains('HTTP 404: "Course not found in source!"'));
     });
 
+    test('Skore\'s 404 "No courses found in results!", its answer to an '
+        'account without its admin rights for the course (dartschool#168): '
+        'the same, as the library throws the same type (#174)', () async {
+      skore.answers['getReportsResults'] = (
+        status: 404,
+        body: '{"message":"No courses found in results!"}',
+      );
+      final text = await error('read_skore_report', {
+        'gradebook_id': 32508,
+        'report_id': 2762,
+      });
+      expect(
+        text,
+        startsWith(
+          'Skore answers that the course of the $_ewiName is not on $_r1d, '
+          'so the server cannot read its results',
+        ),
+      );
+      expect(text, isNot(contains('No courses found')));
+    });
+
     test('another answer Skore\'s gradebook cannot use: the general '
         'message, not the one of a course that is not on the report', () async {
       skore.answers['getReportsResults'] = (

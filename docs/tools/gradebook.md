@@ -289,11 +289,12 @@ gradebook's report periods, and an unknown pupil an error, both before the
 report is read (`skoreReportPeriod`, `skoreGradebookPupil`). A course that
 is not on the report, which Skore answers with HTTP 404 and "Course not
 found in source!" (seen live for a project gradebook,
-yvanvds/dartschool#204), is an error that says so and that trying again does
-not help, the library's message in the log only (`readSkoreReport`). The
-library throws it as a plain `SmartschoolSkoreError`, so the server tells it
-apart by the message's text; removing that is #174, blocked on
-dartschool#204.
+yvanvds/dartschool#204) or "No courses found in results!" (seen live for an
+account without Skore's admin rights for the course, dartschool#168), is an
+error that says so and that trying again does not help, the library's
+message in the log only (`readSkoreReport`). The library throws it as a
+`SmartschoolSkoreCourseNotOnReportError`, so the server tells it apart by
+its type, not by the text of its message (#174).
 
 ### How `create_skore_evaluation` works
 
@@ -629,10 +630,16 @@ pupil), reported with "try again in a moment" and, when it keeps happening,
 to use Skore in Smartschool itself (`skoreGradebookUnusableAnswer`). The
 library's message goes to the log only, as it can quote Skore's answer:
 names, titles and feedback texts; for a redirect it names the target, by
-path and module only. What Skore answers an account without gradebooks of
-its own, such as a pupil's, was not captured, and the message does not
-guess: its old remark that a pupil's account may get it too sent a teacher
-the wrong way in #168.
+path and module only.
+
+Skore sends the calls of an account without gradebooks of its own, such as
+a pupil's, on to Smartschool's start page (`/?module=Homepage`, seen live
+in yvanvds/dartschool#168), which flutter_smartschool 0.4.2 throws as a
+`SmartschoolSkoreAccessDeniedError` with the area `gradebook`. That is
+reported as an account without a gradebook in Skore, for which trying again
+does not help (`skoreNoGradebook`). Before 0.4.2 that answer was not told
+apart, and the message did not guess: an old remark that a pupil's account
+may get it too sent a teacher the wrong way in #168.
 
 ### An expired session
 
