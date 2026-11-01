@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// The app that started the server, recognised by the name it gives itself
 /// in MCP's `initialize` request (`clientInfo.name`).
 ///
@@ -43,7 +45,37 @@ enum ClientApp {
 /// comes after `initialize`, so tool results use the right app; only the
 /// startup log, written before, uses the default.
 final class ClientContext {
-  ClientContext([this.app = ClientApp.claudeDesktop]);
+  /// [platform] is [ServerPlatform.current] by default; tests pass their
+  /// own.
+  ClientContext([this.app = ClientApp.claudeDesktop, ServerPlatform? platform])
+    : platform = platform ?? ServerPlatform.current;
 
   ClientApp app;
+
+  /// The system the server runs on. On Linux there is no Claude Desktop
+  /// extension and no ChatGPT form: whatever the client, the settings are
+  /// environment variables in the MCP client's configuration
+  /// ([linuxGuideUrl]).
+  final ServerPlatform platform;
 }
+
+/// The system the server runs on, which decides the file an update needs
+/// and where the teacher fixes a setting (`ExtensionSettings`).
+enum ServerPlatform {
+  /// Windows: the Claude Desktop extension and the self-installing exe.
+  windows,
+
+  /// Linux (x64): the standalone binary, configured in the MCP client.
+  linux;
+
+  /// The system this process runs on. Anything but Linux counts as
+  /// Windows: releases only have files for these two.
+  static ServerPlatform get current =>
+      Platform.isLinux ? ServerPlatform.linux : ServerPlatform.windows;
+}
+
+/// The guide for Linux, where nothing installs itself: the user puts the
+/// binary in place and configures it in their MCP client.
+const linuxGuideUrl =
+    'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
+    'installatie-linux.md';

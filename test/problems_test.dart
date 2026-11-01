@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/problems.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
@@ -508,6 +509,122 @@ void main() {
       );
       expect(text, isNot(contains('2FA')));
       expect(text, isNot(contains('Smartschool-adres')));
+    });
+
+    group('by platform (#201)', () {
+      SmartschoolSettings extension(ClientApp app, ServerPlatform platform) =>
+          SmartschoolSettings.read(
+            fakeExtensionSettings(null, ClientContext(app, platform)),
+          );
+      SmartschoolSettings file(ServerPlatform platform) =>
+          SmartschoolSettings.read(
+            CredentialsFile(
+              (fromFile.source as CredentialsFile).path,
+              platform: platform,
+            ),
+          );
+
+      // Functions: fromFile is only read in setUpAll.
+      Map<String, SmartschoolSettings> onWindows() => {
+        'no client': fromExtension,
+        'Claude Desktop': extension(
+          ClientApp.claudeDesktop,
+          ServerPlatform.windows,
+        ),
+        'Codex': extension(ClientApp.codex, ServerPlatform.windows),
+        'credentials file': file(ServerPlatform.windows),
+      };
+      Map<String, SmartschoolSettings> onLinux() => {
+        'Claude Desktop': extension(
+          ClientApp.claudeDesktop,
+          ServerPlatform.linux,
+        ),
+        'Codex': extension(ClientApp.codex, ServerPlatform.linux),
+        'credentials file': file(ServerPlatform.linux),
+      };
+
+      test('on Windows, the clock is in Windows Settings and the server is '
+          'the extension, as before', () {
+        for (final MapEntry(key: name, value: settings)
+            in onWindows().entries) {
+          expect(
+            message(ProblemKind.twoFactorRejected, settings),
+            contains(
+              'Also check that the clock of this PC is correct (Windows '
+              'Settings → Time & language → Set time automatically): the '
+              'codes depend on it.',
+            ),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.twoFactorUnsupported, settings),
+            contains(
+              'two-factor authentication (2FA) this extension cannot '
+              'handle.',
+            ),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.userNotOnPage, settings),
+            contains('this version of the extension cannot read'),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.unreachable, settings),
+            contains('internet connection of this PC'),
+            reason: name,
+          );
+        }
+      });
+
+      test('on Linux, no login message names Windows or the extension', () {
+        for (final MapEntry(key: name, value: settings) in onLinux().entries) {
+          for (final kind in loginKinds) {
+            final text = message(kind, settings);
+            expect(text, isNot(contains('Windows')), reason: '$name $kind');
+            expect(text, isNot(contains('extension')), reason: '$name $kind');
+            expect(text, isNot(contains(' PC')), reason: '$name $kind');
+          }
+          expect(
+            message(ProblemKind.missingSettings, settings),
+            isNot(contains('extension')),
+            reason: name,
+          );
+        }
+      });
+
+      test('on Linux, the clock hint is the system time and the server is '
+          'the Smartschool MCP server', () {
+        for (final MapEntry(key: name, value: settings) in onLinux().entries) {
+          expect(
+            message(ProblemKind.twoFactorRejected, settings),
+            contains(
+              'Also check that the clock of this computer is correct (turn '
+              'on its automatic time, for example with timedatectl set-ntp '
+              'true): the codes depend on it.',
+            ),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.twoFactorUnsupported, settings),
+            contains(
+              'two-factor authentication (2FA) the Smartschool MCP server '
+              'cannot handle.',
+            ),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.userNotOnPage, settings),
+            contains('this version of the Smartschool MCP server cannot read'),
+            reason: name,
+          );
+          expect(
+            message(ProblemKind.unreachable, settings),
+            contains('internet connection of this computer'),
+            reason: name,
+          );
+        }
+      });
     });
 
     test('a missing or unreadable credentials file names the file', () {

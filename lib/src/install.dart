@@ -18,12 +18,6 @@ import 'version.dart';
 /// The name of the installed executable.
 const installedName = 'smartschool-mcp.exe';
 
-/// The guide for Linux, where nothing installs itself: the user puts the
-/// binary in place and configures it in their MCP client.
-const linuxGuideUrl =
-    'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
-    'installatie-linux.md';
-
 /// The colleague guide for ChatGPT.
 const chatGptGuideUrl =
     'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'

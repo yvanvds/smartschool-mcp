@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../client_app.dart' show ServerPlatform;
 import '../log.dart';
 import '../settings.dart';
 import '../tools/server_tool.dart';
@@ -410,6 +411,12 @@ final class DownloadFolder {
     return const [];
   }
 
+  /// What the manifest calls this server: on Linux there is no extension
+  /// (#201).
+  static String get _product => ServerPlatform.current == ServerPlatform.linux
+      ? 'MCP server'
+      : 'extension';
+
   /// Writes the list into a temporary file and renames it, so another
   /// server process never reads half a list.
   Future<void> _writeManifest(List<_Saved> files) async {
@@ -420,7 +427,7 @@ final class DownloadFolder {
         const JsonEncoder.withIndent('  ').convert({
           'format': manifestFormat,
           'about':
-              'The files the Smartschool extension saved in this folder. It '
+              'The files the Smartschool $_product saved in this folder. It '
               'deletes them ${retention.inDays} days after saving them, '
               'unless they were changed since; it never touches other files.',
           'cleaned_at': _cleanedAt?.toUtc().toIso8601String(),

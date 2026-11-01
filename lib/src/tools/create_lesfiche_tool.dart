@@ -50,130 +50,135 @@ import 'server_tool.dart';
 ServerTool createLesficheTool(
   SmartschoolSession session, {
   int maxBytes = maxLocalFileBytes,
-}) => ServerTool(
-  definition: Tool(
-    name: 'create_lesfiche',
-    title: 'Make a Smartschool lesfiche',
-    description:
-        'Makes a new lesfiche in the user\'s own library ("Mijn lesfiches") '
-        'of the Smartschool Lesfiches module, in one call: a lesson lesfiche '
-        '(the default) or an assignment lesfiche (type assignment, with '
-        'assignment_type), with its name, public info (what pupils see once '
-        'it is planned), private info, courses, learning goals, labels, '
-        'weblinks and attachments (files from this PC). The own library is private to the user: '
-        'pupils see nothing of a lesfiche until a lesson is planned from it. '
-        'Use it to turn a lesson prepared with the user (in the chat, or '
-        'from documents) into a lesfiche, which plan_lesfiche then plans '
-        'into the user\'s lesson hours as often as needed. Before calling '
-        'this tool, show the user the kind, the name, the courses, the info, '
-        'the goals, the labels, each weblink (name, address, when pupils see it) and each file '
-        '(name, size, when pupils see it), and only call this tool after the '
-        'user has explicitly confirmed it; then call it once per lesfiche. '
-        'The server reads any file the user\'s Windows account can read, up '
-        'to $maxLocalFiles files of ${formatFileSize(maxBytes)} each: files '
-        'you made for the user (for example in a Cowork project folder) or '
-        'that the user names. A name that is taken is not refused: the '
-        'module makes a second lesfiche of that name, and the result names '
-        'the others. Labels are given by their text as list_lesfiche_labels '
-        'shows them; a label that does not exist is refused, and nothing is '
-        'made (make an own label first with create_lesfiche_label, after the '
-        'user has confirmed it). Learning goals are given as read_curriculum '
-        'shows them (find them with list_curricula and read_curriculum); a '
-        'goal the goal selector does not know is refused, and nothing is '
-        'made. Write the info as plain text, with a blank '
-        'line between paragraphs; HTML in it is not interpreted, it shows as '
-        'text. When pupils see a weblink or a file counts from the lesson '
-        'the lesfiche is planned in: $lesficheVisibilityValues. The result '
-        'gives the lesfiche as made, with its id for plan_lesfiche, '
-        'read_lesfiche and edit_lesfiche, which changes it later (its '
-        'weblinks and attachments change with set_lesfiche_weblink, '
-        'add_lesfiche_attachments and the like), and trash_lesfiches, which '
-        'moves it to the trash. If the result says the '
-        'lesfiche may or may not have '
-        'been made, or that it was made without confirming everything, do '
-        'not call this tool again for it, as a second call makes a second '
-        'lesfiche: check it with list_lesfiches or read_lesfiche as the '
-        'result says, and tell the user. For requests like "maak een '
-        'lesfiche Lussen voor informatica met dit werkblad".',
-    inputSchema: Schema.object(
-      properties: {
-        'name': Schema.string(
-          description:
-              'The name of the lesfiche, as the user confirmed it: at most '
-              '${LessonContentService.maxNameLength} characters. Pupils see '
-              'it once it is planned.',
-          minLength: 1,
-        ),
-        'type': UntitledSingleSelectEnumSchema(
-          description:
-              'The kind of lesfiche: lesson (the default) or assignment (a '
-              'test or task, with assignment_type).',
-          values: lesficheTypes.keys.toList(),
-        ),
-        'assignment_type': Schema.string(
-          description:
-              'Only for type assignment, and then required: one of the '
-              'school\'s assignment types, by its abbreviation or name, such '
-              'as KT or Kleine Taak (list_class_assignments lists them), as '
-              'the user confirmed it.',
-          minLength: 1,
-        ),
-        'public_info': Schema.string(
-          description:
-              'What pupils see with a lesson planned from the lesfiche, as '
-              'plain text: a blank line between paragraphs. Default: none.',
-        ),
-        'private_info': Schema.string(
-          description: 'Notes pupils do not see, as plain text. Default: none.',
-        ),
-        'courses': lesficheCoursesSchema(
-          description: 'The courses of the lesfiche. Default: none.',
-        ),
-        'goals': goalsSchema(
-          description:
-              'The learning goals of the lesfiche, each {id, leerplanId, '
-              'type} as read_curriculum shows it (find them with '
-              'list_curricula and read_curriculum). A goal the goal selector '
-              'does not know is refused, and nothing is made. Default: none.',
-        ),
-        'labels': lesficheLabelsSchema(
-          description:
-              'The labels of the lesfiche, the school\'s and the user\'s own, '
-              'as list_lesfiche_labels shows them. Default: none.',
-        ),
-        'weblinks': lesficheWeblinksSchema(
-          description:
-              'Weblinks pupils open from the lesfiche, each with its name, '
-              'its address and when pupils see it. Default: none.',
-        ),
-        'attachments': lesficheAttachmentsSchema(
-          description:
-              'Files from this PC to attach, 1 to $maxLocalFiles, each with '
-              'the full path and when pupils see it; each goes in under its '
-              'own name, and no two may have the same name. Default: none.',
-        ),
-        'icon': Schema.string(
-          description:
-              'The icon of the lesfiche, a name from Smartschool\'s icon set '
-              'as read_lesfiche shows it. Default: the web client\'s, '
-              '${LessonContentService.defaultLessonIcon} for a lesson and '
-              '${LessonContentService.defaultAssignmentIcon} for an '
-              'assignment. Leave it out unless the user asks for an icon.',
-        ),
-      },
-      required: ['name'],
-    ),
-    annotations: ToolAnnotations(
+}) {
+  final local = LocalPaths(session.source.platform);
+  return ServerTool(
+    definition: Tool(
+      name: 'create_lesfiche',
       title: 'Make a Smartschool lesfiche',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: true,
+      description:
+          'Makes a new lesfiche in the user\'s own library ("Mijn lesfiches") '
+          'of the Smartschool Lesfiches module, in one call: a lesson lesfiche '
+          '(the default) or an assignment lesfiche (type assignment, with '
+          'assignment_type), with its name, public info (what pupils see once '
+          'it is planned), private info, courses, learning goals, labels, '
+          'weblinks and attachments (files from ${local.computer}). The own library is private to the user: '
+          'pupils see nothing of a lesfiche until a lesson is planned from it. '
+          'Use it to turn a lesson prepared with the user (in the chat, or '
+          'from documents) into a lesfiche, which plan_lesfiche then plans '
+          'into the user\'s lesson hours as often as needed. Before calling '
+          'this tool, show the user the kind, the name, the courses, the info, '
+          'the goals, the labels, each weblink (name, address, when pupils see it) and each file '
+          '(name, size, when pupils see it), and only call this tool after the '
+          'user has explicitly confirmed it; then call it once per lesfiche. '
+          'The server reads any file ${local.readableBy} can read, up '
+          'to $maxLocalFiles files of ${formatFileSize(maxBytes)} each: files '
+          'you made for the user (for example in a Cowork project folder) or '
+          'that the user names. A name that is taken is not refused: the '
+          'module makes a second lesfiche of that name, and the result names '
+          'the others. Labels are given by their text as list_lesfiche_labels '
+          'shows them; a label that does not exist is refused, and nothing is '
+          'made (make an own label first with create_lesfiche_label, after the '
+          'user has confirmed it). Learning goals are given as read_curriculum '
+          'shows them (find them with list_curricula and read_curriculum); a '
+          'goal the goal selector does not know is refused, and nothing is '
+          'made. Write the info as plain text, with a blank '
+          'line between paragraphs; HTML in it is not interpreted, it shows as '
+          'text. When pupils see a weblink or a file counts from the lesson '
+          'the lesfiche is planned in: $lesficheVisibilityValues. The result '
+          'gives the lesfiche as made, with its id for plan_lesfiche, '
+          'read_lesfiche and edit_lesfiche, which changes it later (its '
+          'weblinks and attachments change with set_lesfiche_weblink, '
+          'add_lesfiche_attachments and the like), and trash_lesfiches, which '
+          'moves it to the trash. If the result says the '
+          'lesfiche may or may not have '
+          'been made, or that it was made without confirming everything, do '
+          'not call this tool again for it, as a second call makes a second '
+          'lesfiche: check it with list_lesfiches or read_lesfiche as the '
+          'result says, and tell the user. For requests like "maak een '
+          'lesfiche Lussen voor informatica met dit werkblad".',
+      inputSchema: Schema.object(
+        properties: {
+          'name': Schema.string(
+            description:
+                'The name of the lesfiche, as the user confirmed it: at most '
+                '${LessonContentService.maxNameLength} characters. Pupils see '
+                'it once it is planned.',
+            minLength: 1,
+          ),
+          'type': UntitledSingleSelectEnumSchema(
+            description:
+                'The kind of lesfiche: lesson (the default) or assignment (a '
+                'test or task, with assignment_type).',
+            values: lesficheTypes.keys.toList(),
+          ),
+          'assignment_type': Schema.string(
+            description:
+                'Only for type assignment, and then required: one of the '
+                'school\'s assignment types, by its abbreviation or name, such '
+                'as KT or Kleine Taak (list_class_assignments lists them), as '
+                'the user confirmed it.',
+            minLength: 1,
+          ),
+          'public_info': Schema.string(
+            description:
+                'What pupils see with a lesson planned from the lesfiche, as '
+                'plain text: a blank line between paragraphs. Default: none.',
+          ),
+          'private_info': Schema.string(
+            description:
+                'Notes pupils do not see, as plain text. Default: none.',
+          ),
+          'courses': lesficheCoursesSchema(
+            description: 'The courses of the lesfiche. Default: none.',
+          ),
+          'goals': goalsSchema(
+            description:
+                'The learning goals of the lesfiche, each {id, leerplanId, '
+                'type} as read_curriculum shows it (find them with '
+                'list_curricula and read_curriculum). A goal the goal selector '
+                'does not know is refused, and nothing is made. Default: none.',
+          ),
+          'labels': lesficheLabelsSchema(
+            description:
+                'The labels of the lesfiche, the school\'s and the user\'s own, '
+                'as list_lesfiche_labels shows them. Default: none.',
+          ),
+          'weblinks': lesficheWeblinksSchema(
+            description:
+                'Weblinks pupils open from the lesfiche, each with its name, '
+                'its address and when pupils see it. Default: none.',
+          ),
+          'attachments': lesficheAttachmentsSchema(
+            platform: local.platform,
+            description:
+                'Files from ${local.computer} to attach, 1 to $maxLocalFiles, each with '
+                'the full path and when pupils see it; each goes in under its '
+                'own name, and no two may have the same name. Default: none.',
+          ),
+          'icon': Schema.string(
+            description:
+                'The icon of the lesfiche, a name from Smartschool\'s icon set '
+                'as read_lesfiche shows it. Default: the web client\'s, '
+                '${LessonContentService.defaultLessonIcon} for a lesson and '
+                '${LessonContentService.defaultAssignmentIcon} for an '
+                'assignment. Leave it out unless the user asks for an icon.',
+          ),
+        },
+        required: ['name'],
+      ),
+      annotations: ToolAnnotations(
+        title: 'Make a Smartschool lesfiche',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      ),
     ),
-  ),
-  handler: (request) =>
-      _create(session, maxBytes, request.arguments ?? const {}),
-);
+    handler: (request) =>
+        _create(session, maxBytes, request.arguments ?? const {}),
+  );
+}
 
 Future<CallToolResult> _create(
   SmartschoolSession session,
@@ -200,6 +205,7 @@ Future<CallToolResult> _create(
   final weblinks = lesficheWeblinksArgument(arguments['weblinks']);
   final files = lesficheAttachmentsArgument(
     arguments['attachments'],
+    platform: session.source.platform,
     maxBytes: maxBytes,
   );
   final kind = lesficheKindName(type);

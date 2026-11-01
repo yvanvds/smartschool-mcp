@@ -304,7 +304,10 @@ void main() {
     test('in ChatGPT, without the variable SMARTSCHOOL_MFA: working, and the '
         'key is named by its variable', () async {
       server = FakeSmartschool(secondStep: SecondStep.none);
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
 
       final (_, text) = await status(
         source: ExtensionSettings(
@@ -634,7 +637,10 @@ void main() {
 
     test('in ChatGPT: names the variable first, and where to change it '
         'there', () async {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final (_, text) = await status(
         source: fakeExtensionSettings(null, client),
         client: client,
@@ -1008,7 +1014,10 @@ void main() {
     test('a missing setting: names the variable, the form in ChatGPT and '
         'a variable under a mistyped name, never its value, and does not '
         'contact Smartschool', () async {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final (result, text) = await status(
         source: codexSettings(client, FakeCredentials(mainUrl: ''), {
           'SMARTSCHOOL_MAINURL': 'value-never-shown',
@@ -1050,7 +1059,10 @@ void main() {
     });
 
     test('valid settings: working', () async {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final (_, text) = await status(
         source: codexSettings(client, FakeCredentials()),
         client: client,
@@ -1070,7 +1082,10 @@ void main() {
 
     test('in Claude Desktop, the same settings are worded as '
         'before', () async {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final (_, text) = await status(
         source: codexSettings(client, FakeCredentials(mainUrl: '')),
         client: client,
@@ -1092,6 +1107,64 @@ void main() {
         ),
       );
       expect(text, isNot(contains('Wrong setting names')));
+    });
+  });
+
+  group('on Linux (#199)', () {
+    test('a missing setting: names its variable, the MCP client\'s '
+        'configuration and the Linux guide, whatever the client calls '
+        'itself, never Claude Desktop or ChatGPT', () async {
+      for (final clientName in [
+        'claude-code',
+        'claude-ai',
+        ClientApp.codexClientName,
+      ]) {
+        final client = ClientContext(
+          ClientApp.claudeDesktop,
+          ServerPlatform.linux,
+        );
+        final (result, text) = await status(
+          source: ExtensionSettings(
+            client: client,
+            read: () => FakeCredentials(mainUrl: ''),
+            environment: () => const {},
+          ),
+          client: client,
+          clientName: clientName,
+          skore: SwitchState.off,
+        );
+
+        expect(result.isError, isNot(true), reason: clientName);
+        expect(
+          text,
+          startsWith(
+            'Smartschool connection: NOT working\n'
+            'Problem: Not all Smartschool settings are filled in. Missing: '
+            'SMARTSCHOOL_MAIN_URL. Fill it in in the Smartschool MCP '
+            "server's configuration in the MCP client (its environment "
+            'variables, see https://github.com/yvanvds/smartschool-mcp/blob/'
+            'main/docs/installatie-linux.md), then restart the MCP client.\n',
+          ),
+          reason: clientName,
+        );
+        expect(
+          text,
+          contains(
+            '\nSettings: environment variables of the MCP server '
+            '(SMARTSCHOOL_MAIN_URL: missing, SMARTSCHOOL_USERNAME: filled in, '
+            'SMARTSCHOOL_PASSWORD: filled in, SMARTSCHOOL_MFA: filled in)\n',
+          ),
+          reason: clientName,
+        );
+        expect(
+          text,
+          contains(': turn on SMARTSCHOOL_SKORE in the Smartschool MCP '),
+          reason: clientName,
+        );
+        expect(text, isNot(contains('Claude Desktop')), reason: clientName);
+        expect(text, isNot(contains('ChatGPT')), reason: clientName);
+        expect(server.requests, isEmpty, reason: clientName);
+      }
     });
   });
 

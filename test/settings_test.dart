@@ -104,7 +104,10 @@ void main() {
 
     test('are worded for the app the server runs in, once it is '
         'known', () {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final source = ExtensionSettings(client: client);
       String words() => [
         source.label,
@@ -133,6 +136,41 @@ void main() {
         '| restart ChatGPT (or Codex)',
       );
       expect(source.logDescription, contains('SMARTSCHOOL_*'));
+    });
+
+    test('on Linux, in the MCP client\'s configuration, whatever the client '
+        'calls itself (#199)', () {
+      for (final app in ClientApp.values) {
+        final source = ExtensionSettings(
+          client: ClientContext(app, ServerPlatform.linux),
+        );
+        expect(source.home, SettingsHome.mcpClient, reason: app.name);
+        expect(
+          [
+            source.label,
+            source.name(Setting.mfa),
+            source.where,
+            source.restart,
+          ].join(' | '),
+          'environment variables of the MCP server | SMARTSCHOOL_MFA | in '
+          "the Smartschool MCP server's configuration in the MCP client (its "
+          'environment variables, see https://github.com/yvanvds/'
+          'smartschool-mcp/blob/main/docs/installatie-linux.md) | restart the '
+          'MCP client',
+          reason: app.name,
+        );
+      }
+    });
+
+    test('on Windows, in the app the client names', () {
+      expect(
+        SettingsHome.of(ClientApp.claudeDesktop, ServerPlatform.windows),
+        SettingsHome.claudeDesktop,
+      );
+      expect(
+        SettingsHome.of(ClientApp.codex, ServerPlatform.windows),
+        SettingsHome.codex,
+      );
     });
   });
 

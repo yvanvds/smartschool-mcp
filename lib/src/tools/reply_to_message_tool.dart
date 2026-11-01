@@ -19,7 +19,7 @@ import 'server_tool.dart';
 ///
 /// The reply is sent with the message's own reply form, so Smartschool links
 /// it to the original, with the original subject after one `Re:`. Files from
-/// this PC go along as attachments, as with `send_message`
+/// this computer go along as attachments, as with `send_message`
 /// ([messageAttachmentsArgument], files of at most [maxBytes]).
 ServerTool replyToMessageTool(
   SmartschoolSession session, {
@@ -43,7 +43,7 @@ ServerTool replyToMessageTool(
         'or simple Markdown: a blank line between paragraphs, lines starting '
         'with "- " or "1. " for lists, **bold**, *italic* and '
         '[text](https://...) links. HTML in body is not interpreted: it is '
-        'sent as text. ${messageAttachmentsDescription(maxBytes)} A new '
+        'sent as text. ${messageAttachmentsDescription(maxBytes, session.source.platform)} A new '
         'message, not a reply, is sent with send_message. The result says '
         'to whom the reply was sent, and with which attachments. If the '
         'result says the reply may or may not have been sent, do not call '
@@ -74,7 +74,7 @@ ServerTool replyToMessageTool(
               'The box list_messages showed the message in: inbox '
               '(default), sent or archive.$folderMessageBox',
         ),
-        'attachments': messageAttachmentsSchema(),
+        'attachments': messageAttachmentsSchema(session.source.platform),
       },
       required: ['message_id', 'body'],
     ),
@@ -107,6 +107,7 @@ Future<CallToolResult> _reply(
   final html = markdownToHtml(body);
   final attachments = messageAttachmentsArgument(
     arguments['attachments'],
+    platform: session.source.platform,
     maxBytes: maxBytes,
   );
 

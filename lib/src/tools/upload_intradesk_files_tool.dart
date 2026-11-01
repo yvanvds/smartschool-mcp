@@ -11,7 +11,7 @@ import '../session.dart';
 import '../uploads/local_files.dart';
 import 'server_tool.dart';
 
-/// `upload_intradesk_files`: uploads files from this PC to a folder on
+/// `upload_intradesk_files`: uploads files from this computer to a folder on
 /// Intradesk, each under its own name, with the library's
 /// `IntradeskService.uploadFiles` (yvanvds/dartschool#128).
 ///
@@ -27,62 +27,65 @@ ServerTool uploadIntradeskFilesTool(
   SmartschoolSession session,
   IntradeskIndexCache cache, {
   int maxBytes = maxLocalFileBytes,
-}) => ServerTool(
-  definition: Tool(
-    name: 'upload_intradesk_files',
-    title: 'Upload files to Intradesk',
-    description:
-        'Uploads 1 to $maxLocalFiles files from this PC to a folder on '
-        'Intradesk, the school\'s shared document store in Smartschool, each '
-        'under its own file name. Everyone who can see the folder sees the '
-        'files. Give the id of the folder, from search_intradesk or '
-        'list_intradesk_folder (the top of Intradesk is not offered), and '
-        'the full paths of the files, like '
-        'C:\\Users\\jan\\Documents\\brief.docx: files you made for the user '
-        '(for example in a Cowork project folder) or that the user names. '
-        'The server reads any file the user\'s Windows account can read, up '
-        'to ${formatFileSize(maxBytes)} each. Before calling this tool, show '
-        'the user every file with its name and size and where it goes (the '
-        'folder\'s path, as search_intradesk shows it), and only call this '
-        'tool after the user has explicitly confirmed it. The tool refuses a '
-        'file whose name a folder, file or weblink in the folder has already '
-        '(Intradesk would not refuse it, but add the new file as '
-        '"name (1).ext"; a new version of a file on Intradesk is not '
-        'offered), two files with the same name, and a folder the user may '
-        'not add to. If the result says the files may or may not have been '
-        'uploaded, do not call this tool again for them: list the folder '
-        'with list_intradesk_folder and tell the user.',
-    inputSchema: Schema.object(
-      properties: {
-        'folder_id': Schema.string(
-          description:
-              'The id of the folder to upload to, from search_intradesk or '
-              'list_intradesk_folder.',
-          minLength: 1,
-        ),
-        'paths': Schema.list(
-          description:
-              'The full paths of the files on this PC, like '
-              'C:\\Users\\jan\\Documents\\brief.docx. Each file goes in under '
-              'its own name.',
-          items: Schema.string(minLength: 1),
-          minItems: 1,
-          maxItems: maxLocalFiles,
-        ),
-      },
-      required: ['folder_id', 'paths'],
-    ),
-    annotations: ToolAnnotations(
+}) {
+  final local = LocalPaths(session.source.platform);
+  return ServerTool(
+    definition: Tool(
+      name: 'upload_intradesk_files',
       title: 'Upload files to Intradesk',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: true,
+      description:
+          'Uploads 1 to $maxLocalFiles files from ${local.computer} to a '
+          'folder on '
+          'Intradesk, the school\'s shared document store in Smartschool, each '
+          'under its own file name. Everyone who can see the folder sees the '
+          'files. Give the id of the folder, from search_intradesk or '
+          'list_intradesk_folder (the top of Intradesk is not offered), and '
+          'the full paths of the files, like ${local.example()}: files you '
+          'made for the user '
+          '(for example in a Cowork project folder) or that the user names. '
+          'The server reads any file ${local.readableBy} can read, up '
+          'to ${formatFileSize(maxBytes)} each. Before calling this tool, show '
+          'the user every file with its name and size and where it goes (the '
+          'folder\'s path, as search_intradesk shows it), and only call this '
+          'tool after the user has explicitly confirmed it. The tool refuses a '
+          'file whose name a folder, file or weblink in the folder has already '
+          '(Intradesk would not refuse it, but add the new file as '
+          '"name (1).ext"; a new version of a file on Intradesk is not '
+          'offered), two files with the same name, and a folder the user may '
+          'not add to. If the result says the files may or may not have been '
+          'uploaded, do not call this tool again for them: list the folder '
+          'with list_intradesk_folder and tell the user.',
+      inputSchema: Schema.object(
+        properties: {
+          'folder_id': Schema.string(
+            description:
+                'The id of the folder to upload to, from search_intradesk or '
+                'list_intradesk_folder.',
+            minLength: 1,
+          ),
+          'paths': Schema.list(
+            description:
+                'The full paths of the files on ${local.computer}, like '
+                '${local.example()}. Each file goes in under its own name.',
+            items: Schema.string(minLength: 1),
+            minItems: 1,
+            maxItems: maxLocalFiles,
+          ),
+        },
+        required: ['folder_id', 'paths'],
+      ),
+      annotations: ToolAnnotations(
+        title: 'Upload files to Intradesk',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      ),
     ),
-  ),
-  handler: (request) =>
-      _upload(session, cache, maxBytes, request.arguments ?? const {}),
-);
+    handler: (request) =>
+        _upload(session, cache, maxBytes, request.arguments ?? const {}),
+  );
+}
 
 Future<CallToolResult> _upload(
   SmartschoolSession session,
@@ -94,6 +97,7 @@ Future<CallToolResult> _upload(
   final files = localFilesArgument(
     arguments['paths'],
     argument: 'paths',
+    platform: session.source.platform,
     maxBytes: maxBytes,
   );
   final names = [for (final file in files) file.name];

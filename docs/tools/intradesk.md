@@ -145,7 +145,9 @@ reported with its reason, in its own words.
 
 It uploads the files (`paths`, absolute) with the library's `uploadFiles`,
 as `create_intradesk_folder` adds a folder. The server reads any file the
-user's Windows account can read; Claude is told to list the files with their
+user's account can read (on Windows the description says "the user's
+Windows account" and gives `C:\Users\jan\Documents\brief.docx` as an
+example path; on Linux `/home/jan/Documents/brief.docx`); Claude is told to list the files with their
 names and sizes and the folder with its path for the user's confirmation.
 Each path must be absolute and name an existing file of at most 200 MB with
 a name Smartschool takes, and no two files may have the same name (see

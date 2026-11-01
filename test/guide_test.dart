@@ -1127,7 +1127,7 @@ void main() {
       const config = r'%USERPROFILE%\.codex\config.toml';
       expect(chatGpt, contains('`$config`'));
       final where = ExtensionSettings(
-        client: ClientContext(ClientApp.codex),
+        client: ClientContext(ClientApp.codex, ServerPlatform.windows),
       ).where;
       expect(where, contains(config));
       const path = "Instellingen → Plug-ins → MCP's → smartschool";

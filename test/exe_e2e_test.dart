@@ -55,6 +55,29 @@ final _teachersAsSubject = {
 /// Linux binary in every app (#185).
 final _onLinux = Platform.isLinux;
 
+/// How the server names a setting in its messages: on Linux by its
+/// environment variable, in the MCP client's configuration; elsewhere by
+/// its title in the Claude Desktop extension's form as well (#199).
+String _named(String title, String variable) =>
+    _onLinux ? variable : '"$title" ($variable)';
+
+/// How `smartschool_status` names a setting in its `Settings:` line.
+String _short(String title, String variable) => _onLinux ? variable : title;
+
+/// Where the server says to fix a setting, then what to restart.
+final _whereThenRestart = _onLinux
+    ? "in the Smartschool MCP server's configuration in the MCP client (its "
+          'environment variables, see https://github.com/yvanvds/'
+          'smartschool-mcp/blob/main/docs/installatie-linux.md), then restart '
+          'the MCP client'
+    : 'in the Smartschool extension settings in Claude Desktop (Settings → '
+          'Extensions), then restart Claude Desktop';
+
+/// What `smartschool_status` calls the settings in its `Settings:` line.
+final _settingsLabel = _onLinux
+    ? 'environment variables of the MCP server'
+    : 'extension settings';
+
 void main() {
   late String exePath;
 
@@ -826,9 +849,8 @@ void main() {
             '\nSkore-beheer: off: its tools are not offered. For an account '
             'with the rights for score management in Skore (Rapporten > '
             'Modellen and Puntenboeken), as a Skore administrator has: turn '
-            'on "Skore-beheer" (SMARTSCHOOL_SKORE) in the Smartschool '
-            'extension settings in Claude Desktop (Settings → Extensions), '
-            'then restart Claude Desktop.\n',
+            'on ${_named('Skore-beheer', 'SMARTSCHOOL_SKORE')} '
+            '$_whereThenRestart.\n',
           ),
         );
         final (isError, text) = await server.callTool('list_skore_classes');
@@ -1059,9 +1081,8 @@ void main() {
             '\nAanwezigheden: off: its tools are not offered. For an account '
             "with the right to record half-day presences for classes in "
             "Smartschool's Presence module, as an absence administrator has: "
-            'turn on "Aanwezigheden" (SMARTSCHOOL_PRESENCE) in the '
-            'Smartschool extension settings in Claude Desktop (Settings → '
-            'Extensions), then restart Claude Desktop.\n',
+            'turn on ${_named('Aanwezigheden', 'SMARTSCHOOL_PRESENCE')} '
+            '$_whereThenRestart.\n',
           ),
         );
         final (isError, text) = await server.callTool('set_pupils_late');
@@ -1335,9 +1356,8 @@ void main() {
             '\nLeerlingvolgsysteem: off: its tools are not offered. For an '
             "account with access to Smartschool's pupil tracking system "
             '(leerlingvolgsysteem, LVS), as most teachers have: turn on '
-            '"Leerlingvolgsysteem" (SMARTSCHOOL_LVS) in the Smartschool '
-            'extension settings in Claude Desktop (Settings → Extensions), '
-            'then restart Claude Desktop. Its tools read what the LVS holds '
+            '${_named('Leerlingvolgsysteem', 'SMARTSCHOOL_LVS')} '
+            '$_whereThenRestart. Its tools read what the LVS holds '
             'about pupils, the most sensitive data in Smartschool (care, '
             'behaviour, educational needs, sometimes health): turn it on only '
             'when the user, and their school, choose to let the assistant '
@@ -1582,7 +1602,9 @@ void main() {
   });
 
   test('smartschool_status without --credentials and without SMARTSCHOOL_* '
-      'variables reports the missing settings', () async {
+      'variables reports the missing settings, and where to fill them in: '
+      "on Linux in the MCP client's configuration, never Claude Desktop's "
+      'extension settings (#199)', () async {
     final server = await ServerProcess.start(
       exePath,
       environment: environmentWithoutSmartschool(),
@@ -1597,28 +1619,33 @@ void main() {
     expect(
       text,
       contains(
-        'Missing: "Smartschool-adres" (SMARTSCHOOL_MAIN_URL), '
-        '"Gebruikersnaam" (SMARTSCHOOL_USERNAME), '
-        '"Wachtwoord" (SMARTSCHOOL_PASSWORD). Fill them in',
+        'Missing: ${_named('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL')}, '
+        '${_named('Gebruikersnaam', 'SMARTSCHOOL_USERNAME')}, '
+        '${_named('Wachtwoord', 'SMARTSCHOOL_PASSWORD')}. Fill them in '
+        '$_whereThenRestart.\n',
       ),
     );
     expect(
       text,
       contains(
-        '\nSettings: extension settings (Smartschool-adres: missing, '
-        'Gebruikersnaam: missing, Wachtwoord: missing, 2FA-sleutel: empty '
-        '(only needed for an account with 2FA))\n',
+        '\nSettings: $_settingsLabel '
+        '(${_short('Smartschool-adres', 'SMARTSCHOOL_MAIN_URL')}: missing, '
+        '${_short('Gebruikersnaam', 'SMARTSCHOOL_USERNAME')}: missing, '
+        '${_short('Wachtwoord', 'SMARTSCHOOL_PASSWORD')}: missing, '
+        '${_short('2FA-sleutel', 'SMARTSCHOOL_MFA')}: empty (only needed for '
+        'an account with 2FA))\n',
       ),
     );
     expect(
       text,
       contains(
-        '\nDownload folder: ${server.downloads} (set in "Downloadmap" '
-        '(SMARTSCHOOL_DOWNLOAD_DIR); writable)\n',
+        '\nDownload folder: ${server.downloads} (set in '
+        '${_named('Downloadmap', 'SMARTSCHOOL_DOWNLOAD_DIR')}; writable)\n',
       ),
     );
     expect(text, contains('Server version: $packageVersion'));
     expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    if (_onLinux) expect(text, isNot(contains('Claude Desktop')));
 
     await server.stop();
     expect(
@@ -1953,8 +1980,9 @@ void main() {
     expect(missingFileError, isTrue);
     expect(
       missingFileText,
-      'There is no file "$missing" on this PC (any more): check the path. '
-      'Nothing was sent.',
+      // On Linux there is no PC (#202).
+      'There is no file "$missing" on ${_onLinux ? 'this computer' : 'this PC'} '
+      '(any more): check the path. Nothing was sent.',
     );
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
@@ -2433,6 +2461,47 @@ void main() {
       expect(text, contains(message), reason: '$tool $arguments');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
+
+    // Paths as the system the server runs on writes them (#202): on Linux
+    // no drive, no Windows account and no PC, in the tools that send files
+    // and in their argument errors.
+    final windowsOnly = RegExp(r'C:\\|drive|Windows|\bPC\b');
+    for (final name in [
+      'upload_intradesk_files',
+      'create_lesfiche',
+      'add_lesfiche_attachments',
+      'send_message',
+      'reply_to_message',
+    ]) {
+      final listed = jsonEncode({
+        'description': tools[name]!['description'],
+        'inputSchema': tools[name]!['inputSchema'],
+      });
+      if (_onLinux) {
+        expect(listed, isNot(contains(windowsOnly)), reason: name);
+        expect(listed, contains('/home/jan/Documents/'), reason: name);
+      } else {
+        expect(listed, contains(r'C:\\Users\\jan\\Documents\\'), reason: name);
+        expect(listed, contains("the user's Windows account"), reason: name);
+      }
+    }
+    final (_, relative) = await server.callTool(
+      'upload_intradesk_files',
+      arguments: {
+        'folder_id': folder,
+        'paths': ['brief.docx'],
+      },
+    );
+    expect(
+      relative,
+      _onLinux
+          ? '"brief.docx" in paths is not a full path: give the whole path of '
+                'the file, starting with /, like /home/jan/Documents/brief.docx. '
+                'Nothing was sent.'
+          : '"brief.docx" in paths is not a full path: give the whole path of '
+                'the file, starting with the drive, like '
+                'C:\\Users\\jan\\Documents\\brief.docx. Nothing was sent.',
+    );
 
     await server.stop();
     expect(await server.stderr, isNot(contains('sending username')));

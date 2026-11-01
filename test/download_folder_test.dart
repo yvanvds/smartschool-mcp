@@ -90,7 +90,10 @@ void main() {
 
     test('worded for the app the server runs in, which is known only after '
         'the folder was resolved', () {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final folder = DownloadFolder.resolve(
         ExtensionSettings(client: client),
         environment: {'SMARTSCHOOL_DOWNLOAD_DIR': inRoot('Cowork')},
@@ -260,7 +263,15 @@ void main() {
       final stat = File(saved.path).statSync();
       expect(manifest(path), {
         'format': DownloadFolder.manifestFormat,
-        'about': contains('never touches other files'),
+        // On Linux there is no extension (#201).
+        'about': allOf(
+          contains(
+            Platform.isLinux
+                ? 'The files the Smartschool MCP server saved'
+                : 'The files the Smartschool extension saved',
+          ),
+          contains('never touches other files'),
+        ),
         'cleaned_at': now.toIso8601String(),
         'files': [
           {

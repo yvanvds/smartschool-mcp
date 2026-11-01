@@ -258,6 +258,17 @@ Settings are named by their variable first (`SMARTSCHOOL_MFA
 ("2FA-sleutel")`), as the form shows them. Any other client gets the Claude
 Desktop wording.
 
+On Linux there is no extension and no ChatGPT form, so whatever the client
+calls itself, the messages name only the variable (`SMARTSCHOOL_MFA`), say
+to set it in the server's configuration in the MCP client (with a link to
+`docs/installatie-linux.md`) and to "restart the MCP client" (#199). Which
+of the three applies is `SettingsHome` in `lib/src/settings.dart`, from the
+app and `ClientContext.platform` (`ServerPlatform`). The login problem
+messages (`lib/src/problems.dart`) also read the platform, from
+`CredentialSource.platform`: on Linux they name "the Smartschool MCP server"
+instead of the extension and give `timedatectl set-ntp true` instead of
+Windows Settings for the clock (#201).
+
 **Mistyped keys.** Codex starts a server with a cleared environment: a fixed
 list of Windows variables (`WINDOWS_CORE_ENV_VARS` in openai/codex) plus the
 form's. So a variable that is close to a setting's name
@@ -555,10 +566,18 @@ Smartschool. The tools that upload share the local-file helper in
 lesfiche and those of a message):
 
 - **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
-  1 to 10 per call (for a message, `attachments` may also be left out or
-  empty). The server reads any file the user's Windows account can read, so
-  the tool descriptions tell Claude to show the user every file, with its
-  name and size, before calling.
+  as the system the server runs on reads them (`C:\...` on Windows, `/...`
+  on Linux), 1 to 10 per call (for a message, `attachments` may also be
+  left out or empty). The server reads any file the user's account can
+  read, so the tool descriptions tell Claude to show the user every file,
+  with its name and size, before calling.
+- **Wording by platform:** the descriptions, schemas and argument errors
+  speak of files as `LocalPaths` words them for `CredentialSource.platform`
+  (the session's settings, known when the tools are made): on Windows of
+  "this PC", paths like `C:\Users\jan\Documents\brief.docx` "starting
+  with the drive" and "the user's Windows account"; on Linux of "this
+  computer", paths like `/home/jan/Documents/brief.docx` "starting with /"
+  and "the user's account" (#202).
 - **Checks before anything is sent:** each path names an existing file, not
   a folder, of at most 200 MB (a sanity limit, as high as what
   `save_intradesk_file` saves: the library reads a file into memory to
@@ -662,7 +681,7 @@ check gets one extra text after its content, for the model to pass on:
   app the server runs in (the release asset's `browser_download_url`):
   `smartschool-mcp.mcpb` in Claude Desktop, `smartschool-mcp.exe` under
   Codex, and on Linux `smartschool-mcp-linux-x64` in every app
-  (`ServerPlatform` in `lib/src/update_check.dart`). A release without that
+  (`ServerPlatform` in `lib/src/client_app.dart`). A release without that
   file gets the link to its release page instead;
 - what to do with it: double-click it (under Codex also: restart ChatGPT);
   on Linux, put it in place of the old binary, `chmod +x` it and restart the

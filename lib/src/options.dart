@@ -88,7 +88,8 @@ Usage: smartschool_mcp [--credentials <path>]
 Serves MCP on stdin/stdout. Without options, the Smartschool settings come
 from the SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, SMARTSCHOOL_PASSWORD and
 SMARTSCHOOL_MFA environment variables: the Claude Desktop extension settings,
-or the environment variables of the MCP server in ChatGPT or Codex.
+the environment variables of the MCP server in ChatGPT or Codex, or on Linux
+those in the MCP client's configuration.
 SMARTSCHOOL_MFA, the 2FA key, is only needed for an account with two-factor
 authentication (teachers); students without 2FA leave it empty.
 

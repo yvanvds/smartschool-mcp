@@ -244,11 +244,10 @@ String _emptyState(Setting setting) => setting.required
       };
 
 /// How [setting] is called where the teacher fills it in: its title in the
-/// install form, its variable in ChatGPT's form, its key in the credentials
-/// file.
+/// install form, its variable in ChatGPT's form or the MCP client's
+/// configuration (Linux), its key in the credentials file.
 String _shortName(CredentialSource source, Setting setting) => switch (source) {
-  ExtensionSettings(client: ClientContext(app: ClientApp.codex)) =>
-    setting.envVar,
-  ExtensionSettings() => setting.formTitle,
+  ExtensionSettings(home: SettingsHome.claudeDesktop) => setting.formTitle,
+  ExtensionSettings() => setting.envVar,
   CredentialsFile() => setting.fileKey,
 };

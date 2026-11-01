@@ -11,6 +11,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:smartschool_mcp/src/client_app.dart';
 import 'package:smartschool_mcp/src/planner/lesfiche_writes.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
 import 'package:test/test.dart';
@@ -23,6 +24,10 @@ PlannerCourse _course(String n, String name) => PlannerCourse(
   platformId: 4069,
   name: name,
 );
+
+/// The wording the attachment tests pin unless they say otherwise: Windows,
+/// the extension's platform (#202).
+const _windows = ServerPlatform.windows;
 
 final _informatica = _course('05', 'informatica');
 final _chemie = _course('06', 'chemie');
@@ -236,12 +241,15 @@ void main() {
 
     test('the files checked, each with when pupils see it, as the library '
         'takes them; none when absent or empty', () {
-      expect(lesficheAttachmentsArgument(null), isEmpty);
-      expect(lesficheAttachmentsArgument(<Object?>[]), isEmpty);
+      expect(lesficheAttachmentsArgument(null, platform: _windows), isEmpty);
+      expect(
+        lesficheAttachmentsArgument(<Object?>[], platform: _windows),
+        isEmpty,
+      );
       final attached = lesficheAttachmentsArgument([
         {'path': ' $lussen ', 'visibility': 'never'},
         {'path': schema},
-      ]);
+      ], platform: _windows);
       expect(
         [
           for (final (:file, :visibility) in attached)
@@ -272,7 +280,7 @@ void main() {
         {'path': ' '},
       ]) {
         expect(
-          () => lesficheAttachmentsArgument([item]),
+          () => lesficheAttachmentsArgument([item], platform: _windows),
           throwsA(
             _toolError(
               'attachment 1 of attachments must be an object with the full '
@@ -288,7 +296,7 @@ void main() {
         () => lesficheAttachmentsArgument([
           {'path': lussen},
           {'path': schema, 'visibility': 'after_end:0'},
-        ]),
+        ], platform: _windows),
         throwsA(
           _toolError(
             'the visibility of attachment 2 of attachments ("$schema") is '
@@ -298,9 +306,13 @@ void main() {
         ),
       );
       expect(
-        () => lesficheAttachmentsArgument([
-          {'path': lussen},
-        ], maxBytes: 10),
+        () => lesficheAttachmentsArgument(
+          [
+            {'path': lussen},
+          ],
+          platform: _windows,
+          maxBytes: 10,
+        ),
         throwsA(_toolError(startsWith('The file "lussen.txt" ($lussen) is '))),
       );
     });

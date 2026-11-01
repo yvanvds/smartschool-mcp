@@ -223,6 +223,11 @@ sealed class CredentialSource {
   /// What the teacher restarts after fixing a setting.
   String get restart;
 
+  /// The system the server runs on, for messages that name more than the
+  /// settings: on Linux there is no extension and no Windows Settings
+  /// (`SmartschoolProblem`, #201).
+  ServerPlatform get platform;
+
   /// One line for the startup log saying which source is used.
   String get logDescription;
 
@@ -236,11 +241,12 @@ sealed class CredentialSource {
 ///
 /// Claude Desktop fills them from the extension's install form. In ChatGPT
 /// and Codex the teacher enters them as the environment variables of the
-/// MCP server. The messages say where to fix them in the app [client] names.
+/// MCP server. On Linux the teacher sets them in the MCP client's
+/// configuration. The messages say where to fix them ([home]).
 final class ExtensionSettings extends CredentialSource {
   /// [read] defaults to [EnvCredentials] and [environment] to this process's
   /// environment; tests pass their own. Without [client], the messages are
-  /// for Claude Desktop.
+  /// for Claude Desktop, on any system: the server passes one.
   const ExtensionSettings({
     this.client,
     Credentials Function()? read,
@@ -254,41 +260,58 @@ final class ExtensionSettings extends CredentialSource {
   final Credentials Function()? _read;
   final Map<String, String> Function()? _environment;
 
-  ClientApp get _app => client?.app ?? ClientApp.claudeDesktop;
+  /// Where the teacher fixes the settings: in the app [client] names, or on
+  /// Linux ([ClientContext.platform]), in the MCP client's configuration
+  /// whatever the client. Without [client], in Claude Desktop.
+  SettingsHome get home => switch (client) {
+    final client? => SettingsHome.of(client.app, client.platform),
+    null => SettingsHome.claudeDesktop,
+  };
+
+  /// [ClientContext.platform]; without [client], Windows, as for [home].
+  @override
+  ServerPlatform get platform => client?.platform ?? ServerPlatform.windows;
 
   @override
   Credentials read() => (_read ?? EnvCredentials.new)();
 
   @override
-  String get label => switch (_app) {
-    ClientApp.claudeDesktop => 'extension settings',
-    ClientApp.codex => 'environment variables of the MCP server',
+  String get label => switch (home) {
+    SettingsHome.claudeDesktop => 'extension settings',
+    SettingsHome.codex ||
+    SettingsHome.mcpClient => 'environment variables of the MCP server',
   };
 
   @override
-  String name(Setting setting) => switch (_app) {
-    ClientApp.claudeDesktop => '"${setting.formTitle}" (${setting.envVar})',
+  String name(Setting setting) => switch (home) {
+    SettingsHome.claudeDesktop => '"${setting.formTitle}" (${setting.envVar})',
     // ChatGPT's form shows the variable, which the teacher typed.
-    ClientApp.codex => '${setting.envVar} ("${setting.formTitle}")',
+    SettingsHome.codex => '${setting.envVar} ("${setting.formTitle}")',
+    // On Linux there is no form: only the variable.
+    SettingsHome.mcpClient => setting.envVar,
   };
 
   @override
-  String get where => switch (_app) {
-    ClientApp.claudeDesktop =>
+  String get where => switch (home) {
+    SettingsHome.claudeDesktop =>
       'in the Smartschool extension settings in Claude Desktop '
           '(Settings → Extensions)',
-    ClientApp.codex =>
+    SettingsHome.codex =>
       'in the ChatGPT app, under Instellingen (Settings) → Plug-ins → '
           "MCP's → ${ClientApp.codexServerName} → Omgevingsvariabelen "
           '(Environment variables); in the Codex CLI or IDE extension, under '
           '[mcp_servers.${ClientApp.codexServerName}.env] in '
           r'%USERPROFILE%\.codex\config.toml',
+    SettingsHome.mcpClient =>
+      "in the Smartschool MCP server's configuration in the MCP client "
+          '(its environment variables, see $linuxGuideUrl)',
   };
 
   @override
-  String get restart => switch (_app) {
-    ClientApp.claudeDesktop => 'restart Claude Desktop',
-    ClientApp.codex => 'restart ChatGPT (or Codex)',
+  String get restart => switch (home) {
+    SettingsHome.claudeDesktop => 'restart Claude Desktop',
+    SettingsHome.codex => 'restart ChatGPT (or Codex)',
+    SettingsHome.mcpClient => 'restart the MCP client',
   };
 
   @override
@@ -298,6 +321,31 @@ final class ExtensionSettings extends CredentialSource {
   @override
   List<MisnamedSetting> get misnamed =>
       MisnamedSetting.find((_environment ?? () => Platform.environment)().keys);
+}
+
+/// Where the teacher fixes the `SMARTSCHOOL_*` environment variables
+/// ([ExtensionSettings]), which decides how messages name a setting, where
+/// to fix it and what to restart.
+enum SettingsHome {
+  /// The Smartschool extension's settings in Claude Desktop (Windows).
+  claudeDesktop,
+
+  /// The environment variables of the MCP server in ChatGPT or Codex
+  /// (Windows).
+  codex,
+
+  /// The environment variables of the server in the MCP client's
+  /// configuration: on Linux, where the Linux binary runs in a client such
+  /// as Claude Code, whatever the client calls itself (#199).
+  mcpClient;
+
+  /// Where the settings are for [app] on [platform].
+  static SettingsHome of(ClientApp app, ServerPlatform platform) =>
+      switch ((platform, app)) {
+        (ServerPlatform.linux, _) => mcpClient,
+        (ServerPlatform.windows, ClientApp.claudeDesktop) => claudeDesktop,
+        (ServerPlatform.windows, ClientApp.codex) => codex,
+      };
 }
 
 /// An environment variable that looks like a setting but is not one, such
@@ -403,11 +451,17 @@ final class MisnamedSetting {
 /// back to searching the working directory, its parents and the home
 /// directory, so the file's existence is checked first.
 final class CredentialsFile extends CredentialSource {
-  /// [path] is resolved against the current directory.
-  CredentialsFile(String path) : path = File(path).absolute.path;
+  /// [path] is resolved against the current directory. [platform] is
+  /// [ServerPlatform.current] by default; tests pass their own.
+  CredentialsFile(String path, {ServerPlatform? platform})
+    : path = File(path).absolute.path,
+      platform = platform ?? ServerPlatform.current;
 
   /// The absolute path of the file.
   final String path;
+
+  @override
+  final ServerPlatform platform;
 
   @override
   Credentials read() {

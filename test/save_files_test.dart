@@ -498,7 +498,10 @@ void main() {
               'ChatGPT (or Codex).',
         ),
       ]) {
-        final client = ClientContext();
+        final client = ClientContext(
+          ClientApp.claudeDesktop,
+          ServerPlatform.windows,
+        );
         final session = SmartschoolSession(
           fakeExtensionSettings(null, client),
           createClient: fakeClientFactory(server, cookies),

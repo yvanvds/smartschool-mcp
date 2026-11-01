@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../client_app.dart' show ServerPlatform;
 import '../intradesk/intradesk_format.dart';
 import '../log.dart';
 import '../uploads/local_files.dart';
@@ -13,41 +14,52 @@ import 'server_tool.dart';
 
 /// What the description of a tool that sends a message says about its
 /// `attachments` argument ([messageAttachmentsArgument]), for files of at
-/// most [maxBytes].
-String messageAttachmentsDescription(int maxBytes) =>
-    'To attach files, pass the full paths of up to $maxLocalFiles files on '
-    'this PC in attachments, like C:\\Users\\jan\\Documents\\brief.docx: '
-    'files you made for the user (for example in a Cowork project folder) '
-    'or that the user names. The server reads any file the user\'s Windows '
-    'account can read, up to ${formatFileSize(maxBytes)} each. Each file '
-    'goes along under its own name, and no two may have the same name.';
+/// most [maxBytes], worded for [platform] ([LocalPaths]).
+String messageAttachmentsDescription(int maxBytes, ServerPlatform platform) {
+  final local = LocalPaths(platform);
+  return 'To attach files, pass the full paths of up to $maxLocalFiles files '
+      'on ${local.computer} in attachments, like ${local.example()}: files '
+      'you made for the user (for example in a Cowork project folder) or '
+      'that the user names. The server reads any file ${local.readableBy} '
+      'can read, up to ${formatFileSize(maxBytes)} each. Each file goes '
+      'along under its own name, and no two may have the same name.';
+}
 
 /// The input schema of the `attachments` argument of a tool that sends a
-/// message ([messageAttachmentsArgument]).
-Schema messageAttachmentsSchema() => Schema.list(
-  description:
-      'Files from this PC to send along, as confirmed by the user: the full '
-      'path of each, like C:\\Users\\jan\\Documents\\brief.docx. Each goes '
-      'along under its own name. Optional.',
-  items: Schema.string(minLength: 1),
-  maxItems: maxLocalFiles,
-);
+/// message ([messageAttachmentsArgument]), worded for [platform].
+Schema messageAttachmentsSchema(ServerPlatform platform) {
+  final local = LocalPaths(platform);
+  return Schema.list(
+    description:
+        'Files from ${local.computer} to send along, as confirmed by the '
+        'user: the full path of each, like ${local.example()}. Each goes '
+        'along under its own name. Optional.',
+    items: Schema.string(minLength: 1),
+    maxItems: maxLocalFiles,
+  );
+}
 
 /// [value], the `attachments` argument of a tool that sends a message: the
-/// files on this PC that go along with it, in the order given; empty when it
+/// files on this computer that go along with it, in the order given; empty when it
 /// is absent or an empty list.
 ///
 /// The paths are checked with [localFilesArgument]: 1 to [maxLocalFiles]
 /// absolute paths of existing files of at most [maxBytes], each with a name
 /// Smartschool takes, and no two with the same name, ignoring case. Throws a
 /// [ToolError] that names the path and says what is wrong, before anything
-/// is sent.
+/// is sent; its errors are worded for [platform].
 List<LocalFile> messageAttachmentsArgument(
   Object? value, {
+  required ServerPlatform platform,
   int maxBytes = maxLocalFileBytes,
 }) {
   if (value == null || (value is List && value.isEmpty)) return const [];
-  return localFilesArgument(value, argument: 'attachments', maxBytes: maxBytes);
+  return localFilesArgument(
+    value,
+    argument: 'attachments',
+    platform: platform,
+    maxBytes: maxBytes,
+  );
 }
 
 /// Submits a message with [send], the library call that sends it
