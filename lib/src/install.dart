@@ -18,6 +18,12 @@ import 'version.dart';
 /// The name of the installed executable.
 const installedName = 'smartschool-mcp.exe';
 
+/// The guide for Linux, where nothing installs itself: the user puts the
+/// binary in place and configures it in their MCP client.
+const linuxGuideUrl =
+    'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
+    'installatie-linux.md';
+
 /// The colleague guide for ChatGPT.
 const chatGptGuideUrl =
     'https://github.com/yvanvds/smartschool-mcp/blob/main/docs/'
@@ -42,12 +48,28 @@ const settingHints = {
 /// The folder the installer puts the server in:
 /// `%LOCALAPPDATA%\Programs\smartschool-mcp`, where Windows keeps programs
 /// installed for one user (no administrator rights needed). Null without
-/// `LOCALAPPDATA`.
+/// `LOCALAPPDATA`. A Windows path, also when worked out elsewhere (for the
+/// guide's test).
 String? installDirectory(Map<String, String> environment) {
   final local = environment['LOCALAPPDATA']?.trim() ?? '';
   if (local.isEmpty) return null;
-  return [local, 'Programs', 'smartschool-mcp'].join(Platform.pathSeparator);
+  return [local, 'Programs', 'smartschool-mcp'].join(r'\');
 }
+
+/// What the installer says on another system than Windows, in Dutch: there
+/// is nothing to install there, and how to set the server up instead.
+const notOnWindows = [
+  'Installeren voor ChatGPT kan alleen op Windows.',
+  '',
+  'Op Linux installeert dit programma zichzelf niet. Zet het waar je wil',
+  '(bv. ~/.local/bin/smartschool-mcp), maak het uitvoerbaar met',
+  'chmod +x, en stel het in je MCP-client in als opdracht van een',
+  'STDIO-server, met je instellingen als omgevingsvariabelen',
+  '(SMARTSCHOOL_MAIN_URL, SMARTSCHOOL_USERNAME, SMARTSCHOOL_PASSWORD en',
+  'met 2FA SMARTSCHOOL_MFA). Je MCP-client start het dan zelf.',
+  '',
+  'Uitleg: $linuxGuideUrl',
+];
 
 /// What [installExecutable] did.
 final class Installation {
@@ -200,7 +222,8 @@ String installInstructions(
 /// [environment], puts the installed path on the clipboard (unless not
 /// [clipboard]) and writes the instructions to [out]. When [interactive]
 /// (a console window opened by a double-click), it waits for Enter before
-/// returning, so the window stays open.
+/// returning, so the window stays open; only on Windows, where a
+/// double-click opens that window.
 ///
 /// Returns the process exit code: 0 when installed, 1 when not.
 Future<int> runInstaller({
@@ -216,7 +239,7 @@ Future<int> runInstaller({
     environment: environment ?? Platform.environment,
     source: source ?? Platform.resolvedExecutable,
   );
-  if (interactive) {
+  if (interactive && Platform.isWindows) {
     out
       ..writeln()
       ..writeln('Druk op Enter om dit venster te sluiten.');
@@ -233,7 +256,7 @@ Future<int> _install(
   required String source,
 }) async {
   if (!Platform.isWindows) {
-    out.writeln('Installeren voor ChatGPT kan alleen op Windows.');
+    out.writeln(notOnWindows.join('\n'));
     return 1;
   }
   final name = source.split(Platform.pathSeparator).last.toLowerCase();

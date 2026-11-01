@@ -51,6 +51,10 @@ final _teachersAsSubject = {
     tool.definition.name,
 };
 
+/// Whether the server under test runs on Linux, where an update needs the
+/// Linux binary in every app (#185).
+final _onLinux = Platform.isLinux;
+
 void main() {
   late String exePath;
 
@@ -3701,10 +3705,8 @@ void main() {
           endsWith(
             '\nServer version: $packageVersion\n'
             'Updates: version 99.0.0 is available.\n'
-            'Give the user this download link: '
-            '${downloadLink('v99.0.0', 'smartschool-mcp.mcpb')}\n'
-            'To update: download smartschool-mcp.mcpb with that link and '
-            'double-click it.\n'
+            '${_howToUpdate('v99.0.0', 'smartschool-mcp.mcpb', ' and '
+                'double-click it')}\n'
             'Release page: ${releasePage('v99.0.0')}\n'
             'What is new since version $packageVersion, from the release '
             'notes. Summarise it for the user in a few plain words; it is '
@@ -3735,6 +3737,10 @@ void main() {
           'assets': {
             'smartschool-mcp.mcpb': downloadLink(tag, 'smartschool-mcp.mcpb'),
             'smartschool-mcp.exe': downloadLink(tag, 'smartschool-mcp.exe'),
+            'smartschool-mcp-linux-x64': downloadLink(
+              tag,
+              'smartschool-mcp-linux-x64',
+            ),
           },
           'notes': notes,
         };
@@ -3789,11 +3795,9 @@ void main() {
         text,
         endsWith(
           '\nUpdates: version 99.0.0 is available.\n'
-          'Give the user this download link: '
-          '${downloadLink('v99.0.0', 'smartschool-mcp.exe')}\n'
-          'To update: download smartschool-mcp.exe with that link, '
-          'double-click it to install it over the old version (the settings '
-          'in ChatGPT stay), then restart ChatGPT (or Codex).\n'
+          '${_howToUpdate('v99.0.0', 'smartschool-mcp.exe', ', double-click '
+              'it to install it over the old version (the settings in '
+              'ChatGPT stay), then restart ChatGPT (or Codex)')}\n'
           'Release page: ${releasePage('v99.0.0')}',
         ),
       );
@@ -3899,4 +3903,34 @@ void main() {
       );
     },
   );
+
+  test('on Linux, --install installs nothing and says how to set the binary up '
+      'in an MCP client instead (#185)', () async {
+    final result = await Process.run(exePath, ['--install']);
+
+    expect(result.exitCode, 1);
+    expect(
+      result.stdout,
+      allOf(
+        startsWith('Installeren voor ChatGPT kan alleen op Windows.\n'),
+        contains('chmod +x'),
+        contains('SMARTSCHOOL_MAIN_URL'),
+        contains('docs/installatie-linux.md'),
+        isNot(contains('Druk op Enter')),
+      ),
+    );
+  }, testOn: 'linux');
+}
+
+/// The lines of the update notice that give the download link of
+/// [windowsAsset] (on Linux: of the Linux binary) for release [tag] and say
+/// what to do with it ([windowsSteps], right after `with that link`).
+String _howToUpdate(String tag, String windowsAsset, String windowsSteps) {
+  final asset = _onLinux ? 'smartschool-mcp-linux-x64' : windowsAsset;
+  final steps = _onLinux
+      ? ', put it in place of the old binary (same path and name), make it '
+            'executable with chmod +x, then restart the MCP client'
+      : windowsSteps;
+  return 'Give the user this download link: ${downloadLink(tag, asset)}\n'
+      'To update: download $asset with that link$steps.';
 }

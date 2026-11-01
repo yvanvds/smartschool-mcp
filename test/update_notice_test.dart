@@ -57,6 +57,7 @@ void main() {
       endpoint: endpoint ?? github.releases,
       currentVersion: '0.1.0',
       timeout: timeout,
+      platform: ServerPlatform.windows,
     );
     addTearDown(updates.close);
     return updates;

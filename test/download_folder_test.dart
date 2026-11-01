@@ -278,6 +278,10 @@ void main() {
       final folder = folderAt(root.path);
       File(inRoot('uitstap.docx')).writeAsStringSync('van de leraar');
       Directory(inRoot('uitstap (3).docx')).createSync();
+      // Windows (and macOS) ignore case in file names, Linux does not: there
+      // UITSTAP.docx is another, free name.
+      final ignoresCase = File(inRoot('UITSTAP.docx')).existsSync();
+      final thirdName = ignoresCase ? 'UITSTAP (4).docx' : 'UITSTAP.docx';
 
       final second = await save(folder, 'uitstap.docx', 'twee');
       final third = await save(folder, 'UITSTAP.docx', 'drie');
@@ -288,7 +292,7 @@ void main() {
             'this one was saved as "uitstap (2).docx"; the other file was not '
             'changed.',
       ]);
-      expect(third.name, 'UITSTAP (4).docx');
+      expect(third.name, thirdName);
       expect(File(inRoot('uitstap.docx')).readAsStringSync(), 'van de leraar');
       expect(File(second.path).readAsStringSync(), 'twee');
       expect(File(third.path).readAsStringSync(), 'drie');
@@ -297,7 +301,7 @@ void main() {
           for (final file in manifest(root.path)['files'] as List)
             (file as Map)['name'],
         ],
-        ['uitstap (2).docx', 'UITSTAP (4).docx'],
+        ['uitstap (2).docx', thirdName],
       );
     });
 

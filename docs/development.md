@@ -147,8 +147,8 @@ error's type: see [their privacy](tools/lvs.md#privacy) and
 dart compile exe bin/smartschool_mcp.dart
 ```
 
-This writes `bin/smartschool_mcp.exe` (git-ignored). Use `-o <path>` to put
-it elsewhere. To build the Claude Desktop extension instead, see
+This writes `bin/smartschool_mcp.exe` on Windows, `bin/smartschool_mcp` on
+Linux (both git-ignored). Use `-o <path>` to put it elsewhere. To build the Claude Desktop extension instead, see
 [Extension and releases](#extension-and-releases).
 
 The server speaks MCP over stdin/stdout, so **stdout is reserved for the
@@ -661,9 +661,12 @@ check gets one extra text after its content, for the model to pass on:
 - "Give the user this download link": the direct link to the file for the
   app the server runs in (the release asset's `browser_download_url`):
   `smartschool-mcp.mcpb` in Claude Desktop, `smartschool-mcp.exe` under
-  Codex. A release without that file gets the link to its release page
-  instead;
+  Codex, and on Linux `smartschool-mcp-linux-x64` in every app
+  (`ServerPlatform` in `lib/src/update_check.dart`). A release without that
+  file gets the link to its release page instead;
 - what to do with it: double-click it (under Codex also: restart ChatGPT);
+  on Linux, put it in place of the old binary, `chmod +x` it and restart the
+  MCP client;
 - the release page, as a second link;
 - what is new: the `## Nieuw in deze versie` section of the notes of every
   release newer than the running one, newest first, with the request to
@@ -694,8 +697,8 @@ GitHub.
 
 A release must be tagged `vX.Y.Z` with the version in `pubspec.yaml`, be a
 full release (not a draft or pre-release), carry the extension as
-`smartschool-mcp.mcpb` and the server as `smartschool-mcp.exe` (the notice
-links to those files), and have the `## Nieuw in deze versie` section in its
+`smartschool-mcp.mcpb`, the server as `smartschool-mcp.exe` and the Linux
+binary as `smartschool-mcp-linux-x64` (the notice links to those files), and have the `## Nieuw in deze versie` section in its
 notes. The release workflow takes care of all of it (see
 [Extension and releases](#extension-and-releases)).
 
@@ -768,15 +771,23 @@ To release:
    `CHANGELOG.md`; commit and merge.
 2. Tag that commit `vX.Y.Z` and push the tag.
 
-The *Release* workflow (`.github/workflows/release.yml`, on Windows) then
-checks the tag against the version, runs the tests, builds the extension,
-validates and packs it with `mcpb`, and publishes a full GitHub release with
-the extension attached as `smartschool-mcp.mcpb` and the server in it as
-`smartschool-mcp.exe` (always those names: the update notice links to them).
+The *Release* workflow (`.github/workflows/release.yml`) then, first on
+Linux (job `linux`), checks the tag against the version, runs the tests and
+compiles the server to `smartschool-mcp-linux-x64`; then on Windows it does
+the same checks, builds the extension, validates and packs it with `mcpb`,
+and publishes a full GitHub release with the extension attached as
+`smartschool-mcp.mcpb`, the server in it as `smartschool-mcp.exe` and the
+Linux binary as `smartschool-mcp-linux-x64` (always those names: the update
+notice links to them, the Linux binary on Linux in every app). The Linux
+binary is passed on as a workflow artifact, so the release is published once,
+with all three files. On Linux there is no extension (`manifest.json` stays
+`win32` only) and no installer: `--install` says how to configure the binary
+in an MCP client instead ([docs/installatie-linux.md](installatie-linux.md)).
+CI (`.github/workflows/ci.yml`) runs every check on Windows and on Linux.
 `tool/release_notes.dart` writes its notes: the version's section of
 `CHANGELOG.md` under `## Nieuw in deze versie` (what the update notice
 shows), then `.github/release-notes.md` under `## Installeren of bijwerken`
-(how to install, in Dutch, with links to both colleague guides). The
+(how to install, in Dutch, with links to the colleague guides). The
 generated release notes follow. `test/release_notes_test.dart` checks that
 the update check reads exactly that section back. Both workflows pin the
 same `mcpb` version. The executable is not signed.

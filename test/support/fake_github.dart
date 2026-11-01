@@ -74,7 +74,7 @@ class FakeGitHub {
 
   /// Publishes the release [tag] (in front of the others, and instead of an
   /// earlier one with that tag), as GitHub describes it: with [assets]
-  /// attached (both files by default) and [body] as its notes (by default
+  /// attached (all three files by default) and [body] as its notes (by default
   /// [releaseBody] for [whatIsNew]).
   void publish(
     String tag, {
@@ -83,6 +83,7 @@ class FakeGitHub {
     List<String> assets = const [
       UpdateChecker.assetName,
       UpdateChecker.exeAssetName,
+      UpdateChecker.linuxAssetName,
     ],
     bool draft = false,
     bool prerelease = false,

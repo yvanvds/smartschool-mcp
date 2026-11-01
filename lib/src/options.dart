@@ -97,17 +97,20 @@ authentication (teachers); students without 2FA leave it empty.
                         mfa, download_dir, skore, presence and lvs). For
                         development.
 
-  --install             Install for ChatGPT and Codex instead of serving:
-                        copy this executable to
+  --install             Windows only. Install for ChatGPT and Codex instead
+                        of serving: copy this executable to
                         %LOCALAPPDATA%\\Programs\\smartschool-mcp and show, in
                         Dutch, what to fill in in ChatGPT. Started from a
                         console without options (a double-click), the
-                        server does the same.
+                        server does the same. On Linux nothing is installed:
+                        configure this binary in your MCP client
+                        (docs/installatie-linux.md).
   --no-clipboard        With --install: leave the clipboard alone.
 
 save_intradesk_file and save_message_attachment save files into the folder in
 SMARTSCHOOL_DOWNLOAD_DIR (then download_dir in the credentials file), by
-default %USERPROFILE%\\Downloads\\Smartschool. The server deletes the files it
+default %USERPROFILE%\\Downloads\\Smartschool on Windows and
+\$HOME/Downloads/Smartschool on Linux. The server deletes the files it
 saved there after 7 days and never touches other files.
 
 SMARTSCHOOL_SKORE=true (then skore: true in the credentials file) offers the

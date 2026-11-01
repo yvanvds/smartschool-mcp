@@ -43,6 +43,7 @@ void main() {
       currentVersion: current,
       timeout: timeout,
       clock: () => now,
+      platform: ServerPlatform.windows,
     );
     addTearDown(updates.close);
     return updates;
@@ -64,14 +65,18 @@ void main() {
   Map<String, Object?> savedState() =>
       jsonDecode(stateFile.readAsStringSync()) as Map<String, Object?>;
 
-  /// The release [tag] as saved in the state file: its page, both download
-  /// links, and [notes].
+  /// The release [tag] as saved in the state file: its page, the three
+  /// download links, and [notes].
   Map<String, Object?> saved(String tag, {String? notes}) => {
     'tag': tag,
     'url': releasePage(tag),
     'assets': {
       UpdateChecker.assetName: downloadLink(tag, UpdateChecker.assetName),
       UpdateChecker.exeAssetName: downloadLink(tag, UpdateChecker.exeAssetName),
+      UpdateChecker.linuxAssetName: downloadLink(
+        tag,
+        UpdateChecker.linuxAssetName,
+      ),
     },
     'notes': notes,
   };
@@ -340,15 +345,22 @@ void main() {
       final release = (await available(checker())).release;
 
       expect(
-        release.download(ClientApp.claudeDesktop),
+        release.download(
+          ClientApp.claudeDesktop,
+          platform: ServerPlatform.windows,
+        ),
         Uri.parse(downloadLink('v0.2.0', 'smartschool-mcp.mcpb')),
       );
       expect(
-        release.download(ClientApp.codex),
+        release.download(ClientApp.codex, platform: ServerPlatform.windows),
         Uri.parse(downloadLink('v0.2.0', 'smartschool-mcp.exe')),
       );
       expect(
-        UpdateChecker.howToUpdate(release, ClientApp.claudeDesktop),
+        UpdateChecker.howToUpdate(
+          release,
+          ClientApp.claudeDesktop,
+          platform: ServerPlatform.windows,
+        ),
         'Give the user this download link: '
         '${downloadLink('v0.2.0', 'smartschool-mcp.mcpb')}\n'
         'To update: download smartschool-mcp.mcpb with that link and '
@@ -356,7 +368,11 @@ void main() {
         'Release page: ${releasePage('v0.2.0')}',
       );
       expect(
-        UpdateChecker.howToUpdate(release, ClientApp.codex),
+        UpdateChecker.howToUpdate(
+          release,
+          ClientApp.codex,
+          platform: ServerPlatform.windows,
+        ),
         'Give the user this download link: '
         '${downloadLink('v0.2.0', 'smartschool-mcp.exe')}\n'
         'To update: download smartschool-mcp.exe with that link, '
@@ -366,21 +382,129 @@ void main() {
       );
     });
 
+    test('on Linux: the Linux binary in every app, with what to do with it '
+        '(#185)', () async {
+      github.publish('v0.2.0');
+
+      final release = (await available(checker())).release;
+      final link = downloadLink('v0.2.0', 'smartschool-mcp-linux-x64');
+
+      for (final app in ClientApp.values) {
+        expect(
+          UpdateChecker.assetFor(app, platform: ServerPlatform.linux),
+          'smartschool-mcp-linux-x64',
+          reason: '$app',
+        );
+        expect(
+          release.download(app, platform: ServerPlatform.linux),
+          Uri.parse(link),
+          reason: '$app',
+        );
+        expect(
+          UpdateChecker.howToUpdate(
+            release,
+            app,
+            platform: ServerPlatform.linux,
+          ),
+          'Give the user this download link: $link\n'
+          'To update: download smartschool-mcp-linux-x64 with that link, put '
+          'it in place of the old binary (same path and name), make it '
+          'executable with chmod +x, then restart the MCP client.\n'
+          'Release page: ${releasePage('v0.2.0')}',
+          reason: '$app',
+        );
+      }
+    });
+
+    test('on Linux, the notice names the server, not the extension, and '
+        'links the Linux binary (#185)', () async {
+      github.publish('v0.2.0');
+      final updates = UpdateChecker(
+        stateFile: stateFile,
+        endpoint: github.releases,
+        currentVersion: '0.1.0',
+        clock: () => now,
+        platform: ServerPlatform.linux,
+      );
+      addTearDown(updates.close);
+      await available(updates);
+
+      final notice = updates.takeNotice();
+
+      expect(
+        notice,
+        startsWith(
+          'Update available: version 0.2.0 of the Smartschool MCP server has '
+          'been released (this is version 0.1.0). Please tell the user.\n'
+          'Give the user this download link: '
+          '${downloadLink('v0.2.0', 'smartschool-mcp-linux-x64')}\n',
+        ),
+      );
+    });
+
+    test('the server knows the system it runs on', () {
+      expect(
+        ServerPlatform.current,
+        Platform.isLinux ? ServerPlatform.linux : ServerPlatform.windows,
+      );
+      expect(
+        UpdateChecker(stateFile: stateFile).platform,
+        ServerPlatform.current,
+      );
+    });
+
+    test('a release without the Linux binary (before #185): the release '
+        'page on Linux', () async {
+      github.publish(
+        'v0.2.0',
+        assets: [UpdateChecker.assetName, UpdateChecker.exeAssetName],
+      );
+
+      final release = (await available(checker())).release;
+
+      expect(
+        UpdateChecker.howToUpdate(
+          release,
+          ClientApp.codex,
+          platform: ServerPlatform.linux,
+        ),
+        'Give the user this link to the release page: '
+        '${releasePage('v0.2.0')}\n'
+        'To update: download smartschool-mcp-linux-x64 from the release page, '
+        'put it in place of the old binary (same path and name), make it '
+        'executable with chmod +x, then restart the MCP client.',
+      );
+    });
+
     test('a release without the file: the release page instead', () async {
       github.publish('v0.2.0', assets: [UpdateChecker.exeAssetName]);
 
       final release = (await available(checker())).release;
 
-      expect(release.download(ClientApp.claudeDesktop), isNull);
       expect(
-        UpdateChecker.howToUpdate(release, ClientApp.claudeDesktop),
+        release.download(
+          ClientApp.claudeDesktop,
+          platform: ServerPlatform.windows,
+        ),
+        isNull,
+      );
+      expect(
+        UpdateChecker.howToUpdate(
+          release,
+          ClientApp.claudeDesktop,
+          platform: ServerPlatform.windows,
+        ),
         'Give the user this link to the release page: '
         '${releasePage('v0.2.0')}\n'
         'To update: download smartschool-mcp.mcpb from the release page and '
         'double-click it.',
       );
       expect(
-        UpdateChecker.howToUpdate(release, ClientApp.codex),
+        UpdateChecker.howToUpdate(
+          release,
+          ClientApp.codex,
+          platform: ServerPlatform.windows,
+        ),
         startsWith(
           'Give the user this download link: '
           '${downloadLink('v0.2.0', 'smartschool-mcp.exe')}\n',

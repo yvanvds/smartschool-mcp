@@ -4,7 +4,8 @@ name: Release
 # as a full GitHub release (not a draft or pre-release: the update check
 # ignores those) with the stable asset names smartschool-mcp.mcpb and
 # smartschool-mcp.exe (the server itself, which installs itself for ChatGPT
-# and Codex when double-clicked): the update notice links to them.
+# and Codex when double-clicked), and smartschool-mcp-linux-x64 (the server
+# for Linux, built and tested there, #185): the update notice links to them.
 on:
   push:
     tags:
@@ -14,7 +15,42 @@ permissions:
   contents: write
 
 jobs:
+  linux:
+    # Built first and passed on, so the release is published once, with all
+    # its files: a Linux server never sees a release without its binary.
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Install dependencies
+        run: dart pub get
+      - name: Check that the tag matches the version
+        run: dart run tool/check_version.dart --tag "$TAG"
+      - name: Test
+        run: dart test
+      - name: Build the Linux binary
+        run: >-
+          dart compile exe bin/smartschool_mcp.dart
+          -o smartschool-mcp-linux-x64
+      - name: Check that the binary starts
+        # Without logging in: --install refuses on Linux and says how to set
+        # the binary up (exit code 1).
+        run: |
+          set +e
+          ./smartschool-mcp-linux-x64 --install
+          test $? -eq 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: smartschool-mcp-linux-x64
+          if-no-files-found: error
+
   release:
+    needs: linux
     runs-on: windows-latest
     env:
       # The tag, through the environment rather than pasted into the scripts.
@@ -48,13 +84,18 @@ jobs:
         run: >-
           dart run tool/release_notes.dart --tag "$env:TAG"
           --output "$env:RUNNER_TEMP/release-notes.md"
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: linux
       - name: Publish the release
         # gh puts the generated notes after the written ones. The exe is the
-        # one in the extension, under its own name.
+        # one in the extension, under its own name; the Linux binary comes
+        # from the linux job.
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release create "$env:TAG" smartschool-mcp.mcpb
-          bundle/server/smartschool-mcp.exe
+          bundle/server/smartschool-mcp.exe linux/smartschool-mcp-linux-x64
           --title "$env:TAG" --notes-file "$env:RUNNER_TEMP/release-notes.md"
           --generate-notes --verify-tag
