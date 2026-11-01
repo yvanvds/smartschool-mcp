@@ -21,7 +21,9 @@ Je vraagt het gewoon in een gesprek:
   weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
   prullenbak van de module verplaatsen en er weer uit terugzetten.
   Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en
-  leerdoelen, en een jaarplan weer verwijderen. Je eigen
+  leerdoelen, en een jaarplan weer verwijderen. Een lescluster van een
+  jaarplan plannen voor je klassen over een periode, en die weer naar de
+  prullenbak van de planner verplaatsen. Je eigen
   lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
   lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
   als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
@@ -421,6 +423,15 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   leerdoelen krijgen. Een jaarplan verwijderen kan, na jouw akkoord, maar
   niet ongedaan maken: een jaarplan heeft geen prullenbak. De lesfiches
   erin blijven in je bibliotheek.
+- "Plan de cluster Lussen van mijn jaarplan Informatica 5 voor 6A1 van 16
+  tot 27 november."
+  Claude zoekt een lesuur informatica van 6A1 in je planner en toont de
+  cluster, de klas, het vak en de eerste en laatste dag. Na jouw akkoord
+  plant het de cluster: in die periode worden je lesuren informatica van
+  6A1 momenten van de cluster, en je leerlingen zien ze meteen. De geplande
+  cluster blijft verbonden met de cluster in je jaarplan. Na jouw akkoord
+  verplaatst Claude ze ook weer naar de prullenbak van de planner, waar je
+  ze 30 dagen kunt terugzetten.
 - "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
   uur."
   Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken
@@ -751,7 +762,8 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   lesfiches naar de prullenbak en zet ze eruit terug; ze kopieert
   lesfiches, zet er labels op en maakt eigen labels. Ze maakt jaarplannen
   met lesclusters uit je lesfiches, en verwijdert een jaarplan. Een cluster
-  voor een klas plannen kan ze nog niet. Lesfiches voor altijd
+  plant ze voor je klassen over een periode, en verplaatst die geplande
+  cluster weer naar de prullenbak van de planner. Lesfiches voor altijd
   verwijderen, en een label aanpassen of verwijderen, kan ze niet.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of

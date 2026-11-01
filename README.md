@@ -31,7 +31,7 @@ offered only when the switch is on; every switch is off by default (see
 | [Status](docs/tools/status.md) | Whether the connection works, or what to fix | | 1 |
 | [Messages](docs/tools/messages.md) | Read, search, archive, mark, flag and trash messages; reply and send | | 11 |
 | [Intradesk](docs/tools/intradesk.md) | Find, read and save files; add folders, weblinks and files; trash | | 8 |
-| [Planner](docs/tools/planner.md) | Read planners; plan lessons, tests and tasks in your own | | 9 |
+| [Planner](docs/tools/planner.md) | Read planners; plan lessons, tests, tasks and lesson clusters of year plans in your own | | 12 |
 | [Lesfiches](docs/tools/lesfiches.md) | Read, make, copy, change, label, trash, restore and plan your lesfiches, save lessons as lesfiches, and build year plans from them | | 26 |
 | [Learning goals](docs/tools/goals.md) | The curricula of the goal selector and their goals, to set on lesfiches and lessons; read only | | 2 |
 | [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments, project ratings | | 12 |
@@ -58,10 +58,10 @@ Many tools only read. Those that change Smartschool share these rules:
   tool says that it may or may not have gone through and what to read to
   check, and Claude is told not to repeat a write that could then happen
   twice.
-- **A trash, not a deletion.** Messages, Intradesk items, lesfiches and
-  assignments are moved to a trash in Smartschool, where you restore them
-  in Smartschool itself (lesfiches also with `restore_lesfiches`). No tool
-  empties a trash. The one exception is `delete_year_plan`: a year plan of
+- **A trash, not a deletion.** Messages, Intradesk items, lesfiches,
+  assignments and planned lesson clusters are moved to a trash in
+  Smartschool, where you restore them in Smartschool itself (lesfiches also
+  with `restore_lesfiches`). No tool empties a trash. The one exception is `delete_year_plan`: a year plan of
   Lesfiches has no trash, so it is deleted, and its description says so;
   the lesfiches in it stay.
 

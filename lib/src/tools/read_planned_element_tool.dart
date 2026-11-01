@@ -16,7 +16,8 @@ ServerTool readPlannedElementTool(SmartschoolSession session) => ServerTool(
     title: 'Read a Smartschool planner element',
     description:
         'Reads one element of the Smartschool planner (a lesson, an '
-        'assignment, an empty lesson hour, a meeting, a lesson-free day, …) '
+        'assignment, an empty lesson hour, a planned lesson cluster or one '
+        'of its moments, a meeting, a lesson-free day, …) '
         'in full, by the id list_planner shows. Gives what its list line '
         'says, one field per line, plus its public info and private info as '
         'plain text, its labels, its attachments and weblinks, each with '
@@ -25,7 +26,11 @@ ServerTool readPlannedElementTool(SmartschoolSession session) => ServerTool(
         'and type it is stored with; a goal the goal selector does not know '
         'is said to be unknown); for an '
         'assignment also its type, from when pupils see it, whether it was '
-        'announced and its status. Public info is what pupils see. Private '
+        'announced and its status; for a planned lesson cluster the ids of '
+        'the lesson cluster and year plan it was planned from (it stays '
+        'linked to them) and the lesfiches planned; for a lesson cluster '
+        'moment its planned lesson cluster, with its id. Public info is '
+        'what pupils see. Private '
         'info is hidden from pupils, but it is not private to its author: '
         'colleagues who can see the element read it too. The detail is up '
         'to date at once, while list_planner can show an old state for a '

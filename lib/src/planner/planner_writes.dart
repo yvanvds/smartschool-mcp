@@ -264,6 +264,31 @@ String _and(List<String> items) => items.length < 2
     ? items.join()
     : '${items.sublist(0, items.length - 1).join(', ')} and ${items.last}';
 
+/// Refuses [hour] unless it is in the user's own planner (the user is one of
+/// its organisers): a class planner also shows colleagues' hours, and [plan]
+/// (like `an assignment`) is only planned in an own hour. The library's
+/// create of an assignment and plan of a lesson cluster do not check this,
+/// as they take no hour.
+Future<void> refuseUnlessOwnHour(
+  PlannerService planner,
+  PlannedElementDetail hour, {
+  required String plan,
+}) async {
+  final me = (await planner.ownCalendar()).id;
+  if (hour.organiserUsers.any((user) => user.id == me)) return;
+  final organisers = [
+    for (final user in hour.organiserUsers)
+      if (user.name.trim().isNotEmpty) user.name.trim(),
+  ];
+  throw ToolError(
+    'hour is not a lesson hour of your own planner: the '
+    '${formatElementSummary(hour)} is organised by '
+    '${organisers.isEmpty ? 'someone else' : organisers.join(', ')}. Plan '
+    '$plan in one of your own lesson hours, as list_planner (planner '
+    'me) shows them.',
+  );
+}
+
 /// Runs the planner write [write] with [withPlanner], for a tool that
 /// changes the planner.
 ///
