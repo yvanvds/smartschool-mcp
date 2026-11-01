@@ -38,7 +38,8 @@ lists the labels there are. At most 200 lines.
 
 Reads one lesfiche in full: its kind, name, icon, labels and courses,
 whether it is visible in the module, its weblinks and attachments (each with
-when pupils see it) and its public and private info. A lesfiche in the trash
+when pupils see it), its learning goals (see [Learning goals](goals.md)) and
+its public and private info. A lesfiche in the trash
 is still read.
 
 ### `read_lesfiche_attachment`
@@ -158,7 +159,11 @@ text (through `htmlToText`, as `read_planned_element`). When pupils see a
 weblink or an attachment (`LessonContentVisibility`) is worded from the
 lesson the lesfiche is planned in: always, never, from its start, from its
 end, or a number of days after its end; an option the library does not
-know, by the module's name for it. Weblinks of publishers and deeplinks are
+know, by the module's name for it. The learning goals
+(`LessonContentDetail.goals`, dartschool#223) are named by the goal selector
+(`GoalService.resolve`, #186; see [How the goals of a lesfiche or a lesson
+are named](goals.md#how-the-goals-of-a-lesfiche-or-a-lesson-are-named)),
+`Goals: none` without any. Weblinks of publishers and deeplinks are
 counted, not shown. The module answers a made-up id, and a lesfiche asked
 for as the other kind, with `404` (`SmartschoolLessonContentNotFoundError`),
 and an id that is not a UUID with a bare `500`, so that one is not sent:
@@ -426,7 +431,9 @@ tools that make or change a lesfiche, which give it back in the same form:
 the `type` argument of a tool that takes one lesfiche (`lesficheTypeSchema`,
 `lesficheTypeArgument`), the read of its detail (`readLesficheDetail`, which
 keeps the detail when the course list fails and turns a `404` into "take the
-id and the kind from `list_lesfiches`", `lesficheNotFound`), the lesfiche as
+id and the kind from `list_lesfiches`", `lesficheNotFound`; and
+`readNamedLesficheDetail`, which also names its goals, for `read_lesfiche`
+and the read-back of a change, see [Learning goals](goals.md#helpers-and-tests)), the lesfiche as
 text (`formatLesficheDetail`, with `formatLesficheWeblink`,
 `formatLesficheAttachment` and `formatLesficheVisibility`, the wording of a
 `LessonContentVisibility`), the `visibility` of a weblink or an attachment

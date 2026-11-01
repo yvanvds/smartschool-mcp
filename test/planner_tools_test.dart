@@ -1116,6 +1116,7 @@ void main() {
         'Weblinks:\n'
         '- Opdracht (https://example.com/opdracht) | visible to pupils: '
         'always\n'
+        'Goals: none\n'
         '\n'
         'Public info (what pupils see):\n'
         'Lees hoofdstuk 4\n'

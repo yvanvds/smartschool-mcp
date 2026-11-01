@@ -347,6 +347,7 @@ void main() {
           '| id ${_partId('f', 3)}\n'
           '2. schema.png | 3 bytes | application/octet-stream | visible to '
           'pupils: always | id ${_partId('f', 4)}\n'
+          'Goals: none\n'
           '\n'
           'Public info (what pupils see):\n'
           'Hoofdstuk 5\n',

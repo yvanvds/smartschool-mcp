@@ -118,6 +118,8 @@ void main() {
       'remove_lesfiche_attachment',
       'trash_lesfiches',
       'plan_lesfiche',
+      'list_curricula',
+      'read_curriculum',
       'list_skore_gradebooks',
       'read_skore_gradebook',
       'list_skore_evaluations',
@@ -156,6 +158,9 @@ void main() {
       'list_lesfiches',
       'read_lesfiche',
       'read_lesfiche_attachment',
+      // The learning goals of the goal selector (#186).
+      'list_curricula',
+      'read_curriculum',
       // The user's own gradebooks in Skore, without a switch (#140, #141),
       // and their reports (#171).
       'list_skore_gradebooks',
@@ -505,6 +510,16 @@ void main() {
       'description': isA<String>(),
       'enum': ['lessons', 'assignments', 'all'],
     });
+    // The learning goals (#186): a curriculum by its id.
+    final curriculaSchema = tools['list_curricula']!['inputSchema'] as Map;
+    expect(curriculaSchema['required'], isNull);
+    expect((curriculaSchema['properties'] as Map).keys, ['query']);
+    final curriculumSchema = tools['read_curriculum']!['inputSchema'] as Map;
+    expect(curriculumSchema['required'], ['curriculum']);
+    expect((curriculumSchema['properties'] as Map).keys, [
+      'curriculum',
+      'query',
+    ]);
     final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
     expect(planLesficheSchema['required'], ['hour', 'lesfiche']);
     expect((planLesficheSchema['properties'] as Map).keys, [
@@ -644,7 +659,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(69));
+    expect(tools, hasLength(71));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -718,7 +733,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(53));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -757,8 +772,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(59));
-      expect([for (final tool in tools.skip(51)) tool['name']], skoreTools);
+      expect(tools, hasLength(61));
+      expect([for (final tool in tools.skip(53)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -951,7 +966,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(53));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -991,8 +1006,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(55));
-      expect([for (final tool in tools.skip(51)) tool['name']], presenceTools);
+      expect(tools, hasLength(57));
+      expect([for (final tool in tools.skip(53)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1188,10 +1203,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(63));
-      expect([for (final tool in tools.skip(59)) tool['name']], presenceTools);
+      expect(tools, hasLength(65));
+      expect([for (final tool in tools.skip(61)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(51).take(8)) tool['name'],
+        for (final tool in tools.skip(53).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1227,7 +1242,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(53));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1280,8 +1295,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(57));
-      expect([for (final tool in tools.skip(51)) tool['name']], lvsTools);
+      expect(tools, hasLength(59));
+      expect([for (final tool in tools.skip(53)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1465,10 +1480,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(69));
-      expect([for (final tool in tools.skip(63)) tool['name']], lvsTools);
+      expect(tools, hasLength(71));
+      expect([for (final tool in tools.skip(65)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(59).take(4)) tool['name']],
+        [for (final tool in tools.skip(61).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1477,7 +1492,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(51).take(8)) tool['name'],
+        for (final tool in tools.skip(53).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1986,6 +2001,12 @@ void main() {
       (
         'trash_assignment',
         {'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      // The learning goals (#186).
+      ('list_curricula', {'query': 'eindtermen'}),
+      (
+        'read_curriculum',
+        {'curriculum': 'e0000000-0000-4000-8000-000000000001'},
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);

@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../intradesk/intradesk_format.dart';
 import '../log.dart';
 import '../planner/lesfiche_detail.dart';
@@ -364,7 +365,8 @@ CallToolResult _result(
               '- ${formatLesficheLine(item, withCourseNames: false)}',
           ],
           '',
-          formatLesficheDetail(lesfiche),
+          // A new lesfiche has no goals: the create sends none.
+          formatLesficheDetail(lesfiche, goals: noGoals),
         ].join('\n'),
       ),
     ],

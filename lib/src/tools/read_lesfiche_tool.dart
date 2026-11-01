@@ -8,8 +8,9 @@ import 'server_tool.dart';
 
 /// `read_lesfiche`: one lesfiche of the user's Lesfiches module in full
 /// (`LessonContentService.getDetailById`, dartschool#129), with its weblinks
-/// and attachments, when pupils see them, and its public and private info
-/// as plain text ([formatLesficheDetail]).
+/// and attachments, when pupils see them, its learning goals named by the
+/// goal selector ([readNamedLesficheDetail], #186), and its public and private info as
+/// plain text ([formatLesficheDetail]).
 ServerTool readLesficheTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'read_lesfiche',
@@ -20,7 +21,10 @@ ServerTool readLesficheTool(SmartschoolSession session) => ServerTool(
         'assignment with its type), name, icon, labels, courses, whether it '
         'is visible or hidden in the module, its weblinks (name, address, '
         'icon, when pupils see it, id) and its attachments (numbered, with '
-        'file name, size, type, when pupils see it, id), and its public info '
+        'file name, size, type, when pupils see it, id), its learning goals '
+        '(each with its curriculum, headings, number and text, and the id, '
+        'leerplanId and type it is stored with; a goal the goal selector '
+        'does not know is said to be unknown), and its public info '
         '(what pupils see) and private info (hidden from pupils) as plain '
         'text. When pupils see a weblink or an attachment counts from the '
         'lesson the lesfiche is planned in: always, never, from the start of '
@@ -65,13 +69,19 @@ Future<CallToolResult> _read(
 ) async {
   final id = lesficheArgument(arguments['lesfiche']);
   final type = lesficheTypeArgument(arguments['type']);
-  final (:detail, :courseError) = await withPlannerClient(
+  final (:detail, :courseError, :goals) = await withPlannerClient(
     session,
-    (client) => readLesficheDetail(client, type, id),
+    (client) => readNamedLesficheDetail(client, type, id),
   );
   return CallToolResult(
     content: [
-      TextContent(text: formatLesficheDetail(detail, courseError: courseError)),
+      TextContent(
+        text: formatLesficheDetail(
+          detail,
+          courseError: courseError,
+          goals: goals,
+        ),
+      ),
     ],
   );
 }

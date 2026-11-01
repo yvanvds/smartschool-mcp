@@ -6,6 +6,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart'
     show PlannerService;
 
 import 'fake_download.dart';
+import 'fake_goals.dart';
 import 'fake_uploads.dart';
 
 /// The planner user id of the fake's own account: the `authenticatedUser.id`
@@ -304,9 +305,14 @@ class FakePlannedElement {
     this.hasLinkedEvaluation = false,
     this.capabilities = const {},
     this.userRoles = const [],
+    this.goals = const [],
   });
 
   final String id;
+
+  /// The learning goals it stores (`goals`, dartschool#226), each
+  /// `{id, leerplanId, type}` ([fakeGoalRef]).
+  final List<Map<String, String>> goals;
 
   /// The planner's name of the type (`planned-lessons`).
   final String type;
@@ -395,12 +401,13 @@ class FakePlannedElement {
     'canUserSeeProperties': {'id': true, 'name': true},
   };
 
-  /// This element with the [name], [publicInfo] and [privateInfo] given
-  /// changed, as an edit of the planner leaves it.
+  /// This element with the [name], [publicInfo], [privateInfo] and [goals]
+  /// given changed, as an edit of the planner leaves it.
   FakePlannedElement withChanges({
     String? name,
     String? publicInfo,
     String? privateInfo,
+    List<Map<String, String>>? goals,
   }) => FakePlannedElement(
     id: id,
     type: type,
@@ -426,6 +433,7 @@ class FakePlannedElement {
     hasLinkedEvaluation: hasLinkedEvaluation,
     capabilities: capabilities,
     userRoles: userRoles,
+    goals: goals ?? this.goals,
   );
 
   /// A new element of [type] with the id [id] in this element's lesson
@@ -535,7 +543,7 @@ class FakePlannedElement {
         },
     ],
     'courseLinks': <Object?>[],
-    'goals': <Object?>[],
+    'goals': goals,
     'reminders': <Object?>[],
     if (_isAssignment) ...{
       'uploadFolder': null,
@@ -654,10 +662,15 @@ class FakeLesfiche {
     this.weblinks = const [],
     this.attachments = const [],
     this.partnerWeblinks = 0,
+    this.goals = const [],
   });
 
   final String id;
   final String name;
+
+  /// The learning goals it stores (`goals`, dartschool#223), each
+  /// `{id, leerplanId, type}` ([fakeGoalRef]); only in the detail.
+  final List<Map<String, String>> goals;
 
   /// The module's name of the kind: `lessons` or `assignments`.
   final String type;
@@ -719,6 +732,7 @@ class FakeLesfiche {
     weblinks: weblinks ?? this.weblinks,
     attachments: attachments ?? this.attachments,
     partnerWeblinks: partnerWeblinks,
+    goals: goals,
   );
 
   Map<String, Object?> toJson() => {
@@ -783,7 +797,7 @@ class FakeLesfiche {
       if (key != 'dateStateChanged' && key != 'dateLastChanged') key: value,
     'info': privateInfo,
     'privateInfo': privateInfo,
-    'goals': <Object?>[],
+    'goals': goals,
     'uploadFolder': null,
     'miniDBItems': <Object?>[],
     'capabilities': {

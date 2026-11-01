@@ -21,7 +21,9 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   van je pc, en ze naar de prullenbak van de module verplaatsen. Je eigen
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
-  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
+  leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
+  minidatabanken van je school), en welke een lesfiche of een les heeft.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de

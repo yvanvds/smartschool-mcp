@@ -8,6 +8,7 @@ import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/settings.dart';
 import 'package:test/test.dart';
 
+import 'fake_goals.dart';
 import 'fake_intradesk.dart';
 import 'fake_lvs.dart';
 import 'fake_messages.dart';
@@ -17,6 +18,7 @@ import 'fake_skore.dart';
 import 'fake_skore_gradebook.dart';
 import 'fake_uploads.dart';
 
+export 'fake_goals.dart';
 export 'fake_intradesk.dart';
 export 'fake_lvs.dart';
 export 'fake_messages.dart';
@@ -145,6 +147,10 @@ class FakeSmartschool implements HttpClientAdapter {
   /// The planner, served to logged-in requests. Its own account is
   /// [fakePlannerMe], the user of the fake's pages.
   late final FakePlanner planner = FakePlanner(uploads: uploads);
+
+  /// The goal selector (dartschool#222), served to logged-in requests:
+  /// empty until a test fills it (`FakeGoalSelector.loadSample`).
+  final FakeGoalSelector goals = FakeGoalSelector();
 
   /// The Skore module, served to logged-in requests: empty until a test
   /// fills it (`FakeSkore.loadSchool`).
@@ -275,6 +281,7 @@ class FakeSmartschool implements HttpClientAdapter {
           mailbox.respond(options) ??
           intradesk.respond(options) ??
           planner.respond(options) ??
+          goals.respond(options) ??
           skore.respond(options) ??
           skoreGradebook.respond(options) ??
           presence.respond(options) ??
@@ -304,6 +311,7 @@ class FakeSmartschool implements HttpClientAdapter {
         mailbox.respond(options, cancelled: cancelled) ??
         intradesk.respond(options, cancelled: cancelled) ??
         planner.respond(options, cancelled: cancelled) ??
+        goals.respond(options) ??
         skore.respond(options) ??
         skoreGradebook.respond(options) ??
         _html(_startPage);

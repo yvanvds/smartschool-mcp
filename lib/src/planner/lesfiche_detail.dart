@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../intradesk/intradesk_format.dart';
 import '../log.dart';
 import '../session.dart';
@@ -108,6 +109,30 @@ Future<LesficheRead> readLesficheDetail(
     }
     rethrow;
   }
+}
+
+/// A lesfiche as `read_lesfiche` shows it ([readNamedLesficheDetail]): as
+/// [readLesficheDetail] reads it, with its learning goals named by the goal
+/// selector ([nameGoals], #186).
+typedef NamedLesficheRead = ({
+  LessonContentDetail detail,
+  SmartschoolLessonContentCourseListError? courseError,
+  NamedGoals goals,
+});
+
+/// Reads the lesfiche [id] of the kind [type] with [client]
+/// ([readLesficheDetail]) and names its goals ([nameGoals]: no request
+/// without goals; a goal selector that fails does not lose the lesfiche).
+/// What `read_lesfiche` shows, and the tools that change a lesfiche give
+/// back ([formatLesficheDetail] with the goals).
+Future<NamedLesficheRead> readNamedLesficheDetail(
+  SmartschoolClient client,
+  LessonContentType type,
+  String id,
+) async {
+  final (:detail, :courseError) = await readLesficheDetail(client, type, id);
+  final goals = await nameGoals(client, detail.goals);
+  return (detail: detail, courseError: courseError, goals: goals);
 }
 
 /// The [ToolError] for a lesfiche [id] of the kind [type] that the module
@@ -272,15 +297,19 @@ String _fileName(LessonContentAttachment attachment) {
 /// its type), name, icon, labels, courses (by name, unless [courseError]
 /// says the school's course list could not be read: then how many), visible
 /// or hidden in the module, its weblinks ([formatLesficheWeblink]) and its
-/// attachments, numbered from 1 ([formatLesficheAttachment]); notes on what
-/// is not shown and on the courses; then its public info and private info
-/// as plain text ([plannerInfoText]).
+/// attachments, numbered from 1 ([formatLesficheAttachment]); with
+/// [goals], its learning goals as the goal selector names them
+/// ([formatNamedGoals], #186); notes on what is not shown and on the
+/// courses; then its public info and private info as plain text
+/// ([plannerInfoText]).
 ///
 /// What `read_lesfiche` answers, and what the tools that make or change a
-/// lesfiche give back after their own lines.
+/// lesfiche give back after their own lines (without [goals]: they do not
+/// name them).
 String formatLesficheDetail(
   LessonContentDetail detail, {
   SmartschoolLessonContentError? courseError,
+  NamedGoals? goals,
 }) {
   final withCourseNames = courseError == null;
   final labels = [
@@ -328,6 +357,7 @@ String formatLesficheDetail(
       for (final (index, attachment) in detail.attachments.indexed)
         '${index + 1}. ${formatLesficheAttachment(attachment)}',
     ],
+    if (goals != null) ...formatNamedGoals(goals),
     if (notShown.isNotEmpty)
       'Note: it also has ${notShown.join(' and ')}, which are not shown '
           'here.',

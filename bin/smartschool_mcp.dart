@@ -26,6 +26,7 @@ import 'package:smartschool_mcp/src/tools/edit_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_curricula_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
@@ -36,6 +37,7 @@ import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_curriculum_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_lesfiche_tool.dart';
@@ -171,6 +173,9 @@ Future<void> _serve(ServerOptions options) async {
           removeLesficheAttachmentTool(session),
           trashLesfichesTool(session),
           planLesficheTool(session),
+          // The learning goals of the goal selector (#186): read only.
+          listCurriculaTool(session),
+          readCurriculumTool(session),
           // The user's gradebooks in Skore, their own and those shared with
           // them (#167), with their reports' course comments (#171): no
           // switch, as they need no extra rights (#140, #141, #142, #143,

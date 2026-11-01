@@ -538,11 +538,15 @@ Future<CallToolResult> lesficheChangedResult(
 ) async {
   String shown;
   try {
-    final (:detail, :courseError) = await withPlannerClient(
+    final (:detail, :courseError, :goals) = await withPlannerClient(
       session,
-      (client) => readLesficheDetail(client, type, id),
+      (client) => readNamedLesficheDetail(client, type, id),
     );
-    shown = formatLesficheDetail(detail, courseError: courseError);
+    shown = formatLesficheDetail(
+      detail,
+      courseError: courseError,
+      goals: goals,
+    );
   } on Object catch (error) {
     final message = switch (error) {
       ToolError(:final message) => message,

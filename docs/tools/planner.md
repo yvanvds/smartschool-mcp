@@ -41,7 +41,8 @@ period for a class.
 ### `read_planned_element`
 
 Reads one lesson or assignment in full: its public and private info, its
-labels, its attachments and weblinks (with when pupils see them), and for an
+labels, its attachments and weblinks (with when pupils see them), the
+learning goals of a lesson (see [Learning goals](goals.md)), and for an
 assignment when pupils see it, whether it was announced and its status.
 Private info is hidden from pupils, but colleagues who can see the element
 read it too.
@@ -158,6 +159,19 @@ attachments and weblinks are the library's typed lists (dartschool#98; seen
 live with a planned lesfiche's attachments and weblink, #117), and every
 element is read by its type name, also one of a type the library does not
 know (`getPlannedElement` with `typeName`, dartschool#99).
+
+The learning goals the element stores (`PlannedElementDetail.goals`,
+dartschool#226: `id`, `leerplanId`, `type` each) are named by the goal
+selector, opened for the planner (`GoalService.resolve` at
+`GoalLocation.plannerLessonContent`, dartschool#222, #186), one line each:
+the curriculum, the headings above the goal, its number and text, and the
+three fields it is stored with. A goal the selector does not name is shown by
+those fields and said to be unknown; when the selector cannot name them at
+all, they are shown by their fields with a note, and the element is still
+read. A lesson without goals reads `Goals: none`; another element shows the
+line only when it has goals. An element without goals sends no request to
+the selector. See [How the goals of a lesfiche or a lesson are
+named](goals.md#how-the-goals-of-a-lesfiche-or-a-lesson-are-named).
 
 ### How `list_class_assignments` works
 
