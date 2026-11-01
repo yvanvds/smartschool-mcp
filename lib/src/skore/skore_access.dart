@@ -147,7 +147,18 @@ String _part(SkoreAccessArea area) => switch (area) {
   SkoreAccessArea.reportManagement =>
     'report management (Rapporten > Modellen)',
   SkoreAccessArea.gradebookManagement => 'gradebook management (Puntenboeken)',
+  SkoreAccessArea.gradebook => 'gradebook (Puntenboek)',
 };
+
+/// The parts of Skore that [SkoreService.checkAccess] checks, and the Skore
+/// tools need ([skoreRights]). Not [SkoreAccessArea.gradebook], the user's
+/// own gradebook (flutter_smartschool 0.4.2): the gradebook tools need no
+/// rights of score management, and `checkAccess` does not check it, so it
+/// is never among the parts it returns.
+const _managementAreas = [
+  SkoreAccessArea.reportManagement,
+  SkoreAccessArea.gradebookManagement,
+];
 
 /// What the user does about missing rights, to end a sentence with.
 String _fix(CredentialSource source) =>
@@ -170,7 +181,7 @@ String _fix(CredentialSource source) =>
 Future<AccessCheck> checkSkoreAccess(SmartschoolSession session) async {
   final usable = await withSkore(session, (skore) => skore.checkAccess());
   final refused = [
-    for (final area in SkoreAccessArea.values)
+    for (final area in _managementAreas)
       if (!usable.contains(area)) area,
   ];
   if (refused.isEmpty) {

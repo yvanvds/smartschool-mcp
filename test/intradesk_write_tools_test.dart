@@ -1209,8 +1209,9 @@ void main() {
       ]);
     });
 
-    test('a refusal (HTTP 400 to 499) is reported with Intradesk\'s reasons, '
-        'if any: nothing was moved', () async {
+    test('a refusal (HTTP 403, an item the user may not manage, '
+        'dartschool#139; HTTP 400 to 499) is reported, with Intradesk\'s '
+        'reasons, if any: nothing was moved', () async {
       intradesk.nextWrites
         ..add(const FakeIntradeskWrite.refused(403))
         // Made up: no refusal of a move to the trash was seen live.
@@ -1219,10 +1220,10 @@ void main() {
       expect(
         await error('trash_intradesk_items', trash([('file', verslag)])),
         endsWith(
-          '\nIntradesk refused the move of the file with id $verslag to the '
-          'trash (HTTP 403), without saying why. It was not moved. Check its '
-          'kind and id with list_intradesk_folder or search_intradesk, and '
-          'tell the user.',
+          '\nIntradesk does not let you move the file with id $verslag to the '
+          'trash (HTTP 403): you may not manage it. Only someone who manages '
+          'it, such as an Intradesk administrator, can. It was not moved. '
+          'Tell the user.',
         ),
       );
       expect(

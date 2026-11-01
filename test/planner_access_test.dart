@@ -718,6 +718,15 @@ void main() {
         }
       });
 
+      test('a lesson cluster of a year plan the user does not have (any '
+          'more), flutter_smartschool 0.4.2: no tool plans one yet', () {
+        expect(
+          refused(PlannerWriteRefusalReason.unknownLessonCluster),
+          '$lead: you have no lesson cluster with the id given (any more) in '
+          'your year plans in Lesfiches.',
+        );
+      });
+
       test('an assignment: a type the school no longer has, and a linked '
           'Skore evaluation', () {
         expect(

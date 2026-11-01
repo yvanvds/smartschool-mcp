@@ -594,8 +594,31 @@ void main() {
       },
     );
 
-    test('a redirect elsewhere than to / (such as the start page with a '
-        'module, as the admin side of Skore refuses a request), and an '
+    test('sent on to the start page with a module, as Skore refuses its '
+        'gradebook to an account without one, a pupil\'s (dartschool#168): '
+        'the account has no gradebook, trying again does not help', () async {
+      skore.answers['getNavigation'] = (status: 302, body: '');
+      skore.answerHeaders['getNavigation'] = {
+        'location': ['/?module=Homepage'],
+      };
+      final ((result, text), logged) = await captureLog(() async {
+        final (connection, _) = await connect(
+          tools: [listSkoreGradebooksTool(session)],
+        );
+        return callTool(connection, 'list_skore_gradebooks', {});
+      });
+      expect(result.isError, isTrue, reason: text);
+      expect(text, skoreNoGradebook);
+      expect(
+        logged,
+        contains(
+          'skore gradebook: SmartschoolSkoreAccessDeniedError(gradebook): '
+          'Skore refused the RPC call getNavigation of its gradebook',
+        ),
+      );
+    });
+
+    test('a redirect elsewhere than to / or the start page, and an '
         'answer in another shape: the same error, with the redirect\'s '
         'target in the log only', () async {
       skore.answers['getNavigation'] = (status: 302, body: '');
@@ -624,7 +647,7 @@ void main() {
         ..clear()
         ..['init'] = (status: 302, body: '');
       skore.answerHeaders['init'] = {
-        'location': ['/?module=Homepage'],
+        'location': ['/?module=Messages'],
       };
       // A connection of its own, so that the server's log is captured.
       final ((result, text), logged) = await captureLog(() async {
@@ -644,7 +667,7 @@ void main() {
           'call init of its gradebook with HTTP 302, a redirect to /',
         ),
       );
-      expect(logged, contains('Homepage'));
+      expect(logged, contains('Messages'));
     });
 
     test('a read that failed is tried again on the next call', () async {
