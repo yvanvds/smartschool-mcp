@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../client_app.dart' show ServerPlatform;
 import '../log.dart';
 import '../problems.dart';
 import '../session.dart';
@@ -275,7 +276,7 @@ NewLessonContentWeblink lesficheWeblinkArgument(
   );
 }
 
-/// A file on this PC that a tool attaches to a lesfiche ([file], checked by
+/// A file on this computer that a tool attaches to a lesfiche ([file], checked by
 /// [checkLocalFiles]), with when pupils see it ([visibility]).
 typedef LesficheFile = ({LocalFile file, LessonContentVisibility visibility});
 
@@ -288,29 +289,36 @@ List<NewLessonContentAttachment> lesficheAttachments(
 ];
 
 /// The input schema of an `attachments` argument
-/// ([lesficheAttachmentsArgument]).
-Schema lesficheAttachmentsSchema({required String description}) => Schema.list(
-  description: description,
-  items: Schema.object(
-    properties: {
-      'path': Schema.string(
-        description:
-            'The full path of the file on this PC, like '
-            'C:\\Users\\jan\\Documents\\werkblad.docx. It goes in under '
-            'its own name.',
-        minLength: 1,
-      ),
-      'visibility': lesficheVisibilitySchema(
-        description: 'When pupils see the file',
-      ),
-    },
-    required: ['path'],
-  ),
-  maxItems: maxLocalFiles,
-);
+/// ([lesficheAttachmentsArgument]), with paths worded for [platform]
+/// ([LocalPaths]).
+Schema lesficheAttachmentsSchema({
+  required String description,
+  required ServerPlatform platform,
+}) {
+  final local = LocalPaths(platform);
+  return Schema.list(
+    description: description,
+    items: Schema.object(
+      properties: {
+        'path': Schema.string(
+          description:
+              'The full path of the file on ${local.computer}, like '
+              '${local.example('werkblad.docx')}. It goes in under its own '
+              'name.',
+          minLength: 1,
+        ),
+        'visibility': lesficheVisibilitySchema(
+          description: 'When pupils see the file',
+        ),
+      },
+      required: ['path'],
+    ),
+    maxItems: maxLocalFiles,
+  );
+}
 
-/// [value], the `attachments` argument [name] of a tool: files on this PC
-/// for a lesfiche, each `{path, visibility?}`, in the order given; empty
+/// [value], the `attachments` argument [name] of a tool: files on this
+/// computer for a lesfiche, each `{path, visibility?}`, in the order given; empty
 /// when it is absent or an empty list.
 ///
 /// The paths are checked with [checkLocalFiles] (1 to [maxLocalFiles]
@@ -318,15 +326,17 @@ Schema lesficheAttachmentsSchema({required String description}) => Schema.list(
 /// Smartschool takes, no two with the same name ignoring case: the module
 /// sends the visibility of an attachment by its name), and the visibilities
 /// with [lesficheVisibilityArgument]. Throws a [ToolError] that names the
-/// path or the item, before anything is sent.
+/// path or the item, before anything is sent, worded for [platform].
 List<LesficheFile> lesficheAttachmentsArgument(
   Object? value, {
+  required ServerPlatform platform,
   String name = 'attachments',
   int maxBytes = maxLocalFileBytes,
 }) {
   if (value == null) return const [];
   final items = value is List ? value : [value];
   if (items.isEmpty) return const [];
+  final local = LocalPaths(platform);
   final paths = <String>[];
   final visibilities = <LessonContentVisibility>[];
   for (final (index, item) in items.indexed) {
@@ -336,9 +346,10 @@ List<LesficheFile> lesficheAttachmentsArgument(
         : '';
     if (path.isEmpty) {
       throw ToolError(
-        '$where must be an object with the full path of a file on this PC '
-        '(path, like C:\\Users\\jan\\Documents\\werkblad.docx), and '
-        'optionally its visibility. $nothingSent',
+        '$where must be an object with the full path of a file on '
+        '${local.computer} (path, like ${local.example('werkblad.docx')}), '
+        'and optionally '
+        'its visibility. $nothingSent',
       );
     }
     paths.add(path);
@@ -349,7 +360,12 @@ List<LesficheFile> lesficheAttachmentsArgument(
       ),
     );
   }
-  final files = checkLocalFiles(paths, argument: name, maxBytes: maxBytes);
+  final files = checkLocalFiles(
+    paths,
+    argument: name,
+    platform: platform,
+    maxBytes: maxBytes,
+  );
   return [
     for (final (index, file) in files.indexed)
       (file: file, visibility: visibilities[index]),

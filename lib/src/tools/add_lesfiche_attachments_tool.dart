@@ -10,7 +10,7 @@ import '../session.dart';
 import '../uploads/local_files.dart';
 import 'server_tool.dart';
 
-/// `add_lesfiche_attachments`: adds files from this PC as attachments to a
+/// `add_lesfiche_attachments`: adds files from this computer as attachments to a
 /// lesfiche in the user's own library of the Lesfiches module, each with
 /// when pupils see it (the library's `LessonContentService.addAttachments`,
 /// dartschool#129), and gives the lesfiche back as `read_lesfiche` shows it.
@@ -43,64 +43,69 @@ import 'server_tool.dart';
 ServerTool addLesficheAttachmentsTool(
   SmartschoolSession session, {
   int maxBytes = maxLocalFileBytes,
-}) => ServerTool(
-  definition: Tool(
-    name: 'add_lesfiche_attachments',
-    title: 'Add files to a Smartschool lesfiche',
-    description:
-        'Adds files from this PC as attachments to one lesfiche in the '
-        'user\'s own library ("Mijn lesfiches") of the Smartschool Lesfiches '
-        'module, by the id and kind list_lesfiches shows, each with when '
-        'pupils see it. When pupils see a file counts from the lesson the '
-        'lesfiche is planned in: $lesficheVisibilityValues. Before calling '
-        'this tool, show the user the lesfiche (name and kind) and each file '
-        '(name, size, when pupils see it), and only call this tool after the '
-        'user has explicitly confirmed it; then call it once. The server '
-        'reads any file the user\'s Windows account can read, up to '
-        '$maxLocalFiles files of ${formatFileSize(maxBytes)} each: files you '
-        'made for the user (for example in a Cowork project folder) or that '
-        'the user names. Each file goes in under its own name; a name the '
-        'lesfiche has already is kept twice, and the result says so. To '
-        'swap a file, add the new one and remove the old one with '
-        'remove_lesfiche_attachment. Whether a lesson planned from the '
-        'lesfiche earlier changes with it is not known. A lesfiche in the '
-        'trash cannot be changed. The result gives the lesfiche as changed, '
-        'with the id of each attachment. If the result says the files may '
-        'or may not have been added, do not call this tool again for them, '
-        'as a second call adds them a second time: check the lesfiche with '
-        'read_lesfiche and tell the user. If it says the files were added '
-        'but a visibility was not set, do not call this tool again either: '
-        'set it with set_lesfiche_attachment_visibility as the result says. '
-        'For requests like "voeg dit werkblad toe aan mijn lesfiche '
-        'Lussen".',
-    inputSchema: Schema.object(
-      properties: {
-        'lesfiche': Schema.string(
-          description:
-              'The id of the lesfiche, as list_lesfiches shows it, like '
-              'b0000000-0000-4000-8000-000000000001.',
-          minLength: 1,
-        ),
-        'type': lesficheTypeSchema(),
-        'attachments': lesficheAttachmentsSchema(
-          description:
-              'The files from this PC to add, 1 to $maxLocalFiles, each with '
-              'the full path and when pupils see it; each goes in under its '
-              'own name, and no two may have the same name.',
-        ),
-      },
-      required: ['lesfiche', 'attachments'],
-    ),
-    annotations: ToolAnnotations(
+}) {
+  final local = LocalPaths(session.source.platform);
+  return ServerTool(
+    definition: Tool(
+      name: 'add_lesfiche_attachments',
       title: 'Add files to a Smartschool lesfiche',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: true,
+      description:
+          'Adds files from ${local.computer} as attachments to one lesfiche in the '
+          'user\'s own library ("Mijn lesfiches") of the Smartschool Lesfiches '
+          'module, by the id and kind list_lesfiches shows, each with when '
+          'pupils see it. When pupils see a file counts from the lesson the '
+          'lesfiche is planned in: $lesficheVisibilityValues. Before calling '
+          'this tool, show the user the lesfiche (name and kind) and each file '
+          '(name, size, when pupils see it), and only call this tool after the '
+          'user has explicitly confirmed it; then call it once. The server '
+          'reads any file ${local.readableBy} can read, up to '
+          '$maxLocalFiles files of ${formatFileSize(maxBytes)} each: files you '
+          'made for the user (for example in a Cowork project folder) or that '
+          'the user names. Each file goes in under its own name; a name the '
+          'lesfiche has already is kept twice, and the result says so. To '
+          'swap a file, add the new one and remove the old one with '
+          'remove_lesfiche_attachment. Whether a lesson planned from the '
+          'lesfiche earlier changes with it is not known. A lesfiche in the '
+          'trash cannot be changed. The result gives the lesfiche as changed, '
+          'with the id of each attachment. If the result says the files may '
+          'or may not have been added, do not call this tool again for them, '
+          'as a second call adds them a second time: check the lesfiche with '
+          'read_lesfiche and tell the user. If it says the files were added '
+          'but a visibility was not set, do not call this tool again either: '
+          'set it with set_lesfiche_attachment_visibility as the result says. '
+          'For requests like "voeg dit werkblad toe aan mijn lesfiche '
+          'Lussen".',
+      inputSchema: Schema.object(
+        properties: {
+          'lesfiche': Schema.string(
+            description:
+                'The id of the lesfiche, as list_lesfiches shows it, like '
+                'b0000000-0000-4000-8000-000000000001.',
+            minLength: 1,
+          ),
+          'type': lesficheTypeSchema(),
+          'attachments': lesficheAttachmentsSchema(
+            platform: local.platform,
+            description:
+                'The files from ${local.computer} to add, 1 to $maxLocalFiles, each with '
+                'the full path and when pupils see it; each goes in under its '
+                'own name, and no two may have the same name.',
+          ),
+        },
+        required: ['lesfiche', 'attachments'],
+      ),
+      annotations: ToolAnnotations(
+        title: 'Add files to a Smartschool lesfiche',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      ),
     ),
-  ),
-  handler: (request) => _add(session, maxBytes, request.arguments ?? const {}),
-);
+    handler: (request) =>
+        _add(session, maxBytes, request.arguments ?? const {}),
+  );
+}
 
 Future<CallToolResult> _add(
   SmartschoolSession session,
@@ -111,12 +116,14 @@ Future<CallToolResult> _add(
   final type = lesficheTypeArgument(arguments['type']);
   final files = lesficheAttachmentsArgument(
     arguments['attachments'],
+    platform: session.source.platform,
     maxBytes: maxBytes,
   );
   if (files.isEmpty) {
-    throw const ToolError(
+    throw ToolError(
       'attachments is empty: pass 1 to $maxLocalFiles files, each with the '
-      'full path of a file on this PC. $nothingSent',
+      'full path of a file on ${LocalPaths(session.source.platform).computer}. '
+      '$nothingSent',
     );
   }
   final localFiles = [for (final (:file, visibility: _) in files) file];

@@ -566,10 +566,18 @@ Smartschool. The tools that upload share the local-file helper in
 lesfiche and those of a message):
 
 - **Paths:** absolute paths only (`localFilesArgument`, `checkLocalFiles`),
-  1 to 10 per call (for a message, `attachments` may also be left out or
-  empty). The server reads any file the user's Windows account can read, so
-  the tool descriptions tell Claude to show the user every file, with its
-  name and size, before calling.
+  as the system the server runs on reads them (`C:\...` on Windows, `/...`
+  on Linux), 1 to 10 per call (for a message, `attachments` may also be
+  left out or empty). The server reads any file the user's account can
+  read, so the tool descriptions tell Claude to show the user every file,
+  with its name and size, before calling.
+- **Wording by platform:** the descriptions, schemas and argument errors
+  speak of files as `LocalPaths` words them for `CredentialSource.platform`
+  (the session's settings, known when the tools are made): on Windows of
+  "this PC", paths like `C:\Users\jan\Documents\brief.docx` "starting
+  with the drive" and "the user's Windows account"; on Linux of "this
+  computer", paths like `/home/jan/Documents/brief.docx` "starting with /"
+  and "the user's account" (#202).
 - **Checks before anything is sent:** each path names an existing file, not
   a folder, of at most 200 MB (a sanity limit, as high as what
   `save_intradesk_file` saves: the library reads a file into memory to

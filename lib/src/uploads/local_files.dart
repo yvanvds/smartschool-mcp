@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../client_app.dart' show ServerPlatform;
 import '../intradesk/intradesk_format.dart';
 import '../log.dart';
 import '../tools/server_tool.dart';
@@ -13,9 +14,10 @@ import '../tools/server_tool.dart';
 // [describeLocalFiles]), and report a file that the library or Smartschool
 // refused ([uploadToolError]).
 //
-// The server reads any file the user's Windows account can read: the tools'
+// The server reads any file the user's account can read: the tools'
 // descriptions say to show the user every file, with its name and size,
-// before calling them.
+// before calling them. How they speak of the files and their paths depends
+// on the system the server runs on ([LocalPaths]).
 
 /// Files larger than this are not sent: a sanity limit, as high as what
 /// `save_intradesk_file` saves. The library reads a file into memory to
@@ -28,6 +30,35 @@ const maxLocalFiles = 10;
 /// What a tool adds to an error about its files: it came before anything
 /// was sent.
 const nothingSent = 'Nothing was sent.';
+
+/// How the upload tools speak of files on the computer the server runs on,
+/// in their descriptions, schemas and argument errors: on Windows of "this
+/// PC" and paths like `C:\Users\jan\Documents\brief.docx`, on Linux of
+/// "this computer" and paths like `/home/jan/Documents/brief.docx` (#202).
+///
+/// The tools take [platform] from their session's settings
+/// (`CredentialSource.platform`) when they are made.
+final class LocalPaths {
+  const LocalPaths(this.platform);
+
+  final ServerPlatform platform;
+
+  bool get _linux => platform == ServerPlatform.linux;
+
+  /// The computer the files are on: `this PC`, or on Linux `this computer`.
+  String get computer => _linux ? 'this computer' : 'this PC';
+
+  /// The full path of a file [name] in the user's documents, as an example.
+  String example([String name = 'brief.docx']) =>
+      _linux ? '/home/jan/Documents/$name' : 'C:\\Users\\jan\\Documents\\$name';
+
+  /// How a full path starts: with the drive, or on Linux with `/`.
+  String get start => _linux ? 'starting with /' : 'starting with the drive';
+
+  /// Whose files the server can read.
+  String get readableBy =>
+      _linux ? "the user's account" : "the user's Windows account";
+}
 
 /// A file on the user's computer, checked by [checkLocalFiles], that a tool
 /// is about to send to Smartschool.
@@ -57,23 +88,26 @@ final class LocalFile {
 String localFileName(String path) => File(path).uri.pathSegments.last;
 
 /// [value], the argument [argument] of a tool: a list of 1 to [maxCount]
-/// absolute paths of files on this PC, checked with [checkLocalFiles].
+/// absolute paths of files on this computer, checked with [checkLocalFiles];
+/// its errors are worded for [platform] ([LocalPaths]).
 ///
 /// Throws a [ToolError] that says what is wrong, before anything is sent.
 List<LocalFile> localFilesArgument(
   Object? value, {
   required String argument,
+  required ServerPlatform platform,
   int maxCount = maxLocalFiles,
   int maxBytes = maxLocalFileBytes,
 }) {
+  final local = LocalPaths(platform);
   final items = value is List ? value : [?value];
   final paths = <String>[];
   for (final item in items) {
     final path = item is String ? item.trim() : '';
     if (path.isEmpty) {
       throw ToolError(
-        'each item of $argument must be the full path of a file on this PC, '
-        'like C:\\Users\\jan\\Documents\\brief.docx; '
+        'each item of $argument must be the full path of a file on '
+        '${local.computer}, like ${local.example()}; '
         '${item is String ? '"$item"' : '$item'} is not. $nothingSent',
       );
     }
@@ -82,6 +116,7 @@ List<LocalFile> localFilesArgument(
   return checkLocalFiles(
     paths,
     argument: argument,
+    platform: platform,
     maxCount: maxCount,
     maxBytes: maxBytes,
   );
@@ -94,18 +129,24 @@ List<LocalFile> localFilesArgument(
 /// other), and no two with the same name, ignoring case (Smartschool stores
 /// a file under its name).
 ///
+/// A path is absolute as the system the server runs on reads it
+/// ([File.isAbsolute]): `C:\...` on Windows, `/...` on Linux. The errors
+/// are worded for [platform] ([LocalPaths]).
+///
 /// Throws a [ToolError] that names the path and says what is wrong, before
 /// anything is sent.
 List<LocalFile> checkLocalFiles(
   List<String> paths, {
   required String argument,
+  required ServerPlatform platform,
   int maxCount = maxLocalFiles,
   int maxBytes = maxLocalFileBytes,
 }) {
+  final local = LocalPaths(platform);
   if (paths.isEmpty) {
     throw ToolError(
-      '$argument is empty: give 1 to $maxCount full paths of files on this '
-      'PC, like C:\\Users\\jan\\Documents\\brief.docx. $nothingSent',
+      '$argument is empty: give 1 to $maxCount full paths of files on '
+      '${local.computer}, like ${local.example()}. $nothingSent',
     );
   }
   if (paths.length > maxCount) {
@@ -119,8 +160,7 @@ List<LocalFile> checkLocalFiles(
     if (!File(path).isAbsolute) {
       throw ToolError(
         '"$path" in $argument is not a full path: give the whole path of the '
-        'file, starting with the drive, like '
-        'C:\\Users\\jan\\Documents\\brief.docx. $nothingSent',
+        'file, ${local.start}, like ${local.example()}. $nothingSent',
       );
     }
     final type = FileSystemEntity.typeSync(path);
@@ -132,7 +172,8 @@ List<LocalFile> checkLocalFiles(
     }
     if (type != FileSystemEntityType.file) {
       throw ToolError(
-        'There is no file "$path" on this PC (any more): check the path. '
+        'There is no file "$path" on ${local.computer} (any more): check the '
+        'path. '
         '$nothingSent',
       );
     }

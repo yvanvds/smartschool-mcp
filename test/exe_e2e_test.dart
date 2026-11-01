@@ -1980,8 +1980,9 @@ void main() {
     expect(missingFileError, isTrue);
     expect(
       missingFileText,
-      'There is no file "$missing" on this PC (any more): check the path. '
-      'Nothing was sent.',
+      // On Linux there is no PC (#202).
+      'There is no file "$missing" on ${_onLinux ? 'this computer' : 'this PC'} '
+      '(any more): check the path. Nothing was sent.',
     );
     expect(emptyQueryError, isTrue);
     expect(emptyQueryText, 'query is empty: pass the words to look for.');
@@ -2460,6 +2461,47 @@ void main() {
       expect(text, contains(message), reason: '$tool $arguments');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
+
+    // Paths as the system the server runs on writes them (#202): on Linux
+    // no drive, no Windows account and no PC, in the tools that send files
+    // and in their argument errors.
+    final windowsOnly = RegExp(r'C:\\|drive|Windows|\bPC\b');
+    for (final name in [
+      'upload_intradesk_files',
+      'create_lesfiche',
+      'add_lesfiche_attachments',
+      'send_message',
+      'reply_to_message',
+    ]) {
+      final listed = jsonEncode({
+        'description': tools[name]!['description'],
+        'inputSchema': tools[name]!['inputSchema'],
+      });
+      if (_onLinux) {
+        expect(listed, isNot(contains(windowsOnly)), reason: name);
+        expect(listed, contains('/home/jan/Documents/'), reason: name);
+      } else {
+        expect(listed, contains(r'C:\\Users\\jan\\Documents\\'), reason: name);
+        expect(listed, contains("the user's Windows account"), reason: name);
+      }
+    }
+    final (_, relative) = await server.callTool(
+      'upload_intradesk_files',
+      arguments: {
+        'folder_id': folder,
+        'paths': ['brief.docx'],
+      },
+    );
+    expect(
+      relative,
+      _onLinux
+          ? '"brief.docx" in paths is not a full path: give the whole path of '
+                'the file, starting with /, like /home/jan/Documents/brief.docx. '
+                'Nothing was sent.'
+          : '"brief.docx" in paths is not a full path: give the whole path of '
+                'the file, starting with the drive, like '
+                'C:\\Users\\jan\\Documents\\brief.docx. Nothing was sent.',
+    );
 
     await server.stop();
     expect(await server.stderr, isNot(contains('sending username')));

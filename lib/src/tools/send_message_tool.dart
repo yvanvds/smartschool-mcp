@@ -26,7 +26,7 @@ const _maxListedCandidates = 10;
 /// before anything is sent, with who the search does find, for the user to
 /// choose from.
 ///
-/// Files from this PC go along as attachments ([messageAttachmentsArgument]:
+/// Files from this computer go along as attachments ([messageAttachmentsArgument]:
 /// absolute paths of existing files of at most [maxBytes], checked before
 /// anything is sent), uploaded by the library into the compose form's upload
 /// directory before the submit (see [submitOnce]).
@@ -56,7 +56,7 @@ ServerTool sendMessageTool(
         'text or simple Markdown: a blank line between paragraphs, lines '
         'starting with "- " or "1. " for lists, **bold**, *italic* and '
         '[text](https://...) links. HTML in body is not interpreted: it is '
-        'sent as text. ${messageAttachmentsDescription(maxBytes)} The '
+        'sent as text. ${messageAttachmentsDescription(maxBytes, session.source.platform)} The '
         'result says to whom the message was sent, and with which '
         'attachments. If the result says the message may or may not have '
         'been sent, do not call this tool again for it: check the sent box '
@@ -86,7 +86,7 @@ ServerTool sendMessageTool(
               'or simple Markdown.',
           minLength: 1,
         ),
-        'attachments': messageAttachmentsSchema(),
+        'attachments': messageAttachmentsSchema(session.source.platform),
       },
       required: ['to', 'subject', 'body'],
     ),
@@ -151,6 +151,7 @@ Future<CallToolResult> _sendMessage(
   final html = markdownToHtml(body);
   final attachments = messageAttachmentsArgument(
     arguments['attachments'],
+    platform: session.source.platform,
     maxBytes: maxBytes,
   );
 
