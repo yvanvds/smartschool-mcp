@@ -32,12 +32,14 @@ import 'package:smartschool_mcp/src/skore/skore_opt_in.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_project_ratings_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
 import 'package:smartschool_mcp/src/tools/status_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
@@ -518,8 +520,8 @@ void main() {
               'leerling.',
             ),
             contains(
-              'een leerling feedback geven en het vakcommentaar op het '
-              'rapport schrijven',
+              'een leerling feedback geven, het vakcommentaar op het rapport '
+              'schrijven',
             ),
           ),
         );
@@ -547,6 +549,59 @@ void main() {
           contains(
             'Zo schrijf je als co-titularis ook het vakcommentaar Gedrag van '
             'je klas op het rapport.',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('the project gradebooks (Projecten), as their tools are built '
+      '(#192)', () {
+    final chatGpt = _read(_chatGptGuidePath).replaceAll(RegExp(r'\s+'), ' ');
+    late final section = _subsection(text, '### Puntenboek');
+    final session = SmartschoolSession(const ExtensionSettings());
+    tearDownAll(session.close);
+    final list = listSkoreProjectsTool(session).definition;
+    final save = saveSkoreProjectRatingsTool(session).definition;
+
+    test('says Claude lists the projects and rates pupils per learning goal '
+        'with a level by name, only after the user confirmed it, in a '
+        'published project only on an explicit yes, and makes or publishes '
+        'no project, as the tools do', () {
+      expect(
+        list.description,
+        contains('Projects are made and published in Skore in Smartschool'),
+      );
+      expect(
+        save.description,
+        allOf(
+          contains('given by its name or symbol (such as Behaald or B)'),
+          contains('after the user has explicitly confirmed it'),
+          contains(
+            'A project that is published or scheduled is refused unless '
+            'allow_published is true',
+          ),
+        ),
+      );
+      for (final guide in [text, chatGpt]) {
+        expect(
+          guide,
+          contains(
+            'In een projectpuntenboek (Projecten) de projecten en de '
+            'beoordeling van elke leerling per leerdoel.',
+          ),
+        );
+      }
+      expect(
+        section,
+        allOf(
+          contains('"Behaald" of "Niet behaald"'),
+          contains(
+            'Een project maken of publiceren doe je zelf in Smartschool.',
+          ),
+          contains(
+            'In een project dat je leerlingen al zien, doet Claude dat alleen '
+            'als je het uitdrukkelijk toestaat.',
           ),
         ),
       );

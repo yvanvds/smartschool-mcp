@@ -35,9 +35,11 @@ Je vraagt het gewoon in een gesprek:
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
   feedback die een leerling kreeg, en per rapport de resultaten en het
-  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
-  invullen, een leerling feedback geven en het vakcommentaar op het rapport
-  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  vakcommentaar van elke leerling. In een projectpuntenboek (Projecten) de
+  projecten en de beoordeling van elke leerling per leerdoel. Een nieuwe
+  evaluatie maken, punten invullen, een leerling feedback geven, het
+  vakcommentaar op het rapport schrijven en leerlingen in een project
+  beoordelen, ook in een puntenboek dat een collega met je deelde om te
   wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
   nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
   je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je
@@ -488,6 +490,19 @@ dat nog open is.
   zijn ouders krijgen, en wacht op jouw akkoord. Daarna vraagt Claude Desktop
   nog eens toestemming. Claude schrijft het vakcommentaar van één leerling
   per keer, want elke tekst is persoonlijk. Een vakcommentaar wissen kan ook.
+- "Welke projecten staan er in Digitale vaardigheden van 5WW1?"
+  Een projectpuntenboek (in Skore onder "Projecten") heeft geen evaluaties
+  met punten: je beoordeelt je leerlingen per leerdoel (rubriek) met een
+  niveau van de schaal, zoals "Behaald" of "Niet behaald". Claude toont de
+  projecten, of je leerlingen ze zien, en per leerling de beoordeling van
+  elk leerdoel. Een project maken of publiceren doe je zelf in Smartschool.
+- "Zet in het project Webquest Behaald voor Jan bij LPD 16.1.1."
+  Claude zoekt de leerling en het leerdoel in het project, toont de hele
+  lijst met het niveau dat er nu staat en het nieuwe, en wacht op jouw
+  akkoord. Daarna vraagt Claude Desktop nog eens toestemming. Een
+  beoordeling wissen, of er een tekst bij zetten, kan ook. In een project dat
+  je leerlingen al zien, doet Claude dat alleen als je het uitdrukkelijk
+  toestaat.
 - "Welke puntenboeken deelden collega's met mij?"
   Een puntenboek dat een collega met je deelde (in Skore onder "Gedeeld"),
   zoals het puntenboek Gedrag van je klas als je co-titularis bent, toont

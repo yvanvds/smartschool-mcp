@@ -67,6 +67,9 @@ import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_project_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_project_ratings_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
@@ -217,6 +220,11 @@ Future<void> _serve(ServerOptions options) async {
           saveSkoreGradesTool(session),
           saveSkoreFeedbackTool(session),
           saveSkoreReportCommentTool(session),
+          // The project gradebooks ("Projecten", #192): their projects and
+          // the pupils' ratings per learning goal.
+          listSkoreProjectsTool(session),
+          readSkoreProjectTool(session),
+          saveSkoreProjectRatingsTool(session),
           for (final optIn in optIns) ...optIn.offered,
         ],
         updates: updates,

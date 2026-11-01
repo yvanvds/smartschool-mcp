@@ -34,7 +34,7 @@ offered only when the switch is on; every switch is off by default (see
 | [Planner](docs/tools/planner.md) | Read planners; plan lessons, tests and tasks in your own | | 9 |
 | [Lesfiches](docs/tools/lesfiches.md) | Read, make, copy, change, label, trash, restore and plan your lesfiches, save lessons as lesfiches, and build year plans from them | | 26 |
 | [Learning goals](docs/tools/goals.md) | The curricula of the goal selector and their goals, to set on lesfiches and lessons; read only | | 2 |
-| [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments | | 9 |
+| [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments, project ratings | | 12 |
 | [Skore administration](docs/tools/skore.md) | Teachers per course and shared gradebooks, for Skore administrators | "Skore-beheer" (`SMARTSCHOOL_SKORE`) | 8 |
 | [Presences](docs/tools/presences.md) | Half-day presences of classes: late and present | "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`) | 4 |
 | [Pupil tracking system (LVS)](docs/tools/lvs.md) | A pupil's file: notes, results, support plan, absences; read only | "Leerlingvolgsysteem" (`SMARTSCHOOL_LVS`) | 6 |

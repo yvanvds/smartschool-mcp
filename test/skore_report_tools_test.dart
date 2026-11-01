@@ -623,10 +623,11 @@ void main() {
         text,
         'Skore answers that the course of the $_ewiName is not on $_r1d, so '
         'the server cannot read its results or its course comment there. '
-        'Skore answers so for a course that is on the report through a '
-        'project (Skore\'s "Projecten"), which the server does not read yet. '
-        'Tell the user so; trying again does not help. The user sees the '
-        'report in Skore in Smartschool itself.',
+        'Skore answers so for a project course (Skore\'s "Projecten"), which '
+        'is not on the gradebook\'s reports: read_skore_gradebook says '
+        'whether the gradebook is one, and read_skore_project reads the '
+        'ratings of its projects. Tell the user so; trying again does not '
+        'help. The user sees the report in Skore in Smartschool itself.',
       );
       expect(text, isNot(contains('Course not found')));
       expect(logged, contains('HTTP 404: "Course not found in source!"'));

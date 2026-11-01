@@ -35,9 +35,11 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
   feedback die een leerling kreeg, en per rapport de resultaten en het
-  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
-  invullen, een leerling feedback geven en het vakcommentaar op het rapport
-  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  vakcommentaar van elke leerling. In een projectpuntenboek (Projecten) de
+  projecten en de beoordeling van elke leerling per leerdoel. Een nieuwe
+  evaluatie maken, punten invullen, een leerling feedback geven, het
+  vakcommentaar op het rapport schrijven en leerlingen in een project
+  beoordelen, ook in een puntenboek dat een collega met je deelde om te
   wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
   nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
   je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je

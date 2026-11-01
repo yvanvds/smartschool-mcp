@@ -27,6 +27,7 @@ export 'fake_planner.dart';
 export 'fake_presence.dart';
 export 'fake_skore.dart';
 export 'fake_skore_gradebook.dart';
+export 'fake_skore_projects.dart';
 export 'fake_uploads.dart';
 export 'fake_year_plans.dart';
 

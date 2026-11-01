@@ -623,7 +623,7 @@ SkoreReportPeriod skoreReportPeriod(SkoreGradebookSheet sheet, int reportId) {
 ///
 /// A course that is not on the report is answered by Skore with HTTP 404
 /// and "Course not found in source!" (seen live for a project gradebook,
-/// yvanvds/dartschool#204) or "No courses found in results!" (seen live for
+/// yvanvds/dartschool#204, whose ratings the project tools read, #192) or "No courses found in results!" (seen live for
 /// an account without Skore's admin rights for the course, dartschool#168),
 /// which the library throws as a [SmartschoolSkoreCourseNotOnReportError].
 /// Trying again does not help then, so this throws a [ToolError] that says
@@ -642,10 +642,12 @@ Future<SkoreReport> readSkoreReport(
       'Skore answers that the course of the '
       '${formatSkoreGradebookName(sheet.gradebook)} is not on '
       '${formatSkoreReportName(report)}, so the server cannot read its '
-      'results or its course comment there. Skore answers so for a course '
-      'that is on the report through a project (Skore\'s "Projecten"), which '
-      'the server does not read yet. Tell the user so; trying again does not '
-      'help. The user sees the report in Skore in Smartschool itself.',
+      'results or its course comment there. Skore answers so for a project '
+      'course (Skore\'s "Projecten"), which is not on the gradebook\'s '
+      'reports: read_skore_gradebook says whether the gradebook is one, and '
+      'read_skore_project reads the ratings of its projects. Tell the user '
+      'so; trying again does not help. The user sees the report in Skore in '
+      'Smartschool itself.',
     );
   }
 }
