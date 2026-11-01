@@ -380,6 +380,9 @@ void main() {
         return null;
       }
 
+      // The temporary folder is a real path of the host (C:\ on Windows),
+      // which the message quotes as given: only the wording around it counts.
+      final missing = path('weg.pdf');
       final messages = [
         refused(
           () => localFilesArgument(['  '], argument: 'paths', platform: linux),
@@ -395,11 +398,7 @@ void main() {
           ),
         ),
         refused(
-          () => checkLocalFiles(
-            [path('weg.pdf')],
-            argument: 'paths',
-            platform: linux,
-          ),
+          () => checkLocalFiles([missing], argument: 'paths', platform: linux),
         ),
         refused(
           () => lesficheAttachmentsArgument([
@@ -408,7 +407,9 @@ void main() {
         ),
       ];
       expect(messages, everyElement(isNotNull));
-      expect(messages, everyElement(isNot(contains(windowsOnly))));
+      expect([
+        for (final m in messages) m!.replaceAll(missing, '<file>'),
+      ], everyElement(isNot(contains(windowsOnly))));
       expect(messages[0], contains('like /home/jan/Documents/brief.docx'));
       expect(messages[1], contains('files on this computer, like /home/jan/'));
       expect(
