@@ -1,12 +1,15 @@
 import 'package:dart_mcp/server.dart';
+import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../planner/planner_access.dart';
 import '../planner/planner_format.dart';
 import '../session.dart';
 import 'server_tool.dart';
 
 /// `read_planned_element`: one element of the planner in full, with its
-/// public and private info as plain text.
+/// public and private info as plain text, and its learning goals named by
+/// the goal selector ([nameGoals], #186).
 ServerTool readPlannedElementTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'read_planned_element',
@@ -16,8 +19,11 @@ ServerTool readPlannedElementTool(SmartschoolSession session) => ServerTool(
         'assignment, an empty lesson hour, a meeting, a lesson-free day, …) '
         'in full, by the id list_planner shows. Gives what its list line '
         'says, one field per line, plus its public info and private info as '
-        'plain text, its labels, and its attachments and weblinks, each with '
-        'when pupils see it; for an '
+        'plain text, its labels, its attachments and weblinks, each with '
+        'when pupils see it, and the learning goals of a lesson (each with '
+        'its curriculum, headings, number and text, and the id, leerplanId '
+        'and type it is stored with; a goal the goal selector does not know '
+        'is said to be unknown); for an '
         'assignment also its type, from when pupils see it, whether it was '
         'announced and its status. Public info is what pupils see. Private '
         'info is hidden from pupils, but it is not private to its author: '
@@ -50,8 +56,16 @@ Future<CallToolResult> _read(
   Map<String, Object?> arguments,
 ) async {
   final element = PlannedElementRef.parse(arguments['id']);
-  final detail = await withPlanner(session, element.read);
+  final (detail, goals) = await withPlannerClient(session, (client) async {
+    final detail = await element.read(PlannerService(client));
+    final goals = await nameGoals(
+      client,
+      detail.goals ?? const [],
+      location: GoalLocation.plannerLessonContent,
+    );
+    return (detail, goals);
+  });
   return CallToolResult(
-    content: [TextContent(text: formatElementDetail(detail))],
+    content: [TextContent(text: formatElementDetail(detail, goals: goals))],
   );
 }

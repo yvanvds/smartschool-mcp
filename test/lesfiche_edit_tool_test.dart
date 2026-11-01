@@ -136,6 +136,8 @@ void main() {
         'public_info',
         'private_info',
         'courses',
+        'goals',
+        'labels',
         'visible',
       ]);
       expect(
@@ -149,7 +151,7 @@ void main() {
             'it is not known',
           ),
           contains('A lesfiche in the trash cannot be changed.'),
-          contains('labels are set in the Lesfiches module itself'),
+          contains('labels are labels as list_lesfiche_labels shows them'),
         ),
       );
     });
@@ -324,7 +326,7 @@ void main() {
       expect(
         await refused({}),
         'Nothing to change: pass at least one of name, icon, public_info, '
-        'private_info, courses and visible. Nothing was sent.',
+        'private_info, courses, goals, labels and visible. Nothing was sent.',
       );
       expect(
         await refused({'name': '  '}),
@@ -445,9 +447,9 @@ void main() {
         'The Lesfiches module answered the change of the name of the lesson '
         'lesfiche "Lussen" with HTTP 404: the lesfiche is in the trash or no '
         'longer exists. A lesfiche in the trash can still be read, but not '
-        'changed, and list_lesfiches does not list it; the user restores it '
-        'from the trash in the Lesfiches module itself. The lesfiche was not '
-        'changed.',
+        'changed, and list_lesfiches does not list it; list_trashed_lesfiches '
+        'lists the trash, and restore_lesfiches takes it back out. The '
+        'lesfiche was not changed.',
       );
       expect(planner.writes, ['POST $_lessonPath/rename']);
       expect(

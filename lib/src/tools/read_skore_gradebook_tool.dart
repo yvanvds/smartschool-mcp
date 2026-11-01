@@ -4,6 +4,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../session.dart';
 import '../skore/skore_gradebook_access.dart';
 import '../skore/skore_gradebook_format.dart';
+import '../skore/skore_projects.dart';
 import 'arguments.dart';
 import 'server_tool.dart';
 
@@ -12,6 +13,11 @@ import 'server_tool.dart';
 /// its report periods (#171, dartschool#195), its pupils and whether Skore
 /// lets the user change it ([SkoreGradebookService.getGradebook],
 /// dartschool#148).
+///
+/// A gradebook without evaluation periods may be a project gradebook
+/// (Skore's "Projecten", #192): for one, its project periods are read too
+/// ([skoreProjectPeriodsOrNone]), and the result says so and points to the
+/// project tools.
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -37,7 +43,12 @@ ServerTool readSkoreGradebookTool(SmartschoolSession session) => ServerTool(
         'writes the comment); the pupils of its class, '
         'each with the class number, the name (last name first) and the '
         'pupil id, and whether Skore greys the pupil out as inactive; and '
-        'whether Skore lets the user change the gradebook. For a gradebook '
+        'whether Skore lets the user change the gradebook. A project '
+        'gradebook (Skore\'s "Projecten", whose pupils are rated per '
+        'learning goal in projects instead of getting grades) says so, with '
+        'its project periods: list_skore_projects lists its projects, '
+        'read_skore_project reads their ratings and '
+        'save_skore_project_ratings saves them. For a gradebook '
         'of an earlier school year, pass its workyear_id too, as '
         'list_skore_gradebooks lists the school years. Reading changes '
         'nothing in Skore.',
@@ -74,17 +85,36 @@ Future<CallToolResult> _read(
   final gradebookId = requiredIntArgument(arguments, 'gradebook_id');
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
-  final (:sheet, :workyear) = await withSkoreGradebook(
+  final (:sheet, :workyear, :projectPeriods) = await withSkoreGradebook(
     session,
-    (gradebooks) => readSkoreGradebook(
-      gradebooks,
-      years,
-      gradebookId,
-      workyearId: workyearId,
-    ),
+    (gradebooks) async {
+      final (:sheet, :workyear) = await readSkoreGradebook(
+        gradebooks,
+        years,
+        gradebookId,
+        workyearId: workyearId,
+      );
+      return (
+        sheet: sheet,
+        workyear: workyear,
+        // Only a gradebook without evaluation periods can be a project
+        // gradebook (seen live, dartschool#204): one more request then.
+        projectPeriods: sheet.periods.isEmpty
+            ? await skoreProjectPeriodsOrNone(gradebooks, sheet.gradebook)
+            : const <SkoreGradebookPeriod>[],
+      );
+    },
   );
   return CallToolResult(
-    content: [TextContent(text: formatSkoreGradebookSheet(sheet, workyear))],
+    content: [
+      TextContent(
+        text: formatSkoreGradebookSheet(
+          sheet,
+          workyear,
+          projectPeriods: projectPeriods,
+        ),
+      ),
+    ],
   );
 }
 
@@ -96,11 +126,16 @@ Future<CallToolResult> _read(
 /// without evaluation periods says so instead of whether the user may
 /// change it (Skore is not asked then); one with
 /// report periods only, such as a behaviour gradebook (#168), also where
-/// its course comments are ([skoreReportPeriodsOnlyNote]).
+/// its course comments are ([skoreReportPeriodsOnlyNote]). A project
+/// gradebook (one with [projectPeriods], #192) says so and lists them, with
+/// the project tools, instead; its report periods are left out, as a
+/// project course is not on the gradebook's reports (dartschool#204).
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
-  SkoreWorkyear workyear,
-) {
+  SkoreWorkyear workyear, {
+  List<SkoreGradebookPeriod> projectPeriods = const [],
+}) {
+  final isProject = projectPeriods.isNotEmpty;
   final periods = sheet.periods;
   final reports = sheet.reports;
   final pupils = sheet.pupils;
@@ -108,7 +143,20 @@ String formatSkoreGradebookSheet(
   final active = sheet.activePeriod;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
-    if (periods.isEmpty && sheet.reports.isEmpty)
+    if (isProject) ...[
+      'It is a project gradebook (Skore\'s "Projecten"): it has no '
+          'evaluation periods, so no evaluations and no grades; its pupils '
+          'are rated per learning goal in projects, on the scale of the '
+          'project\'s template. list_skore_projects lists its projects, '
+          'read_skore_project reads their ratings, and '
+          'save_skore_project_ratings saves them. A project course is not on '
+          'the gradebook\'s reports, so it has no course comments there.',
+      '${projectPeriods.length} project '
+          '${projectPeriods.length == 1 ? 'period' : 'periods'}, in Skore\'s '
+          'order; only an open one takes ratings:',
+      for (final period in projectPeriods)
+        '- ${formatSkoreGradebookPeriod(period, active: false)}',
+    ] else if (periods.isEmpty && sheet.reports.isEmpty)
       'It has ${formatSkoreMissingPeriods(sheet)}, so it takes no grades; '
           'Skore was not asked whether the user may change it.'
     else if (periods.isEmpty)
@@ -124,7 +172,7 @@ String formatSkoreGradebookSheet(
           '${periods.any((p) => p.isOpen) ? '' : ', but none of its periods is open, so it takes no grades now'}.'
     else
       'Skore opens it read-only for the user: the user may not change it.',
-    ?skoreReportPeriodsOnlyNote(sheet),
+    if (!isProject) ?skoreReportPeriodsOnlyNote(sheet),
     if (periods.isNotEmpty) ...[
       '${periods.length} ${periods.length == 1 ? 'period' : 'periods'}, in '
           'Skore\'s order; only an open period takes grades'
@@ -133,7 +181,7 @@ String formatSkoreGradebookSheet(
       for (final period in periods)
         '- ${formatSkoreGradebookPeriod(period, active: period.id == active?.id)}',
     ],
-    if (reports.isNotEmpty) ...[
+    if (reports.isNotEmpty && !isProject) ...[
       '${reports.length} report ${reports.length == 1 ? 'period' : 'periods'} '
           '(Rapporten), in Skore\'s order, where each pupil\'s course comment '
           'is written that goes on the report, while the report is open; '

@@ -41,7 +41,8 @@ period for a class.
 ### `read_planned_element`
 
 Reads one lesson or assignment in full: its public and private info, its
-labels, its attachments and weblinks (with when pupils see them), and for an
+labels, its attachments and weblinks (with when pupils see them), the
+learning goals of a lesson (see [Learning goals](goals.md)), and for an
 assignment when pupils see it, whether it was announced and its status.
 Private info is hidden from pupils, but colleagues who can see the element
 read it too.
@@ -67,7 +68,10 @@ gets a new id, which the answer gives.
 ### `edit_planned_element`
 
 Changes the name, the public info or the private info of a lesson or an
-assignment of your own planner; an empty text empties an info. Asks for
+assignment of your own planner, and the learning goals of a lesson (from
+[`read_curriculum`](goals.md#read_curriculum); pupils see them); an empty
+text empties an info. The goals given replace all of them, and an empty list
+clears them; a goal the goal selector does not know is refused. Asks for
 approval. A colleague's element is refused.
 
 ### `clear_lesson`
@@ -159,6 +163,19 @@ live with a planned lesfiche's attachments and weblink, #117), and every
 element is read by its type name, also one of a type the library does not
 know (`getPlannedElement` with `typeName`, dartschool#99).
 
+The learning goals the element stores (`PlannedElementDetail.goals`,
+dartschool#226: `id`, `leerplanId`, `type` each) are named by the goal
+selector, opened for the planner (`GoalService.resolve` at
+`GoalLocation.plannerLessonContent`, dartschool#222, #186), one line each:
+the curriculum, the headings above the goal, its number and text, and the
+three fields it is stored with. A goal the selector does not name is shown by
+those fields and said to be unknown; when the selector cannot name them at
+all, they are shown by their fields with a note, and the element is still
+read. A lesson without goals reads `Goals: none`; another element shows the
+line only when it has goals. An element without goals sends no request to
+the selector. See [How the goals of a lesfiche or a lesson are
+named](goals.md#how-the-goals-of-a-lesfiche-or-a-lesson-are-named).
+
 ### How `list_class_assignments` works
 
 `classes` takes 1 to 10 planner ids such as `group/4069_4256`; the period is
@@ -199,10 +216,16 @@ once.
 ### How `edit_planned_element` works
 
 It changes `name`, `public_info` and/or `private_info` (plain text, as
-`plan_lesson`), by the element's id (`renameElement`, `changePublicInfo`,
-`changePrivateInfo`, in that order). Marked destructive and idempotent: each
-change sets a value, and the library sends nothing for a value the element
-already has. The library refuses a colleague's element, or a change the
+`plan_lesson`), and for a lesson `goals` (`{id, leerplanId, type}` as
+`read_curriculum` shows them), by the element's id (`renameElement`,
+`changePublicInfo`, `changePrivateInfo`, `changeGoals` of dartschool#226, in
+that order). Marked destructive and idempotent: each change sets a value,
+and the library sends nothing for a value the element already has. The goals
+are checked with the goal selector (at `GoalLocation.plannerLessonContent`)
+before any change is sent, and the answer names them, as
+`read_planned_element` does, when they were among the changes; goals for an
+assignment are refused before anything is sent (the library has not tried
+them). See [How goals are set](goals.md#how-goals-are-set). The library refuses a colleague's element, or a change the
 planner does not allow, before sending it. When one change fails after
 another was saved, the answer says which were saved.
 
@@ -252,8 +275,9 @@ by reading the assignment again (the planner answers `404`).
 
 ### The planner writes
 
-For the six planner writes (`plan_lesson`, `edit_planned_element`,
-`clear_lesson`, `plan_lesfiche`, `plan_assignment`, `trash_assignment`), a
+For the seven planner writes (`plan_lesson`, `edit_planned_element`,
+`clear_lesson`, `plan_lesfiche`, `save_lesson_as_lesfiche`,
+`plan_assignment`, `trash_assignment`), a
 write that went out without the planner confirming it
 (`SmartschoolPlannerSaveUnconfirmedError`) is reported as maybe saved, with
 what to read to check it, and Claude is told not to call the tool again for
@@ -295,7 +319,9 @@ In `planner_writes.dart`, for the tools that change the planner: the info
 text Claude writes as HTML (`plainTextToHtml`), the `hour` argument
 (`emptyHourArgument`), the fill of an empty lesson hour with its result
 (`fillLessonHour`, which takes the library call that fills, so a lesfiche
-can be planned the same way), the lesson hour, the classes and the type of a
+can be planned the same way, and a lesson replaced by one), the goals of
+what a write just made, named in a session action of their own
+(`nameGoalsAfterWrite`), the lesson hour, the classes and the type of a
 new assignment (`lessonHourArgument`, `lessonHourClassesArgument`,
 `lessonHourClasses`, `assignmentTypeArgument`), `withPlannerWrite`
 (`withPlanner`, with a note that nothing changed on an error), and the

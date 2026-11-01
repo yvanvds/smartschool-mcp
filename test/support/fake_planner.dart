@@ -6,6 +6,7 @@ import 'package:flutter_smartschool/flutter_smartschool.dart'
     show PlannerService;
 
 import 'fake_download.dart';
+import 'fake_goals.dart';
 import 'fake_uploads.dart';
 
 /// The planner user id of the fake's own account: the `authenticatedUser.id`
@@ -46,6 +47,92 @@ String fakeLesficheCreatePath([String type = 'lessons']) =>
 /// Where lesfiches are moved to the module's trash (dartschool#129): one
 /// `POST lesson-content/trash/bulk` for all of them.
 const fakeLesficheTrashPath = '$_lessonContentApi/lesson-content/trash/bulk';
+
+/// Where the lesfiches in the module's trash are read (dartschool#227).
+const fakeLesficheTrashedPath = '$_lessonContentApi/lesson-content/trashed';
+
+/// Where lesfiches are taken out of the module's trash (dartschool#227): one
+/// `POST lesson-content/restore/bulk` for all of them.
+const fakeLesficheRestorePath =
+    '$_lessonContentApi/lesson-content/restore/bulk';
+
+/// Where lesfiches are copied in the own library (dartschool#227): one
+/// `POST lesson-content/duplicate/bulk` for all of them.
+const fakeLesficheDuplicatePath =
+    '$_lessonContentApi/lesson-content/duplicate/bulk';
+
+/// When the fake's lesfiches went to the trash, as the module writes it
+/// (`dateStateChanged` of the trash), unless [FakePlanner.lesficheTrashDates]
+/// says otherwise.
+const fakeLesficheTrashDate = '2026-11-01 09:30:00';
+
+/// A lesfiche of [lesfiche] as a bulk write of the module keys its answer:
+/// the lesfiche as sent, as a JSON object in a string (seen live,
+/// dartschool#227).
+String fakeLesficheRefKey(FakeLesfiche lesfiche) =>
+    jsonEncode({'id': lesfiche.id, 'type': lesfiche.type, 'platformId': 4069});
+
+/// Smartschool's labels module (dartschool#228), which keeps the labels of
+/// lesfiches.
+const fakeLabelsApi = '/labels/api/v1';
+
+/// Where the school's labels for the Lesfiches module are read.
+const fakeSchoolLabelsPath =
+    '$fakeLabelsApi/locations/lesson_content/platform-labels';
+
+/// Where the own labels of the fake's account are read, and a new one made.
+const fakeOwnLabelsPath = '$fakeLabelsApi/user-labels/$fakePlannerMe';
+
+/// A stable part of a label id for [text]: twelve hex digits from its
+/// characters, so that a lesfiche, the labels module and a test give the
+/// label of a text the same id.
+String _labelKey(String text) => text.codeUnits
+    .fold<int>(7, (hash, unit) => (hash * 31 + unit) & 0xffffffffffff)
+    .toRadixString(16)
+    .padLeft(12, '0');
+
+/// The id of the school label [text], as the labels module gives it: the
+/// platform id and a UUID.
+String fakeSchoolLabelId(String text) =>
+    '4069_d0000000-0000-4000-8000-${_labelKey(text)}';
+
+/// The id of the own label [text] of [owner], as the labels module gives
+/// it: the owner's whole user id and a UUID.
+String fakeOwnLabelId(String text, {String owner = fakePlannerMe}) =>
+    '${owner}_d0000000-0000-4000-8100-${_labelKey(text)}';
+
+/// A label of the labels module (dartschool#228): a school label for the
+/// Lesfiches module, or an own label of the fake's account.
+class FakeLabel {
+  const FakeLabel(this.text, {this.color = 'steel', this.isVisible = true});
+
+  final String text;
+  final String color;
+  final bool isVisible;
+
+  /// As `GET .../platform-labels` gives a school label.
+  Map<String, Object?> schoolJson() => {
+    'identifier': fakeSchoolLabelId(text),
+    'id': fakeSchoolLabelId(text),
+    'type': 'platform',
+    'text': text,
+    'color': color,
+    'isVisible': isVisible,
+    'platformId': 4069,
+    'locations': ['lesson_content', 'planner'],
+  };
+
+  /// As `GET user-labels/{userId}` gives an own label.
+  Map<String, Object?> ownJson() => {
+    'identifier': fakeOwnLabelId(text),
+    'id': fakeOwnLabelId(text),
+    'type': 'user',
+    'text': text,
+    'color': color,
+    'isVisible': isVisible,
+    'userId': fakePlannerMe,
+  };
+}
 
 /// The id the fake gives the [n]th lesfiche its creates make.
 String fakeNewLesficheId(int n) =>
@@ -304,9 +391,14 @@ class FakePlannedElement {
     this.hasLinkedEvaluation = false,
     this.capabilities = const {},
     this.userRoles = const [],
+    this.goals = const [],
   });
 
   final String id;
+
+  /// The learning goals it stores (`goals`, dartschool#226), each
+  /// `{id, leerplanId, type}` ([fakeGoalRef]).
+  final List<Map<String, String>> goals;
 
   /// The planner's name of the type (`planned-lessons`).
   final String type;
@@ -380,6 +472,8 @@ class FakePlannedElement {
         'canUserChangePublicInfo': isOwn,
         'canUserReplace': isOwn,
         'canUserRename': isOwn,
+        'canUserChangeGoals': isOwn,
+        'canUserSaveInSourceModule': isOwn,
       },
       'planned-assignments' => {
         'canUserTrash': isOwn,
@@ -395,12 +489,13 @@ class FakePlannedElement {
     'canUserSeeProperties': {'id': true, 'name': true},
   };
 
-  /// This element with the [name], [publicInfo] and [privateInfo] given
-  /// changed, as an edit of the planner leaves it.
+  /// This element with the [name], [publicInfo], [privateInfo] and [goals]
+  /// given changed, as an edit of the planner leaves it.
   FakePlannedElement withChanges({
     String? name,
     String? publicInfo,
     String? privateInfo,
+    List<Map<String, String>>? goals,
   }) => FakePlannedElement(
     id: id,
     type: type,
@@ -426,6 +521,7 @@ class FakePlannedElement {
     hasLinkedEvaluation: hasLinkedEvaluation,
     capabilities: capabilities,
     userRoles: userRoles,
+    goals: goals ?? this.goals,
   );
 
   /// A new element of [type] with the id [id] in this element's lesson
@@ -438,6 +534,7 @@ class FakePlannedElement {
     String publicInfo = '',
     String privateInfo = '',
     List<String> labels = const [],
+    List<Map<String, String>> goals = const [],
   }) => FakePlannedElement(
     id: id,
     type: type,
@@ -454,6 +551,7 @@ class FakePlannedElement {
     publicInfo: publicInfo,
     privateInfo: privateInfo,
     labels: labels,
+    goals: goals,
   );
 
   bool overlaps(DateTime start, DateTime end) =>
@@ -535,7 +633,7 @@ class FakePlannedElement {
         },
     ],
     'courseLinks': <Object?>[],
-    'goals': <Object?>[],
+    'goals': goals,
     'reminders': <Object?>[],
     if (_isAssignment) ...{
       'uploadFolder': null,
@@ -654,10 +752,15 @@ class FakeLesfiche {
     this.weblinks = const [],
     this.attachments = const [],
     this.partnerWeblinks = 0,
+    this.goals = const [],
   });
 
   final String id;
   final String name;
+
+  /// The learning goals it stores (`goals`, dartschool#223), each
+  /// `{id, leerplanId, type}` ([fakeGoalRef]); only in the detail.
+  final List<Map<String, String>> goals;
 
   /// The module's name of the kind: `lessons` or `assignments`.
   final String type;
@@ -702,6 +805,9 @@ class FakeLesfiche {
     List<FakePlannerCourse>? courses,
     List<FakeLesficheWeblink>? weblinks,
     List<FakeLesficheAttachment>? attachments,
+    List<Map<String, String>>? goals,
+    List<String>? labels,
+    List<String>? ownLabels,
   }) => FakeLesfiche(
     id: id,
     name: name ?? this.name,
@@ -713,15 +819,19 @@ class FakeLesfiche {
     owner: owner,
     lastChanged: lastChanged,
     courses: courses ?? this.courses,
-    labels: labels,
-    ownLabels: ownLabels,
+    labels: labels ?? this.labels,
+    ownLabels: ownLabels ?? this.ownLabels,
     assignmentType: assignmentType,
     weblinks: weblinks ?? this.weblinks,
     attachments: attachments ?? this.attachments,
     partnerWeblinks: partnerWeblinks,
+    goals: goals ?? this.goals,
   );
 
-  Map<String, Object?> toJson() => {
+  /// The lesfiche as the list gives it; [stateChanged] is its
+  /// `dateStateChanged` (when it went to the trash, in the trash's list),
+  /// [lastChanged] by default.
+  Map<String, Object?> toJson({String? stateChanged}) => {
     'id': id,
     'platformId': 4069,
     if (assignmentType case final type?) 'assignmentType': type.schoolJson(),
@@ -730,32 +840,32 @@ class FakeLesfiche {
     'publicInfo': publicInfo,
     'isVisible': isVisible,
     'owner': owner,
-    'dateStateChanged': lastChanged,
+    'dateStateChanged': stateChanged ?? lastChanged,
     'dateLastChanged': lastChanged,
     'courses': [
       for (final course in courses) {'platformId': 4069, 'id': course.id},
     ],
     'labels': [
-      for (final (index, text) in labels.indexed)
+      for (final text in labels)
         {
-          'identifier': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'identifier': fakeSchoolLabelId(text),
           'type': 'platform',
           'text': text,
           'color': 'aqua',
           'isVisible': true,
-          'id': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'id': fakeSchoolLabelId(text),
           'platformId': 4069,
           'ssId': 4069,
           'locations': ['lesson_content', 'planner'],
         },
-      for (final (index, text) in ownLabels.indexed)
+      for (final text in ownLabels)
         {
-          'identifier': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'identifier': fakeOwnLabelId(text, owner: owner),
           'type': 'user',
           'text': text,
           'color': 'steel',
           'isVisible': true,
-          'id': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'id': fakeOwnLabelId(text, owner: owner),
           'userId': owner,
         },
     ],
@@ -783,7 +893,7 @@ class FakeLesfiche {
       if (key != 'dateStateChanged' && key != 'dateLastChanged') key: value,
     'info': privateInfo,
     'privateInfo': privateInfo,
-    'goals': <Object?>[],
+    'goals': goals,
     'uploadFolder': null,
     'miniDBItems': <Object?>[],
     'capabilities': {
@@ -953,10 +1063,21 @@ class FakePlannerHit {
 ///   public info, as the live planner did (it took the name, the labels and
 ///   the empty info of the lesfiche tried), and answers with the lesson; a
 ///   lesfiche it does not have is answered with `400` (made up: the library
-///   refuses one before sending);
+///   refuses one before sending); the lesson takes the lesfiche's private
+///   info and goals too, as live (dartschool#224, #226);
+/// - `POST /planner/api/v1/planned-lessons/replace/planned-lessons/{platformId}/{id}`
+///   (dartschool#224): the lesson becomes a new lesson of the lesfiche
+///   `sourceId` ([_replaceWithLesfiche]); `POST
+///   /planner/api/v1/planned-elements/replace-with-lesson-content` plans
+///   the lesfiche into several hours at once ([_planIntoSeveral],
+///   [bulkExceptions]);
+/// - `POST /planner/api/v1/planned-lessons/{platformId}/{id}/save-in-source-module`
+///   (dartschool#225): adds a lesson lesfiche of the lesson
+///   ([_saveAsLesfiche]);
 /// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/rename`
 ///   (`newName`), `.../change-public-info` and `.../change-private-info`
-///   (`newInfo`): changes the element, and answers with it;
+///   (`newInfo`), and `.../change-goals` (`goals`, dartschool#226, stored
+///   as sent): changes the element, and answers with it;
 /// - `POST /planner/api/v1/planned-elements/clear` (`type`, `elementId`,
 ///   `elementPlatformId`): clears the lesson as [clearLesson] does, and
 ///   answers with the empty lesson hour;
@@ -983,7 +1104,12 @@ class FakePlannerHit {
 ///   (`newPublicInfo`), `.../change-private-info` (`newPrivateInfo`),
 ///   `.../change-courses` (`newCourses`, each `{platformId, id}`, stored as
 ///   sent, also a course the course list does not have, as live),
-///   `.../mark-as-visible` and `.../mark-as-invisible`: change the lesfiche,
+///   `.../change-goals` (`newGoals`, dartschool#223, stored as sent, also a
+///   goal no curriculum has, as live), `.../change-labels` (`newLabels`,
+///   dartschool#228, each as `LessonContentLabel.toWire` gives it, stored
+///   by its text; one without its `userId` or `platformId` gets a bare
+///   `500`, as live), `.../mark-as-visible` and `.../mark-as-invisible`:
+///   change the lesfiche,
 ///   and answer `200` with the whole lesfiche;
 /// - `POST .../weblinks` (`newName`, `newIcon`, `newUrl`, `newVisibility`;
 ///   an address without `http(s)://` gets a bare `400`, as live) adds a
@@ -1001,7 +1127,18 @@ class FakePlannerHit {
 ///   platformId}`): moves the lesfiches to the module's trash
 ///   ([trashedLesfiches]), and answers `200` with `{"exceptions":[]}`; one
 ///   in the trash already gets a bare `500`, as live
-///   ([_trashLesfiches]).
+///   ([_trashLesfiches]);
+/// - `GET` [fakeLesficheTrashedPath]: the lesfiches of [trashedLesfiches],
+///   in the shape of the list, each with when it went there
+///   ([lesficheTrashDates]) as its `dateStateChanged` (dartschool#227);
+/// - `POST` [fakeLesficheRestorePath] (the body of the trash): takes the
+///   lesfiches out of the trash ([_restoreLesfiches]);
+/// - `POST` [fakeLesficheDuplicatePath] (the body of the trash): copies the
+///   lesfiches in the own library ([_duplicateLesfiches]).
+///
+/// And Smartschool's labels module of dartschool#228 at [fakeLabelsApi]:
+/// the school's labels ([schoolLabels]) and the own ones ([ownLabels]), and
+/// the create of an own label ([_labelsAnswer]).
 ///
 /// A write of a lesfiche the fake does not have, or of one in
 /// [trashedLesfiches] (whose detail is still served, as live), is answered
@@ -1064,6 +1201,18 @@ class FakePlanner {
   /// The user's lesfiches in the Lesfiches module.
   final List<FakeLesfiche> lesfiches = [];
 
+  /// The school's labels for the Lesfiches module, in the labels module
+  /// (dartschool#228): those of the lesfiches of the captures.
+  final List<FakeLabel> schoolLabels = [
+    const FakeLabel('JAAR 6', color: 'aqua'),
+    const FakeLabel('TRIMESTER 1', color: 'yellow'),
+    const FakeLabel('TRIMESTER 2', color: 'yellow'),
+  ];
+
+  /// The own labels of the fake's account, in the labels module; a create
+  /// of one adds it at the end.
+  final List<FakeLabel> ownLabels = [const FakeLabel('Lussen')];
+
   /// The ids of the lesfiches of [lesfiches] that are in the module's trash,
   /// in lower case: the list ([fakeLesfichesPath]) leaves them out, their
   /// detail is still served, and their writes are answered with `404`, as
@@ -1075,6 +1224,18 @@ class FakePlanner {
   /// them in its `exceptions`, by id, and leaves these lesfiches where they
   /// are (in the shape of dartschool's test of the trash; not seen live).
   final Map<String, Map<String, Object?>> lesficheTrashExceptions = {};
+
+  /// When the lesfiches of [trashedLesfiches] went to the trash, by id in
+  /// lower case, as the module writes it; [fakeLesficheTrashDate] for one
+  /// not in it.
+  final Map<String, String> lesficheTrashDates = {};
+
+  /// The exceptions the module answers a restore of these lesfiches with,
+  /// by lesfiche id in lower case: the restore answers `200` with them in
+  /// its `exceptions`, keyed as sent, and leaves these lesfiches in the
+  /// trash (made up; the module's own for a lesfiche not in the trash is a
+  /// `404`, which the fake gives too).
+  final Map<String, Map<String, Object?>> lesficheRestoreExceptions = {};
 
   /// The school's course list: [fakeSchoolCourses] by default, every course
   /// of the captures, as the live list holds all the school's courses
@@ -1099,6 +1260,12 @@ class FakePlanner {
   /// Paths answered with this status (and an answer the planner might give)
   /// instead.
   final Map<String, int> failing = {};
+
+  /// Exceptions the plan of a lesfiche into several hours
+  /// (`planned-elements/replace-with-lesson-content`) gives instead of
+  /// planning a target, by its ref (`planned-placeholders/4069/<id>`), as
+  /// the planner gives them (made up: none was seen live).
+  final Map<String, Object?> bulkExceptions = {};
 
   /// Paths of writes that are carried out, after which the connection drops
   /// before the answer arrives.
@@ -1143,6 +1310,7 @@ class FakePlanner {
     String publicInfo = '',
     String privateInfo = '',
     List<String> labels = const [],
+    List<Map<String, String>> goals = const [],
   }) {
     final slot = elements[ref];
     if (slot == null || slot.type != 'planned-placeholders') return null;
@@ -1153,6 +1321,7 @@ class FakePlanner {
       publicInfo: publicInfo,
       privateInfo: privateInfo,
       labels: labels,
+      goals: goals,
     );
     _replace(slot, lesson);
     return lesson;
@@ -1250,6 +1419,10 @@ class FakePlanner {
         path != fakeAssignmentTypesPath &&
         path != fakeLesfichesPath &&
         path != fakeLesficheTrashPath &&
+        path != fakeLesficheTrashedPath &&
+        path != fakeLesficheRestorePath &&
+        path != fakeLesficheDuplicatePath &&
+        !path.startsWith('$fakeLabelsApi/') &&
         lesficheRoute == null) {
       return null;
     }
@@ -1282,9 +1455,41 @@ class FakePlanner {
         ]),
       );
     }
-    if (path == fakeLesficheTrashPath) {
+    if (path.startsWith('$fakeLabelsApi/')) {
+      final answer = _labelsAnswer(options.method, path, options.data);
+      if (answer != null &&
+          options.method == 'POST' &&
+          lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
+    }
+    if (path == fakeLesficheTrashedPath) {
+      if (options.method != 'GET') return null;
+      return _json(
+        jsonEncode([
+          for (final lesfiche in lesfiches)
+            if (trashedLesfiches.contains(lesfiche.id.toLowerCase()))
+              lesfiche.toJson(
+                stateChanged:
+                    lesficheTrashDates[lesfiche.id.toLowerCase()] ??
+                    fakeLesficheTrashDate,
+              ),
+        ]),
+      );
+    }
+    if (path == fakeLesficheTrashPath ||
+        path == fakeLesficheRestorePath ||
+        path == fakeLesficheDuplicatePath) {
       if (options.method != 'POST') return null;
-      final answer = _trashLesfiches(options.data);
+      final answer = switch (path) {
+        fakeLesficheTrashPath => _trashLesfiches(options.data),
+        fakeLesficheRestorePath => _restoreLesfiches(options.data),
+        _ => _duplicateLesfiches(options.data),
+      };
       if (lostAnswers.contains(path)) {
         throw DioException.connectionError(
           requestOptions: options,
@@ -1354,6 +1559,30 @@ class FakePlanner {
             options.data,
           ),
         ['planned-elements', 'clear'] => _clear(options.data),
+        ['planned-elements', 'replace-with-lesson-content'] => _planIntoSeveral(
+          options.data,
+        ),
+        [
+          'planned-lessons',
+          'replace',
+          'planned-lessons',
+          final platform,
+          final id,
+        ] =>
+          _replaceWithLesfiche(
+            'planned-lessons/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
+        [
+          'planned-lessons',
+          final platform,
+          final id,
+          'save-in-source-module',
+        ] =>
+          _saveAsLesfiche(
+            'planned-lessons/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
         ['planned-assignments', 'blanco'] => _createAssignment(options.data),
         [final type, final platform, final id, 'trash'] => _trash(
           '$type/$platform/${Uri.decodeComponent(id)}',
@@ -1363,7 +1592,10 @@ class FakePlanner {
           final platform,
           final id,
           final action &&
-              ('rename' || 'change-public-info' || 'change-private-info'),
+              ('rename' ||
+                  'change-public-info' ||
+                  'change-private-info' ||
+                  'change-goals'),
         ] =>
           _edit(
             '$type/$platform/${Uri.decodeComponent(id)}',
@@ -1497,6 +1729,7 @@ class FakePlanner {
         (type == 'assignments') != body.containsKey('assignmentType')) {
       return _badRequest();
     }
+    if (!_labelsComplete(body['labels'] as List)) return _serverError();
     FakeAssignmentType? assignmentType;
     if (type == 'assignments') {
       final typeId = '${body['assignmentType']}'.toLowerCase();
@@ -1524,6 +1757,9 @@ class FakePlanner {
               FakePlannerCourse('${course['id']}', ''),
       ],
       assignmentType: assignmentType,
+      goals: _storedGoals(body['goals']),
+      labels: _storedLabels(body['labels'], 'platform'),
+      ownLabels: _storedLabels(body['labels'], 'user'),
       weblinks: [
         for (final weblink in (body['weblinks'] as List).cast<Map>())
           FakeLesficheWeblink(
@@ -1553,6 +1789,89 @@ class FakePlanner {
     lesfiches.add(lesfiche);
     return _json(jsonEncode({'id': lesfiche.id}), status: 201);
   }
+
+  /// The labels module (dartschool#228): `GET` [fakeSchoolLabelsPath]
+  /// ([schoolLabels]) and [fakeOwnLabelsPath] ([ownLabels]); `POST`
+  /// [fakeOwnLabelsPath] (`{text, color, isVisible}`) makes an own label and
+  /// answers `201` with it, as live. A text one of the own labels has
+  /// (ignoring case) gets `400` with `languageCode` `name.already.used`, one
+  /// of more than 50 characters a bare `400` (both seen live). The module
+  /// answers `GET platform-labels` with its web app (seen live); the fake
+  /// answers what it does not know with `404`.
+  ResponseBody? _labelsAnswer(String method, String path, Object? data) {
+    if (method == 'GET' && path == fakeSchoolLabelsPath) {
+      return _json(
+        jsonEncode([for (final label in schoolLabels) label.schoolJson()]),
+      );
+    }
+    if (path == fakeOwnLabelsPath) {
+      if (method == 'GET') {
+        return _json(
+          jsonEncode([for (final label in ownLabels) label.ownJson()]),
+        );
+      }
+      if (method != 'POST') return null;
+      final body = data is Map ? data : const <Object?, Object?>{};
+      final text = body['text'];
+      final color = body['color'];
+      if (text is! String || text.trim().isEmpty || color is! String) {
+        return _badRequest();
+      }
+      if (text.length > 50) return _badRequest();
+      if (ownLabels.any(
+        (label) => label.text.toLowerCase() == text.toLowerCase(),
+      )) {
+        return _json(
+          jsonEncode({
+            'status': 400,
+            'title': 'Bad Request',
+            'languageCode': 'name.already.used',
+          }),
+          status: 400,
+        );
+      }
+      final label = FakeLabel(text, color: color);
+      ownLabels.add(label);
+      return _json(jsonEncode(label.ownJson()), status: 201);
+    }
+    return _notFound();
+  }
+
+  /// The texts of the labels of the kind [type] (`platform`, `user`) in a
+  /// label write's body [labels] (each as `LessonContentLabel.toWire` gives
+  /// it), as the module stores them.
+  static List<String> _storedLabels(Object? labels, String type) => [
+    for (final label in (labels as List).cast<Map>())
+      if (label['type'] == type) label['text'] as String,
+  ];
+
+  /// Whether every label of a label write's body [labels] has what the
+  /// module needs: the module answers an own label without its `userId`,
+  /// and a school label without its `platformId`, with a bare `500` (seen
+  /// live, dartschool#228).
+  static bool _labelsComplete(List<Object?> labels) => labels.every(
+    (label) =>
+        label is Map &&
+        label['id'] is String &&
+        label['text'] is String &&
+        switch (label['type']) {
+          'platform' => label['platformId'] != null,
+          'user' => label['userId'] is String,
+          _ => false,
+        },
+  );
+
+  /// The goals of a goal write's body [goals] (each `{id, goalId,
+  /// leerplanId, type}`) as the module and the planner store them: `{id,
+  /// leerplanId, type}`, any id, also one no curriculum has (as live).
+  static List<Map<String, String>> _storedGoals(Object? goals) => [
+    for (final goal in (goals as List).cast<Map>())
+      fakeGoalRef(
+        goal['id'] as String,
+        goal['leerplanId'] as String,
+        goal['type'] as String,
+      ),
+  ];
 
   /// A new id for a weblink or an attachment, with [prefix] `e` for a
   /// weblink and `f` for an attachment: the creates and the writes of
@@ -1612,6 +1931,20 @@ class FakePlanner {
         final info = text('newPrivateInfo');
         if (info == null) return _badRequest();
         return changed(lesfiche.withChanges(privateInfo: info));
+      case ('POST', ['change-goals']):
+        final goals = body['newGoals'];
+        if (goals is! List) return _badRequest();
+        return changed(lesfiche.withChanges(goals: _storedGoals(goals)));
+      case ('POST', ['change-labels']):
+        final labels = body['newLabels'];
+        if (labels is! List) return _badRequest();
+        if (!_labelsComplete(labels)) return _serverError();
+        return changed(
+          lesfiche.withChanges(
+            labels: _storedLabels(labels, 'platform'),
+            ownLabels: _storedLabels(labels, 'user'),
+          ),
+        );
       case ('POST', ['change-courses']):
         final courses = body['newCourses'];
         if (courses is! List) return _badRequest();
@@ -1760,6 +2093,141 @@ class FakePlanner {
     );
   }
 
+  /// The lesfiches the body [data] of a bulk write names (`lessonContent`,
+  /// each `{id, type, platformId}`, as the web client sends it), each with
+  /// the key the module gives it in its answer; null for a body without
+  /// the list, or with an item without its id, kind or platform.
+  List<({String id, String type, String key})>? _bulkItems(Object? data) {
+    final list = data is Map ? data['lessonContent'] : null;
+    if (list is! List ||
+        list.isEmpty ||
+        list.any(
+          (item) =>
+              item is! Map ||
+              item['id'] is! String ||
+              item['type'] is! String ||
+              item['platformId'] is! int,
+        )) {
+      return null;
+    }
+    return [
+      for (final item in list.cast<Map<Object?, Object?>>())
+        (
+          id: item['id']! as String,
+          type: item['type']! as String,
+          key: jsonEncode({
+            'id': item['id'],
+            'type': item['type'],
+            'platformId': item['platformId'],
+          }),
+        ),
+    ];
+  }
+
+  /// Takes the lesfiches of the body [data] of a restore (the body of the
+  /// trash) out of the module's trash ([trashedLesfiches]), as the module
+  /// does (dartschool#227), and answers `200` with `{"exceptions":[]}`.
+  ///
+  /// A lesfiche that is not in the trash (also one the fake does not have)
+  /// gets an exception with the status `404`, keyed by the lesfiche as
+  /// sent, as live; so does one of [lesficheRestoreExceptions], with its
+  /// exception, and it stays in the trash; the others are restored. A body
+  /// without the list gets a bare `400` (made up).
+  ResponseBody _restoreLesfiches(Object? data) {
+    final items = _bulkItems(data);
+    if (items == null) return _badRequest();
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      final id = item.id.toLowerCase();
+      if (_lesficheOf(item.type, item.id) == null ||
+          !trashedLesfiches.contains(id)) {
+        exceptions[item.key] = {
+          'status': 404,
+          'title': 'Not Found',
+          'detail': '',
+          'type': '',
+        };
+      } else if (lesficheRestoreExceptions[id] case final error?) {
+        exceptions[item.key] = error;
+      } else {
+        trashedLesfiches.remove(id);
+        lesficheTrashDates.remove(id);
+      }
+    }
+    return _json(
+      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
+    );
+  }
+
+  /// Copies the lesfiches of the body [data] of a duplicate (the body of
+  /// the trash) in the own library, as the module does (dartschool#227):
+  /// each copy is added to [lesfiches] at the end, with the id
+  /// [fakeNewLesficheId], the name with " - kopie" behind it, and the icon,
+  /// info, visibility, courses, labels, goals, attachments and weblinks
+  /// (each weblink with a new id) of the lesfiche. Answers `200` with
+  /// `{"lessonContent": {...}, "exceptions": ...}`, both keyed by the
+  /// lesfiche as sent, each copy as its detail.
+  ///
+  /// A lesfiche in the trash (also one the fake does not have, made up)
+  /// gets an exception with the status `403` and no copy, as live. A body
+  /// without the list gets a bare `400` (made up).
+  ResponseBody _duplicateLesfiches(Object? data) {
+    final items = _bulkItems(data);
+    if (items == null) return _badRequest();
+    final copies = <String, Object?>{};
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      final lesfiche = _lesficheOf(item.type, item.id);
+      if (lesfiche == null ||
+          trashedLesfiches.contains(item.id.toLowerCase())) {
+        exceptions[item.key] = {
+          'status': 403,
+          'title': 'Forbidden',
+          'detail': '',
+          'type': '',
+        };
+        continue;
+      }
+      final copy = FakeLesfiche(
+        id: fakeNewLesficheId(++_madeLesfiches),
+        name: '${lesfiche.name} - kopie',
+        type: lesfiche.type,
+        icon: lesfiche.icon,
+        publicInfo: lesfiche.publicInfo,
+        privateInfo: lesfiche.privateInfo,
+        isVisible: lesfiche.isVisible,
+        owner: lesfiche.owner,
+        lastChanged: '2026-11-01 10:15:00',
+        courses: lesfiche.courses,
+        labels: lesfiche.labels,
+        ownLabels: lesfiche.ownLabels,
+        assignmentType: lesfiche.assignmentType,
+        weblinks: [
+          for (final weblink in lesfiche.weblinks)
+            FakeLesficheWeblink(
+              id: _newPartId('e'),
+              name: weblink.name,
+              url: weblink.url,
+              icon: weblink.icon,
+              option: weblink.option,
+              daysAfterEnd: weblink.daysAfterEnd,
+            ),
+        ],
+        attachments: lesfiche.attachments,
+        partnerWeblinks: lesfiche.partnerWeblinks,
+        goals: lesfiche.goals,
+      );
+      lesfiches.add(copy);
+      copies[item.key] = copy.detailJson();
+    }
+    return _json(
+      jsonEncode({
+        'lessonContent': copies.isEmpty ? <Object?>[] : copies,
+        'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions,
+      }),
+    );
+  }
+
   /// The weblink with [id] of the body [body] of a weblink write
   /// (`newName`, `newIcon`, `newUrl`, `newVisibility`), or null when the
   /// module answers it with a bare `400`: a value missing, or an address
@@ -1814,10 +2282,125 @@ class FakePlanner {
       ref,
       name: lesfiche.name,
       publicInfo: lesfiche.publicInfo,
+      privateInfo: lesfiche.privateInfo,
       labels: [...lesfiche.labels, ...lesfiche.ownLabels],
+      goals: lesfiche.goals,
     );
     if (lesson == null) return _notFound();
     return _json(jsonEncode(lesson.detailJson()));
+  }
+
+  /// The lesfiche with the id [sourceId] (ignoring case), or null.
+  FakeLesfiche? _lesficheById(Object? sourceId) {
+    final id = '$sourceId'.toLowerCase();
+    return lesfiches
+        .where((lesfiche) => lesfiche.id.toLowerCase() == id)
+        .firstOrNull;
+  }
+
+  /// Makes a lesson of [lesfiche] in the place of [element], an empty
+  /// lesson hour or a lesson, as the planner does (dartschool#224): a new
+  /// lesson with a new id, named after the lesfiche, with its info, labels
+  /// and goals; the old content of a lesson is gone. Returns the lesson.
+  FakePlannedElement _lessonOf(
+    FakePlannedElement element,
+    FakeLesfiche lesfiche,
+  ) {
+    final lesson = element.inSameHour(
+      id: _newId('4000'),
+      type: 'planned-lessons',
+      name: lesfiche.name,
+      publicInfo: lesfiche.publicInfo,
+      privateInfo: lesfiche.privateInfo,
+      labels: [...lesfiche.labels, ...lesfiche.ownLabels],
+      goals: lesfiche.goals,
+    );
+    _replace(element, lesson);
+    return lesson;
+  }
+
+  /// `POST planned-lessons/replace/planned-lessons/{platformId}/{id}`
+  /// (dartschool#224): the lesson [ref] becomes a lesson of the lesfiche
+  /// `sourceId`, answered `201` with it, as live.
+  ResponseBody _replaceWithLesfiche(String ref, Object? data) {
+    final lesfiche = _lesficheById((data as Map)['sourceId']);
+    if (lesfiche == null) return _badRequest();
+    final lesson = elements[ref];
+    if (lesson == null || lesson.type != 'planned-lessons') return _notFound();
+    return _json(
+      jsonEncode(_lessonOf(lesson, lesfiche).detailJson()),
+      status: 201,
+    );
+  }
+
+  /// `POST planned-elements/replace-with-lesson-content` (dartschool#224):
+  /// plans the lesfiche `sourceId` into each of the `plannedElements`, but
+  /// those of [bulkExceptions] and those the fake does not have, which get
+  /// an exception by `{platformId}_{id}`; answered with the short lessons
+  /// (`id`, `platformId`, `plannedElementType`, `name`) and the
+  /// `exceptions`: an empty list when there are none, as live.
+  ResponseBody _planIntoSeveral(Object? data) {
+    final body = data as Map;
+    final lesfiche = _lesficheById(body['sourceId']);
+    final targets = body['plannedElements'];
+    if (lesfiche == null ||
+        body['sourceType'] != 'lesson' ||
+        targets is! List) {
+      return _badRequest();
+    }
+    final planned = <Map<String, Object?>>[];
+    final exceptions = <String, Object?>{};
+    for (final target in targets.cast<Map>()) {
+      final ref =
+          '${target['plannedElementType']}/${target['platformId']}/'
+          '${target['plannedElementId']}';
+      final element = elements[ref];
+      final key = '${target['platformId']}_${target['plannedElementId']}';
+      if (bulkExceptions[ref] case final exception?) {
+        exceptions[key] = exception;
+      } else if (element == null) {
+        exceptions[key] = {'message': 'Not found'};
+      } else {
+        final lesson = _lessonOf(element, lesfiche);
+        planned.add({
+          'id': lesson.id,
+          'platformId': lesson.platformId,
+          'plannedElementType': lesson.type,
+          'name': lesson.name,
+        });
+      }
+    }
+    return _json(
+      jsonEncode({
+        'plannedElements': planned,
+        'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions,
+      }),
+    );
+  }
+
+  /// `POST planned-lessons/{platformId}/{id}/save-in-source-module`
+  /// (`newName`, dartschool#225): adds a lesson lesfiche named `newName` to
+  /// [lesfiches], with the lesson's info, course, labels and goals and the
+  /// id [fakeNewLesficheId], and answers `200` with `{}`, as live. The
+  /// lesson stays as it is.
+  ResponseBody _saveAsLesfiche(String ref, Object? data) {
+    final lesson = elements[ref];
+    final name = (data as Map)['newName'];
+    if (lesson == null) return _notFound();
+    if (name is! String || name.trim().isEmpty) return _badRequest();
+    lesfiches.add(
+      FakeLesfiche(
+        id: fakeNewLesficheId(++_madeLesfiches),
+        name: name,
+        icon: 'document_observation',
+        publicInfo: lesson.publicInfo,
+        privateInfo: lesson.privateInfo,
+        lastChanged: '2026-11-01 10:00:00',
+        courses: lesson.courses,
+        goals: lesson.goals,
+      ),
+    );
+    return _json('{}');
   }
 
   ResponseBody _clear(Object? data) {
@@ -1911,6 +2494,7 @@ class FakePlanner {
       'change-public-info' => element.withChanges(
         publicInfo: body['newInfo'] as String,
       ),
+      'change-goals' => element.withChanges(goals: _storedGoals(body['goals'])),
       _ => element.withChanges(privateInfo: body['newInfo'] as String),
     };
     _replace(element, changed);
@@ -1949,6 +2533,11 @@ class FakePlanner {
       jsonEncode([for (final course in courseList) course.toJson()]),
     );
   }
+
+  ResponseBody _serverError() => _json(
+    '{"status":500,"title":"Internal Server Error","detail":"","type":""}',
+    status: 500,
+  );
 
   ResponseBody _badRequest() => _json(
     '{"status":400,"title":"Bad Request","detail":"","type":""}',

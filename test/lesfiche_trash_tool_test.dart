@@ -6,6 +6,8 @@
 /// platform, answered with `{"exceptions":[]}`, and a lesfiche in the trash
 /// already with a bare `500`), after which the list leaves the lesfiches
 /// out and their detail is still served (`test/support/fake_planner.dart`).
+/// A move the module does not confirm is checked against the trash, read
+/// again (`GET lesson-content/trashed`, dartschool#227).
 library;
 
 import 'package:dart_mcp/client.dart';
@@ -143,9 +145,10 @@ void main() {
         allOf(
           contains('by the ids list_lesfiches shows: 1 to 20 in one call'),
           contains(
-            'It is a move, not a deletion: the user can restore them from '
-            'the trash in the Lesfiches module itself. This tool cannot '
-            'restore anything, nor delete anything for good.',
+            'It is a move, not a deletion: list_trashed_lesfiches lists the '
+            'trash, and restore_lesfiches takes them back out of it (the '
+            'Lesfiches module says within 100 days). No tool deletes '
+            'anything for good.',
           ),
           contains(
             'A lesson planned from one of them earlier stays in the '
@@ -205,10 +208,9 @@ void main() {
         'Moved 2 lesfiches to the trash of the Lesfiches module:\n'
         '$_lessonLine\n'
         '$_assignmentLine\n'
-        'list_lesfiches no longer lists them. The user can restore them from '
-        'the trash in the Lesfiches module itself; this server cannot '
-        'restore them, nor delete them for good. A lesson planned from one '
-        'of them earlier stays in the planner.',
+        'list_lesfiches no longer lists them; list_trashed_lesfiches lists '
+        'the trash, and restore_lesfiches takes them back out of it. A '
+        'lesson planned from one of them earlier stays in the planner.',
       );
       expect(planner.trashedLesfiches, {_lesson.id, _assignment.id});
 
@@ -235,10 +237,9 @@ void main() {
         'Moved 1 lesfiche to the trash of the Lesfiches module:\n'
         '- lesson | Test: lussen | no labels | no course | visible | changed '
         '2026-10-05 | id $id\n'
-        'list_lesfiches no longer lists it. The user can restore it from the '
-        'trash in the Lesfiches module itself; this server cannot restore '
-        'it, nor delete it for good. A lesson planned from it earlier stays '
-        'in the planner.',
+        'list_lesfiches no longer lists it; list_trashed_lesfiches lists the '
+        'trash, and restore_lesfiches takes it back out of it. A lesson '
+        'planned from it earlier stays in the planner.',
       );
       expect(
         await ok('list_lesfiches', {'query': 'test'}),
@@ -248,9 +249,10 @@ void main() {
       expect(
         await refused([id]),
         'You have no lesfiche with id $id: list_lesfiches does not list it. '
-        'A lesfiche that is in the trash already is not listed, nor is one '
-        'that no longer exists. Take the ids from list_lesfiches (type all '
-        'lists both kinds). Nothing was sent.',
+        'A lesfiche that is in the trash already is not listed '
+        '(list_trashed_lesfiches lists those), nor is one that no longer '
+        'exists. Take the ids from list_lesfiches (type all lists both '
+        'kinds). Nothing was sent.',
       );
       expect(planner.writes, [
         'POST ${fakeLesficheCreatePath()}',
@@ -268,8 +270,8 @@ void main() {
         await refused([_lesson.id, fakeLesficheGame.id, _unknown]),
         'You have no lesfiches with the ids ${fakeLesficheGame.id}, '
         '$_unknown: list_lesfiches does not list them. A lesfiche that is in '
-        'the trash already is not listed, nor is one that no longer exists. '
-        'Take the ids from list_lesfiches (type all lists both kinds), and '
+        'the trash already is not listed (list_trashed_lesfiches lists '
+        'those), nor is one that no longer exists. Take the ids from list_lesfiches (type all lists both kinds), and '
         'check with the user which lesfiches are meant: the others were not '
         'moved either. Nothing was sent.',
       );
@@ -304,31 +306,41 @@ void main() {
         await refused([_lesson.id, id]),
         'The lesfiche "Methode les 1" (id $id) is of the kind '
         '"method-lessons", which this server cannot move to the trash: only '
-        'lesson and assignment lesfiches. The user moves it to the trash in '
-        'the Lesfiches module itself. Nothing was sent.',
+        'lesson and assignment lesfiches. The user does that in the '
+        'Lesfiches module itself. Nothing was sent.',
       );
       expect(planner.writes, isEmpty);
     });
 
-    test('exceptions in the answer: maybe moved, some or all, with '
-        'list_lesfiches to check which are still listed', () async {
+    test('exceptions in the answer: the trash, read again, says which were '
+        'moved and which not', () async {
       planner.lesficheTrashExceptions[_lesson.id] = {
         'status': 403,
         'title': 'Forbidden',
         'detail': '',
       };
+      await openSession();
 
       expect(
         await refused([_lesson.id, _assignment.id]),
-        'The 2 lesfiches (the lesson lesfiche "Lussen" and the assignment '
-        'lesfiche "Lussen") may or may not have been moved to the trash: it '
-        'was sent, but the Lesfiches module did not confirm it. Some of them '
-        'may have been moved, and others not. Do not call trash_lesfiches '
-        'again for it. First list the lesfiches with list_lesfiches (type '
-        'all) to see which are still listed: a lesfiche in the trash is not '
-        'listed. Then tell the user what you found.',
+        'The move of 2 lesfiches to the trash was sent, but the Lesfiches '
+        'module did not confirm all of it. Read again after it, the trash '
+        'shows what was done.\n'
+        'In the trash now:\n'
+        '$_assignmentLine\n'
+        'Not in the trash (still in the library):\n'
+        '$_lessonLine\n'
+        'Do not call trash_lesfiches again for those in the trash. Tell the '
+        'user which were moved and which not, and ask before moving the '
+        'others again. restore_lesfiches takes a lesfiche back out of the '
+        'trash.',
       );
       expect(planner.writes, ['POST $fakeLesficheTrashPath'], reason: 'once');
+      expect(server.requests, [
+        'GET $fakeLesfichesPath',
+        'POST $fakeLesficheTrashPath',
+        'GET $fakeLesficheTrashedPath',
+      ]);
 
       final list = await listed();
       expect(list, contains(_lesson.id));
@@ -336,14 +348,8 @@ void main() {
     });
 
     test('a bare 500 (the lesfiche was moved to the trash after the list was '
-        'read, seen live) or a move whose answer does not arrive: maybe '
-        'moved, with list_lesfiches to check it', () async {
-      const notConfirmed =
-          'may or may not have been moved to the trash: it was sent, but the '
-          'Lesfiches module did not confirm it. Do not call trash_lesfiches '
-          'again for it. First list the lesfiches with list_lesfiches (type '
-          'all) to see whether it is still listed: a lesfiche in the trash is '
-          'not listed. Then tell the user what you found.';
+        'read, seen live) or a move whose answer does not arrive: the trash, '
+        'read again, shows it there', () async {
       planner.beforeAnswer = (method, path) {
         if (method == 'POST' && path == fakeLesficheTrashPath) {
           planner.trashedLesfiches.add(_lesson.id);
@@ -351,22 +357,49 @@ void main() {
       };
 
       expect(
-        await refused([_lesson.id]),
-        'The lesson lesfiche "Lussen" $notConfirmed',
+        await trash([_lesson.id]),
+        'The move of the lesson lesfiche "Lussen" to the trash was sent, but '
+        'the Lesfiches module did not confirm it. Read again after it, the '
+        'trash shows what was done.\n'
+        'In the trash now:\n'
+        '$_lessonLine\n'
+        'Do not call trash_lesfiches again for those in the trash. Tell the '
+        'user which were moved and which not, and ask before moving the '
+        'others again. restore_lesfiches takes a lesfiche back out of the '
+        'trash.',
       );
 
       planner
         ..beforeAnswer = null
         ..lostAnswers.add(fakeLesficheTrashPath);
       expect(
-        await refused([_assignment.id]),
-        'The assignment lesfiche "Lussen" $notConfirmed',
+        await trash([_assignment.id]),
+        contains('In the trash now:\n$_assignmentLine\n'),
       );
       expect(planner.writes, [
         'POST $fakeLesficheTrashPath',
         'POST $fakeLesficheTrashPath',
       ], reason: 'each sent once');
       expect(planner.trashedLesfiches, {_lesson.id, _assignment.id});
+    });
+
+    test('a move whose answer does not arrive, and the trash cannot be read '
+        'after it: maybe moved, with list_trashed_lesfiches to check '
+        'it', () async {
+      planner
+        ..lostAnswers.add(fakeLesficheTrashPath)
+        ..failing[fakeLesficheTrashedPath] = 500;
+
+      expect(
+        await refused([_lesson.id, _assignment.id]),
+        'The 2 lesfiches (the lesson lesfiche "Lussen" and the assignment '
+        'lesfiche "Lussen") may or may not have been moved to the trash: it '
+        'was sent, but the Lesfiches module did not confirm it. Some of them '
+        'may have been moved, and others not. Do not call trash_lesfiches '
+        'again for it. First list the trash with list_trashed_lesfiches to '
+        'see which are there. Then tell the user what you found.',
+      );
+      expect(planner.writes, ['POST $fakeLesficheTrashPath']);
     });
 
     test('the module refuses the move with a bare 400, or the list cannot be '

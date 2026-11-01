@@ -4,8 +4,8 @@ import '../tools/server_tool.dart';
 import 'planner_format.dart';
 
 // The lesfiches of Smartschool's Lesfiches module (lesson content), which
-// `list_lesfiches` lists and `plan_lesfiche` plans into an empty lesson hour
-// of the user's own planner: the kinds a tool lists, the lesfiche id a tool
+// `list_lesfiches` lists and `plan_lesfiche` plans into lesson hours of
+// the user's own planner: the kinds a tool lists, the lesfiche id a tool
 // takes, the names of a lesfiche's courses, the order of the list, and one
 // line per lesfiche. Both tools reach the module with `withPlannerClient`
 // (`planner_access.dart`), which turns its errors into ToolErrors. One
@@ -195,9 +195,14 @@ const unnamedLesficheCourseNote =
 /// informatica | hidden | changed 2026-09-07 | id b0000000-…`. The day is
 /// as the module gives it: its dates have no offset, so they are Smartschool
 /// time, read as the time of this PC.
+///
+/// With [inTrash] (a lesfiche of the trash, `list_trashed_lesfiches`), the
+/// day it went to the trash (its `dateStateChanged`, dartschool#227)
+/// instead: `in the trash since 2026-11-01`.
 String formatLesficheLine(
   LessonContentItem item, {
   bool withCourseNames = true,
+  bool inTrash = false,
 }) {
   final labels = [
     for (final label in item.labels)
@@ -209,7 +214,12 @@ String formatLesficheLine(
     if (labels.isEmpty) 'no labels' else 'labels ${labels.join(', ')}',
     formatLesficheCourses(item, withCourseNames: withCourseNames),
     if (item.isVisible) 'visible' else 'hidden',
-    if (item.dateLastChanged case final changed?)
+    if (inTrash)
+      if (item.dateStateChanged case final trashed?)
+        'in the trash since ${formatPlannerDate(trashed)}'
+      else
+        'in the trash'
+    else if (item.dateLastChanged case final changed?)
       'changed ${formatPlannerDate(changed)}',
     'id ${item.id}',
   ].join(' | ');

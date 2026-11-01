@@ -203,6 +203,7 @@ const _capabilityVerb = {
   'canUserChangePrivateInfo': 'change the private info of',
   'canUserTrash': 'trash',
   'canUserDelete': 'delete',
+  'canUserSaveInSourceModule': 'save as a lesfiche',
 };
 
 /// What [flags], capability flags of the planner, allow: `fill`, `trash or

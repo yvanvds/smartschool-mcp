@@ -1,5 +1,6 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../messages/html_to_text.dart';
 import 'planner_access.dart';
 
@@ -291,9 +292,13 @@ String plannerInfoText(String html) {
 
 /// [detail] as text: what its list line says, one field per line, then its
 /// labels, its attachments and weblinks (one line each, with when pupils
-/// see it: [formatPlannerVisibility]), and its public and private info as
-/// plain text.
-String formatElementDetail(PlannedElementDetail detail) {
+/// see it: [formatPlannerVisibility]), with [goals] its learning goals as
+/// the goal selector names them ([formatNamedGoals], #186: `Goals: none`
+/// only for a lesson), and its public and private info as plain text.
+///
+/// What `read_planned_element` answers (with [goals]), and what the planner
+/// writes give back (without: they do not name them).
+String formatElementDetail(PlannedElementDetail detail, {NamedGoals? goals}) {
   final placeholder = detail.type == PlannedElementType.placeholder;
   final assignment = detail.type == PlannedElementType.assignment;
   final organisers = elementOrganisers(detail);
@@ -353,6 +358,9 @@ String formatElementDetail(PlannedElementDetail detail) {
       'Weblinks:',
       for (final weblink in weblinks) '- $weblink',
     ],
+    if (goals != null &&
+        (goals.refs.isNotEmpty || detail.type == PlannedElementType.lesson))
+      ...formatNamedGoals(goals),
     if (!placeholder) ...[
       '',
       'Public info (what pupils see):',

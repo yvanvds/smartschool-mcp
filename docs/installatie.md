@@ -16,19 +16,30 @@ Je vraagt het gewoon in een gesprek:
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
   kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
-  Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken en
-  aanpassen in je eigen bibliotheek, met info, vakken, weblinks en bestanden
-  van je pc, en ze naar de prullenbak van de module verplaatsen. Je eigen
-  lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
-  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
-  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+  Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken,
+  kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
+  weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
+  prullenbak van de module verplaatsen en er weer uit terugzetten.
+  Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en
+  leerdoelen, en een jaarplan weer verwijderen. Je eigen
+  lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
+  lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
+  als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
+  Een toets of taak naar de prullenbak van de
+  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
+  leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
+  minidatabanken van je school), en welke een lesfiche of een les heeft. De
+  leerdoelen van een lesfiche of een eigen les instellen, pas nadat jij het
+  goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
   feedback die een leerling kreeg, en per rapport de resultaten en het
-  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
-  invullen, een leerling feedback geven en het vakcommentaar op het rapport
-  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  vakcommentaar van elke leerling. In een projectpuntenboek (Projecten) de
+  projecten en de beoordeling van elke leerling per leerdoel. Een nieuwe
+  evaluatie maken, punten invullen, een leerling feedback geven, het
+  vakcommentaar op het rapport schrijven en leerlingen in een project
+  beoordelen, ook in een puntenboek dat een collega met je deelde om te
   wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
   nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
   je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je
@@ -341,6 +352,20 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
   lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
   kunnen zo: een lesfiche van een toets of taak niet.
+- "Plan mijn lesfiche Lussen in de lessen informatica van 6A1, 6A2 en 6A3
+  volgende week."
+  Claude zoekt die lesuren en toont welke lesfiche in welk lesuur komt. Na
+  jouw akkoord plant het de lesfiche in al die lesuren tegelijk, en zegt per
+  lesuur of het gelukt is. Staat er in een lesuur al een les (die je zelf
+  typte bijvoorbeeld), dan laat Claude die staan, tenzij je zelf vraagt om
+  ze te vervangen: dan verdwijnen haar titel, info en leerdoelen. Plannen
+  kopieert de lesfiche: pas je de lesfiche later aan, dan verandert de les
+  niet mee.
+- "Bewaar mijn les van vrijdag als lesfiche, voor volgend jaar."
+  Claude toont de les en de naam die de lesfiche krijgt. Na jouw akkoord
+  maakt het een nieuwe lesfiche in je eigen bibliotheek, met de info en de
+  leerdoelen van de les. De les zelf blijft zoals ze is. Elke keer maakt een
+  nieuwe lesfiche, ook als er al een met die naam is.
 - "Wat staat er in mijn lesfiche over recursie? Vat de bijlage samen."
   Claude zoekt de lesfiche en leest ze: de info voor leerlingen, je
   privé-info, de weblinks en de bijlagen, en wanneer je leerlingen die zien.
@@ -354,8 +379,10 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   einde van de les, of enkele dagen erna). Na jouw akkoord maakt het de
   lesfiche in je eigen bibliotheek ("Mijn lesfiches"), die alleen jij ziet
   tot je ze in een les plant. Daarna kan Claude ze in je lesuren plannen.
-  Labels geef je zelf in de module Lesfiches. Bestaat er al een lesfiche
-  met die naam, dan maakt Smartschool een tweede, en Claude zegt dat.
+  Labels van de school of je eigen labels kan Claude er meteen opzetten;
+  een nieuw eigen label maakt het ook, na jouw akkoord. Bestaat er al een
+  lesfiche met die naam, dan maakt Smartschool een tweede, en Claude zegt
+  dat.
 - "Geef mijn lesfiche Lussen ook het vak wiskunde, vervang de dode link
   naar de oefeningen en laat de oplossingen pas na de les zien."
   Claude leest de lesfiche en toont wat er verandert: de naam, de info, de
@@ -369,10 +396,31 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   Claude zoekt de lesfiche op en toont welke lesfiches het naar de
   prullenbak van de module Lesfiches verplaatst, met hun naam en of het een
   les of een toets of taak is. Na jouw akkoord verplaatst het ze, ook
-  meerdere tegelijk. Daarna staan ze niet meer bij je lesfiches. Je zet ze
-  terug vanuit de prullenbak in de module Lesfiches zelf; voor altijd
-  verwijderen kan Claude niet. Een les die je al uit de lesfiche gepland
-  had, blijft in je planner staan.
+  meerdere tegelijk. Daarna staan ze niet meer bij je lesfiches. Een les
+  die je al uit de lesfiche gepland had, blijft in je planner staan. Voor
+  altijd verwijderen kan Claude niet.
+- "Wat zit er in de prullenbak van mijn lesfiches? Zet Lussen terug."
+  Claude toont de lesfiches in de prullenbak, met de dag waarop ze erin
+  kwamen (volgens Smartschool kun je ze 100 dagen terugzetten). Na jouw
+  akkoord zet het de
+  lesfiches die je kiest terug in je eigen bibliotheek, ook meerdere
+  tegelijk.
+- "Maak een kopie van mijn lesfiche Lussen en noem ze Lussen 5WEWI."
+  Claude toont welke lesfiches het kopieert. Na jouw akkoord maakt het de
+  kopie in je eigen bibliotheek: ze heet zoals de lesfiche, met " - kopie"
+  erachter, en krijgt de info, de vakken, de labels, de leerdoelen, de
+  weblinks en de bijlagen mee. Een nieuwe naam geeft Claude ze daarna, ook
+  na jouw akkoord. Elke kopie die Claude maakt, is een nieuwe lesfiche: het
+  kopieert een lesfiche maar één keer. Een lesfiche in de prullenbak zet
+  het eerst terug.
+- "Maak een jaarplan Informatica 5 met een cluster Lussen, en zet daarin
+  de titel Week 1 en mijn lesfiches Lussen 1 en Lussen 2."
+  Claude toont het jaarplan, de cluster, de titel en de lesfiches, en maakt
+  ze na jouw akkoord, in de volgorde die je vraagt. De lesfiches zelf
+  blijven zoals ze zijn: de cluster verwijst ernaar. Een cluster kan ook
+  leerdoelen krijgen. Een jaarplan verwijderen kan, na jouw akkoord, maar
+  niet ongedaan maken: een jaarplan heeft geen prullenbak. De lesfiches
+  erin blijven in je bibliotheek.
 - "Plan een kleine overhoring over hoofdstuk 3 in 6WEWI1, dinsdag het 3e
   uur."
   Claude zoekt dat lesuur in je planner en kijkt eerst welke toetsen en taken
@@ -442,6 +490,19 @@ dat nog open is.
   zijn ouders krijgen, en wacht op jouw akkoord. Daarna vraagt Claude Desktop
   nog eens toestemming. Claude schrijft het vakcommentaar van één leerling
   per keer, want elke tekst is persoonlijk. Een vakcommentaar wissen kan ook.
+- "Welke projecten staan er in Digitale vaardigheden van 5WW1?"
+  Een projectpuntenboek (in Skore onder "Projecten") heeft geen evaluaties
+  met punten: je beoordeelt je leerlingen per leerdoel (rubriek) met een
+  niveau van de schaal, zoals "Behaald" of "Niet behaald". Claude toont de
+  projecten, of je leerlingen ze zien, en per leerling de beoordeling van
+  elk leerdoel. Een project maken of publiceren doe je zelf in Smartschool.
+- "Zet in het project Webquest Behaald voor Jan bij LPD 16.1.1."
+  Claude zoekt de leerling en het leerdoel in het project, toont de hele
+  lijst met het niveau dat er nu staat en het nieuwe, en wacht op jouw
+  akkoord. Daarna vraagt Claude Desktop nog eens toestemming. Een
+  beoordeling wissen, of er een tekst bij zetten, kan ook. In een project dat
+  je leerlingen al zien, doet Claude dat alleen als je het uitdrukkelijk
+  toestaat.
 - "Welke puntenboeken deelden collega's met mij?"
   Een puntenboek dat een collega met je deelde (in Skore onder "Gedeeld"),
   zoals het puntenboek Gedrag van je klas als je co-titularis bent, toont
@@ -680,14 +741,18 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   leerkrachten aan vakken en deelt ze puntenboeken: een lesopdracht
   verwijderen kan ze niet. In de planner verandert ze alleen je eigen
   planner: ze vult je lesuren in, plant toetsen en taken in je lesuren, past
-  je eigen lessen, toetsen en taken aan, maakt lesuren weer leeg en
-  verplaatst je toetsen en taken naar de prullenbak.
+  je eigen lessen, toetsen en taken aan, maakt lesuren weer leeg,
+  vervangt een eigen les door een lesfiche als je dat vraagt, bewaart een
+  les als lesfiche en verplaatst je toetsen en taken naar de prullenbak.
   Een toets of taak aankondigen, ze uit de prullenbak terugzetten of voor
   altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
   module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in
   je eigen bibliotheek, met hun weblinks en bijlagen, en verplaatst ze
-  lesfiches naar de prullenbak: er labels aan geven, ze uit de prullenbak
-  terugzetten of voor altijd verwijderen kan ze niet.
+  lesfiches naar de prullenbak en zet ze eruit terug; ze kopieert
+  lesfiches, zet er labels op en maakt eigen labels. Ze maakt jaarplannen
+  met lesclusters uit je lesfiches, en verwijdert een jaarplan. Een cluster
+  voor een klas plannen kan ze nog niet. Lesfiches voor altijd
+  verwijderen, en een label aanpassen of verwijderen, kan ze niet.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
   toets apart openen toont meteen de nieuwe.

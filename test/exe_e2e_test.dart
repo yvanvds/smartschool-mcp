@@ -109,7 +109,9 @@ void main() {
       'read_lesfiche',
       'read_lesfiche_attachment',
       'save_lesfiche_attachment',
+      'list_lesfiche_labels',
       'create_lesfiche',
+      'duplicate_lesfiches',
       'edit_lesfiche',
       'set_lesfiche_weblink',
       'remove_lesfiche_weblink',
@@ -117,7 +119,20 @@ void main() {
       'set_lesfiche_attachment_visibility',
       'remove_lesfiche_attachment',
       'trash_lesfiches',
+      'list_trashed_lesfiches',
+      'restore_lesfiches',
       'plan_lesfiche',
+      'save_lesson_as_lesfiche',
+      'create_lesfiche_label',
+      'list_year_plans',
+      'read_year_plan',
+      'create_year_plan',
+      'add_lesson_cluster',
+      'add_to_lesson_cluster',
+      'set_lesson_cluster_goals',
+      'delete_year_plan',
+      'list_curricula',
+      'read_curriculum',
       'list_skore_gradebooks',
       'read_skore_gradebook',
       'list_skore_evaluations',
@@ -127,6 +142,9 @@ void main() {
       'save_skore_grades',
       'save_skore_feedback',
       'save_skore_report_comment',
+      'list_skore_projects',
+      'read_skore_project',
+      'save_skore_project_ratings',
     ]);
     final listSchema = tools['list_messages']!['inputSchema'] as Map;
     expect((listSchema['properties'] as Map)['box'], {
@@ -156,6 +174,16 @@ void main() {
       'list_lesfiches',
       'read_lesfiche',
       'read_lesfiche_attachment',
+      // The labels a lesfiche can get (#188).
+      'list_lesfiche_labels',
+      // The lesfiches in the trash (#189).
+      'list_trashed_lesfiches',
+      // The year plans and their clusters (#191).
+      'list_year_plans',
+      'read_year_plan',
+      // The learning goals of the goal selector (#186).
+      'list_curricula',
+      'read_curriculum',
       // The user's own gradebooks in Skore, without a switch (#140, #141),
       // and their reports (#171).
       'list_skore_gradebooks',
@@ -163,6 +191,9 @@ void main() {
       'list_skore_evaluations',
       'read_skore_feedback',
       'read_skore_report',
+      // The project gradebooks (#192).
+      'list_skore_projects',
+      'read_skore_project',
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -440,7 +471,24 @@ void main() {
       ('set_lesfiche_attachment_visibility', true),
       ('remove_lesfiche_attachment', true),
       ('trash_lesfiches', true),
+      // A copy makes more copies each call; a restore (#189) finds them no
+      // longer in the trash the second time.
+      ('duplicate_lesfiches', false),
+      ('restore_lesfiches', true),
       ('plan_lesfiche', false),
+      // A save makes a new lesfiche each call (#190).
+      ('save_lesson_as_lesfiche', false),
+      // An own label (#188): a second call is refused, not made twice, but
+      // it is a create.
+      ('create_lesfiche_label', false),
+      // The year plans (#191): a create or an add makes another one each
+      // call; the goals of a cluster are set, and a deleted plan is no
+      // longer listed the second time.
+      ('create_year_plan', false),
+      ('add_lesson_cluster', false),
+      ('add_to_lesson_cluster', false),
+      ('set_lesson_cluster_goals', true),
+      ('delete_year_plan', true),
       ('plan_assignment', false),
       ('trash_assignment', false),
       // The gradebook's first write (#142): a create, so not idempotent;
@@ -453,6 +501,9 @@ void main() {
       // A course comment on a report (#171): the same text is not sent
       // again, so a second call gives the same state.
       ('save_skore_report_comment', true),
+      // Ratings in a project (#192): saving the same ratings again gives the
+      // same state.
+      ('save_skore_project_ratings', true),
     ]) {
       expect(tools[name]!['annotations'], {
         'title': isA<String>(),
@@ -482,7 +533,14 @@ void main() {
       'name',
       'public_info',
       'private_info',
+      'goals',
     ]);
+    // The learning goals of a lesson (#187), as read_curriculum shows them.
+    expect(
+      (((editSchema['properties'] as Map)['goals'] as Map)['items']
+          as Map)['required'],
+      ['id', 'leerplanId', 'type'],
+    );
     final clearSchema = tools['clear_lesson']!['inputSchema'] as Map;
     expect(clearSchema['required'], ['id']);
     expect((clearSchema['properties'] as Map).keys, ['id']);
@@ -505,12 +563,36 @@ void main() {
       'description': isA<String>(),
       'enum': ['lessons', 'assignments', 'all'],
     });
-    final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
-    expect(planLesficheSchema['required'], ['hour', 'lesfiche']);
-    expect((planLesficheSchema['properties'] as Map).keys, [
-      'hour',
-      'lesfiche',
+    // The learning goals (#186): a curriculum by its id.
+    final curriculaSchema = tools['list_curricula']!['inputSchema'] as Map;
+    expect(curriculaSchema['required'], isNull);
+    expect((curriculaSchema['properties'] as Map).keys, ['query']);
+    final curriculumSchema = tools['read_curriculum']!['inputSchema'] as Map;
+    expect(curriculumSchema['required'], ['curriculum']);
+    expect((curriculumSchema['properties'] as Map).keys, [
+      'curriculum',
+      'query',
     ]);
+    final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
+    // Several hours in one call, and a lesson only replaced on request
+    // (#190).
+    expect(planLesficheSchema['required'], ['hours', 'lesfiche']);
+    expect((planLesficheSchema['properties'] as Map).keys, [
+      'hours',
+      'lesfiche',
+      'replace',
+    ]);
+    expect((planLesficheSchema['properties'] as Map)['hours'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string', 'minLength': 1},
+      'minItems': 1,
+      'maxItems': 20,
+    });
+    final saveLessonSchema =
+        tools['save_lesson_as_lesfiche']!['inputSchema'] as Map;
+    expect(saveLessonSchema['required'], ['lesson']);
+    expect((saveLessonSchema['properties'] as Map).keys, ['lesson', 'name']);
     // One lesfiche in full, and its attachments (#113): by the lesfiche's
     // id and kind, and the attachment by number or file name.
     final readLesficheSchema = tools['read_lesfiche']!['inputSchema'] as Map;
@@ -644,7 +726,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(69));
+    expect(tools, hasLength(87));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -718,7 +800,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(69));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -757,8 +839,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(59));
-      expect([for (final tool in tools.skip(51)) tool['name']], skoreTools);
+      expect(tools, hasLength(77));
+      expect([for (final tool in tools.skip(69)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -951,7 +1033,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(69));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -991,8 +1073,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(55));
-      expect([for (final tool in tools.skip(51)) tool['name']], presenceTools);
+      expect(tools, hasLength(73));
+      expect([for (final tool in tools.skip(69)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1188,10 +1270,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(63));
-      expect([for (final tool in tools.skip(59)) tool['name']], presenceTools);
+      expect(tools, hasLength(81));
+      expect([for (final tool in tools.skip(77)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(51).take(8)) tool['name'],
+        for (final tool in tools.skip(69).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1227,7 +1309,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(51));
+        expect(tools, hasLength(69));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1280,8 +1362,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(57));
-      expect([for (final tool in tools.skip(51)) tool['name']], lvsTools);
+      expect(tools, hasLength(75));
+      expect([for (final tool in tools.skip(69)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1465,10 +1547,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(69));
-      expect([for (final tool in tools.skip(63)) tool['name']], lvsTools);
+      expect(tools, hasLength(87));
+      expect([for (final tool in tools.skip(81)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(59).take(4)) tool['name']],
+        [for (final tool in tools.skip(77).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1477,7 +1559,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(51).take(8)) tool['name'],
+        for (final tool in tools.skip(69).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1967,10 +2049,15 @@ void main() {
       (
         'plan_lesfiche',
         {
-          'hour':
-              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'hours': [
+            'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          ],
           'lesfiche': 'b0000000-0000-4000-8000-000000000001',
         },
+      ),
+      (
+        'save_lesson_as_lesfiche',
+        {'lesson': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
       ),
       (
         'plan_assignment',
@@ -1986,6 +2073,12 @@ void main() {
       (
         'trash_assignment',
         {'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000'},
+      ),
+      // The learning goals (#186).
+      ('list_curricula', {'query': 'eindtermen'}),
+      (
+        'read_curriculum',
+        {'curriculum': 'e0000000-0000-4000-8000-000000000001'},
       ),
     ]) {
       final (isError, text) = await server.callTool(tool, arguments: arguments);
@@ -2062,7 +2155,21 @@ void main() {
       (
         'edit_planned_element',
         {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
-        'pass at least one of name, public_info and private_info',
+        'pass at least one of name, public_info, private_info and goals',
+      ),
+      (
+        'edit_planned_element',
+        {
+          'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000',
+          'goals': [
+            {
+              'id': 'f0000000-0000-4000-8000-000000000011',
+              'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+              'type': 'eindtermen-derde-graad-doorstroom',
+            },
+          ],
+        },
+        'goals are for a lesson only',
       ),
       (
         'clear_lesson',
@@ -2081,19 +2188,30 @@ void main() {
       (
         'plan_lesfiche',
         {
-          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'hours': [
+            'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          ],
           'lesfiche': 'b0000000-0000-4000-8000-000000000001',
         },
-        'is a lesson, not an empty lesson hour',
+        'A lesson is only replaced by the lesfiche when replace is true',
       ),
       (
         'plan_lesfiche',
         {
-          'hour':
-              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'hours': [
+            'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          ],
           'lesfiche': 'Herhaling: lussen',
         },
         'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'save_lesson_as_lesfiche',
+        {
+          'lesson':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+        },
+        'is an empty lesson hour, which has nothing to save',
       ),
       (
         'read_lesfiche',
@@ -2349,6 +2467,8 @@ void main() {
       'public_info',
       'private_info',
       'courses',
+      'goals',
+      'labels',
       'weblinks',
       'attachments',
       'icon',
@@ -2535,6 +2655,8 @@ void main() {
           'public_info',
           'private_info',
           'courses',
+          'goals',
+          'labels',
           'visible',
         ],
       ),
@@ -2593,6 +2715,29 @@ void main() {
 
     for (final (name, arguments) in <(String, Map<String, Object?>)>[
       ('edit_lesfiche', {'lesfiche': lesfiche, 'name': 'Lussen 2'}),
+      // Labels by their text (#188): matched with the labels once logged in.
+      (
+        'edit_lesfiche',
+        {
+          'lesfiche': lesfiche,
+          'labels': ['JAAR 6'],
+        },
+      ),
+      // Goals as read_curriculum shows them (#187): checked with the goal
+      // selector once logged in.
+      (
+        'edit_lesfiche',
+        {
+          'lesfiche': lesfiche,
+          'goals': [
+            {
+              'id': 'f0000000-0000-4000-8000-000000000011',
+              'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+              'type': 'eindtermen-derde-graad-doorstroom',
+            },
+          ],
+        },
+      ),
       (
         'set_lesfiche_weblink',
         {
@@ -2645,6 +2790,28 @@ void main() {
             'edit_lesfiche',
             {'lesfiche': lesfiche, 'name': '   '},
             'name is empty',
+          ),
+          (
+            'edit_lesfiche',
+            {
+              'lesfiche': lesfiche,
+              'goals': [
+                {
+                  'id': '01.01',
+                  'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+                  'type': 'eindtermen-derde-graad-doorstroom',
+                },
+              ],
+            },
+            'which is not the id of a goal: take it from read_curriculum',
+          ),
+          (
+            'edit_lesfiche',
+            {
+              'lesfiche': lesfiche,
+              'labels': ['  '],
+            },
+            'each item of labels must be a label',
           ),
           (
             'set_lesfiche_weblink',
@@ -2701,6 +2868,80 @@ void main() {
     expect(await server.stderr, isNot(contains('sending username')));
   });
 
+  test('the labels of lesfiches (#188): list_lesfiche_labels reads, '
+      'create_lesfiche_label is a write Claude Desktop asks approval for; '
+      'without settings: an error result that names the missing settings; '
+      'a text that is too long or empty: an error that says what to fix, '
+      'before any login', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    expect(
+      (tools['list_lesfiche_labels']!['inputSchema'] as Map)['required'],
+      isNull,
+    );
+    final create = tools['create_lesfiche_label']!;
+    final schema = create['inputSchema'] as Map;
+    expect(schema['required'], ['text']);
+    expect((schema['properties'] as Map).keys, ['text', 'color']);
+    expect(((schema['properties'] as Map)['color'] as Map)['enum'], [
+      'aqua',
+      'black',
+      'blue',
+      'brown',
+      'grass',
+      'green',
+      'lavender',
+      'mint',
+      'olive',
+      'orange',
+      'pink',
+      'purple',
+      'red',
+      'silver',
+      'steel',
+      'tangerine',
+      'violet',
+      'yellow',
+    ]);
+
+    for (final (name, arguments) in <(String, Map<String, Object?>)>[
+      ('list_lesfiche_labels', {}),
+      ('create_lesfiche_label', {'text': 'Herhaling', 'color': 'aqua'}),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (arguments, message) in <(Map<String, Object?>, String)>[
+      ({'text': 'x' * 51}, 'text is 51 characters long'),
+      ({'text': '  '}, 'text is empty'),
+    ]) {
+      final (isError, text) = await server.callTool(
+        'create_lesfiche_label',
+        arguments: arguments,
+      );
+      expect(isError, isTrue, reason: '$arguments');
+      expect(text, contains(message), reason: '$arguments');
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
   test('trash_lesfiches is a write Claude Desktop asks approval for that a '
       'second call does not change, for 1 to 20 ids; without settings: an '
       'error result that names the missing settings; an id that is not one '
@@ -2733,7 +2974,7 @@ void main() {
     expect(
       trash['description'],
       allOf(
-        contains('restore them from the trash in the Lesfiches module'),
+        contains('restore_lesfiches takes them back out of it'),
         contains('A lesson planned from one of them earlier stays in the '),
       ),
     );
@@ -2783,6 +3024,192 @@ void main() {
       expect(isError, isTrue, reason: '$lesfiches');
       expect(text, contains(message), reason: '$lesfiches');
       expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('duplicate_lesfiches and restore_lesfiches take 1 to 20 ids; '
+      'list_trashed_lesfiches takes a query; without settings: an error '
+      'result that names the missing settings; an id that is not one of a '
+      'lesfiche: an error that says what to fix, before any login '
+      '(#189)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const lesson = 'b0000000-0000-4000-8000-000000000011';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    expect(
+      (tools['list_trashed_lesfiches']!['inputSchema'] as Map)['properties'],
+      {
+        'query': {'type': 'string', 'description': isA<String>()},
+      },
+    );
+    for (final name in ['duplicate_lesfiches', 'restore_lesfiches']) {
+      final schema = tools[name]!['inputSchema'] as Map;
+      expect(schema['required'], ['lesfiches'], reason: name);
+      expect(schema['properties'], {
+        'lesfiches': {
+          'type': 'array',
+          'description': isA<String>(),
+          'items': {'type': 'string', 'minLength': 1},
+          'minItems': 1,
+          'maxItems': 20,
+        },
+      }, reason: name);
+
+      final (isError, text) = await server.callTool(
+        name,
+        arguments: {
+          'lesfiches': [lesson],
+        },
+      );
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+
+      final (refused, refusal) = await server.callTool(
+        name,
+        arguments: {
+          'lesfiches': [lesson, 'Lussen!'],
+        },
+      );
+      expect(refused, isTrue, reason: name);
+      expect(
+        refusal,
+        contains(
+          'item 2 of lesfiches must be the id of a lesfiche as list_lesfiches '
+          'shows it',
+        ),
+        reason: name,
+      );
+    }
+    expect(
+      tools['trash_lesfiches']!['description'],
+      contains('restore_lesfiches takes them back out of it'),
+    );
+    final (isError, text) = await server.callTool('list_trashed_lesfiches');
+    expect(isError, isTrue);
+    expect(text, startsWith('Not all Smartschool settings are filled in.'));
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('the year plans (#191): their schemas; without settings: an error '
+      'result that names the missing settings; a year plan or cluster that is '
+      'not an id, and a name over 50 characters: an error that says what to '
+      'fix, before any login', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const plan = 'c0000000-0000-4000-8000-000000000001';
+    const cluster = 'c0000000-0000-4000-8000-000000000002';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    Map<String, Object?> schemaOf(String name) =>
+        (tools[name]!['inputSchema'] as Map).cast();
+    expect(schemaOf('list_year_plans')['properties'], anyOf(isNull, isEmpty));
+    expect(schemaOf('read_year_plan')['required'], ['year_plan']);
+    expect((schemaOf('read_year_plan')['properties'] as Map).keys, [
+      'year_plan',
+      'cluster',
+    ]);
+    expect(schemaOf('create_year_plan')['required'], ['name']);
+    expect(schemaOf('add_lesson_cluster')['required'], ['year_plan', 'name']);
+    expect(schemaOf('add_to_lesson_cluster')['required'], [
+      'year_plan',
+      'cluster',
+    ]);
+    expect(
+      (schemaOf('add_to_lesson_cluster')['properties'] as Map)['lesfiches'],
+      allOf(containsPair('minItems', 1), containsPair('maxItems', 20)),
+    );
+    expect(schemaOf('set_lesson_cluster_goals')['required'], [
+      'year_plan',
+      'cluster',
+      'goals',
+    ]);
+    expect(schemaOf('delete_year_plan')['required'], ['year_plan']);
+    expect(
+      tools['delete_year_plan']!['description'],
+      allOf(contains('cannot be undone'), contains('stay in the user')),
+    );
+
+    for (final (name, arguments) in [
+      ('list_year_plans', <String, Object?>{}),
+      ('read_year_plan', {'year_plan': plan}),
+      ('create_year_plan', {'name': 'Informatica 5'}),
+      ('add_lesson_cluster', {'year_plan': plan, 'name': 'Lussen'}),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster, 'title': 'Week 1'},
+      ),
+      (
+        'set_lesson_cluster_goals',
+        {'year_plan': plan, 'cluster': cluster, 'goals': <Object?>[]},
+      ),
+      ('delete_year_plan', {'year_plan': plan}),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+    }
+
+    for (final (name, arguments, refusal) in [
+      (
+        'read_year_plan',
+        {'year_plan': 'Informatica 5'},
+        'year_plan must be the id of a year plan as list_year_plans shows it',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': 'Lussen', 'title': 'Week 1'},
+        'cluster must be the id of a lesson cluster as read_year_plan shows it',
+      ),
+      (
+        'create_year_plan',
+        {'name': 'x' * 51},
+        'takes at most 50 for the year plan',
+      ),
+      (
+        'add_lesson_cluster',
+        {'year_plan': plan, 'name': 'x' * 51},
+        'takes at most 50 for the lesson cluster',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster, 'title': 'x' * 51},
+        'takes at most 50 for the title',
+      ),
+      (
+        'add_to_lesson_cluster',
+        {'year_plan': plan, 'cluster': cluster},
+        'there is nothing to add',
+      ),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(text, contains(refusal), reason: name);
     }
 
     await server.stop();
@@ -2993,6 +3420,34 @@ void main() {
           'text': 'Goed gewerkt.',
           'current_comment': 'Goed begonnen.',
           'clear': false,
+        },
+      ),
+      // The project gradebooks (#192).
+      (
+        'list_skore_projects',
+        {'gradebook_id': 34990.0, 'period_id': 1710.0, 'workyear_id': 24.0},
+      ),
+      (
+        'read_skore_project',
+        {
+          'gradebook_id': 34990.0,
+          'project_id': 8101.0,
+          'period_id': 1710.0,
+          'pupil_id': 1221.0,
+          'workyear_id': 24.0,
+        },
+      ),
+      (
+        'save_skore_project_ratings',
+        {
+          'gradebook_id': 34990.0,
+          'project_id': 8101.0,
+          'period_id': 1710.0,
+          'ratings': [
+            {'pupil_id': 1221.0, 'goal_id': '9002', 'level': 'B'},
+            {'pupil_id': 1222.0, 'goal_id': '9002', 'level': null, 'info': ''},
+          ],
+          'allow_published': false,
         },
       ),
     ]) {

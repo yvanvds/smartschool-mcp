@@ -16,19 +16,30 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   lokalen: lessen, toetsen en taken, en lege lesuren. Per dag zien welke
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
   kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
-  Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken en
-  aanpassen in je eigen bibliotheek, met info, vakken, weblinks en bestanden
-  van je pc, en ze naar de prullenbak van de module verplaatsen. Je eigen
-  lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
-  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
-  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt.
+  Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken,
+  kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
+  weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
+  prullenbak van de module verplaatsen en er weer uit terugzetten.
+  Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en
+  leerdoelen, en een jaarplan weer verwijderen. Je eigen
+  lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
+  lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
+  als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
+  Een toets of taak naar de prullenbak van de
+  planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
+  leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
+  minidatabanken van je school), en welke een lesfiche of een les heeft. De
+  leerdoelen van een lesfiche of een eigen les instellen, pas nadat jij het
+  goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de
   feedback die een leerling kreeg, en per rapport de resultaten en het
-  vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten
-  invullen, een leerling feedback geven en het vakcommentaar op het rapport
-  schrijven, ook in een puntenboek dat een collega met je deelde om te
+  vakcommentaar van elke leerling. In een projectpuntenboek (Projecten) de
+  projecten en de beoordeling van elke leerling per leerdoel. Een nieuwe
+  evaluatie maken, punten invullen, een leerling feedback geven, het
+  vakcommentaar op het rapport schrijven en leerlingen in een project
+  beoordelen, ook in een puntenboek dat een collega met je deelde om te
   wijzigen (een evaluatie maken alleen in je eigen puntenboeken). Telkens pas
   nadat jij het goedgekeurd hebt. Een nieuwe evaluatie blijft ongepubliceerd:
   je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je

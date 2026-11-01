@@ -32,8 +32,9 @@ offered only when the switch is on; every switch is off by default (see
 | [Messages](docs/tools/messages.md) | Read, search, archive, mark, flag and trash messages; reply and send | | 11 |
 | [Intradesk](docs/tools/intradesk.md) | Find, read and save files; add folders, weblinks and files; trash | | 8 |
 | [Planner](docs/tools/planner.md) | Read planners; plan lessons, tests and tasks in your own | | 9 |
-| [Lesfiches](docs/tools/lesfiches.md) | Read, make, change, trash and plan your lesfiches | | 13 |
-| [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments | | 9 |
+| [Lesfiches](docs/tools/lesfiches.md) | Read, make, copy, change, label, trash, restore and plan your lesfiches, save lessons as lesfiches, and build year plans from them | | 26 |
+| [Learning goals](docs/tools/goals.md) | The curricula of the goal selector and their goals, to set on lesfiches and lessons; read only | | 2 |
+| [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments, project ratings | | 12 |
 | [Skore administration](docs/tools/skore.md) | Teachers per course and shared gradebooks, for Skore administrators | "Skore-beheer" (`SMARTSCHOOL_SKORE`) | 8 |
 | [Presences](docs/tools/presences.md) | Half-day presences of classes: late and present | "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`) | 4 |
 | [Pupil tracking system (LVS)](docs/tools/lvs.md) | A pupil's file: notes, results, support plan, absences; read only | "Leerlingvolgsysteem" (`SMARTSCHOOL_LVS`) | 6 |
@@ -59,7 +60,10 @@ Many tools only read. Those that change Smartschool share these rules:
   twice.
 - **A trash, not a deletion.** Messages, Intradesk items, lesfiches and
   assignments are moved to a trash in Smartschool, where you restore them
-  in Smartschool itself. No tool empties a trash.
+  in Smartschool itself (lesfiches also with `restore_lesfiches`). No tool
+  empties a trash. The one exception is `delete_year_plan`: a year plan of
+  Lesfiches has no trash, so it is deleted, and its description says so;
+  the lesfiches in it stay.
 
 ## Development
 

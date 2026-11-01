@@ -1,8 +1,10 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../log.dart';
 import '../planner/lesfiche_detail.dart';
+import '../planner/lesfiche_labels.dart';
 import '../planner/lesfiche_writes.dart';
 import '../planner/lesfiches.dart';
 import '../planner/planner_writes.dart';
@@ -12,12 +14,14 @@ import '../uploads/local_files.dart';
 import 'server_tool.dart';
 
 /// `edit_lesfiche`: changes the name, the icon, the public info, the
-/// private info, the courses and/or whether it is visible in the module of
-/// one lesfiche in the user's own library of the Lesfiches module, with the
-/// library's edits (`LessonContentService.rename`, `changeIcon`,
-/// `changePublicInfo`, `changePrivateInfo`, `changeCourses` and
-/// `setVisible`, dartschool#129), one per field given, in that order, and
-/// gives the lesfiche back as `read_lesfiche` shows it.
+/// private info, the courses, the learning goals, the labels and/or whether
+/// it is visible in the module of one lesfiche in the user's own library of
+/// the Lesfiches module, with the library's edits
+/// (`LessonContentService.rename`, `changeIcon`, `changePublicInfo`,
+/// `changePrivateInfo`, `changeCourses`, `changeGoals`, `changeLabels` and
+/// `setVisible`, dartschool#129, #223 and #228), one per field given, in
+/// that order, and gives the lesfiche back as `read_lesfiche` shows it, its
+/// goals named (#187).
 ///
 /// Marked destructive, as `create_lesfiche` is (its doc comment says why):
 /// a write that Claude is told to show the user first and to make only
@@ -27,8 +31,10 @@ import 'server_tool.dart';
 ///
 /// The tool reads the lesfiche first, in the session action of the edits
 /// (they take it as read, and a `404` of an edit then means that it is in
-/// the trash), and the school's course list for the courses, before it
-/// sends anything. It stops at the first edit that fails, and says which
+/// the trash), the school's course list for the courses, the labels there
+/// are for the labels ([lesficheLabels], #188), and checks new goals with
+/// the goal selector ([checkGoals]), before it sends anything. It stops at
+/// the first edit that fails, and says which
 /// were made and which were not sent, like `edit_planned_element`. The
 /// edits answer with the lesfiche, but only `changeCourses` names its
 /// courses, so the result reads it once more at the end
@@ -41,9 +47,9 @@ ServerTool editLesficheTool(SmartschoolSession session) => ServerTool(
         'Changes one lesfiche in the user\'s own library ("Mijn lesfiches") '
         'of the Smartschool Lesfiches module, by the id and kind '
         'list_lesfiches shows: its name, icon, public info (what pupils see '
-        'once it is planned), private info, courses, and/or whether it is '
-        'visible in the module. Give only what changes, at least one of '
-        'them. The own library is private to the user: pupils only see what '
+        'once it is planned), private info, courses, learning goals, labels, '
+        'and/or whether it is visible in the module. Give only what changes, at '
+        'least one of them. The own library is private to the user: pupils only see what '
         'is planned from it. Before calling this tool, read the lesfiche '
         'with read_lesfiche, show the user its name and kind and what '
         'changes, and only call this tool after the user has explicitly '
@@ -51,17 +57,26 @@ ServerTool editLesficheTool(SmartschoolSession session) => ServerTool(
         'between paragraphs; HTML in it is not interpreted, it shows as '
         'text. An info replaces the whole info: to add to it, pass the old '
         'text with the addition; an empty text empties it. courses replaces '
-        'all its courses; an empty list removes them. visible false hides '
+        'all its courses; an empty list removes them. goals are learning '
+        'goals as read_curriculum shows them (find them with list_curricula '
+        'and read_curriculum): $goalsReplaceNote A goal the goal selector '
+        'does not know is refused, and nothing is sent. labels are labels as '
+        'list_lesfiche_labels shows them, by their text: '
+        '$lesficheLabelsReplaceNote A label that does not exist is refused, '
+        'and nothing is sent; make an own label first with '
+        'create_lesfiche_label, after the user has confirmed it. visible '
+        'false hides '
         'the lesfiche in the module, true shows it again; a hidden lesfiche '
         'is still listed and can still be planned. Its weblinks change with '
         'set_lesfiche_weblink and remove_lesfiche_weblink, its attachments '
         'with add_lesfiche_attachments, set_lesfiche_attachment_visibility '
-        'and remove_lesfiche_attachment; labels are set in the Lesfiches '
-        'module itself. Whether a lesson planned from the lesfiche earlier '
+        'and remove_lesfiche_attachment. Whether a lesson planned from the lesfiche earlier '
         'changes with it is not known: check such a lesson with '
         'read_planned_element, and change it with edit_planned_element. The '
         'changes are made one by one, in the order name, icon, public info, '
-        'private info, courses, visible; when one fails, the result says '
+        'private info, courses, goals, labels, visible; when one fails, the '
+        'result '
+        'says '
         'which were made. A lesfiche in the trash cannot be changed. The '
         'result gives the lesfiche as changed. If the result says a change '
         'may or may not have been saved, do not call this tool again for '
@@ -105,6 +120,19 @@ ServerTool editLesficheTool(SmartschoolSession session) => ServerTool(
               'The courses the lesfiche gets, in place of all its courses; '
               'an empty list removes them.',
         ),
+        'goals': goalsSchema(
+          description:
+              'The learning goals the lesfiche gets, in place of all its '
+              'goals, each {id, leerplanId, type} as read_curriculum shows '
+              'it; an empty list removes them. To add a goal, pass the '
+              'goals read_lesfiche shows plus the new one.',
+        ),
+        'labels': lesficheLabelsSchema(
+          description:
+              'The labels the lesfiche gets, in place of all its labels; an '
+              'empty list removes them. To add a label, pass the labels '
+              'read_lesfiche shows plus the new one.',
+        ),
         'visible': Schema.bool(
           description:
               'false hides the lesfiche in the Lesfiches module, true shows '
@@ -132,6 +160,8 @@ enum _Field {
   publicInfo('the public info'),
   privateInfo('the private info'),
   courses('the courses'),
+  goals('the goals'),
+  labels('the labels'),
   visible('the visibility in the module');
 
   const _Field(this.label);
@@ -142,8 +172,9 @@ enum _Field {
 
 /// The changes [arguments] ask for, in the order of [_Field]: a name, an
 /// icon and the infos as the library sends them, the courses as the
-/// argument names them ([lesficheCoursesArgument]), and whether it is
-/// visible.
+/// argument names them ([lesficheCoursesArgument]), the goals
+/// ([goalsArgument]), the labels as the argument names them
+/// ([lesficheLabelsArgument]), and whether it is visible.
 ///
 /// Throws a [ToolError] for a field it refuses, and when nothing changes,
 /// before anything is sent.
@@ -172,6 +203,12 @@ Map<_Field, Object> _changes(Map<String, Object?> arguments) {
   if (lesficheCoursesArgument(arguments['courses']) case final courses?) {
     changes[_Field.courses] = courses;
   }
+  if (goalsArgument(arguments['goals']) case final goals?) {
+    changes[_Field.goals] = goals;
+  }
+  if (lesficheLabelsArgument(arguments['labels']) case final labels?) {
+    changes[_Field.labels] = labels;
+  }
   if (arguments['visible'] case final Object value) {
     if (value is! bool) {
       throw const ToolError(
@@ -184,7 +221,7 @@ Map<_Field, Object> _changes(Map<String, Object?> arguments) {
   if (changes.isEmpty) {
     throw const ToolError(
       'Nothing to change: pass at least one of name, icon, public_info, '
-      'private_info, courses and visible. $nothingSent',
+      'private_info, courses, goals, labels and visible. $nothingSent',
     );
   }
   return changes;
@@ -204,6 +241,8 @@ Future<CallToolResult> _edit(
   // edits that were not made yet.
   LessonContentDetail? before;
   List<PlannerCourse>? courses;
+  List<LessonContentLabel>? labels;
+  var goalsChecked = false;
   final saved = <_Field>[];
   _Field? sending;
   String title() => before == null
@@ -227,6 +266,26 @@ Future<CallToolResult> _edit(
             ? const []
             : lesficheCourses(await lesfiches.getCourses(), wanted);
       }
+      if (changes[_Field.labels] case final List<String> wanted
+          when labels == null) {
+        labels = wanted.isEmpty
+            ? const []
+            : lesficheLabels(
+                await lesfiches.getLabels(),
+                wanted,
+                stored: before!.labels,
+              );
+      }
+      if (changes[_Field.goals] case final List<LearningGoalRef> goals
+          when !goalsChecked) {
+        await checkGoals(
+          client,
+          goals,
+          location: GoalLocation.lessonContent,
+          stored: before!.goals,
+        );
+        goalsChecked = true;
+      }
       for (final MapEntry(key: field, :value) in changes.entries) {
         if (saved.contains(field)) continue;
         sending = field;
@@ -244,6 +303,11 @@ Future<CallToolResult> _edit(
           _Field.courses => lesfiches.changeCourses(lesfiche, [
             for (final course in courses!) course.id,
           ]),
+          _Field.goals => lesfiches.changeGoals(
+            lesfiche,
+            value as List<LearningGoalRef>,
+          ),
+          _Field.labels => lesfiches.changeLabels(lesfiche, labels!),
           _Field.visible => lesfiches.setVisible(lesfiche, value as bool),
         };
         saved.add(field);
@@ -292,18 +356,20 @@ Future<CallToolResult> _edit(
     session,
     type,
     id,
-    _changedText(before!, changes, courses),
+    _changedText(before!, changes, courses, labels),
   );
 }
 
 /// Whether [lesfiche], as read before the edits, already had [value] (as
 /// [_changes] gives it) for [field]; for the courses, [courses], the
-/// courses found for the argument.
+/// courses found for the argument, and for the labels, [labels], the labels
+/// found for it.
 bool _had(
   LessonContentDetail lesfiche,
   _Field field,
   Object value,
   List<PlannerCourse>? courses,
+  List<LessonContentLabel>? labels,
 ) => switch (field) {
   _Field.name => lesfiche.name == value,
   _Field.icon => lesfiche.icon == value,
@@ -313,6 +379,8 @@ bool _had(
     [for (final course in lesfiche.courses) course.id],
     [for (final course in courses ?? const <PlannerCourse>[]) course.id],
   ),
+  _Field.goals => sameGoals(lesfiche.goals, value as List<LearningGoalRef>),
+  _Field.labels => sameLabels(lesfiche.labels, labels ?? const []),
   _Field.visible => lesfiche.isVisible == value,
 };
 
@@ -329,11 +397,14 @@ List<String> _changedText(
   LessonContentDetail before,
   Map<_Field, Object> changes,
   List<PlannerCourse>? courses,
+  List<LessonContentLabel>? labels,
 ) {
   final changed = <String>[];
   final already = <String>[];
   for (final MapEntry(key: field, :value) in changes.entries) {
-    (_had(before, field, value, courses) ? already : changed).add(field.label);
+    (_had(before, field, value, courses, labels) ? already : changed).add(
+      field.label,
+    );
   }
   return [
     if (changed.isNotEmpty)

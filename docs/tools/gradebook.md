@@ -3,8 +3,9 @@
 [Back to the overview](../../README.md)
 
 Your own gradebooks in Skore ("Puntenboek"), as every teacher has them, and
-those colleagues shared with you: evaluations, grades, feedback and the
-course comments on reports. For every account, without a switch: these tools
+those colleagues shared with you: evaluations, grades, feedback, the
+course comments on reports, and the ratings of pupils per learning goal in
+the projects of a project gradebook ("Projecten"). For every account, without a switch: these tools
 need none of the rights of [Skore administration](skore.md). Tools that
 change something follow the
 [shared rules](../../README.md#changes-and-approval).
@@ -27,6 +28,9 @@ only.
 | [`save_skore_grades`](#save_skore_grades) | Saves or clears the grades of an evaluation | Yes, asks approval |
 | [`save_skore_feedback`](#save_skore_feedback) | Gives a pupil your feedback on an evaluation | Yes, asks approval |
 | [`save_skore_report_comment`](#save_skore_report_comment) | Writes a pupil's course comment on a report | Yes, asks approval |
+| [`list_skore_projects`](#list_skore_projects) | Lists the projects of a project gradebook | No |
+| [`read_skore_project`](#read_skore_project) | Reads a project's learning goals and ratings | No |
+| [`save_skore_project_ratings`](#save_skore_project_ratings) | Saves or clears ratings in a project | Yes, asks approval |
 
 ## Tools
 
@@ -115,6 +119,35 @@ new text. A comment that changed since it was read, perhaps a colleague's,
 is never overwritten unseen. It never closes, unlocks, calculates or
 publishes a report.
 
+### `list_skore_projects`
+
+Lists the projects of a project gradebook (Skore's "Projecten", such as
+"Digitale vaardigheden"), whose pupils are rated per learning goal instead
+of getting grades: per project period (open or closed, until when), each
+template with its rating scale (its levels by name and symbol, such as
+Behaald (B)), and under it each project with its id, its day and whether
+its pupils see it (in capitals when they do). `read_skore_gradebook` says
+when a gradebook is a project gradebook. Projects are made and published in
+Smartschool.
+
+### `read_skore_project`
+
+Reads one project: its scale, its learning goals ("rubrieken") as a tree
+under the course, the headings and the goals that take no rating marked,
+and per pupil the rating of each goal that has one, the level by name, with
+the text Skore keeps with it. Optionally for one pupil only.
+
+### `save_skore_project_ratings`
+
+Saves or clears pupils' ratings of learning goals in one project, the whole
+list in one call: a level of the scale by name or symbol, or none to clear
+it, and optionally the text Skore keeps with it. Claude matches the names
+and goals you give with `read_skore_project` and asks rather than guesses;
+then it shows you the full list (pupil, goal, current level and new one)
+and asks for approval. A project that is published or scheduled is refused
+until you say yes to exactly that: a rating there is visible to its pupils
+at once, or from its publication time on.
+
 ## How it works
 
 The gradebook tools work in the user's own gradebooks in Skore
@@ -129,6 +162,9 @@ first five change nothing; `create_skore_evaluation` creates an evaluation,
 always unpublished, `save_skore_grades` saves the grades of one,
 `save_skore_feedback` gives a pupil the user's feedback on one, and
 `save_skore_report_comment` writes a pupil's course comment on a report.
+For a project gradebook, `list_skore_projects` and `read_skore_project`
+change nothing, and `save_skore_project_ratings` saves the pupils' ratings
+in a project (see [Project gradebooks](#project-gradebooks)).
 
 ### How `list_skore_gradebooks` works
 
@@ -173,6 +209,16 @@ pupils, each with the class number (when Skore shows one), the name last
 name first, the pupil id, and whether Skore greys the pupil out as inactive.
 A gradebook with report periods only also names `read_skore_report` and
 `save_skore_report_comment` in its sentence on the course comments.
+
+A gradebook without evaluation periods may be a project gradebook, so for
+one its project periods are read too (`getProjectPeriods`, Skore's `init`
+with the page `1`: one more request, only then; #192). A project gradebook
+says that it is one, that its pupils are rated per learning goal in
+projects, which tools read and save them, and that a project course is not
+on the gradebook's reports; then its project periods, as its periods are
+listed. Its report periods are left out. An answer about the project
+periods the server cannot use is logged and leaves them out: the gradebook
+is what was asked for (`skoreProjectPeriodsOrNone`).
 
 ### How `list_skore_evaluations` works
 
@@ -294,7 +340,10 @@ account without Skore's admin rights for the course, dartschool#168), is an
 error that says so and that trying again does not help, the library's
 message in the log only (`readSkoreReport`). The library throws it as a
 `SmartschoolSkoreCourseNotOnReportError`, so the server tells it apart by
-its type, not by the text of its message (#174).
+its type, not by the text of its message (#174). Since that is how Skore
+answers for a project course, the error names `read_skore_gradebook`, which
+says whether the gradebook is a project gradebook, and `read_skore_project`,
+which reads its ratings (#192).
 
 ### How `create_skore_evaluation` works
 
@@ -510,6 +559,114 @@ library's message goes to the log only. The library sends the save again
 itself after a new login, as it sends the whole text; when Smartschool
 refuses the session even then, nothing was saved, and the session repeats
 the call, which reads the comment again first.
+
+### Project gradebooks
+
+A project gradebook (Skore's "Projecten", such as "Digitale vaardigheden")
+has project periods instead of evaluation periods (#192, flutter_smartschool
+0.4.2, yvanvds/dartschool#204). A project period has templates (Skore's
+selector "Project:"), each with its rating scale (levels such as `Behaald`,
+symbol `B`), its learning goals ("rubrieken", a tree under the course's
+root, `-<courseId>`, with headings) and its projects; a pupil's rating of a
+learning goal in a project is a level of the template's scale, with an
+optional text (`info`). The library reads and writes them as Skore's
+project sheet (`/Gradebook/Main/<method>`) does, and never makes, publishes
+or removes a project: the user does that in Smartschool. The helpers are in
+`lib/src/skore/skore_projects.dart`: `readSkoreProjectPeriods` (the project
+periods, or the one of a `period_id`; a gradebook without any is an error
+that says it is not a project gradebook), `findSkoreProject` (a
+`project_id`, period by period and template by template, with
+`getProjectTemplates` and `getProjects`), `skoreProjectLevel` (a level by
+name or symbol, ignoring case and accents; one not on the scale is an error
+that lists the levels), `checkSkoreProjectPublication` and the lines of a
+project, a scale, a level and the goal tree.
+
+### How `list_skore_projects` works
+
+It reads the project periods of a gradebook (`gradebook_id`, optional
+`period_id` and `workyear_id`), and per period its templates and per
+template its projects. The result names the gradebook, says what a project
+gradebook is and how many projects it lists, then per period
+(`formatSkoreGradebookPeriod`) each template with its id and its scale, and
+each project with its title (and short name), project id, day and
+publication: `PUBLISHED since ...`, `SCHEDULED for ...` (a `publicAt`
+without `isPublic`), or `not published`. A template without projects says
+that projects are made in Smartschool. A gradebook without project periods,
+and an unknown `period_id`, are errors (the latter lists the project
+periods). Two requests per period for the templates and two per template
+for the projects (the library sends `getGradebookContext` for the period
+before each).
+
+### How `read_skore_project` works
+
+It reads one project (`gradebook_id`, `project_id`, optional `period_id`,
+to find it with fewer reads, `pupil_id` and `workyear_id`): the gradebook
+for the pupils' names (`getGradebook`), the project (`findSkoreProject`),
+the template's learning goals (`getLearningGoals`) and the project's
+ratings (`getProjectRatings`, one per pupil and goal that holds something).
+The result gives the project, its period, its template with the scale, the
+learning goals as a tree in Skore's order (indented under their parent;
+`the course`, `heading`, and `not enabled: it takes no ratings` marked; the
+count of goals that take a rating), and per pupil in the gradebook's order
+their ratings in the order of the goals: the goal, the level by name and
+symbol (`no level` for a cleared one, `level id N (not on the scale)` for
+one the scale does not hold), a grade when Skore has one, and the info.
+Ratings of pupils the gradebook does not list come last, by pupil id. An
+unknown pupil or project is an error.
+
+### How `save_skore_project_ratings` works
+
+It saves or clears pupils' ratings of learning goals in one project of a
+gradebook of Skore's current school year (`gradebook_id`, `project_id`,
+optional `period_id`, `ratings`: a list of `{pupil_id, goal_id, level,
+info}`, `level` a name or symbol of the scale, null or empty to clear,
+`info` an empty text to clear it and left out to keep it; `allow_published`,
+false by default; `saveProjectRatings`). Marked destructive, so Claude
+Desktop asks for approval before every call, and idempotent: saving the
+same ratings again gives the same state. Its description tells Claude, as
+`save_skore_grades`' does, to read the project with `read_skore_project`
+first, to match names and goals to ids there and ask rather than guess, to
+show the full list with the current and new level, and to call only after
+explicit confirmation.
+
+The server refuses in its own words, with nothing sent: an empty list, a
+pupil and goal given twice and a blank goal id (before anything is read); a
+gradebook shared with the user to read only (before it is read); a pupil
+the gradebook does not list (every such id); an unknown project; a goal
+that is not one of the template's, a heading, the course or a goal that is
+not enabled (every such goal); a level that is not on the scale (with the
+levels); and a project that is published or scheduled, unless
+`allow_published` is true (`checkSkoreProjectPublication`: what the pupils
+would see, and that `allow_published: true` comes only after the user said
+yes to exactly that). The library reads Skore again and checks the same and
+more (a closed project period, a gradebook Skore shows read-only in the
+period or a read-only project sheet, a pupil not in the sheet's pupil tree,
+a rating to clear that is not there); its refusal is passed on with what to
+read again (`read_skore_project`, `list_skore_projects`). A project
+published between the two reads is refused by the library with a
+`SmartschoolSkoreProjectPublishedError`, which the tool words as its own
+check, from the project the error carries.
+
+Then the library sends Skore's `saveCategoryGrades` (at most 30 cells per
+request; a new cell for a pupil's first rating of a goal) and reads the
+ratings again once. The result lists each rating as Skore lists it after
+the save, in the order given. When it cannot confirm every rating
+(`SmartschoolSkoreProjectRatingSaveUnconfirmedError`), the result lists the
+ratings it confirmed and the ones that may or may not have been saved, with
+what was sent; saving a rating again is harmless, so it says to read the
+project again with `read_skore_project`, tell the user, and save only the
+ratings that differ. The library's message goes to the log only.
+
+The tests (`test/skore_project_tools_test.dart`) run against the fake
+project sheet of `test/support/fake_skore_projects.dart`
+(`FakeSkoreGradebook.projects`), which answers the sheet's methods from the
+project periods and templates of a `FakeSkoreOwnGradebook`
+(`projectPeriods`, `projectTemplates`; `fakeSkoreProjectGradebook`, in the
+shapes seen live, dartschool#204) and carries out `saveCategoryGrades`
+(`saves`; `savesIgnored` answers without keeping, a save Skore did not
+confirm; `beforeAnswer` changes a project between two reads). The fake
+gradebook's `init` with the page `1` gives the project periods, and its
+`calls` show that `init` as `init wy=24 projects`.
 
 ### Gradebooks shared with the user
 

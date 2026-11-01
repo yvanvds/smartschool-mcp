@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import 'fake_skore_projects.dart';
+
 // A fake of Skore's gradebook as a teacher sees it at `/SkoreGradebook`
 // ("Puntenboek"): the RPC service `SkoreGradebookService` of
 // flutter_smartschool calls (dartschool#148), answered in the shape of
@@ -661,7 +663,11 @@ class FakeSkoreOwnGradebook {
     List<List<Object>>? components,
     List<FakeSkoreReportPeriod>? reports,
     Map<int, FakeSkoreReport>? reportContents,
+    List<FakeSkoreGradebookPeriod>? projectPeriods,
+    Map<int, List<FakeSkoreProjectTemplate>>? projectTemplates,
   }) : periods = periods ?? [],
+       projectPeriods = projectPeriods ?? [],
+       projectTemplates = projectTemplates ?? {},
        reports = reports ?? [],
        reportContents = reportContents ?? {},
        pupils = pupils ?? [],
@@ -713,6 +719,14 @@ class FakeSkoreOwnGradebook {
   final List<String> teachers;
 
   final List<FakeSkoreGradebookPeriod> periods;
+
+  /// The project periods ("Projecten", #192), as `init` with the page `1`
+  /// gives them; none by default.
+  final List<FakeSkoreGradebookPeriod> projectPeriods;
+
+  /// The templates of each project period, by period id, with their
+  /// learning goals and projects ([FakeSkoreProjectSheet]).
+  final Map<int, List<FakeSkoreProjectTemplate>> projectTemplates;
 
   /// The report periods, in Skore's order (`init`'s `reports`); none by
   /// default.
@@ -1389,14 +1403,25 @@ class FakeSkoreGradebook {
   /// the fake, in order, as `page` and `frame`: two per read of the scale.
   final List<String> scaleReads = [];
 
-  /// The calls, as `method` or, with a school year, `method wy=22`.
+  /// The calls, as `method` or, with a school year, `method wy=22`; an
+  /// `init` of the projects page (the page `1`, #192) as `init wy=24
+  /// projects`.
   List<String> get calls => [
     for (final request in requests)
       [
         request.rpc,
         if (request.session['wy'] case final wy?) 'wy=$wy',
+        if (_isProjectsInit(request.rpc, request.params)) 'projects',
       ].join(' '),
   ];
+
+  /// Whether [rpc] with [params] is an `init` of the projects page (the
+  /// page `1`).
+  static bool _isProjectsInit(String rpc, List<Object?> params) =>
+      rpc == 'init' && params.length > 4 && params[4] == 1;
+
+  /// Skore's project sheet of these gradebooks (#192).
+  late final FakeSkoreProjectSheet projects = FakeSkoreProjectSheet(this);
 
   /// The school years and gradebooks of dartschool's captures: 2026-2027
   /// (current) with 6EWI (as captured), 6WEWI2, and two gradebooks of 5WW1
@@ -1516,6 +1541,7 @@ class FakeSkoreGradebook {
             path.startsWith(fakeSkoreFeedbackPath))) {
       return _saveFeedback(options);
     }
+    if (projects.respond(options) case final answer?) return answer;
     if (options.method != 'POST' || path != fakeSkoreGradebookRpcPath) {
       return null;
     }
@@ -2791,7 +2817,10 @@ class FakeSkoreGradebook {
       'left_1': rows,
       'left_2': rows,
       'periods': [
-        for (final period in book.periods)
+        for (final period
+            in _isProjectsInit(method, params)
+                ? book.projectPeriods
+                : book.periods)
           {
             'name': period.name,
             'fullname': period.name,

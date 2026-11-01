@@ -4,7 +4,7 @@
   "display_name": "Smartschool",
   "version": "0.7.1",
   "description": "Geeft Claude toegang tot je Smartschool-berichten, Intradesk en planner.",
-  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen. Een map, een weblink of bestanden van deze pc in een map zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk verplaatsen (telkens pas na jouw bevestiging).\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je lesfiches uit de module Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches in je eigen bibliotheek maken, aanpassen en naar de prullenbak verplaatsen, met hun info, vakken, weblinks en bijlagen van deze pc. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging).\n- **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de puntenboeken die collega's met je deelden: de periodes, de evaluaties met de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de feedback die een leerling kreeg, en per rapport de resultaten en het vakcommentaar van elke leerling. Een nieuwe evaluatie maken, punten invullen, een leerling feedback geven en het vakcommentaar op het rapport schrijven, ook in een puntenboek dat een collega met je deelde om te wijzigen (een evaluatie maken alleen in je eigen puntenboeken; telkens pas na jouw bevestiging). Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te zetten.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore-beheer (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging). Voor je eigen puntenboek heb je Skore-beheer niet nodig.\n- **Aanwezigheden (alleen met Aanwezigheden aan):** voor wie in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: de klassen bekijken, en per klas en dag wat er voor elke leerling 's morgens en 's middags geregistreerd is. Leerlingen als te laat markeren (ook zonder geldige reden), of weer als aanwezig, bijvoorbeeld een groep van een bus die te laat was (telkens pas na jouw bevestiging). Een andere registratie, zoals een afwezigheid, overschrijft de extensie nooit.\n- **Leerlingvolgsysteem (alleen met Leerlingvolgsysteem aan):** alleen als jij en je school dat willen: in het leerlingvolgsysteem (LVS) een leerling opzoeken en zijn dossier lezen: de notities, de resultaten in alle vakken, het handelingsplan en de afwezigheden. Eén leerling per keer, en alleen lezen: Claude kan in het LVS niets veranderen. Vertrouwelijke notities en de motivering van afwezigheden laat Claude weg, tenzij je erom vraagt. Het LVS bevat de gevoeligste gegevens over leerlingen: het staat standaard uit, en wat Claude erin leest, gaat naar Anthropic. Lees eerst Veiligheid en privacy in de gids.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Uit het leerlingvolgsysteem bewaart ze niets. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
+  "long_description": "Een lokale MCP-server waarmee Claude Desktop met je Smartschool-account werkt, voor leerkrachten en leerlingen op Windows.\n\n- **Berichten:** bekijken, lezen, doorzoeken, als gelezen markeren, een vlag geven, archiveren, naar de prullenbak verplaatsen, beantwoorden en nieuwe berichten versturen (een bericht gaat pas weg, en een bericht pas naar de prullenbak, na jouw bevestiging).\n- **Intradesk:** zoeken op naam, mappen bekijken en bestanden lezen. Een map, een weblink of bestanden van deze pc in een map zetten, en mappen, bestanden of weblinks naar de prullenbak van Intradesk verplaatsen (telkens pas na jouw bevestiging).\n- **Planner:** je eigen planner en die van klassen, collega's en lokalen bekijken: lessen, toetsen en taken, en lege lesuren. Per dag zien welke toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te kiezen. Je lesfiches uit de module Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches in je eigen bibliotheek maken, kopiëren, aanpassen, naar de prullenbak verplaatsen en eruit terugzetten, met hun info, vakken, labels, weblinks en bijlagen van deze pc, en eigen labels maken. Jaarplannen maken uit je lesfiches: lesclusters met titels, lesfiches en leerdoelen. Je eigen lesuren invullen met lessen of met je lesfiches, ze aanpassen en weer leegmaken, en in je lesuren een toets of taak plannen voor je klassen en die weer naar de prullenbak verplaatsen (pas na jouw bevestiging). De leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de minidatabanken van je school), en welke een lesfiche of een les heeft.\n- **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de puntenboeken die collega's met je deelden: de periodes, de evaluaties met de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de feedback die een leerling kreeg, en per rapport de resultaten en het vakcommentaar van elke leerling. In een projectpuntenboek (Projecten) de projecten en de beoordeling van elke leerling per leerdoel. Een nieuwe evaluatie maken, punten invullen, een leerling feedback geven, het vakcommentaar op het rapport schrijven en leerlingen in een project beoordelen, ook in een puntenboek dat een collega met je deelde om te wijzigen (een evaluatie maken alleen in je eigen puntenboeken; telkens pas na jouw bevestiging). Een nieuwe evaluatie blijft ongepubliceerd: je publiceert ze zelf in Smartschool. Dit is er voor elke leerkracht: je hoeft er niets voor aan te zetten.\n- **Bestanden bewaren:** bijlagen en Intradesk-bestanden in een downloadmap op deze pc.\n- **Skore-beheer (alleen met Skore-beheer aan):** voor wie in Skore de rechten heeft voor puntenbeheer, zoals een Skore-beheerder: de klassen bekijken, de vakken van een klas met de leerkrachten die eraan gekoppeld zijn (de lesopdrachten), en de leerkrachten die je aan een vak kunt koppelen. Een leerkracht aan een vak van een klas koppelen, of een lesopdracht een andere leerkracht geven. De puntenboeken van een leerkracht delen met andere leerkrachten, om te lezen of ook te wijzigen, of dat delen weer stoppen (telkens pas na jouw bevestiging). Voor je eigen puntenboek heb je Skore-beheer niet nodig.\n- **Aanwezigheden (alleen met Aanwezigheden aan):** voor wie in Smartschool de halve-dagaanwezigheden van klassen registreert, zoals de afwezigheidsbeheerder of het leerlingensecretariaat: de klassen bekijken, en per klas en dag wat er voor elke leerling 's morgens en 's middags geregistreerd is. Leerlingen als te laat markeren (ook zonder geldige reden), of weer als aanwezig, bijvoorbeeld een groep van een bus die te laat was (telkens pas na jouw bevestiging). Een andere registratie, zoals een afwezigheid, overschrijft de extensie nooit.\n- **Leerlingvolgsysteem (alleen met Leerlingvolgsysteem aan):** alleen als jij en je school dat willen: in het leerlingvolgsysteem (LVS) een leerling opzoeken en zijn dossier lezen: de notities, de resultaten in alle vakken, het handelingsplan en de afwezigheden. Eén leerling per keer, en alleen lezen: Claude kan in het LVS niets veranderen. Vertrouwelijke notities en de motivering van afwezigheden laat Claude weg, tenzij je erom vraagt. Het LVS bevat de gevoeligste gegevens over leerlingen: het staat standaard uit, en wat Claude erin leest, gaat naar Anthropic. Lees eerst Veiligheid en privacy in de gids.\n\nDe extensie logt zelf in, met je wachtwoord en, als je tweestapsverificatie gebruikt, je 2FA-sleutel. Wat ze bijhoudt, blijft op deze pc: de sessie, de tekst van doorzochte berichten en de namen op Intradesk staan in `.cache\\smartschool` in je gebruikersmap. Uit het leerlingvolgsysteem bewaart ze niets. Ze praat alleen met Smartschool, en vraagt GitHub één keer per dag of er een nieuwere versie is.\n\nNiet officieel: niet gemaakt door of verbonden aan Smartschool.",
   "author": {
     "name": "Yvan Vander Sanden",
     "url": "https://github.com/yvanvds"
@@ -126,7 +126,7 @@
     },
     {
       "name": "read_planned_element",
-      "description": "Leest één les, toets of taak uit de planner, met de info voor leerlingen en de privé-info."
+      "description": "Leest één les, toets of taak uit de planner, met de info voor leerlingen, de privé-info en de leerdoelen van een les."
     },
     {
       "name": "list_class_assignments",
@@ -138,7 +138,7 @@
     },
     {
       "name": "edit_planned_element",
-      "description": "Past de titel, de info voor leerlingen of de privé-info van een eigen les of toets in de planner aan. Pas na jouw bevestiging."
+      "description": "Past de titel, de info voor leerlingen of de privé-info van een eigen les of toets in de planner aan, en de leerdoelen van een les. Pas na jouw bevestiging."
     },
     {
       "name": "clear_lesson",
@@ -158,7 +158,7 @@
     },
     {
       "name": "read_lesfiche",
-      "description": "Leest één lesfiche volledig: de info voor leerlingen, je privé-info, de weblinks en de bijlagen, en wanneer leerlingen die zien."
+      "description": "Leest één lesfiche volledig: de info voor leerlingen, je privé-info, de weblinks en de bijlagen (en wanneer leerlingen die zien), en de leerdoelen."
     },
     {
       "name": "read_lesfiche_attachment",
@@ -169,12 +169,20 @@
       "description": "Bewaart een bijlage van een lesfiche in de downloadmap."
     },
     {
+      "name": "list_lesfiche_labels",
+      "description": "Toont de labels die een lesfiche kan krijgen: die van je school en je eigen labels, met hun kleur."
+    },
+    {
       "name": "create_lesfiche",
-      "description": "Maakt een nieuwe lesfiche in je eigen bibliotheek van de module Lesfiches, met de info, de vakken, weblinks en bijlagen van deze pc. Pas na jouw bevestiging."
+      "description": "Maakt een nieuwe lesfiche in je eigen bibliotheek van de module Lesfiches, met de info, de vakken, de leerdoelen, de labels, weblinks en bijlagen van deze pc. Pas na jouw bevestiging."
+    },
+    {
+      "name": "duplicate_lesfiches",
+      "description": "Maakt een kopie van lesfiches in je eigen bibliotheek, met hun info, vakken, labels, leerdoelen, weblinks en bijlagen, om ze voor een andere klas of een ander jaar aan te passen. Pas na jouw bevestiging."
     },
     {
       "name": "edit_lesfiche",
-      "description": "Past een lesfiche in je eigen bibliotheek aan: de naam, het icoon, de info, de vakken, of ze zichtbaar is in de module. Pas na jouw bevestiging."
+      "description": "Past een lesfiche in je eigen bibliotheek aan: de naam, het icoon, de info, de vakken, de leerdoelen, de labels, of ze zichtbaar is in de module. Pas na jouw bevestiging."
     },
     {
       "name": "set_lesfiche_weblink",
@@ -198,11 +206,63 @@
     },
     {
       "name": "trash_lesfiches",
-      "description": "Verplaatst lesfiches naar de prullenbak van de module Lesfiches, van waaruit je ze in Smartschool zelf terugzet. Pas na jouw bevestiging."
+      "description": "Verplaatst lesfiches naar de prullenbak van de module Lesfiches, van waaruit je ze weer terugzet. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_trashed_lesfiches",
+      "description": "Toont de lesfiches in de prullenbak van de module Lesfiches, met wanneer ze erin kwamen."
+    },
+    {
+      "name": "restore_lesfiches",
+      "description": "Zet lesfiches uit de prullenbak van de module Lesfiches terug in je eigen bibliotheek. Pas na jouw bevestiging."
     },
     {
       "name": "plan_lesfiche",
-      "description": "Plant een lesfiche als les in een leeg lesuur van je eigen planner. Pas na jouw bevestiging."
+      "description": "Plant een lesfiche als les in een of meer lesuren van je eigen planner; een les vervangen alleen als je dat vraagt. Pas na jouw bevestiging."
+    },
+    {
+      "name": "save_lesson_as_lesfiche",
+      "description": "Bewaart een les van je eigen planner als nieuwe lesfiche in je bibliotheek. Pas na jouw bevestiging."
+    },
+    {
+      "name": "create_lesfiche_label",
+      "description": "Maakt een eigen label met een kleur, om op je lesfiches te zetten. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_year_plans",
+      "description": "Toont je jaarplannen (leeropdrachten) in de module Lesfiches, met hun lesclusters."
+    },
+    {
+      "name": "read_year_plan",
+      "description": "Toont een jaarplan met zijn lesclusters: per cluster de leerdoelen en de titels en lesfiches in volgorde."
+    },
+    {
+      "name": "create_year_plan",
+      "description": "Maakt een nieuw, leeg jaarplan in de module Lesfiches, dat al je lesfiches kan opnemen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "add_lesson_cluster",
+      "description": "Voegt een lescluster (een eenheid van het jaar) toe aan een van je jaarplannen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "add_to_lesson_cluster",
+      "description": "Zet een titel en je lesfiches in een lescluster van een jaarplan, in de volgorde die je kiest. Pas na jouw bevestiging."
+    },
+    {
+      "name": "set_lesson_cluster_goals",
+      "description": "Geeft een lescluster van een jaarplan zijn leerdoelen. Pas na jouw bevestiging."
+    },
+    {
+      "name": "delete_year_plan",
+      "description": "Verwijdert een jaarplan met zijn lesclusters, voorgoed; de lesfiches erin blijven in je bibliotheek. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_curricula",
+      "description": "Toont de leerplannen van de doelenselector (de eindtermen, de leerplannen levensbeschouwing en de minidatabanken van je school), in hun groepen."
+    },
+    {
+      "name": "read_curriculum",
+      "description": "Toont de leerdoelen van één leerplan onder hun titels, met hun nummer, en zoekt een doel op woorden."
     },
     {
       "name": "list_skore_gradebooks",
@@ -239,6 +299,18 @@
     {
       "name": "save_skore_report_comment",
       "description": "Schrijft het vakcommentaar van een leerling op een open rapport in een van je puntenboeken in Skore, of in een dat een collega met je deelde om te wijzigen, of past het aan of wist het. Het komt op het rapport dat de leerling en zijn ouders krijgen. Eén leerling per keer; het commentaar van een collega overschrijft het nooit ongezien. Pas na jouw bevestiging."
+    },
+    {
+      "name": "list_skore_projects",
+      "description": "Toont de projecten van een projectpuntenboek in Skore (Projecten), per projectperiode en sjabloon, met de beoordelingsschaal van het sjabloon en of de leerlingen het project zien."
+    },
+    {
+      "name": "read_skore_project",
+      "description": "Leest een project in een projectpuntenboek in Skore: de leerdoelen (rubrieken) als boom en per leerling de beoordeling van elk doel, met het niveau bij naam en de bijhorende tekst."
+    },
+    {
+      "name": "save_skore_project_ratings",
+      "description": "Beoordeelt je leerlingen op leerdoelen in een project van een projectpuntenboek in Skore, met een niveau van de schaal bij naam en eventueel een tekst, of wist beoordelingen. In een gepubliceerd project alleen als je dat uitdrukkelijk toestaat, want je leerlingen zien de beoordelingen dan meteen. Pas na jouw bevestiging."
     },
     {
       "name": "list_skore_classes",

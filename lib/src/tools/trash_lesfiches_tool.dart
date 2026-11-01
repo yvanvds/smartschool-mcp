@@ -2,6 +2,7 @@ import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
+import '../planner/lesfiche_bulk.dart';
 import '../planner/lesfiche_detail.dart';
 import '../planner/lesfiche_writes.dart';
 import '../planner/lesfiches.dart';
@@ -10,15 +11,16 @@ import '../uploads/local_files.dart';
 import 'server_tool.dart';
 
 /// At most this many lesfiches per call of `trash_lesfiches`.
-const maxLesficheTrashItems = 20;
+const maxLesficheTrashItems = maxLesficheBulkItems;
 
 /// `trash_lesfiches`: moves lesfiches of the user's Lesfiches module,
 /// lessons and assignments, to the module's trash in one move (the
 /// library's `LessonContentService.trash`, dartschool#129).
 ///
-/// A move, not a deletion: the lesfiches leave the list, and the user
-/// restores them from the trash in the module itself; the library neither
-/// restores a lesfiche nor deletes one for good. A lesson planned from one
+/// A move, not a deletion: the lesfiches leave the list, and
+/// `restore_lesfiches` takes them back out of the trash
+/// (`list_trashed_lesfiches` lists it, dartschool#227); the library never
+/// deletes one for good. A lesson planned from one
 /// of them earlier stays in the planner, which copied the lesfiche (its
 /// info, attachments and weblinks, #117). Still the lesfiches leave the
 /// user's library,
@@ -43,9 +45,11 @@ const maxLesficheTrashItems = 20;
 /// The module answers the move of a lesfiche that is in the trash already
 /// with a bare `500`, and the library throws a
 /// [SmartschoolLessonContentSaveUnconfirmedError] for it, and for an answer
-/// whose `exceptions` are not empty: the result says that some or all of
-/// them may or may not have been moved, and to check with
-/// `list_lesfiches`.
+/// whose `exceptions` are not empty: the tool then reads the trash again
+/// ([readLesficheTrashAfter]) and says which of them are in it and which
+/// not ([lesficheBulkPartialResult]); when that read fails too, that they
+/// may or may not have been moved, and to check with
+/// `list_trashed_lesfiches`.
 ServerTool trashLesfichesTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'trash_lesfiches',
@@ -56,35 +60,33 @@ ServerTool trashLesfichesTool(SmartschoolSession session) => ServerTool(
         'list_lesfiches shows: 1 to $maxLesficheTrashItems in one call. The '
         'lesfiches leave the user\'s library: list_lesfiches no longer lists '
         'them, and they can no longer be planned. It is a move, not a '
-        'deletion: the user can restore them from the trash in the Lesfiches '
-        'module itself. This tool cannot restore anything, nor delete '
-        'anything for good. A lesson planned from one of them earlier stays '
+        'deletion: list_trashed_lesfiches lists the trash, and '
+        'restore_lesfiches takes them back out of it (the Lesfiches module '
+        'says within 100 days). No tool deletes anything for good. '
+        'A lesson planned from one of them earlier stays '
         'in the planner: the planner copied the lesfiche when it was '
         'planned. Use it to clear out old lesfiches, or to undo a lesfiche '
         'made with create_lesfiche. Before calling this tool, show the user '
         'each lesfiche by its name and kind (lesson or assignment, as '
         'list_lesfiches shows it; two lesfiches can have the same name), say '
-        'that the user can restore them from the trash in the Lesfiches '
-        'module, and only call this tool after the user has explicitly '
+        'that they can be restored from the trash, and only call this tool '
+        'after the user has explicitly '
         'confirmed it; then call it once, with all of them. An id that names '
         'none of the user\'s lesfiches is refused before anything is sent: a '
         'lesfiche that is in the trash already is not listed. If the result '
-        'says the lesfiches may or may not have been moved, do not call this '
-        'tool again for them: check with list_lesfiches which are still '
-        'listed, and tell the user. For requests like "ruim mijn '
+        'says the move was not confirmed, do not call this tool again for '
+        'the lesfiches it says are in the trash; tell the user which were '
+        'moved and which not. For requests like "ruim mijn '
         'testlesfiches op".',
     inputSchema: Schema.object(
       properties: {
-        'lesfiches': Schema.list(
+        'lesfiches': lesficheIdsSchema(
           description:
               'The ids of the lesfiches to move to the trash, as '
               'list_lesfiches shows them and as the user confirmed them, '
               'like b0000000-0000-4000-8000-000000000001: lessons and '
               'assignments together, at most $maxLesficheTrashItems. The '
               'kind of each is taken from list_lesfiches.',
-          items: Schema.string(minLength: 1),
-          minItems: 1,
-          maxItems: maxLesficheTrashItems,
         ),
       },
       required: ['lesfiches'],
@@ -104,7 +106,7 @@ Future<CallToolResult> _trash(
   SmartschoolSession session,
   Map<String, Object?> arguments,
 ) async {
-  final ids = _idsArgument(arguments['lesfiches']);
+  final ids = lesficheIdsArgument(arguments['lesfiches']);
   final nothingDone = ids.length == 1
       ? 'The lesfiche was not moved to the trash.'
       : 'None of the lesfiches was moved to the trash.';
@@ -124,23 +126,50 @@ Future<CallToolResult> _trash(
       },
       what: () => chosen.isEmpty
           ? 'the move of the lesfiches to the trash'
-          : 'the move of ${_titles(chosen)} to the trash',
+          : 'the move of ${lesficheTitles(chosen)} to the trash',
       nothingDone: nothingDone,
     );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
     final one = chosen.length == 1;
-    return lesficheWriteNotConfirmed(
+    final trash = await readLesficheTrashAfter(session);
+    if (trash == null) {
+      return lesficheWriteNotConfirmed(
+        tool: 'trash_lesfiches',
+        what: lesficheSubject(chosen),
+        done: 'moved to the trash',
+        also: one ? null : 'Some of them may have been moved, and others not.',
+        check:
+            'list the trash with list_trashed_lesfiches to see '
+            '${one ? 'whether it is there' : 'which are there'}',
+        error: error,
+      );
+    }
+    final inTrash = {for (final item in trash) item.id.toLowerCase()};
+    bool moved(LessonContentItem item) =>
+        inTrash.contains(item.id.toLowerCase());
+    return lesficheBulkPartialResult(
       tool: 'trash_lesfiches',
-      what: one
-          ? _capitalised(lesficheTitle(chosen.single))
-          : 'The ${chosen.length} lesfiches (${_titles(chosen)})',
-      done: 'moved to the trash',
-      also: one ? null : 'Some of them may have been moved, and others not.',
-      check:
-          'list the lesfiches with list_lesfiches (type all) to see '
-          '${one ? 'whether it is still listed' : 'which are still listed'}: '
-          'a lesfiche in the trash is not listed',
-      error: error,
+      sent: one
+          ? 'The move of ${lesficheTitle(chosen.single)} to the trash'
+          : 'The move of ${chosen.length} lesfiches to the trash',
+      readFrom: 'the trash',
+      doneHeader: 'In the trash now:',
+      done: [
+        for (final item in chosen)
+          if (moved(item))
+            '- ${formatLesficheLine(item, withCourseNames: false)}',
+      ],
+      notDoneHeader: 'Not in the trash (still in the library):',
+      notDone: [
+        for (final item in chosen)
+          if (!moved(item))
+            '- ${formatLesficheLine(item, withCourseNames: false)}',
+      ],
+      advice:
+          'Do not call trash_lesfiches again for those in the trash. Tell '
+          'the user which were moved and which not, and ask before moving '
+          'the others again. restore_lesfiches takes a lesfiche back out of '
+          'the trash.',
     );
   }
   log(
@@ -156,34 +185,15 @@ Future<CallToolResult> _trash(
               'Lesfiches module:',
           for (final item in chosen)
             '- ${formatLesficheLine(item, withCourseNames: false)}',
-          'list_lesfiches no longer lists $them. The user can restore $them '
-              'from the trash in the Lesfiches module itself; this server '
-              'cannot restore $them, nor delete $them for good. A lesson '
-              'planned from ${chosen.length == 1 ? 'it' : 'one of them'} '
-              'earlier stays in the planner.',
+          'list_lesfiches no longer lists $them; list_trashed_lesfiches '
+              'lists the trash, and restore_lesfiches takes $them back out '
+              'of it. A lesson planned from '
+              '${chosen.length == 1 ? 'it' : 'one of them'} earlier stays in '
+              'the planner.',
         ].join('\n'),
       ),
     ],
   );
-}
-
-/// The `lesfiches` argument [value]: ids of lesfiches as `list_lesfiches`
-/// shows them ([lesficheArgument]), each once (ignoring case), in the order
-/// given. The input schema guarantees a list of 1 to
-/// [maxLesficheTrashItems] texts.
-///
-/// Throws a [ToolError] that names the item for anything that is not such
-/// an id, before anything is sent.
-List<String> _idsArgument(Object? value) {
-  final items = value is List ? value : [value];
-  final ids = <String>[];
-  for (final (index, item) in items.indexed) {
-    final id = lesficheArgument(item, name: 'item ${index + 1} of lesfiches');
-    if (!ids.any((known) => known.toLowerCase() == id.toLowerCase())) {
-      ids.add(id);
-    }
-  }
-  return ids;
 }
 
 /// The lesfiches of [items] (the user's, as listed) with the ids [ids], in
@@ -196,49 +206,20 @@ List<LessonContentItem> _chosen(
   List<LessonContentItem> items,
   List<String> ids,
 ) {
-  final chosen = <LessonContentItem>[];
-  final unknown = <String>[];
-  for (final id in ids) {
-    final matches = [
-      for (final item in items)
-        if (item.id.toLowerCase() == id.toLowerCase()) item,
-    ];
-    if (matches.isEmpty) unknown.add(id);
-    chosen.addAll(matches);
-  }
+  final (:found, :unknown) = findLesfiches(items, ids);
   if (unknown.isNotEmpty) {
     final one = unknown.length == 1;
     throw ToolError(
       'You have no ${one ? 'lesfiche with id' : 'lesfiches with the ids'} '
       '${unknown.join(', ')}: list_lesfiches does not list '
       '${one ? 'it' : 'them'}. A lesfiche that is in the trash already is '
-      'not listed, nor is one that no longer exists. Take the ids from '
-      'list_lesfiches (type all lists both kinds)'
-      '${chosen.isEmpty ? '' : ', and check with the user which lesfiches are meant: the others were not moved either'}. '
+      'not listed (list_trashed_lesfiches lists those), nor is one that no '
+      'longer exists. Take the ids from list_lesfiches (type all lists both '
+      'kinds)'
+      '${found.isEmpty ? '' : ', and check with the user which lesfiches are meant: the others were not moved either'}. '
       '$nothingSent',
     );
   }
-  for (final item in chosen) {
-    if (item.type != LessonContentType.other) continue;
-    throw ToolError(
-      '${_capitalised(lesficheTitle(item))} (id ${item.id}) is of the kind '
-      '"${item.typeName}", which this server cannot move to the trash: only '
-      'lesson and assignment lesfiches. The user moves it to the trash in '
-      'the Lesfiches module itself. $nothingSent',
-    );
-  }
-  return chosen;
+  refuseOtherLesficheKinds(found, action: 'move to the trash');
+  return found;
 }
-
-/// The lesfiches [items] in a few words each ([lesficheTitle]): `the
-/// lesson lesfiche "Lussen" and the assignment lesfiche "Taak"`.
-String _titles(List<LessonContentItem> items) {
-  final titles = [for (final item in items) lesficheTitle(item)];
-  return titles.length < 2
-      ? titles.join()
-      : '${titles.sublist(0, titles.length - 1).join(', ')} and '
-            '${titles.last}';
-}
-
-String _capitalised(String text) =>
-    text.isEmpty ? text : '${text[0].toUpperCase()}${text.substring(1)}';

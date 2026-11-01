@@ -1,6 +1,7 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../planner/planner_access.dart';
 import '../planner/planner_format.dart';
 import '../planner/planner_writes.dart';
@@ -9,7 +10,10 @@ import '../session.dart';
 import 'server_tool.dart';
 
 /// `edit_planned_element`: changes the name, the public info and/or the
-/// private info of a lesson or an assignment in the user's own planner.
+/// private info of a lesson or an assignment in the user's own planner, and
+/// the learning goals of a lesson (`PlannerService.changeGoals`,
+/// dartschool#226; #187): checked with the goal selector first
+/// ([checkGoals]), and named in the result when they change.
 ///
 /// Pupils see a new name and public info at once, so the tool is marked
 /// destructive (for Claude Desktop to ask for approval before every call).
@@ -22,8 +26,9 @@ ServerTool editPlannedElementTool(SmartschoolSession session) => ServerTool(
     description:
         'Changes the name, the public info (what pupils see) and/or the '
         'private info of a lesson or an assignment in the user\'s own '
-        'Smartschool planner, by the id list_planner shows. Give only what '
-        'changes, at least one of name, public_info and private_info. Only '
+        'Smartschool planner, and the learning goals of a lesson, by the id '
+        'list_planner shows. Give only what changes, at least one of name, '
+        'public_info, private_info and goals. Only '
         'the user\'s own planner can be changed: list_planner also shows '
         'colleagues\' lessons and assignments, and this tool refuses those. '
         'Pupils see a new name and public info at once. Before calling this '
@@ -36,9 +41,14 @@ ServerTool editPlannedElementTool(SmartschoolSession session) => ServerTool(
         'plain text, with a blank line between paragraphs; HTML in it is not '
         'interpreted, it shows as text. An info replaces the whole info: to '
         'add to it, pass the old text with the addition; an empty text '
-        'empties it. Of an assignment (a test or task, such as one planned '
-        'with plan_assignment) only the name and the info change here, not '
-        'its date, type or classes. The result gives the element as saved. '
+        'empties it. goals are learning goals as read_curriculum shows them '
+        '(find them with list_curricula and read_curriculum); pupils see '
+        'them. $goalsReplaceNote A goal the goal selector does not know is '
+        'refused, and nothing is sent. Of an assignment (a test or task, '
+        'such as one planned with plan_assignment) only the name and the '
+        'info change here, not its goals, date, type or classes. The changes '
+        'are made in the order name, public info, private info, goals. The '
+        'result gives the element as saved. '
         'If the result says a change may or may not have been saved, do not '
         'call this tool again for it: check the element with '
         'read_planned_element and tell the user.',
@@ -64,6 +74,13 @@ ServerTool editPlannedElementTool(SmartschoolSession session) => ServerTool(
               'The new private info, as plain text; it replaces the whole '
               'private info. An empty text empties it.',
         ),
+        'goals': goalsSchema(
+          description:
+              'Only for a lesson: the learning goals it gets, in place of all '
+              'its goals, each {id, leerplanId, type} as read_curriculum '
+              'shows it; an empty list removes them. To add a goal, pass the '
+              'goals read_planned_element shows plus the new one.',
+        ),
       },
       required: ['id'],
     ),
@@ -82,7 +99,8 @@ ServerTool editPlannedElementTool(SmartschoolSession session) => ServerTool(
 enum _Field {
   name('name', 'the name'),
   publicInfo('public_info', 'the public info'),
-  privateInfo('private_info', 'the private info');
+  privateInfo('private_info', 'the private info'),
+  goals('goals', 'the goals');
 
   const _Field(this.argument, this.label);
 
@@ -92,22 +110,28 @@ enum _Field {
   /// The field in a sentence.
   final String label;
 
-  /// The value of this field of [element], as the library compares it.
-  String of(PlannedElementDetail element) => switch (this) {
-    name => (element.name ?? '').trim(),
-    publicInfo => element.publicInfo,
-    privateInfo => element.privateInfo,
+  /// Whether this field of [element] has [value] already, as the library
+  /// compares it.
+  bool has(PlannedElementDetail element, Object value) => switch (this) {
+    name => (element.name ?? '').trim() == value,
+    publicInfo => element.publicInfo == value,
+    privateInfo => element.privateInfo == value,
+    goals => sameGoals(
+      element.goals ?? const [],
+      value as List<LearningGoalRef>,
+    ),
   };
 
   /// Sets this field of [element] to [value] with the library's edit.
   Future<PlannedElementDetail> set(
     PlannerService planner,
     PlannedElementDetail element,
-    String value,
+    Object value,
   ) => switch (this) {
-    name => planner.renameElement(element, value),
-    publicInfo => planner.changePublicInfo(element, value),
-    privateInfo => planner.changePrivateInfo(element, value),
+    name => planner.renameElement(element, value as String),
+    publicInfo => planner.changePublicInfo(element, value as String),
+    privateInfo => planner.changePrivateInfo(element, value as String),
+    goals => planner.changeGoals(element, value as List<LearningGoalRef>),
   };
 }
 
@@ -127,18 +151,26 @@ Future<CallToolResult> _edit(
       '$what. Nothing was sent.',
     );
   }
-  final changes = <_Field, String>{
-    for (final field in _Field.values)
+  final changes = <_Field, Object>{
+    for (final field in [_Field.name, _Field.publicInfo, _Field.privateInfo])
       if (arguments[field.argument] case final String text)
         field: field == _Field.name ? text.trim() : plainTextToHtml(text),
+    _Field.goals: ?goalsArgument(arguments['goals']),
   };
   if (changes.isEmpty) {
     throw const ToolError(
-      'Nothing to change: pass at least one of name, public_info and '
-      'private_info. Nothing was sent.',
+      'Nothing to change: pass at least one of name, public_info, '
+      'private_info and goals. Nothing was sent.',
     );
   }
-  if (changes[_Field.name]?.isEmpty ?? false) {
+  if (changes.containsKey(_Field.goals) &&
+      id.type != PlannedElementType.lesson) {
+    throw ToolError(
+      'goals are for a lesson only; $id is an assignment, whose goals this '
+      'server does not change. Nothing was sent.',
+    );
+  }
+  if (changes[_Field.name] == '') {
     throw const ToolError(
       'name is empty: pass the new name, or leave name out to keep it. '
       'Nothing was sent.',
@@ -151,20 +183,43 @@ Future<CallToolResult> _edit(
   PlannedElementDetail? before;
   final saved = <_Field>[];
   _Field? sending;
+  var goalsChecked = false;
   try {
-    final after = await withPlanner(session, (planner) async {
+    final (after, goals) = await withPlannerClient(session, (client) async {
+      final planner = PlannerService(client);
       var element = await id.read(planner);
       before ??= element;
+      if (changes[_Field.goals] case final List<LearningGoalRef> goals
+          when !goalsChecked) {
+        await checkGoals(
+          client,
+          goals,
+          location: GoalLocation.plannerLessonContent,
+          stored: before!.goals ?? const [],
+        );
+        goalsChecked = true;
+      }
       for (final MapEntry(key: field, :value) in changes.entries) {
         sending = field;
         element = await field.set(planner, element, value);
         if (!saved.contains(field)) saved.add(field);
         sending = null;
       }
-      return element;
+      // The goals named as read_planned_element names them, when they
+      // changed; the writes of the other fields do not show them.
+      final goals = changes.containsKey(_Field.goals)
+          ? await nameGoals(
+              client,
+              element.goals ?? const [],
+              location: GoalLocation.plannerLessonContent,
+            )
+          : null;
+      return (element, goals);
     });
     return CallToolResult(
-      content: [TextContent(text: _savedText(before!, after, changes, saved))],
+      content: [
+        TextContent(text: _savedText(before!, after, changes, saved, goals)),
+      ],
     );
   } on SmartschoolPlannerSaveUnconfirmedError catch (error) {
     // Only the edits throw it, each with its field in [sending].
@@ -199,16 +254,17 @@ Future<CallToolResult> _edit(
 String _savedText(
   PlannedElementDetail before,
   PlannedElementDetail after,
-  Map<_Field, String> changes,
+  Map<_Field, Object> changes,
   List<_Field> saved,
+  NamedGoals? goals,
 ) {
   final changed = [
     for (final field in saved)
-      if (field.of(before) != changes[field]) field.label,
+      if (!field.has(before, changes[field]!)) field.label,
   ];
   final already = [
     for (final field in saved)
-      if (field.of(before) == changes[field]) field.label,
+      if (field.has(before, changes[field]!)) field.label,
   ];
   return [
     if (changed.isNotEmpty)
@@ -220,7 +276,7 @@ String _savedText(
       '${_sentence(_list(already))} already had the value given.',
     if (changed.isNotEmpty) plannerListLagNote,
     '',
-    formatElementDetail(after),
+    formatElementDetail(after, goals: goals),
   ].join('\n');
 }
 
@@ -229,7 +285,7 @@ String _savedText(
 /// failed (null when the read before it did), and the changes after it.
 String _partly(
   PlannedElementDetail before,
-  Map<_Field, String> changes,
+  Map<_Field, Object> changes,
   List<_Field> saved,
   _Field? stopped,
   String message,
@@ -246,7 +302,7 @@ String _partly(
 /// [stopped], the change that failed. Like `The private info was not
 /// sent.`, or null when there are none.
 String? _notSent(
-  Map<_Field, String> changes,
+  Map<_Field, Object> changes,
   List<_Field> saved,
   _Field? stopped,
 ) {

@@ -14,8 +14,9 @@ import 'planner_access.dart';
 // (`create_lesfiche`, and the edits after it: `edit_lesfiche`,
 // `set_lesfiche_weblink`, `remove_lesfiche_weblink`,
 // `add_lesfiche_attachments`, `set_lesfiche_attachment_visibility`,
-// `remove_lesfiche_attachment`; and `trash_lesfiches`, which moves
-// lesfiches to the trash): the name, the courses, the weblinks and the
+// `remove_lesfiche_attachment`; and `trash_lesfiches`, `restore_lesfiches`
+// and `duplicate_lesfiches`, the bulk writes of `lesfiche_bulk.dart`): the
+// name, the courses, the weblinks and the
 // attachments a tool takes, and the weblink or attachment it names by its
 // id, checked before anything is sent; the write itself, with the library's
 // errors as ToolErrors ([withLesficheWrite], [lesficheWriteToolError]); a
@@ -432,8 +433,8 @@ ToolError? lesficheWriteToolError(
         'in the trash or no longer exists'
         '${orGone == null ? '' : ', or $orGone'}. A lesfiche in the trash '
         'can still be read, but not changed, and list_lesfiches does not '
-        'list it; the user restores it from the trash in the Lesfiches '
-        'module itself. $nothingDone',
+        'list it; list_trashed_lesfiches lists the trash, and '
+        'restore_lesfiches takes it back out. $nothingDone',
       );
     case SmartschoolLessonContentWriteRefusedError(
       :final statusCode,
@@ -538,11 +539,15 @@ Future<CallToolResult> lesficheChangedResult(
 ) async {
   String shown;
   try {
-    final (:detail, :courseError) = await withPlannerClient(
+    final (:detail, :courseError, :goals) = await withPlannerClient(
       session,
-      (client) => readLesficheDetail(client, type, id),
+      (client) => readNamedLesficheDetail(client, type, id),
     );
-    shown = formatLesficheDetail(detail, courseError: courseError);
+    shown = formatLesficheDetail(
+      detail,
+      courseError: courseError,
+      goals: goals,
+    );
   } on Object catch (error) {
     final message = switch (error) {
       ToolError(:final message) => message,
