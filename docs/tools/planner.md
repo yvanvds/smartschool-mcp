@@ -5,7 +5,9 @@
 Smartschool's planner: lessons, tests and tasks, in your own planner and in
 those of classes, people and rooms. For everyone, without a switch; the
 writes work in your own planner only. Planning a lesfiche is on the
-[Lesfiches](lesfiches.md#plan_lesfiche) page. Tools that change something
+[Lesfiches](lesfiches.md#plan_lesfiche) page; the year plans whose lesson
+clusters `plan_lesson_cluster` plans are on the
+[Lesfiches](lesfiches.md#list_year_plans) page too. Tools that change something
 follow the [shared rules](../../README.md#changes-and-approval).
 
 | Tool | What it does | Changes Smartschool? |
@@ -19,6 +21,9 @@ follow the [shared rules](../../README.md#changes-and-approval).
 | [`clear_lesson`](#clear_lesson) | Empties a lesson hour again | Yes, asks approval |
 | [`plan_assignment`](#plan_assignment) | Plans a test or task in one of your lesson hours | Yes, asks approval |
 | [`trash_assignment`](#trash_assignment) | Moves an assignment to the planner's trash | Yes, asks approval |
+| [`plan_lesson_cluster`](#plan_lesson_cluster) | Plans a lesson cluster of a year plan for classes over a period | Yes, asks approval |
+| [`list_planned_lesson_clusters`](#list_planned_lesson_clusters) | Lists the planned lesson clusters, in a period or of one cluster | No |
+| [`trash_planned_lesson_cluster`](#trash_planned_lesson_cluster) | Moves a planned lesson cluster to the planner's trash | Yes, asks approval |
 
 ## Tools
 
@@ -32,8 +37,9 @@ name, the class a pupil is listed with. People are pupils and staff alike.
 
 Lists what is planned in your own planner, or in that of a class, a person or
 a room, in a period (by default today to 7 days ahead), optionally only some
-kinds: lessons, assignments, empty lesson hours, meetings, lesson-free days,
-other. Per day, one line per element: the time, the kind, name, course,
+kinds: lessons, assignments, empty lesson hours, planned lesson clusters,
+lesson cluster moments (the hours of a planned lesson cluster, each with the
+name and id of its planned cluster), meetings, lesson-free days, other. Per day, one line per element: the time, the kind, name, course,
 classes, organiser, rooms and id. At most 200 elements are shown: a class
 planner holds a slot for every teacher of every hour, so narrow down the
 period for a class.
@@ -42,8 +48,11 @@ period for a class.
 
 Reads one lesson or assignment in full: its public and private info, its
 labels, its attachments and weblinks (with when pupils see them), the
-learning goals of a lesson (see [Learning goals](goals.md)), and for an
-assignment when pupils see it, whether it was announced and its status.
+learning goals of a lesson (see [Learning goals](goals.md)), for an
+assignment when pupils see it, whether it was announced and its status, for
+a planned lesson cluster the cluster and year plan it was planned from (by
+their ids, for `read_year_plan`) and the lesfiches planned, and for a lesson
+cluster moment its planned lesson cluster.
 Private info is hidden from pupils, but colleagues who can see the element
 read it too.
 
@@ -97,6 +106,36 @@ Moves a test or task of your own planner to the planner's trash, where
 Smartschool keeps it for 30 days and you can restore it in Smartschool
 itself. One with a linked Skore evaluation is refused. Asks for approval.
 
+### `plan_lesson_cluster`
+
+Plans a lesson cluster of one of your year plans (by the ids of
+[`list_year_plans`](lesfiches.md#list_year_plans) and
+[`read_year_plan`](lesfiches.md#read_year_plan)) for classes and a course
+over whole days, from `from` to `until` in one school year. The classes (all,
+or those `classes` names) and the course are those of one of your own lesson
+hours (`hour`, from `list_planner` with `me`, in any week). Unlike
+`plan_lesfiche`, which copies a lesfiche into a lesson, a planned cluster
+stays linked to its cluster. In the period, the planner shows the lesson
+hours of those classes and that course in your planner as lesson cluster
+moments, and **pupils see them at once**. Asks for approval; Claude shows
+you the cluster, the classes, the course and the days first. The answer
+gives the planned cluster with its id.
+
+### `list_planned_lesson_clusters`
+
+Lists the lesson clusters planned in your own planner: those in a period
+(by default today to the end of the school year), or, with `year_plan` and
+`cluster`, where that cluster was planned. One line each: the cluster's
+name, the first and last day, the course, the classes and the id.
+
+### `trash_planned_lesson_cluster`
+
+Moves a planned lesson cluster of your own planner to the planner's trash,
+where Smartschool keeps it for 30 days and you can restore it in Smartschool
+itself. Pupils no longer see its moments, and the lesson hours show as they
+were; the cluster in the year plan stays. A single moment cannot be
+trashed: only the whole planned cluster. Asks for approval.
+
 ## How it works
 
 ### How `search_planners` works
@@ -113,17 +152,19 @@ is shown without a planner id.
 ### How `list_planner` works
 
 The planner is `me`, the default, or a planner id; the period is `from` and
-`until`; `types` takes lessons, assignments, empty lesson hours, meetings,
-lesson-free days and other (other holds every kind not named, such as
-excursions). The planner is asked only for lessons, assignments and empty
-lesson hours; for any other kind every type is read and the kinds asked for
-are kept (asking the planner for meetings or lesson-free days was never
-tried live).
+`until`; `types` takes lessons, assignments, empty lesson hours, planned
+lesson clusters, lesson cluster moments, meetings, lesson-free days and other
+(other holds every kind not named, such as excursions). The planner is asked
+only for lessons, assignments and empty lesson hours; for any other kind
+every type is read and the kinds asked for are kept (asking the planner for
+meetings, lesson-free days or the lesson cluster types was never tried
+live).
 
 Per day, in date order, one line per element: the time (`10:20–11:10`, or
 `08:30 (deadline)` for an assignment), the kind (lesson, an assignment with
-its type, such as `KO Kleine Overhoring`, empty lesson hour, meeting,
-lesson-free day, or the planner's type name of any other type, such as
+its type, such as `KO Kleine Overhoring`, empty lesson hour, planned lesson
+cluster, lesson cluster moment, meeting, lesson-free day, or the planner's
+type name of any other type, such as
 `planned-excursions`), name, course, classes, organiser (left out in the
 user's own planner), rooms and the element id. The header counts the
 elements by those kinds. A lesson-free day can run over several days (the
@@ -273,11 +314,52 @@ assignment, one the planner does not let the user trash (`canUserTrash`) and
 one with a linked Skore evaluation; it sends the trash once, and confirms it
 by reading the assignment again (the planner answers `404`).
 
+### How the planned lesson clusters work
+
+The three tools use the library's `PlannerService` (dartschool#230, #196;
+part 2 of #191). A planned cluster is a `planned-lesson-clusters` element
+over whole days (`00:00:00` of the first day to `23:59:59` of the last); in
+its period the planner turns the lesson hours of its classes and course in
+the own planner into `planned-lesson-cluster-moments` elements, which
+`list_planner` lists instead of the empty lesson hours, each naming its
+planned cluster (`plannedLessonClusters`). `read_planned_element` reads a
+planned cluster as a `PlannedLessonCluster`: the cluster and year plan it is
+linked to (`lessonCluster`) and the lesfiches the planner planned of its
+content (`plannedContent`, by name in order).
+
+`plan_lesson_cluster` first reads, in a session action of its own, the
+user's year plans (`getTeachingAssignments`; an unknown year plan or cluster
+is refused with the ones there are) and the hour, whose classes and first
+course it takes; an hour that is not the user's own, or without a course, is
+refused (the library's plan takes no hour). The days are checked before
+anything is sent: a day only (no time), `until` not before `from`, and both
+in one school year (1 September to 31 August), as the library checks them.
+Then `planLessonCluster` reads the cluster (`getCluster`: one the Lesfiches
+module answers with `404` is refused, `unknownLessonCluster`) and sends the
+plan (`POST planned-lesson-clusters/`) once. Marked destructive and not
+idempotent: a second call plans the cluster a second time. A plan the
+planner does not confirm is reported as maybe planned, and Claude is told to
+check with `list_planned_lesson_clusters` (`year_plan` and `cluster`) first.
+
+`list_planned_lesson_clusters` reads `getPlannedLessonClusters` (a period of
+days, the own planner) or `getPlannedLessonClustersOf` (the cluster, found in
+the year plan first). Both give the planner's short form, without the link
+or the content: `read_planned_element` reads the rest. `from` and `until`
+cannot go with `year_plan` and `cluster`.
+
+`trash_planned_lesson_cluster` takes a `planned-lesson-clusters/…` id only
+(a moment is refused, with where to find its planned cluster), reads it, and
+moves it with `trashPlannedLessonCluster`, which refuses a colleague's
+planned cluster and one the planner does not let the user trash
+(`canUserTrash`), sends the trash once, and confirms it by reading it again
+(`404`). Marked destructive, not idempotent.
+
 ### The planner writes
 
-For the seven planner writes (`plan_lesson`, `edit_planned_element`,
+For the nine planner writes (`plan_lesson`, `edit_planned_element`,
 `clear_lesson`, `plan_lesfiche`, `save_lesson_as_lesfiche`,
-`plan_assignment`, `trash_assignment`), a
+`plan_assignment`, `trash_assignment`, `plan_lesson_cluster`,
+`trash_planned_lesson_cluster`), a
 write that went out without the planner confirming it
 (`SmartschoolPlannerSaveUnconfirmedError`) is reported as maybe saved, with
 what to read to check it, and Claude is told not to call the tool again for
@@ -312,8 +394,13 @@ In `planner_format.dart`: dates and times in the time of this PC, a period
 (`formatPlannerPeriod`), the kind and time of an element, an assignment type
 (`formatAssignmentType`), one line per element (`formatElementLine`), an
 element in a few words for a write's result (`formatElementSummary`),
-elements per day (`elementsByDay`) and an element's detail
-(`formatElementDetail`).
+elements per day (`elementsByDay`), an element's detail
+(`formatElementDetail`), and a planned lesson cluster's line and content
+(`formatPlannedClusterLine`, `plannedClusterContent`, `momentClusters`). In
+`planned_lesson_clusters.dart`: the `hour`, day and period arguments of
+`plan_lesson_cluster` (`clusterHourArgument`, `clusterDayArgument`,
+`clusterPeriodArguments`, `schoolYearEnd`) and the answers of
+`list_planned_lesson_clusters`.
 
 In `planner_writes.dart`, for the tools that change the planner: the info
 text Claude writes as HTML (`plainTextToHtml`), the `hour` argument
@@ -323,7 +410,8 @@ can be planned the same way, and a lesson replaced by one), the goals of
 what a write just made, named in a session action of their own
 (`nameGoalsAfterWrite`), the lesson hour, the classes and the type of a
 new assignment (`lessonHourArgument`, `lessonHourClassesArgument`,
-`lessonHourClasses`, `assignmentTypeArgument`), `withPlannerWrite`
+`lessonHourClasses`, `assignmentTypeArgument`), the check that a lesson hour
+is the user's own (`refuseUnlessOwnHour`), `withPlannerWrite`
 (`withPlanner`, with a note that nothing changed on an error), and the
 result of a write the planner did not confirm (`plannerWriteNotConfirmed`).
 `plannerToolError` says why the library refused a write
@@ -340,5 +428,10 @@ built from dartschool's anonymised captures of the live planner and its
 workload view, which carries out the writes of dartschool#87 (fill, rename,
 change of the info, clear), the plan of a lesfiche of dartschool#88, and the
 create and the trash of an assignment of dartschool#89 as the live planner
-did. The same fake serves the Lesfiches module (see
+did, and plans, lists and trashes a lesson cluster with the requests of
+dartschool#230 (its empty lesson hours of the classes and course become
+moments, and come back with the trash); the fake year plans
+(`test/support/fake_year_plans.dart`) list where a cluster was planned. The
+tests of the planned clusters are in
+`test/planned_lesson_cluster_tools_test.dart`. The same fake serves the Lesfiches module (see
 [Lesfiches](lesfiches.md#helpers-and-tests)).

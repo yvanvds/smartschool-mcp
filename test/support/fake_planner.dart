@@ -392,9 +392,19 @@ class FakePlannedElement {
     this.capabilities = const {},
     this.userRoles = const [],
     this.goals = const [],
+    this.listExtra = const {},
+    this.detailExtra = const {},
   });
 
   final String id;
+
+  /// Fields the list form and the detail add, such as the planned lesson
+  /// clusters of a lesson cluster moment (`plannedLessonClusters`, #196).
+  final Map<String, Object?> listExtra;
+
+  /// Fields only the detail adds, such as the link of a planned lesson
+  /// cluster to its cluster (`lessonClusterId`, #196).
+  final Map<String, Object?> detailExtra;
 
   /// The learning goals it stores (`goals`, dartschool#226), each
   /// `{id, leerplanId, type}` ([fakeGoalRef]).
@@ -483,6 +493,11 @@ class FakePlannedElement {
         'canUserChangePublicInfo': isOwn,
         'canUserRename': isOwn,
       },
+      'planned-lesson-clusters' => {
+        'canUserTrash': isOwn,
+        'canUserEdit': isOwn,
+      },
+      'planned-lesson-cluster-moments' => {'canUserTrash': false},
       _ => {'canUserEdit': isOwn},
     },
     ...capabilities,
@@ -522,6 +537,8 @@ class FakePlannedElement {
     capabilities: capabilities,
     userRoles: userRoles,
     goals: goals ?? this.goals,
+    listExtra: listExtra,
+    detailExtra: detailExtra,
   );
 
   /// A new element of [type] with the id [id] in this element's lesson
@@ -535,12 +552,14 @@ class FakePlannedElement {
     String privateInfo = '',
     List<String> labels = const [],
     List<Map<String, String>> goals = const [],
+    Map<String, Object?> listExtra = const {},
   }) => FakePlannedElement(
     id: id,
     type: type,
     from: from,
     to: to,
     name: name,
+    listExtra: listExtra,
     platformId: platformId,
     wholeDay: wholeDay,
     organisers: organisers,
@@ -591,6 +610,7 @@ class FakePlannedElement {
     'unconfirmed': false,
     'pinned': false,
     'color': 'aqua-200',
+    ...listExtra,
   };
 
   Map<String, Object?> detailJson() => {
@@ -643,6 +663,7 @@ class FakePlannedElement {
       'linkedEvaluation': null,
       'dateCreated': visibleFrom ?? from,
     },
+    ...detailExtra,
   };
 }
 
@@ -1190,6 +1211,21 @@ class FakePlanner {
   /// The elements moved to the planner's trash, in order.
   final List<FakePlannedElement> trash = [];
 
+  /// The lesson cluster of a year plan with the id [clusterId] (in lower
+  /// case), as the Lesfiches module has it: its name, its year plan's id
+  /// and the names of its lesfiches in order; null when it has none. Set by
+  /// [FakeYearPlans], whose clusters a plan of a lesson cluster takes.
+  ({String name, String yearPlanId, List<String> lesfiches})? Function(
+    String clusterId,
+  )?
+  lessonClusterOf;
+
+  /// The lesson cluster moments a planned lesson cluster made, by the ref
+  /// of the planned cluster: each moment with the empty lesson hour it took
+  /// the place of, which its trash gives back.
+  final Map<String, List<(FakePlannedElement, FakePlannedElement)>> _moments =
+      {};
+
   /// When the planner makes an assignment, as it writes it: pupils see the
   /// assignment from then. The moment of dartschool's capture of the create
   /// (#89) by default.
@@ -1297,7 +1333,9 @@ class FakePlanner {
 
   static bool _isWrite(String path) =>
       !path.startsWith('$_api/quick-search/') &&
-      !path.startsWith('$_api/workload/');
+      !path.startsWith('$_api/workload/') &&
+      // The list of the planned lesson clusters only reads (#196).
+      path != '$_api/planned-lesson-clusters/list';
 
   /// Fills the empty lesson hour [ref] (`planned-placeholders/4069/<id>`)
   /// with a lesson named [name], as the planner does: the hour is gone under
@@ -1584,6 +1622,8 @@ class FakePlanner {
             options.data,
           ),
         ['planned-assignments', 'blanco'] => _createAssignment(options.data),
+        ['planned-lesson-clusters', ''] => _planCluster(options.data),
+        ['planned-lesson-clusters', 'list'] => _listClusters(options.data),
         [final type, final platform, final id, 'trash'] => _trash(
           '$type/$platform/${Uri.decodeComponent(id)}',
         ),
@@ -2482,7 +2522,148 @@ class FakePlanner {
 
   ResponseBody _trash(String ref) {
     if (trashElement(ref) == null) return _notFound();
+    for (final (moment, slot)
+        in _moments.remove(ref) ??
+            const <(FakePlannedElement, FakePlannedElement)>[]) {
+      _replace(moment, slot);
+    }
     return _json('[]');
+  }
+
+  /// The planned lesson clusters of the fake, the short form of each, as
+  /// the planner lists them: without the info, the content or the link to
+  /// the cluster (#196).
+  Iterable<FakePlannedElement> get plannedClusters => elements.values.where(
+    (element) => element.type == 'planned-lesson-clusters',
+  );
+
+  /// The planned lesson clusters of the cluster [clusterId], in the short
+  /// form: what the Lesfiches module lists under the cluster.
+  List<Map<String, Object?>> plannedClustersOf(String clusterId) => [
+    for (final planned in plannedClusters)
+      if ('${planned.detailExtra['lessonClusterId']}'.toLowerCase() ==
+          clusterId.toLowerCase())
+        planned.listJson(),
+  ];
+
+  /// Plans a lesson cluster as the planner does (#196, the body of
+  /// dartschool's `planLessonCluster`): a whole-day planned cluster of the
+  /// fake's own account for the classes and courses of the body, linked to
+  /// the cluster ([lessonClusterOf]); the empty lesson hours of the own
+  /// planner of those classes and courses in its days become lesson cluster
+  /// moments. A body without the fields the web client sends, or with a
+  /// class or course the fake does not know, gets a `400`; a cluster the
+  /// Lesfiches module does not have a `404`.
+  ResponseBody _planCluster(Object? data) {
+    final body = data is Map ? data : const <Object?, Object?>{};
+    final period = body['period'];
+    final participants = body['participants'];
+    final clusterId = body['lessonClusterId'];
+    final day = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+    if (clusterId is! String ||
+        body['lessonClusterPlatformId'] is! int ||
+        period is! Map ||
+        period['wholeDay'] != true ||
+        participants is! Map ||
+        body['isCrossCurricular'] != false ||
+        body['courses'] is! List) {
+      return _badRequest();
+    }
+    final first = day.firstMatch('${period['dateTimeFrom']}');
+    final last = day.firstMatch('${period['dateTimeTo']}');
+    final groups = [
+      for (final id in participants['groups'] as List) classes[id],
+    ];
+    final courseList = [
+      for (final course in (body['courses'] as List).cast<Map>())
+        if (course['platformId'] is String) courses[course['id']],
+    ];
+    if (first == null ||
+        last == null ||
+        groups.isEmpty ||
+        groups.contains(null) ||
+        courseList.length != (body['courses'] as List).length ||
+        courseList.contains(null)) {
+      return _badRequest();
+    }
+    final cluster = lessonClusterOf?.call(clusterId);
+    if (cluster == null) return _notFound();
+    int part(RegExpMatch match, int group) => int.parse(match.group(group)!);
+    final planned = FakePlannedElement(
+      id: _newId('4000'),
+      type: 'planned-lesson-clusters',
+      name: cluster.name,
+      from: plannerTime(part(first, 1), part(first, 2), part(first, 3)),
+      to: plannerTime(part(last, 1), part(last, 2), part(last, 3), 23, 59, 59),
+      wholeDay: true,
+      organisers: [FakePlannerUser.me],
+      groups: groups.nonNulls.toList(),
+      courses: courseList.nonNulls.toList(),
+      listExtra: const {'isCrossCurricular': false, 'isVisible': true},
+      detailExtra: {
+        'lessonClusterId': clusterId,
+        'lessonClusterPlatformId': 4069,
+        'teachingAssignmentId': cluster.yearPlanId,
+        'teachingAssignmentPlatformId': 4069,
+        'plannedLessonClusterContent': [
+          for (final (index, name) in cluster.lesfiches.indexed)
+            {
+              'position': index,
+              'id': _newId('7000'),
+              'platformId': 4069,
+              'name': name,
+              'plannedElementType': 'planned-lesson-cluster-lessons',
+            },
+        ],
+      },
+    );
+    add(planned, calendars: const []);
+    final start = DateTime.parse(planned.from);
+    final end = DateTime.parse(planned.to);
+    final groupIds = {for (final group in planned.groups) group.id};
+    final courseIds = {for (final course in planned.courses) course.id};
+    final made = <(FakePlannedElement, FakePlannedElement)>[];
+    for (final slot in [...?calendars['user/$fakePlannerMe']]) {
+      if (slot.type != 'planned-placeholders' ||
+          !slot.isOwn ||
+          !slot.overlaps(start, end) ||
+          !slot.groups.any((group) => groupIds.contains(group.id)) ||
+          !slot.courses.any((course) => courseIds.contains(course.id))) {
+        continue;
+      }
+      final moment = slot.inSameHour(
+        id: _newId('6000'),
+        type: 'planned-lesson-cluster-moments',
+        listExtra: {
+          'plannedLessonClusters': [planned.listJson()],
+        },
+      );
+      _replace(slot, moment);
+      made.add((moment, slot));
+    }
+    _moments[planned.ref] = made;
+    return _json(jsonEncode(planned.detailJson()), status: 201);
+  }
+
+  /// The planned lesson clusters of the fake's own account in the days of
+  /// the body (`{id, type, period}`), in the short form; a body for another
+  /// user gets a `400`.
+  ResponseBody _listClusters(Object? data) {
+    final body = data is Map ? data : const <Object?, Object?>{};
+    final period = body['period'];
+    if (body['id'] != fakePlannerMe ||
+        body['type'] != 'user' ||
+        period is! Map) {
+      return _badRequest();
+    }
+    final from = DateTime.parse('${period['dateTimeFrom']}');
+    final to = DateTime.parse('${period['dateTimeTo']}T23:59:59');
+    return _json(
+      jsonEncode([
+        for (final planned in plannedClusters)
+          if (planned.isOwn && planned.overlaps(from, to)) planned.listJson(),
+      ]),
+    );
   }
 
   ResponseBody _edit(String ref, String action, Object? data) {

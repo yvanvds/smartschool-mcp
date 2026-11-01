@@ -37,14 +37,17 @@ import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiche_labels_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_planned_lesson_clusters_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_trashed_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_year_plans_tool.dart';
 import 'package:smartschool_mcp/src/tools/mark_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesfiche_tool.dart';
+import 'package:smartschool_mcp/src/tools/plan_lesson_cluster_tool.dart';
 import 'package:smartschool_mcp/src/tools/plan_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_curriculum_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_intradesk_file_tool.dart';
@@ -54,6 +57,7 @@ import 'package:smartschool_mcp/src/tools/read_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_project_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_year_plan_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
@@ -66,10 +70,8 @@ import 'package:smartschool_mcp/src/tools/save_lesson_as_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
-import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
-import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
-import 'package:smartschool_mcp/src/tools/read_skore_project_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_project_ratings_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_report_comment_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_intradesk_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/search_planners_tool.dart';
@@ -83,6 +85,7 @@ import 'package:smartschool_mcp/src/tools/trash_assignment_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_intradesk_items_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/trash_messages_tool.dart';
+import 'package:smartschool_mcp/src/tools/trash_planned_lesson_cluster_tool.dart';
 import 'package:smartschool_mcp/src/tools/upload_intradesk_files_tool.dart';
 import 'package:smartschool_mcp/src/update_check.dart';
 import 'package:smartschool_mcp/src/version.dart';
@@ -176,6 +179,10 @@ Future<void> _serve(ServerOptions options) async {
           clearLessonTool(session),
           planAssignmentTool(session),
           trashAssignmentTool(session),
+          // A lesson cluster of a year plan planned for classes (#196).
+          planLessonClusterTool(session),
+          listPlannedLessonClustersTool(session),
+          trashPlannedLessonClusterTool(session),
           listLesfichesTool(session),
           readLesficheTool(session),
           readLesficheAttachmentTool(session),

@@ -121,7 +121,30 @@ class FakeYearPlan {
 /// their content, and the writes (a plan, a cluster, a title, lesfiches,
 /// goals, the delete).
 class FakeYearPlans {
-  FakeYearPlans(this.planner);
+  FakeYearPlans(this.planner) {
+    planner.lessonClusterOf = _clusterOf;
+  }
+
+  /// The cluster with the id [clusterId] as the planner's plan of a lesson
+  /// cluster takes it (#196).
+  ({String name, String yearPlanId, List<String> lesfiches})? _clusterOf(
+    String clusterId,
+  ) {
+    for (final plan in plans) {
+      for (final cluster in plan.clusters) {
+        if (cluster.id.toLowerCase() != clusterId.toLowerCase()) continue;
+        return (
+          name: cluster.name,
+          yearPlanId: plan.id,
+          lesfiches: [
+            for (final entry in cluster.entries)
+              if (entry.lesfiche case final lesfiche?) lesfiche.name,
+          ],
+        );
+      }
+    }
+    return null;
+  }
 
   /// The planner, whose lesfiches a year plan with the filter `all` takes.
   final FakePlanner planner;
@@ -275,6 +298,9 @@ class FakeYearPlans {
               _entryJson(cluster, entry, index),
           ]),
         );
+      case ('GET', ['planned-lesson-clusters']):
+        // Where the cluster was planned (#196), in the planner's short form.
+        return _json(jsonEncode(planner.plannedClustersOf(cluster.id)));
       case ('GET', ['goals']):
         return _json(
           jsonEncode([

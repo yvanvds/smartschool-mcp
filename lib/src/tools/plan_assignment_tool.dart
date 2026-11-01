@@ -148,7 +148,7 @@ Future<CallToolResult> _plan(
         await assignmentTypes.read(planner),
       );
       final slot = await hour.read(planner);
-      await _refuseUnlessOwn(planner, slot);
+      await refuseUnlessOwnHour(planner, slot, plan: 'an assignment');
       final classes = lessonHourClasses(slot, wanted);
       final course = slot.courses.firstOrNull;
       if (course == null) {
@@ -242,26 +242,3 @@ ToolError _typeGone(
   'and pass it by its abbreviation or its name; list_class_assignments '
   'lists them too.',
 );
-
-/// Refuses [hour] unless it is in the user's own planner (the user is one of
-/// its organisers): a class planner also shows colleagues' hours, and an
-/// assignment is only planned in an own hour. The library's create does not
-/// check this, as it takes no hour.
-Future<void> _refuseUnlessOwn(
-  PlannerService planner,
-  PlannedElementDetail hour,
-) async {
-  final me = (await planner.ownCalendar()).id;
-  if (hour.organiserUsers.any((user) => user.id == me)) return;
-  final organisers = [
-    for (final user in hour.organiserUsers)
-      if (user.name.trim().isNotEmpty) user.name.trim(),
-  ];
-  throw ToolError(
-    'hour is not a lesson hour of your own planner: the '
-    '${formatElementSummary(hour)} is organised by '
-    '${organisers.isEmpty ? 'someone else' : organisers.join(', ')}. Plan an '
-    'assignment in one of your own lesson hours, as list_planner (planner '
-    'me) shows them.',
-  );
-}

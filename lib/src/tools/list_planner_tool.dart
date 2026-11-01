@@ -19,8 +19,9 @@ const maxPlannerLines = 200;
 ///
 /// The planner itself is asked only for lessons, assignments and empty
 /// lesson hours ([plannerType]). The other kinds are kept here from every
-/// type read: asking the planner for `planned-meetings` or
-/// `planned-lesson-free-days` was never tried live (#103).
+/// type read: asking the planner for `planned-meetings`,
+/// `planned-lesson-free-days` or the planned lesson clusters and their
+/// moments (#196) was never tried live (#103).
 enum PlannerKind {
   lessons('lessons', PlannedElementKind.lesson, askPlanner: true),
   assignments('assignments', PlannedElementKind.assignment, askPlanner: true),
@@ -28,6 +29,11 @@ enum PlannerKind {
     'empty_lesson_hours',
     PlannedElementKind.emptyLessonHour,
     askPlanner: true,
+  ),
+  lessonClusters('lesson_clusters', PlannedElementKind.lessonCluster),
+  lessonClusterMoments(
+    'lesson_cluster_moments',
+    PlannedElementKind.lessonClusterMoment,
   ),
   meetings('meetings', PlannedElementKind.meeting),
   lessonFreeDays('lesson_free_days', PlannedElementKind.lessonFreeDay),
@@ -77,7 +83,10 @@ ServerTool listPlannerTool(
         'one line per element: the time (for an assignment, its deadline), '
         'the kind (lesson; assignment with its type, such as "KO Kleine '
         'Overhoring"; empty lesson hour, an hour of the timetable without a '
-        'lesson; meeting, such as a class council; lesson-free day, such as '
+        'lesson; lesson cluster moment, a lesson hour of a lesson cluster '
+        'planned for the class, with the name and id of the planned lesson '
+        'cluster (plan_lesson_cluster); planned lesson cluster; '
+        'meeting, such as a class council; lesson-free day, such as '
         'a holiday, which can run over several days; or the planner\'s name '
         'of another type, such as planned-excursions), the name, course, '
         'classes, who planned it, the room, and the id for '
@@ -112,7 +121,9 @@ ServerTool listPlannerTool(
           description:
               'Only these kinds: lessons, assignments (tests, tasks), '
               'empty_lesson_hours (hours of the timetable without a lesson), '
-              'meetings (such as class councils), lesson_free_days (such as '
+              'lesson_clusters (planned lesson clusters), '
+              'lesson_cluster_moments (the lesson hours of a planned lesson '
+              'cluster), meetings (such as class councils), lesson_free_days (such as '
               'holidays) and/or other (every kind not named here, such as '
               'excursions). Default: all.',
           values: [for (final kind in PlannerKind.values) kind.argument],

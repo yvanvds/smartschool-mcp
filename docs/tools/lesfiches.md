@@ -799,8 +799,9 @@ or cluster is gone, a `403` that the year plan does not take the lesfiches.
 The helpers live in `lib/src/planner/year_plans.dart`; the tests in
 `test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`.
 
-Planning a cluster for classes is not here yet: it is #196, part two of
-#191.
+Planning a cluster for classes is on the Planner page:
+[`plan_lesson_cluster`](planner.md#plan_lesson_cluster) (#196, part two of
+#191).
 
 ### Helpers and tests
 

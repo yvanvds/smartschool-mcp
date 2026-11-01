@@ -124,6 +124,23 @@ enum PlannedElementKind {
     PlannedElementType.placeholder,
   ),
 
+  /// A lesson cluster of a year plan planned for classes over a period
+  /// (`planned-lesson-clusters`, #196): whole days, linked to its cluster.
+  lessonCluster(
+    'planned lesson cluster',
+    'planned lesson clusters',
+    PlannedElementType.lessonCluster,
+  ),
+
+  /// A lesson hour of a planned lesson cluster (`planned-lesson-cluster-
+  /// moments`, #196): in its period, the planner shows the lesson hours of
+  /// its classes and course as these instead of empty lesson hours.
+  lessonClusterMoment(
+    'lesson cluster moment',
+    'lesson cluster moments',
+    PlannedElementType.lessonClusterMoment,
+  ),
+
   /// A meeting, such as a class council (`planned-meetings`, seen live in
   /// #71).
   meeting('meeting', 'meetings', PlannedElementType.meeting),
@@ -225,6 +242,8 @@ String formatElementLine(PlannedElement element, {String? ownUserId}) {
     formatElementTime(element),
     formatElementKind(element),
     ?elementName(element),
+    if (momentClusters(element) case final clusters?)
+      'of planned lesson cluster $clusters',
     if (elementCourses(element) case final courses when courses.isNotEmpty)
       courses,
     if (elementClasses(element) case final classes when classes.isNotEmpty)
@@ -244,12 +263,68 @@ String formatElementSummary(PlannedElement element) {
     elementClasses(element),
     elementCourses(element),
   ].where((part) => part.isNotEmpty).join(', ');
+  final clusters = element.plannedLessonClusters ?? const [];
   return [
     formatElementKind(element),
     if (elementName(element) case final name?) '"$name"',
-    'on ${formatPlannerDay(element.period.from)} ${formatElementTime(element)}',
+    if (element.type == PlannedElementType.lessonClusterMoment &&
+        clusters.isNotEmpty)
+      'of ${[for (final cluster in clusters) '"${elementName(cluster) ?? '(no name)'}"'].join(', ')}',
+    if (element.type == PlannedElementType.lessonCluster)
+      formatPlannerPeriod(element.period.from, element.period.to)
+    else
+      'on ${formatPlannerDay(element.period.from)} '
+          '${formatElementTime(element)}',
     if (about.isNotEmpty) '($about)',
   ].join(' ');
+}
+
+/// The planned lesson clusters a lesson cluster moment [element] belongs
+/// to ([PlannedElement.plannedLessonClusters], #196), each by its name and
+/// id, like `Lussen (planned-lesson-clusters/4069/…)`, joined; null for an
+/// element that names none.
+String? momentClusters(PlannedElement element) {
+  final clusters = element.plannedLessonClusters ?? const [];
+  if (clusters.isEmpty) return null;
+  return [
+    for (final cluster in clusters)
+      '${elementName(cluster) ?? '(no name)'} '
+          '(${PlannedElementRef.of(cluster)})',
+  ].join(', ');
+}
+
+/// One line describing [planned], a planned lesson cluster (#196), as
+/// `list_planned_lesson_clusters` lists it: its name (that of its cluster),
+/// its days, course, classes and id. For example `Lussen | from Monday
+/// 2026-11-16 to Friday 2026-11-20 | informatica | 6A1 | id
+/// planned-lesson-clusters/4069/…`.
+String formatPlannedClusterLine(PlannedElement planned) => [
+  elementName(planned) ?? '(no name)',
+  formatPlannerPeriod(planned.period.from, planned.period.to),
+  if (elementCourses(planned) case final courses when courses.isNotEmpty)
+    courses,
+  if (elementClasses(planned) case final classes when classes.isNotEmpty)
+    classes,
+  'id ${PlannedElementRef.of(planned)}',
+].join(' | ');
+
+/// The names of the lesfiches the planner planned of a planned lesson
+/// cluster's content ([PlannedLessonCluster.plannedContent], the planner's
+/// `plannedLessonClusterContent`), in their order (`position`); an entry
+/// without a name is left out.
+List<String> plannedClusterContent(PlannedLessonCluster planned) {
+  final entries = [
+    for (final (index, entry) in planned.plannedContent.indexed)
+      if (entry case {'name': final String name} when name.trim().isNotEmpty)
+        (
+          position: switch (entry['position']) {
+            final num position => position,
+            _ => index,
+          },
+          name: name.trim(),
+        ),
+  ]..sort((a, b) => a.position.compareTo(b.position));
+  return [for (final entry in entries) entry.name];
 }
 
 /// The name of [calendar] as the elements of it tell it: the class, the
@@ -301,6 +376,8 @@ String plannerInfoText(String html) {
 String formatElementDetail(PlannedElementDetail detail, {NamedGoals? goals}) {
   final placeholder = detail.type == PlannedElementType.placeholder;
   final assignment = detail.type == PlannedElementType.assignment;
+  final moment = detail.type == PlannedElementType.lessonClusterMoment;
+  final plannedClusters = detail.plannedLessonClusters ?? const [];
   final organisers = elementOrganisers(detail);
   final people = _names(detail.participantUsers, (user) => user.name);
   final labels = _names(
@@ -330,9 +407,13 @@ String formatElementDetail(PlannedElementDetail detail, {NamedGoals? goals}) {
   return [
     'Planner element ${PlannedElementRef.of(detail)}',
     'Kind: ${formatElementKind(detail)}',
-    if (!placeholder) 'Name: ${elementName(detail) ?? '(no name)'}',
-    'When: ${formatPlannerDay(detail.period.from)} '
-        '${formatElementTime(detail)}',
+    if (!placeholder && !(moment && elementName(detail) == null))
+      'Name: ${elementName(detail) ?? '(no name)'}',
+    if (detail.type == PlannedElementType.lessonCluster)
+      'When: ${formatPlannerPeriod(detail.period.from, detail.period.to)}'
+    else
+      'When: ${formatPlannerDay(detail.period.from)} '
+          '${formatElementTime(detail)}',
     if (elementCourses(detail) case final courses when courses.isNotEmpty)
       'Course: $courses',
     if (elementClasses(detail) case final classes when classes.isNotEmpty)
@@ -348,6 +429,27 @@ String formatElementDetail(PlannedElementDetail detail, {NamedGoals? goals}) {
       if (detail.isAnnounced case final announced?)
         'Announced: ${announced ? 'yes' : 'no'}',
       if (detail.resolvedStatus case final status?) 'Status: $status',
+    ],
+    if (detail case PlannedLessonCluster(
+      :final lessonCluster,
+      :final isCrossCurricular,
+    )) ...[
+      if (lessonCluster != null)
+        'Planned from: the lesson cluster ${lessonCluster.id} of the year '
+            'plan ${lessonCluster.teachingAssignment.id} (read_year_plan '
+            'shows it, with year_plan and cluster these ids); it stays '
+            'linked to it',
+      if (isCrossCurricular) 'Across courses: yes',
+      if (plannedClusterContent(detail) case final content
+          when content.isNotEmpty) ...[
+        'Lesfiches planned, in order:',
+        for (final (index, name) in content.indexed) '${index + 1}. $name',
+      ],
+    ],
+    if (plannedClusters.isNotEmpty) ...[
+      'Moment of the planned lesson ${plannedClusters.length == 1 ? 'cluster' : 'clusters'}:',
+      for (final cluster in plannedClusters)
+        '- ${formatPlannedClusterLine(cluster)}',
     ],
     if (labels.isNotEmpty) 'Labels: $labels',
     if (attachments.isNotEmpty) ...[
