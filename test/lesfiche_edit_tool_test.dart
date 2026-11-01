@@ -447,9 +447,9 @@ void main() {
         'The Lesfiches module answered the change of the name of the lesson '
         'lesfiche "Lussen" with HTTP 404: the lesfiche is in the trash or no '
         'longer exists. A lesfiche in the trash can still be read, but not '
-        'changed, and list_lesfiches does not list it; the user restores it '
-        'from the trash in the Lesfiches module itself. The lesfiche was not '
-        'changed.',
+        'changed, and list_lesfiches does not list it; list_trashed_lesfiches '
+        'lists the trash, and restore_lesfiches takes it back out. The '
+        'lesfiche was not changed.',
       );
       expect(planner.writes, ['POST $_lessonPath/rename']);
       expect(

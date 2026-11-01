@@ -48,6 +48,30 @@ String fakeLesficheCreatePath([String type = 'lessons']) =>
 /// `POST lesson-content/trash/bulk` for all of them.
 const fakeLesficheTrashPath = '$_lessonContentApi/lesson-content/trash/bulk';
 
+/// Where the lesfiches in the module's trash are read (dartschool#227).
+const fakeLesficheTrashedPath = '$_lessonContentApi/lesson-content/trashed';
+
+/// Where lesfiches are taken out of the module's trash (dartschool#227): one
+/// `POST lesson-content/restore/bulk` for all of them.
+const fakeLesficheRestorePath =
+    '$_lessonContentApi/lesson-content/restore/bulk';
+
+/// Where lesfiches are copied in the own library (dartschool#227): one
+/// `POST lesson-content/duplicate/bulk` for all of them.
+const fakeLesficheDuplicatePath =
+    '$_lessonContentApi/lesson-content/duplicate/bulk';
+
+/// When the fake's lesfiches went to the trash, as the module writes it
+/// (`dateStateChanged` of the trash), unless [FakePlanner.lesficheTrashDates]
+/// says otherwise.
+const fakeLesficheTrashDate = '2026-11-01 09:30:00';
+
+/// A lesfiche of [lesfiche] as a bulk write of the module keys its answer:
+/// the lesfiche as sent, as a JSON object in a string (seen live,
+/// dartschool#227).
+String fakeLesficheRefKey(FakeLesfiche lesfiche) =>
+    jsonEncode({'id': lesfiche.id, 'type': lesfiche.type, 'platformId': 4069});
+
 /// Smartschool's labels module (dartschool#228), which keeps the labels of
 /// lesfiches.
 const fakeLabelsApi = '/labels/api/v1';
@@ -801,7 +825,10 @@ class FakeLesfiche {
     goals: goals ?? this.goals,
   );
 
-  Map<String, Object?> toJson() => {
+  /// The lesfiche as the list gives it; [stateChanged] is its
+  /// `dateStateChanged` (when it went to the trash, in the trash's list),
+  /// [lastChanged] by default.
+  Map<String, Object?> toJson({String? stateChanged}) => {
     'id': id,
     'platformId': 4069,
     if (assignmentType case final type?) 'assignmentType': type.schoolJson(),
@@ -810,7 +837,7 @@ class FakeLesfiche {
     'publicInfo': publicInfo,
     'isVisible': isVisible,
     'owner': owner,
-    'dateStateChanged': lastChanged,
+    'dateStateChanged': stateChanged ?? lastChanged,
     'dateLastChanged': lastChanged,
     'courses': [
       for (final course in courses) {'platformId': 4069, 'id': course.id},
@@ -1087,7 +1114,14 @@ class FakePlannerHit {
 ///   platformId}`): moves the lesfiches to the module's trash
 ///   ([trashedLesfiches]), and answers `200` with `{"exceptions":[]}`; one
 ///   in the trash already gets a bare `500`, as live
-///   ([_trashLesfiches]).
+///   ([_trashLesfiches]);
+/// - `GET` [fakeLesficheTrashedPath]: the lesfiches of [trashedLesfiches],
+///   in the shape of the list, each with when it went there
+///   ([lesficheTrashDates]) as its `dateStateChanged` (dartschool#227);
+/// - `POST` [fakeLesficheRestorePath] (the body of the trash): takes the
+///   lesfiches out of the trash ([_restoreLesfiches]);
+/// - `POST` [fakeLesficheDuplicatePath] (the body of the trash): copies the
+///   lesfiches in the own library ([_duplicateLesfiches]).
 ///
 /// And Smartschool's labels module of dartschool#228 at [fakeLabelsApi]:
 /// the school's labels ([schoolLabels]) and the own ones ([ownLabels]), and
@@ -1177,6 +1211,18 @@ class FakePlanner {
   /// them in its `exceptions`, by id, and leaves these lesfiches where they
   /// are (in the shape of dartschool's test of the trash; not seen live).
   final Map<String, Map<String, Object?>> lesficheTrashExceptions = {};
+
+  /// When the lesfiches of [trashedLesfiches] went to the trash, by id in
+  /// lower case, as the module writes it; [fakeLesficheTrashDate] for one
+  /// not in it.
+  final Map<String, String> lesficheTrashDates = {};
+
+  /// The exceptions the module answers a restore of these lesfiches with,
+  /// by lesfiche id in lower case: the restore answers `200` with them in
+  /// its `exceptions`, keyed as sent, and leaves these lesfiches in the
+  /// trash (made up; the module's own for a lesfiche not in the trash is a
+  /// `404`, which the fake gives too).
+  final Map<String, Map<String, Object?>> lesficheRestoreExceptions = {};
 
   /// The school's course list: [fakeSchoolCourses] by default, every course
   /// of the captures, as the live list holds all the school's courses
@@ -1352,6 +1398,9 @@ class FakePlanner {
         path != fakeAssignmentTypesPath &&
         path != fakeLesfichesPath &&
         path != fakeLesficheTrashPath &&
+        path != fakeLesficheTrashedPath &&
+        path != fakeLesficheRestorePath &&
+        path != fakeLesficheDuplicatePath &&
         !path.startsWith('$fakeLabelsApi/') &&
         lesficheRoute == null) {
       return null;
@@ -1397,9 +1446,29 @@ class FakePlanner {
       }
       return answer;
     }
-    if (path == fakeLesficheTrashPath) {
+    if (path == fakeLesficheTrashedPath) {
+      if (options.method != 'GET') return null;
+      return _json(
+        jsonEncode([
+          for (final lesfiche in lesfiches)
+            if (trashedLesfiches.contains(lesfiche.id.toLowerCase()))
+              lesfiche.toJson(
+                stateChanged:
+                    lesficheTrashDates[lesfiche.id.toLowerCase()] ??
+                    fakeLesficheTrashDate,
+              ),
+        ]),
+      );
+    }
+    if (path == fakeLesficheTrashPath ||
+        path == fakeLesficheRestorePath ||
+        path == fakeLesficheDuplicatePath) {
       if (options.method != 'POST') return null;
-      final answer = _trashLesfiches(options.data);
+      final answer = switch (path) {
+        fakeLesficheTrashPath => _trashLesfiches(options.data),
+        fakeLesficheRestorePath => _restoreLesfiches(options.data),
+        _ => _duplicateLesfiches(options.data),
+      };
       if (lostAnswers.contains(path)) {
         throw DioException.connectionError(
           requestOptions: options,
@@ -1976,6 +2045,141 @@ class FakePlanner {
     }
     return _json(
       jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
+    );
+  }
+
+  /// The lesfiches the body [data] of a bulk write names (`lessonContent`,
+  /// each `{id, type, platformId}`, as the web client sends it), each with
+  /// the key the module gives it in its answer; null for a body without
+  /// the list, or with an item without its id, kind or platform.
+  List<({String id, String type, String key})>? _bulkItems(Object? data) {
+    final list = data is Map ? data['lessonContent'] : null;
+    if (list is! List ||
+        list.isEmpty ||
+        list.any(
+          (item) =>
+              item is! Map ||
+              item['id'] is! String ||
+              item['type'] is! String ||
+              item['platformId'] is! int,
+        )) {
+      return null;
+    }
+    return [
+      for (final item in list.cast<Map<Object?, Object?>>())
+        (
+          id: item['id']! as String,
+          type: item['type']! as String,
+          key: jsonEncode({
+            'id': item['id'],
+            'type': item['type'],
+            'platformId': item['platformId'],
+          }),
+        ),
+    ];
+  }
+
+  /// Takes the lesfiches of the body [data] of a restore (the body of the
+  /// trash) out of the module's trash ([trashedLesfiches]), as the module
+  /// does (dartschool#227), and answers `200` with `{"exceptions":[]}`.
+  ///
+  /// A lesfiche that is not in the trash (also one the fake does not have)
+  /// gets an exception with the status `404`, keyed by the lesfiche as
+  /// sent, as live; so does one of [lesficheRestoreExceptions], with its
+  /// exception, and it stays in the trash; the others are restored. A body
+  /// without the list gets a bare `400` (made up).
+  ResponseBody _restoreLesfiches(Object? data) {
+    final items = _bulkItems(data);
+    if (items == null) return _badRequest();
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      final id = item.id.toLowerCase();
+      if (_lesficheOf(item.type, item.id) == null ||
+          !trashedLesfiches.contains(id)) {
+        exceptions[item.key] = {
+          'status': 404,
+          'title': 'Not Found',
+          'detail': '',
+          'type': '',
+        };
+      } else if (lesficheRestoreExceptions[id] case final error?) {
+        exceptions[item.key] = error;
+      } else {
+        trashedLesfiches.remove(id);
+        lesficheTrashDates.remove(id);
+      }
+    }
+    return _json(
+      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
+    );
+  }
+
+  /// Copies the lesfiches of the body [data] of a duplicate (the body of
+  /// the trash) in the own library, as the module does (dartschool#227):
+  /// each copy is added to [lesfiches] at the end, with the id
+  /// [fakeNewLesficheId], the name with " - kopie" behind it, and the icon,
+  /// info, visibility, courses, labels, goals, attachments and weblinks
+  /// (each weblink with a new id) of the lesfiche. Answers `200` with
+  /// `{"lessonContent": {...}, "exceptions": ...}`, both keyed by the
+  /// lesfiche as sent, each copy as its detail.
+  ///
+  /// A lesfiche in the trash (also one the fake does not have, made up)
+  /// gets an exception with the status `403` and no copy, as live. A body
+  /// without the list gets a bare `400` (made up).
+  ResponseBody _duplicateLesfiches(Object? data) {
+    final items = _bulkItems(data);
+    if (items == null) return _badRequest();
+    final copies = <String, Object?>{};
+    final exceptions = <String, Object?>{};
+    for (final item in items) {
+      final lesfiche = _lesficheOf(item.type, item.id);
+      if (lesfiche == null ||
+          trashedLesfiches.contains(item.id.toLowerCase())) {
+        exceptions[item.key] = {
+          'status': 403,
+          'title': 'Forbidden',
+          'detail': '',
+          'type': '',
+        };
+        continue;
+      }
+      final copy = FakeLesfiche(
+        id: fakeNewLesficheId(++_madeLesfiches),
+        name: '${lesfiche.name} - kopie',
+        type: lesfiche.type,
+        icon: lesfiche.icon,
+        publicInfo: lesfiche.publicInfo,
+        privateInfo: lesfiche.privateInfo,
+        isVisible: lesfiche.isVisible,
+        owner: lesfiche.owner,
+        lastChanged: '2026-11-01 10:15:00',
+        courses: lesfiche.courses,
+        labels: lesfiche.labels,
+        ownLabels: lesfiche.ownLabels,
+        assignmentType: lesfiche.assignmentType,
+        weblinks: [
+          for (final weblink in lesfiche.weblinks)
+            FakeLesficheWeblink(
+              id: _newPartId('e'),
+              name: weblink.name,
+              url: weblink.url,
+              icon: weblink.icon,
+              option: weblink.option,
+              daysAfterEnd: weblink.daysAfterEnd,
+            ),
+        ],
+        attachments: lesfiche.attachments,
+        partnerWeblinks: lesfiche.partnerWeblinks,
+        goals: lesfiche.goals,
+      );
+      lesfiches.add(copy);
+      copies[item.key] = copy.detailJson();
+    }
+    return _json(
+      jsonEncode({
+        'lessonContent': copies.isEmpty ? <Object?>[] : copies,
+        'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions,
+      }),
     );
   }
 

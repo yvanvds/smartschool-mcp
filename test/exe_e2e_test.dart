@@ -111,6 +111,7 @@ void main() {
       'save_lesfiche_attachment',
       'list_lesfiche_labels',
       'create_lesfiche',
+      'duplicate_lesfiches',
       'edit_lesfiche',
       'set_lesfiche_weblink',
       'remove_lesfiche_weblink',
@@ -118,6 +119,8 @@ void main() {
       'set_lesfiche_attachment_visibility',
       'remove_lesfiche_attachment',
       'trash_lesfiches',
+      'list_trashed_lesfiches',
+      'restore_lesfiches',
       'plan_lesfiche',
       'create_lesfiche_label',
       'list_curricula',
@@ -162,6 +165,8 @@ void main() {
       'read_lesfiche_attachment',
       // The labels a lesfiche can get (#188).
       'list_lesfiche_labels',
+      // The lesfiches in the trash (#189).
+      'list_trashed_lesfiches',
       // The learning goals of the goal selector (#186).
       'list_curricula',
       'read_curriculum',
@@ -449,6 +454,10 @@ void main() {
       ('set_lesfiche_attachment_visibility', true),
       ('remove_lesfiche_attachment', true),
       ('trash_lesfiches', true),
+      // A copy makes more copies each call; a restore (#189) finds them no
+      // longer in the trash the second time.
+      ('duplicate_lesfiches', false),
+      ('restore_lesfiches', true),
       ('plan_lesfiche', false),
       // An own label (#188): a second call is refused, not made twice, but
       // it is a create.
@@ -673,7 +682,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(73));
+    expect(tools, hasLength(76));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -747,7 +756,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(55));
+        expect(tools, hasLength(58));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -786,8 +795,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(63));
-      expect([for (final tool in tools.skip(55)) tool['name']], skoreTools);
+      expect(tools, hasLength(66));
+      expect([for (final tool in tools.skip(58)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -980,7 +989,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(55));
+        expect(tools, hasLength(58));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -1020,8 +1029,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(59));
-      expect([for (final tool in tools.skip(55)) tool['name']], presenceTools);
+      expect(tools, hasLength(62));
+      expect([for (final tool in tools.skip(58)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1217,10 +1226,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(67));
-      expect([for (final tool in tools.skip(63)) tool['name']], presenceTools);
+      expect(tools, hasLength(70));
+      expect([for (final tool in tools.skip(66)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(55).take(8)) tool['name'],
+        for (final tool in tools.skip(58).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1256,7 +1265,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(55));
+        expect(tools, hasLength(58));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1309,8 +1318,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(61));
-      expect([for (final tool in tools.skip(55)) tool['name']], lvsTools);
+      expect(tools, hasLength(64));
+      expect([for (final tool in tools.skip(58)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1494,10 +1503,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(73));
-      expect([for (final tool in tools.skip(67)) tool['name']], lvsTools);
+      expect(tools, hasLength(76));
+      expect([for (final tool in tools.skip(70)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(63).take(4)) tool['name']],
+        [for (final tool in tools.skip(66).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1506,7 +1515,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(55).take(8)) tool['name'],
+        for (final tool in tools.skip(58).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2905,7 +2914,7 @@ void main() {
     expect(
       trash['description'],
       allOf(
-        contains('restore them from the trash in the Lesfiches module'),
+        contains('restore_lesfiches takes them back out of it'),
         contains('A lesson planned from one of them earlier stays in the '),
       ),
     );
@@ -2956,6 +2965,82 @@ void main() {
       expect(text, contains(message), reason: '$lesfiches');
       expect(text, isNot(startsWith('Not all Smartschool')));
     }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('duplicate_lesfiches and restore_lesfiches take 1 to 20 ids; '
+      'list_trashed_lesfiches takes a query; without settings: an error '
+      'result that names the missing settings; an id that is not one of a '
+      'lesfiche: an error that says what to fix, before any login '
+      '(#189)', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+    const lesson = 'b0000000-0000-4000-8000-000000000011';
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    expect(
+      (tools['list_trashed_lesfiches']!['inputSchema'] as Map)['properties'],
+      {
+        'query': {'type': 'string', 'description': isA<String>()},
+      },
+    );
+    for (final name in ['duplicate_lesfiches', 'restore_lesfiches']) {
+      final schema = tools[name]!['inputSchema'] as Map;
+      expect(schema['required'], ['lesfiches'], reason: name);
+      expect(schema['properties'], {
+        'lesfiches': {
+          'type': 'array',
+          'description': isA<String>(),
+          'items': {'type': 'string', 'minLength': 1},
+          'minItems': 1,
+          'maxItems': 20,
+        },
+      }, reason: name);
+
+      final (isError, text) = await server.callTool(
+        name,
+        arguments: {
+          'lesfiches': [lesson],
+        },
+      );
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+
+      final (refused, refusal) = await server.callTool(
+        name,
+        arguments: {
+          'lesfiches': [lesson, 'Lussen!'],
+        },
+      );
+      expect(refused, isTrue, reason: name);
+      expect(
+        refusal,
+        contains(
+          'item 2 of lesfiches must be the id of a lesfiche as list_lesfiches '
+          'shows it',
+        ),
+        reason: name,
+      );
+    }
+    expect(
+      tools['trash_lesfiches']!['description'],
+      contains('restore_lesfiches takes them back out of it'),
+    );
+    final (isError, text) = await server.callTool('list_trashed_lesfiches');
+    expect(isError, isTrue);
+    expect(text, startsWith('Not all Smartschool settings are filled in.'));
 
     await server.stop();
     expect(await server.stderr, isNot(contains('sending username')));

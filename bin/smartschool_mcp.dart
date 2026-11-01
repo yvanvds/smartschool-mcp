@@ -23,6 +23,7 @@ import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_lesfiche_label_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
+import 'package:smartschool_mcp/src/tools/duplicate_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_planned_element_tool.dart';
 import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
@@ -31,6 +32,7 @@ import 'package:smartschool_mcp/src/tools/list_curricula_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiche_labels_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_trashed_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
@@ -50,6 +52,7 @@ import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/remove_lesfiche_weblink_tool.dart';
+import 'package:smartschool_mcp/src/tools/restore_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
@@ -168,6 +171,7 @@ Future<void> _serve(ServerOptions options) async {
           saveLesficheAttachmentTool(session, downloads),
           listLesficheLabelsTool(session),
           createLesficheTool(session),
+          duplicateLesfichesTool(session),
           editLesficheTool(session),
           setLesficheWeblinkTool(session),
           removeLesficheWeblinkTool(session),
@@ -175,6 +179,8 @@ Future<void> _serve(ServerOptions options) async {
           setLesficheAttachmentVisibilityTool(session),
           removeLesficheAttachmentTool(session),
           trashLesfichesTool(session),
+          listTrashedLesfichesTool(session),
+          restoreLesfichesTool(session),
           planLesficheTool(session),
           createLesficheLabelTool(session),
           // The learning goals of the goal selector (#186): read only.

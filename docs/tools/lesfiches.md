@@ -15,6 +15,7 @@ everyone, without a switch. Tools that change something follow the
 | [`save_lesfiche_attachment`](#save_lesfiche_attachment) | Saves an attachment into the download folder | No, saves a file on this PC |
 | [`list_lesfiche_labels`](#list_lesfiche_labels) | Lists the labels a lesfiche can get, the school's and your own | No |
 | [`create_lesfiche`](#create_lesfiche) | Makes a lesfiche in your own library | Yes, asks approval |
+| [`duplicate_lesfiches`](#duplicate_lesfiches) | Copies lesfiches in your own library | Yes, asks approval |
 | [`edit_lesfiche`](#edit_lesfiche) | Changes a lesfiche's name, icon, info, courses, goals, labels or visibility | Yes, asks approval |
 | [`set_lesfiche_weblink`](#set_lesfiche_weblink) | Adds or changes a weblink | Yes, asks approval |
 | [`remove_lesfiche_weblink`](#remove_lesfiche_weblink) | Removes a weblink | Yes, asks approval |
@@ -22,6 +23,8 @@ everyone, without a switch. Tools that change something follow the
 | [`set_lesfiche_attachment_visibility`](#set_lesfiche_attachment_visibility) | Sets when pupils see an attachment | Yes, asks approval |
 | [`remove_lesfiche_attachment`](#remove_lesfiche_attachment) | Removes an attachment | Yes, asks approval |
 | [`trash_lesfiches`](#trash_lesfiches) | Moves lesfiches to the module's trash | Yes, asks approval |
+| [`list_trashed_lesfiches`](#list_trashed_lesfiches) | Lists the lesfiches in the module's trash | No |
+| [`restore_lesfiches`](#restore_lesfiches) | Takes lesfiches out of the trash, back into your library | Yes, asks approval |
 | [`plan_lesfiche`](#plan_lesfiche) | Plans a lesfiche as a lesson in an empty lesson hour | Yes, asks approval |
 | [`create_lesfiche_label`](#create_lesfiche_label) | Makes an own label, with its colour | Yes, asks approval |
 
@@ -79,6 +82,17 @@ Claude shows you everything first and makes the lesfiche once. A name that
 is taken is kept (the module makes a second lesfiche), and the answer names
 the others.
 
+### `duplicate_lesfiches`
+
+Copies 1 to 20 lesfiches, lessons and assignments together, in your own
+library: each copy gets a new id and the name of its lesfiche with
+` - kopie` behind it, and its icon, info, visibility, courses, labels,
+learning goals, weblinks and attachments. The lesfiches themselves do not
+change. Change a copy afterwards with `edit_lesfiche` and the other tools,
+by the id the answer gives. A lesfiche in the trash cannot be copied:
+restore it first. Asks for approval; every call makes new copies, so Claude
+copies once.
+
 ### `edit_lesfiche`
 
 Changes one lesfiche of your own library: its name, icon, public or private
@@ -122,9 +136,24 @@ Removes one attachment of a lesfiche, and says which file with its size;
 
 Moves 1 to 20 lesfiches, lessons and assignments together, to the module's
 trash, after which `list_lesfiches` no longer lists them. A move, not a
-deletion: you restore a lesfiche from the trash in the module itself. A
+deletion: `restore_lesfiches` takes a lesfiche back out of the trash. A
 lesson planned from a lesfiche earlier stays in the planner. Asks for
 approval; Claude shows you each lesfiche by name and kind first.
+
+### `list_trashed_lesfiches`
+
+Lists the lesfiches in the module's trash, lessons and assignments, most
+recently moved first: one line each as `list_lesfiches` shows it, with the
+day it went to the trash instead of the day it was last changed, and its id
+for `restore_lesfiches`. Filtered by words in the name. The module says a
+lesfiche in its trash can be restored within 100 days.
+
+### `restore_lesfiches`
+
+Takes 1 to 20 lesfiches out of the module's trash, back into your library,
+by the ids `list_trashed_lesfiches` shows; `list_lesfiches` lists them
+again. Asks for approval; Claude shows you each lesfiche by name and kind
+first.
 
 ### `plan_lesfiche`
 
@@ -437,8 +466,9 @@ tool reads the list first (`getItems`, without the course names), in the
 session action of the move, and matches the ids (ignoring case, each once);
 an id that names no listed lesfiche is refused before anything is sent,
 with a note that a lesfiche in the trash is not listed, and so is a lesfiche
-of a kind the library cannot write. The library neither restores nor deletes
-for good (`delete/bulk` is left out on purpose). A lesson planned from a
+of a kind the library cannot write. `restore_lesfiches` takes lesfiches back
+out of the trash; nothing deletes for good (`delete/bulk` is left out on
+purpose). A lesson planned from a
 lesfiche earlier stays in the planner, which copied the lesfiche (its info,
 attachments and weblinks, #117); the description says so.
 
@@ -451,10 +481,90 @@ counted). The library retries the move after logging in again, as a read.
 The module answers the move of a lesfiche that is in the trash already with
 a bare `500` (seen live; it was moved there after the tool read the list),
 and an answer whose `exceptions` are not empty is not confirmed either
-(`SmartschoolLessonContentSaveUnconfirmedError`): the result says that some
-or all of them may or may not have been moved, and to check with
-`list_lesfiches` which are still listed. A refusal by the module (`400` to
-`499`) says that none was moved.
+(`SmartschoolLessonContentSaveUnconfirmedError`): the tool then reads the
+trash again, in a session action of its own, and lists which lesfiches are
+in it and which are still in the library (an error result when some were
+not moved; see [How the bulk writes check an unconfirmed
+answer](#how-the-bulk-writes-check-an-unconfirmed-answer)). When that read
+fails too, the result says that some or all of them may or may not have
+been moved, and to check with `list_trashed_lesfiches`. A refusal by the
+module (`400` to `499`) says that none was moved.
+
+### How `list_trashed_lesfiches` works
+
+It reads the trash with the library's `getTrash` (dartschool#227,
+`GET lesson-content/trashed`), which gives the lesfiches in the shape of
+`getItems`, with their courses named after the school's course list; when
+only that list fails, the lesfiches are listed with the number of their
+courses and a note, as `list_lesfiches` does. Each line is
+`formatLesficheLine` with `inTrash`: `in the trash since <day>`, from the
+lesfiche's `dateStateChanged`. The order is most recently moved first, then
+by name; `query` keeps the lesfiches whose name holds every word. At most
+200 lines. Read-only.
+
+### How `restore_lesfiches` works
+
+It takes the lesfiches (`lesfiches`, 1 to 20 ids) out of the trash with the
+library's `restore` (dartschool#227): one `POST lesson-content/restore/bulk`
+with the body of the trash. The library takes each lesfiche as read, so the
+tool reads the trash first (`getTrash`, without the course names), in the
+session action of the restore, and matches the ids (ignoring case, each
+once). An id the trash does not list is looked up in the library
+(`getItems`): a lesfiche there is "not in the trash, nothing to restore",
+any other names no lesfiche; both are refused before anything is sent.
+Not destructive (it brings lesfiches back), and idempotent: a second call
+finds them no longer in the trash and sends nothing. The library retries
+the restore after logging in again, as a read.
+
+The module answers the restore of a lesfiche that is not in the trash with
+an exception (`404`, seen live), and the library throws a
+`SmartschoolLessonContentSaveUnconfirmedError` for any exception or for no
+answer: the tool reads the trash again and lists which lesfiches left it
+and which are still there. When that read fails too, maybe restored, with
+`list_trashed_lesfiches` to check.
+
+### How `duplicate_lesfiches` works
+
+It copies the lesfiches (`lesfiches`, 1 to 20 ids from `list_lesfiches`)
+with the library's `duplicate` (dartschool#227): one
+`POST lesson-content/duplicate/bulk` with the body of the trash, which the
+module answers with each copy, keyed by the lesfiche as sent. The library
+returns the copies in the order given; the result has a line per copy (as
+`list_lesfiches` shows it, its courses counted, without a date: the copy
+comes in the shape of the detail) with the id of the lesfiche it copies.
+
+As `trash_lesfiches`, the tool reads the list first, in the session action
+of the copy. An id the list does not hold is looked up in the trash
+(`getTrash`): a lesfiche there cannot be copied (the module answers `403`),
+so the tool says to restore it first; any other names no lesfiche; both
+before anything is sent. The library sends the copy **once**, never again
+after logging in again: a second send makes more copies. So the tool is not
+idempotent, and Claude is told never to copy a lesfiche again that was
+copied. A refused session repeats the whole action in a new session, which
+is safe: the library did not send the copy then.
+
+When the module refuses every lesfiche (`403`: one went to the trash after
+the read), the library throws a `SmartschoolLessonContentWriteRefusedError`
+and the tool says no copy was made, and to restore it first. When some
+copies were made and others not, or no answer came, it throws a
+`SmartschoolLessonContentSaveUnconfirmedError`: the tool reads the list
+again and takes the lesfiches new since its first read as the copies made,
+each matched with the lesfiche of its name (with ` - kopie` behind it) and
+kind. The result lists the copies made, the lesfiches without a copy, and
+any other lesfiche new in the library. When that read fails too, maybe
+made, with `list_lesfiches` to check.
+
+### How the bulk writes check an unconfirmed answer
+
+The library names the lesfiches an unconfirmed bulk write did and did not
+do only in the message of its `SmartschoolLessonContentSaveUnconfirmedError`
+(yvanvds/dartschool#235), and the server never shows or logs that message
+(it holds names). So `trash_lesfiches`, `restore_lesfiches` and
+`duplicate_lesfiches` read again where the lesfiches are (the trash, or the
+list for a copy) and say which were done and which not
+(`lesficheBulkPartialResult`): an error result when some were not done,
+with Claude told not to repeat the ones that were. Until the library
+carries them as data (#195 tracks it), that read is the workaround.
 
 ### How `plan_lesfiche` works
 
@@ -545,6 +655,16 @@ read back (`lesficheChangedResult`); a header note says why the session's
 repeat of a write cannot make a lesfiche, a weblink or an attachment twice,
 and why a read comes before the write.
 
+In `lesfiche_bulk.dart`, for the bulk writes (`trash_lesfiches`,
+`restore_lesfiches`, `duplicate_lesfiches`, #189): the `lesfiches` argument
+(`lesficheIdsSchema`, `lesficheIdsArgument`, at most
+`maxLesficheBulkItems`), the lesfiches of a read with those ids
+(`findLesfiches`), the refusal of a kind the library cannot write
+(`refuseOtherLesficheKinds`), the lesfiches in words (`lesficheTitles`,
+`lesficheSubject`), and the read after an unconfirmed write
+(`readLesficheTrashAfter`, `readLesfichesAfter`) with its result
+(`lesficheBulkPartialResult`).
+
 In `lesfiche_labels.dart`, the labels (#188): the `labels` argument of
 `create_lesfiche` and `edit_lesfiche` (`lesficheLabelsSchema`,
 `lesficheLabelsArgument`, `lesficheLabelsReplaceNote`), matched with the
@@ -565,7 +685,15 @@ changed and removed, and the move of lesfiches to the trash
 (`fakeLesficheTrashPath`; a lesfiche in the trash already answered with a
 bare `500`, and `lesficheTrashExceptions` for an answer with `exceptions`),
 with a trash (`trashedLesfiches`) whose lesfiches are read but not written,
-and no longer listed, as live. It serves the labels module too
+and no longer listed, as live. The trash is listed
+(`fakeLesficheTrashedPath`, with `lesficheTrashDates`), restored from
+(`fakeLesficheRestorePath`: a `404` exception for a lesfiche not in it, and
+`lesficheRestoreExceptions`) and the lesfiches copied
+(`fakeLesficheDuplicatePath`: each copy with the next `fakeNewLesficheId`,
+" - kopie", and the lesfiche's labels, goals, weblinks with new ids and
+attachments; a `403` exception for one in the trash), each answer keyed by
+the lesfiche as sent (`fakeLesficheRefKey`); these tools are tested in
+`test/lesfiche_copy_restore_tools_test.dart`. It serves the labels module too
 (`fakeLabelsApi`): the school's labels (`schoolLabels`) and the own ones
 (`ownLabels`), each a `FakeLabel` with an id from its text
 (`fakeSchoolLabelId`, `fakeOwnLabelId`), the create of an own label

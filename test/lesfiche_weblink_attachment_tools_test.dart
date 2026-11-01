@@ -519,9 +519,9 @@ void main() {
       planner.trashedLesfiches.add(_lesson.id);
       const trash =
           'A lesfiche in the trash can still be read, but not changed, and '
-          'list_lesfiches does not list it; the user restores it from the '
-          'trash in the Lesfiches module itself. The lesfiche was not '
-          'changed.';
+          'list_lesfiches does not list it; list_trashed_lesfiches lists the '
+          'trash, and restore_lesfiches takes it back out. The lesfiche was '
+          'not changed.';
 
       expect(
         await refusedOnLesson('set_lesfiche_weblink', {
