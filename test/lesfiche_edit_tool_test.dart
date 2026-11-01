@@ -137,6 +137,7 @@ void main() {
         'private_info',
         'courses',
         'goals',
+        'labels',
         'visible',
       ]);
       expect(
@@ -150,7 +151,7 @@ void main() {
             'it is not known',
           ),
           contains('A lesfiche in the trash cannot be changed.'),
-          contains('labels are set in the Lesfiches module itself'),
+          contains('labels are labels as list_lesfiche_labels shows them'),
         ),
       );
     });
@@ -325,7 +326,7 @@ void main() {
       expect(
         await refused({}),
         'Nothing to change: pass at least one of name, icon, public_info, '
-        'private_info, courses, goals and visible. Nothing was sent.',
+        'private_info, courses, goals, labels and visible. Nothing was sent.',
       );
       expect(
         await refused({'name': '  '}),

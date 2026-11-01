@@ -13,8 +13,9 @@ everyone, without a switch. Tools that change something follow the
 | [`read_lesfiche`](#read_lesfiche) | Reads one lesfiche in full | No |
 | [`read_lesfiche_attachment`](#read_lesfiche_attachment) | Returns the text of an attachment, or an image | No |
 | [`save_lesfiche_attachment`](#save_lesfiche_attachment) | Saves an attachment into the download folder | No, saves a file on this PC |
+| [`list_lesfiche_labels`](#list_lesfiche_labels) | Lists the labels a lesfiche can get, the school's and your own | No |
 | [`create_lesfiche`](#create_lesfiche) | Makes a lesfiche in your own library | Yes, asks approval |
-| [`edit_lesfiche`](#edit_lesfiche) | Changes a lesfiche's name, icon, info, courses or visibility | Yes, asks approval |
+| [`edit_lesfiche`](#edit_lesfiche) | Changes a lesfiche's name, icon, info, courses, goals, labels or visibility | Yes, asks approval |
 | [`set_lesfiche_weblink`](#set_lesfiche_weblink) | Adds or changes a weblink | Yes, asks approval |
 | [`remove_lesfiche_weblink`](#remove_lesfiche_weblink) | Removes a weblink | Yes, asks approval |
 | [`add_lesfiche_attachments`](#add_lesfiche_attachments) | Adds files from this PC | Yes, asks approval |
@@ -22,6 +23,7 @@ everyone, without a switch. Tools that change something follow the
 | [`remove_lesfiche_attachment`](#remove_lesfiche_attachment) | Removes an attachment | Yes, asks approval |
 | [`trash_lesfiches`](#trash_lesfiches) | Moves lesfiches to the module's trash | Yes, asks approval |
 | [`plan_lesfiche`](#plan_lesfiche) | Plans a lesfiche as a lesson in an empty lesson hour | Yes, asks approval |
+| [`create_lesfiche_label`](#create_lesfiche_label) | Makes an own label, with its colour | Yes, asks approval |
 
 ## Tools
 
@@ -54,16 +56,24 @@ Saves one attachment of a lesfiche into your
 [download folder](../development.md#saving-files) and returns its full path,
 name and size.
 
+### `list_lesfiche_labels`
+
+Lists the labels a lesfiche can get: the school's labels for the Lesfiches
+module (such as `JAAR 6`), then your own, each with its colour and id.
+`create_lesfiche` and `edit_lesfiche` take them by their text,
+`list_lesfiches` filters by them.
+
 ### `create_lesfiche`
 
 Makes a lesfiche in your own library ("Mijn lesfiches"): a lesson, or an
 assignment of one of the school's types, with a name and optionally public
 and private info, courses, learning goals (from
-[`read_curriculum`](goals.md#read_curriculum)), weblinks, files from this PC
-and an icon. For each
+[`read_curriculum`](goals.md#read_curriculum)), labels (from
+[`list_lesfiche_labels`](#list_lesfiche_labels)), weblinks, files from this
+PC and an icon. For each
 weblink and file you choose when pupils see it: always, never, from the
 start or the end of the lesson it is planned in, or 1 to 14 days after its
-end. Labels are set in the module itself. Your library is private until you
+end. Your library is private until you
 plan a lesson from the lesfiche, but the tool still asks for approval:
 Claude shows you everything first and makes the lesfiche once. A name that
 is taken is kept (the module makes a second lesfiche), and the answer names
@@ -72,11 +82,12 @@ the others.
 ### `edit_lesfiche`
 
 Changes one lesfiche of your own library: its name, icon, public or private
-info, courses, learning goals, or whether it is visible in the module (a
-hidden lesfiche is still listed and can still be planned). An info is
-replaced whole, and an empty text empties it; the courses and the goals
-given replace all of them (to add a goal, Claude passes the goals it has with
-the new one). A goal the goal selector does not know is refused. Asks for
+info, courses, learning goals, labels, or whether it is visible in the
+module (a hidden lesfiche is still listed and can still be planned). An info
+is replaced whole, and an empty text empties it; the courses, the goals and
+the labels given replace all of them (to add a goal or a label, Claude
+passes the ones it has with the new one). A goal the goal selector does not
+know is refused, and so is a label that does not exist. Asks for
 approval. A lesfiche in the trash cannot be changed: restore it in the
 module first. Whether a lesson planned from the lesfiche earlier changes
 with it has not been checked.
@@ -124,6 +135,13 @@ weblink with the visibility it has in the lesfiche. The lesson keeps the
 course of the hour, not the lesfiche's. It works as [`plan_lesson`](planner.md#plan_lesson):
 asks for approval, after Claude shows you which lesfiche goes into which
 hour. An assignment lesfiche cannot be planned.
+
+### `create_lesfiche_label`
+
+Makes a new own label with a text (at most 50 characters) and one of the web
+client's 18 colours (`steel` by default), to put on lesfiches. A text one of
+your own labels has already is refused, in plain words. Asks for approval.
+The server does not change or remove a label: do that in Smartschool.
 
 ## How it works
 
@@ -196,6 +214,35 @@ The attachment is named as `read_lesfiche_attachment` names it, and saved as
 `save_message_attachment` saves one (see
 [Saving files](../development.md#saving-files)).
 
+### How `list_lesfiche_labels` works
+
+It reads the labels with the library's `LessonContentService.getLabels`
+(dartschool#228), as the Lesfiches web client's label picker does: two reads
+of Smartschool's labels module (`/labels/api/v1`), the school's labels whose
+locations hold the Lesfiches module and the user's own labels. It takes no
+arguments. The school's labels come first, then the own ones, each in
+Smartschool's order, one line each: text, colour, `hidden` when it is not
+visible, and id. An answer the server cannot use is "the Lesfiches module
+gave an answer the server could not use", with the details in the log only.
+
+### How labels are set
+
+`create_lesfiche` and `edit_lesfiche` take `labels`: each label by its whole
+text as `list_lesfiche_labels` shows it (case-insensitive, extra white space
+ignored, each once), or by its id. Before anything is sent, the tool reads
+the labels (`getLabels`) and finds each one there; `edit_lesfiche` also
+finds the labels the lesfiche has, so that a label that is no longer offered
+is kept when it is passed again. A text that names no label is refused with
+the labels there are, and one that a school label and an own label both have
+is refused with their ids, to pass the id instead. An empty list sends no
+read. The labels go out as the labels module gives them
+(`LessonContentLabel.toWire`): the module answers an own label without its
+owner, or a school label with only its id, with a bare `500` (seen live).
+`create_lesfiche` sends them in the create; `edit_lesfiche` with
+`changeLabels`, in the order of the fields after the goals. The list
+replaces the labels, and an empty one takes them all off; the library checks
+that the lesfiche has exactly the labels sent.
+
 ### How `create_lesfiche` works
 
 It makes the lesfiche in one create, as the web client makes one, with the
@@ -203,7 +250,8 @@ library's `LessonContentService.createLesson` or `createAssignment`
 (dartschool#129): a `name` (at most 255 characters), a `type` (`lesson`, the
 default, or `assignment` with `assignment_type`, one of the school's types
 by abbreviation or name, matched as `plan_assignment` matches its `type`),
-and optionally `public_info` and `private_info` (plain text, as
+and optionally `labels` (see [How labels are set](#how-labels-are-set)),
+`public_info` and `private_info` (plain text, as
 `plan_lesson`), `courses` (each by its name as the tools show it, or by its
 id, found in the school's course list: one the list does not have is an
 error that lists the names, and a name two courses have one that gives
@@ -229,7 +277,8 @@ a second lesfiche, and it sends files from this PC; Claude Desktop and Codex
 ask for approval only for a tool marked destructive.
 
 Before sending, it reads the user's lesfiches (for the note on namesakes),
-the course list for the courses, for an assignment the school's
+the course list for the courses, the labels for the labels, for an
+assignment the school's
 types (read once per session), and checks the goals with the goal selector,
 whose answer names them in the result. The library checks the courses and the type
 again, uploads the files into a new upload directory, sends the create once
@@ -241,8 +290,7 @@ the repeat's first request (dartschool#134). A name that is taken is kept
 other lesfiches of that name and kind. The result is the lesfiche as
 `read_lesfiche` shows it, with its id for `plan_lesfiche` (a lesson),
 `read_lesfiche` and `edit_lesfiche`, the tools that change its weblinks and
-attachments, and `trash_lesfiches` to undo it. Labels are not in the
-library: the description says the user sets them in the module.
+attachments, and `trash_lesfiches` to undo it.
 
 A refusal by the module (a bare `400`) and a file Smartschool's upload step
 refuses (in Smartschool's words) say that no lesfiche was made; a create the
@@ -267,7 +315,9 @@ whole info, and an empty text empties it), `courses` (`changeCourses`, by
 name or id as `create_lesfiche` takes them, in place of all its courses; an
 empty list removes them), `goals` (`changeGoals`, dartschool#223, in place
 of all its goals; an empty list clears them; see [How goals are
-set](goals.md#how-goals-are-set)) and `visible` (`setVisible`: shown or
+set](goals.md#how-goals-are-set)), `labels` (`changeLabels`, dartschool#228,
+in place of all its labels; an empty list clears them; see [How labels are
+set](#how-labels-are-set)) and `visible` (`setVisible`: shown or
 hidden in the module). Marked destructive (as `create_lesfiche`, for Claude Desktop and
 Codex to ask approval) and idempotent: each edit sets a value. Claude shows
 the lesfiche and what changes, and calls after the user's confirmation.
@@ -276,7 +326,9 @@ The tool reads the lesfiche first (the edits take it as read), for
 `courses` the school's course list, so that an unknown course is refused
 before any edit (the library checks the courses again), and for `goals`
 asks the goal selector about the goals the lesfiche does not have yet, so
-that an unknown goal is refused before any edit. It stops at the
+that an unknown goal is refused before any edit, and for `labels` the
+labels there are, so that an unknown label is refused before any edit. It
+stops at the
 first edit that fails, and says which fields were changed before it and
 which were not sent, as `edit_planned_element` does; a field that already
 had the value given is sent all the same, and the result says so. The edits
@@ -426,6 +478,25 @@ yet. It is one of the planner writes, which report a write the planner did
 not confirm as the others do (see
 [The planner writes](planner.md#the-planner-writes)).
 
+### How `create_lesfiche_label` works
+
+It makes an own label with the library's `createUserLabel`
+(dartschool#228): `POST /labels/api/v1/user-labels/{userId}` with the `text`
+(at most 50 characters, `maxLabelLength`, without the white space around it)
+and the `color` (one of `labelColors`, the web client's 18; `steel`,
+`defaultLabelColor`, when it is left out), answered `201` with the new
+label. An empty or too long text is refused before anything is sent; the
+input schema lists the colours. Marked destructive, for Claude Desktop and
+Codex to ask approval, and not idempotent. The library sends it once, never
+again after logging in again. The labels module refuses a text one of the
+own labels has (`400` with `name.already.used`), and the result says so in
+plain words, with `list_lesfiche_labels` to find the label; another refusal
+says that nothing was made, and that a text longer than 50 characters is
+refused so. A create the module does not confirm is maybe made, with
+`list_lesfiche_labels` to check it and not to call again. The result gives
+the label with its colour and id, and how to put it on a lesfiche. The
+library does not change or remove a label, so neither does the server.
+
 ### Helpers and tests
 
 The helpers of the Lesfiches module live next to the planner's, in
@@ -474,6 +545,15 @@ read back (`lesficheChangedResult`); a header note says why the session's
 repeat of a write cannot make a lesfiche, a weblink or an attachment twice,
 and why a read comes before the write.
 
+In `lesfiche_labels.dart`, the labels (#188): the `labels` argument of
+`create_lesfiche` and `edit_lesfiche` (`lesficheLabelsSchema`,
+`lesficheLabelsArgument`, `lesficheLabelsReplaceNote`), matched with the
+labels there are and the labels the lesfiche has (`lesficheLabels`) and
+compared by id (`sameLabels`); the list of `list_lesfiche_labels`
+(`formatLesficheLabels`, `formatLesficheLabel`); and the text and colour of
+`create_lesfiche_label` (`lesficheLabelTextArgument`,
+`lesficheLabelColorArgument`, `lesficheLabelColors`).
+
 The tests run against the fake planner (`test/support/fake_planner.dart`),
 which also serves dartschool's anonymised captures of the Lesfiches list and
 the detail of a lesfiche with the download of its attachment
@@ -485,4 +565,11 @@ changed and removed, and the move of lesfiches to the trash
 (`fakeLesficheTrashPath`; a lesfiche in the trash already answered with a
 bare `500`, and `lesficheTrashExceptions` for an answer with `exceptions`),
 with a trash (`trashedLesfiches`) whose lesfiches are read but not written,
-and no longer listed, as live.
+and no longer listed, as live. It serves the labels module too
+(`fakeLabelsApi`): the school's labels (`schoolLabels`) and the own ones
+(`ownLabels`), each a `FakeLabel` with an id from its text
+(`fakeSchoolLabelId`, `fakeOwnLabelId`), the create of an own label
+(`name.already.used`, a bare `400` for a long text), and the labels of
+`change-labels` and of the create (a bare `500` for a label without its
+owner or platform). The label tools are tested in
+`test/lesfiche_label_tools_test.dart`.

@@ -20,6 +20,7 @@ import 'package:smartschool_mcp/src/tools/add_lesfiche_attachments_tool.dart';
 import 'package:smartschool_mcp/src/tools/archive_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/clear_lesson_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/create_lesfiche_label_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/edit_lesfiche_tool.dart';
@@ -28,6 +29,7 @@ import 'package:smartschool_mcp/src/tools/flag_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_class_assignments_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_curricula_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_intradesk_folder_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_lesfiche_labels_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_messages_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_planner_tool.dart';
@@ -164,6 +166,7 @@ Future<void> _serve(ServerOptions options) async {
           readLesficheTool(session),
           readLesficheAttachmentTool(session),
           saveLesficheAttachmentTool(session, downloads),
+          listLesficheLabelsTool(session),
           createLesficheTool(session),
           editLesficheTool(session),
           setLesficheWeblinkTool(session),
@@ -173,6 +176,7 @@ Future<void> _serve(ServerOptions options) async {
           removeLesficheAttachmentTool(session),
           trashLesfichesTool(session),
           planLesficheTool(session),
+          createLesficheLabelTool(session),
           // The learning goals of the goal selector (#186): read only.
           listCurriculaTool(session),
           readCurriculumTool(session),

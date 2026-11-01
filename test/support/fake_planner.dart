@@ -48,6 +48,68 @@ String fakeLesficheCreatePath([String type = 'lessons']) =>
 /// `POST lesson-content/trash/bulk` for all of them.
 const fakeLesficheTrashPath = '$_lessonContentApi/lesson-content/trash/bulk';
 
+/// Smartschool's labels module (dartschool#228), which keeps the labels of
+/// lesfiches.
+const fakeLabelsApi = '/labels/api/v1';
+
+/// Where the school's labels for the Lesfiches module are read.
+const fakeSchoolLabelsPath =
+    '$fakeLabelsApi/locations/lesson_content/platform-labels';
+
+/// Where the own labels of the fake's account are read, and a new one made.
+const fakeOwnLabelsPath = '$fakeLabelsApi/user-labels/$fakePlannerMe';
+
+/// A stable part of a label id for [text]: twelve hex digits from its
+/// characters, so that a lesfiche, the labels module and a test give the
+/// label of a text the same id.
+String _labelKey(String text) => text.codeUnits
+    .fold<int>(7, (hash, unit) => (hash * 31 + unit) & 0xffffffffffff)
+    .toRadixString(16)
+    .padLeft(12, '0');
+
+/// The id of the school label [text], as the labels module gives it: the
+/// platform id and a UUID.
+String fakeSchoolLabelId(String text) =>
+    '4069_d0000000-0000-4000-8000-${_labelKey(text)}';
+
+/// The id of the own label [text] of [owner], as the labels module gives
+/// it: the owner's whole user id and a UUID.
+String fakeOwnLabelId(String text, {String owner = fakePlannerMe}) =>
+    '${owner}_d0000000-0000-4000-8100-${_labelKey(text)}';
+
+/// A label of the labels module (dartschool#228): a school label for the
+/// Lesfiches module, or an own label of the fake's account.
+class FakeLabel {
+  const FakeLabel(this.text, {this.color = 'steel', this.isVisible = true});
+
+  final String text;
+  final String color;
+  final bool isVisible;
+
+  /// As `GET .../platform-labels` gives a school label.
+  Map<String, Object?> schoolJson() => {
+    'identifier': fakeSchoolLabelId(text),
+    'id': fakeSchoolLabelId(text),
+    'type': 'platform',
+    'text': text,
+    'color': color,
+    'isVisible': isVisible,
+    'platformId': 4069,
+    'locations': ['lesson_content', 'planner'],
+  };
+
+  /// As `GET user-labels/{userId}` gives an own label.
+  Map<String, Object?> ownJson() => {
+    'identifier': fakeOwnLabelId(text),
+    'id': fakeOwnLabelId(text),
+    'type': 'user',
+    'text': text,
+    'color': color,
+    'isVisible': isVisible,
+    'userId': fakePlannerMe,
+  };
+}
+
 /// The id the fake gives the [n]th lesfiche its creates make.
 String fakeNewLesficheId(int n) =>
     'b0000000-0000-4000-9000-${'$n'.padLeft(12, '0')}';
@@ -717,6 +779,8 @@ class FakeLesfiche {
     List<FakeLesficheWeblink>? weblinks,
     List<FakeLesficheAttachment>? attachments,
     List<Map<String, String>>? goals,
+    List<String>? labels,
+    List<String>? ownLabels,
   }) => FakeLesfiche(
     id: id,
     name: name ?? this.name,
@@ -728,8 +792,8 @@ class FakeLesfiche {
     owner: owner,
     lastChanged: lastChanged,
     courses: courses ?? this.courses,
-    labels: labels,
-    ownLabels: ownLabels,
+    labels: labels ?? this.labels,
+    ownLabels: ownLabels ?? this.ownLabels,
     assignmentType: assignmentType,
     weblinks: weblinks ?? this.weblinks,
     attachments: attachments ?? this.attachments,
@@ -752,26 +816,26 @@ class FakeLesfiche {
       for (final course in courses) {'platformId': 4069, 'id': course.id},
     ],
     'labels': [
-      for (final (index, text) in labels.indexed)
+      for (final text in labels)
         {
-          'identifier': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'identifier': fakeSchoolLabelId(text),
           'type': 'platform',
           'text': text,
           'color': 'aqua',
           'isVisible': true,
-          'id': '4069_d0000000-0000-4000-8000-00000000000$index',
+          'id': fakeSchoolLabelId(text),
           'platformId': 4069,
           'ssId': 4069,
           'locations': ['lesson_content', 'planner'],
         },
-      for (final (index, text) in ownLabels.indexed)
+      for (final text in ownLabels)
         {
-          'identifier': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'identifier': fakeOwnLabelId(text, owner: owner),
           'type': 'user',
           'text': text,
           'color': 'steel',
           'isVisible': true,
-          'id': '${owner}_d0000000-0000-4000-8000-00000000010$index',
+          'id': fakeOwnLabelId(text, owner: owner),
           'userId': owner,
         },
     ],
@@ -1001,7 +1065,11 @@ class FakePlannerHit {
 ///   `.../change-courses` (`newCourses`, each `{platformId, id}`, stored as
 ///   sent, also a course the course list does not have, as live),
 ///   `.../change-goals` (`newGoals`, dartschool#223, stored as sent, also a
-///   goal no curriculum has, as live), `.../mark-as-visible` and `.../mark-as-invisible`: change the lesfiche,
+///   goal no curriculum has, as live), `.../change-labels` (`newLabels`,
+///   dartschool#228, each as `LessonContentLabel.toWire` gives it, stored
+///   by its text; one without its `userId` or `platformId` gets a bare
+///   `500`, as live), `.../mark-as-visible` and `.../mark-as-invisible`:
+///   change the lesfiche,
 ///   and answer `200` with the whole lesfiche;
 /// - `POST .../weblinks` (`newName`, `newIcon`, `newUrl`, `newVisibility`;
 ///   an address without `http(s)://` gets a bare `400`, as live) adds a
@@ -1020,6 +1088,10 @@ class FakePlannerHit {
 ///   ([trashedLesfiches]), and answers `200` with `{"exceptions":[]}`; one
 ///   in the trash already gets a bare `500`, as live
 ///   ([_trashLesfiches]).
+///
+/// And Smartschool's labels module of dartschool#228 at [fakeLabelsApi]:
+/// the school's labels ([schoolLabels]) and the own ones ([ownLabels]), and
+/// the create of an own label ([_labelsAnswer]).
 ///
 /// A write of a lesfiche the fake does not have, or of one in
 /// [trashedLesfiches] (whose detail is still served, as live), is answered
@@ -1081,6 +1153,18 @@ class FakePlanner {
 
   /// The user's lesfiches in the Lesfiches module.
   final List<FakeLesfiche> lesfiches = [];
+
+  /// The school's labels for the Lesfiches module, in the labels module
+  /// (dartschool#228): those of the lesfiches of the captures.
+  final List<FakeLabel> schoolLabels = [
+    const FakeLabel('JAAR 6', color: 'aqua'),
+    const FakeLabel('TRIMESTER 1', color: 'yellow'),
+    const FakeLabel('TRIMESTER 2', color: 'yellow'),
+  ];
+
+  /// The own labels of the fake's account, in the labels module; a create
+  /// of one adds it at the end.
+  final List<FakeLabel> ownLabels = [const FakeLabel('Lussen')];
 
   /// The ids of the lesfiches of [lesfiches] that are in the module's trash,
   /// in lower case: the list ([fakeLesfichesPath]) leaves them out, their
@@ -1268,6 +1352,7 @@ class FakePlanner {
         path != fakeAssignmentTypesPath &&
         path != fakeLesfichesPath &&
         path != fakeLesficheTrashPath &&
+        !path.startsWith('$fakeLabelsApi/') &&
         lesficheRoute == null) {
       return null;
     }
@@ -1299,6 +1384,18 @@ class FakePlanner {
               lesfiche.toJson(),
         ]),
       );
+    }
+    if (path.startsWith('$fakeLabelsApi/')) {
+      final answer = _labelsAnswer(options.method, path, options.data);
+      if (answer != null &&
+          options.method == 'POST' &&
+          lostAnswers.contains(path)) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'Connection reset by peer',
+        );
+      }
+      return answer;
     }
     if (path == fakeLesficheTrashPath) {
       if (options.method != 'POST') return null;
@@ -1518,6 +1615,7 @@ class FakePlanner {
         (type == 'assignments') != body.containsKey('assignmentType')) {
       return _badRequest();
     }
+    if (!_labelsComplete(body['labels'] as List)) return _serverError();
     FakeAssignmentType? assignmentType;
     if (type == 'assignments') {
       final typeId = '${body['assignmentType']}'.toLowerCase();
@@ -1546,6 +1644,8 @@ class FakePlanner {
       ],
       assignmentType: assignmentType,
       goals: _storedGoals(body['goals']),
+      labels: _storedLabels(body['labels'], 'platform'),
+      ownLabels: _storedLabels(body['labels'], 'user'),
       weblinks: [
         for (final weblink in (body['weblinks'] as List).cast<Map>())
           FakeLesficheWeblink(
@@ -1575,6 +1675,77 @@ class FakePlanner {
     lesfiches.add(lesfiche);
     return _json(jsonEncode({'id': lesfiche.id}), status: 201);
   }
+
+  /// The labels module (dartschool#228): `GET` [fakeSchoolLabelsPath]
+  /// ([schoolLabels]) and [fakeOwnLabelsPath] ([ownLabels]); `POST`
+  /// [fakeOwnLabelsPath] (`{text, color, isVisible}`) makes an own label and
+  /// answers `201` with it, as live. A text one of the own labels has
+  /// (ignoring case) gets `400` with `languageCode` `name.already.used`, one
+  /// of more than 50 characters a bare `400` (both seen live). The module
+  /// answers `GET platform-labels` with its web app (seen live); the fake
+  /// answers what it does not know with `404`.
+  ResponseBody? _labelsAnswer(String method, String path, Object? data) {
+    if (method == 'GET' && path == fakeSchoolLabelsPath) {
+      return _json(
+        jsonEncode([for (final label in schoolLabels) label.schoolJson()]),
+      );
+    }
+    if (path == fakeOwnLabelsPath) {
+      if (method == 'GET') {
+        return _json(
+          jsonEncode([for (final label in ownLabels) label.ownJson()]),
+        );
+      }
+      if (method != 'POST') return null;
+      final body = data is Map ? data : const <Object?, Object?>{};
+      final text = body['text'];
+      final color = body['color'];
+      if (text is! String || text.trim().isEmpty || color is! String) {
+        return _badRequest();
+      }
+      if (text.length > 50) return _badRequest();
+      if (ownLabels.any(
+        (label) => label.text.toLowerCase() == text.toLowerCase(),
+      )) {
+        return _json(
+          jsonEncode({
+            'status': 400,
+            'title': 'Bad Request',
+            'languageCode': 'name.already.used',
+          }),
+          status: 400,
+        );
+      }
+      final label = FakeLabel(text, color: color);
+      ownLabels.add(label);
+      return _json(jsonEncode(label.ownJson()), status: 201);
+    }
+    return _notFound();
+  }
+
+  /// The texts of the labels of the kind [type] (`platform`, `user`) in a
+  /// label write's body [labels] (each as `LessonContentLabel.toWire` gives
+  /// it), as the module stores them.
+  static List<String> _storedLabels(Object? labels, String type) => [
+    for (final label in (labels as List).cast<Map>())
+      if (label['type'] == type) label['text'] as String,
+  ];
+
+  /// Whether every label of a label write's body [labels] has what the
+  /// module needs: the module answers an own label without its `userId`,
+  /// and a school label without its `platformId`, with a bare `500` (seen
+  /// live, dartschool#228).
+  static bool _labelsComplete(List<Object?> labels) => labels.every(
+    (label) =>
+        label is Map &&
+        label['id'] is String &&
+        label['text'] is String &&
+        switch (label['type']) {
+          'platform' => label['platformId'] != null,
+          'user' => label['userId'] is String,
+          _ => false,
+        },
+  );
 
   /// The goals of a goal write's body [goals] (each `{id, goalId,
   /// leerplanId, type}`) as the module and the planner store them: `{id,
@@ -1650,6 +1821,16 @@ class FakePlanner {
         final goals = body['newGoals'];
         if (goals is! List) return _badRequest();
         return changed(lesfiche.withChanges(goals: _storedGoals(goals)));
+      case ('POST', ['change-labels']):
+        final labels = body['newLabels'];
+        if (labels is! List) return _badRequest();
+        if (!_labelsComplete(labels)) return _serverError();
+        return changed(
+          lesfiche.withChanges(
+            labels: _storedLabels(labels, 'platform'),
+            ownLabels: _storedLabels(labels, 'user'),
+          ),
+        );
       case ('POST', ['change-courses']):
         final courses = body['newCourses'];
         if (courses is! List) return _badRequest();
@@ -1988,6 +2169,11 @@ class FakePlanner {
       jsonEncode([for (final course in courseList) course.toJson()]),
     );
   }
+
+  ResponseBody _serverError() => _json(
+    '{"status":500,"title":"Internal Server Error","detail":"","type":""}',
+    status: 500,
+  );
 
   ResponseBody _badRequest() => _json(
     '{"status":400,"title":"Bad Request","detail":"","type":""}',

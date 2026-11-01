@@ -17,8 +17,9 @@ Je vraagt het gewoon in een gesprek:
   toetsen en taken een klas al heeft, om een moment voor een nieuwe toets te
   kiezen, en die toets of taak dan plannen. Je lesfiches uit de module
   Lesfiches lezen, met hun weblinks en bijlagen, en lesfiches maken en
-  aanpassen in je eigen bibliotheek, met info, vakken, weblinks en bestanden
-  van je pc, en ze naar de prullenbak van de module verplaatsen. Je eigen
+  aanpassen in je eigen bibliotheek, met info, vakken, labels, weblinks en
+  bestanden van je pc, eigen labels maken, en lesfiches naar de prullenbak
+  van de module verplaatsen. Je eigen
   lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
@@ -358,8 +359,10 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   einde van de les, of enkele dagen erna). Na jouw akkoord maakt het de
   lesfiche in je eigen bibliotheek ("Mijn lesfiches"), die alleen jij ziet
   tot je ze in een les plant. Daarna kan Claude ze in je lesuren plannen.
-  Labels geef je zelf in de module Lesfiches. Bestaat er al een lesfiche
-  met die naam, dan maakt Smartschool een tweede, en Claude zegt dat.
+  Labels van de school of je eigen labels kan Claude er meteen opzetten;
+  een nieuw eigen label maakt het ook, na jouw akkoord. Bestaat er al een
+  lesfiche met die naam, dan maakt Smartschool een tweede, en Claude zegt
+  dat.
 - "Geef mijn lesfiche Lussen ook het vak wiskunde, vervang de dode link
   naar de oefeningen en laat de oplossingen pas na de les zien."
   Claude leest de lesfiche en toont wat er verandert: de naam, de info, de
@@ -690,8 +693,9 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
   module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in
   je eigen bibliotheek, met hun weblinks en bijlagen, en verplaatst ze
-  lesfiches naar de prullenbak: er labels aan geven, ze uit de prullenbak
-  terugzetten of voor altijd verwijderen kan ze niet.
+  lesfiches naar de prullenbak; ze zet er labels op en maakt eigen labels.
+  Lesfiches uit de prullenbak terugzetten of voor altijd verwijderen, en een
+  label aanpassen of verwijderen, kan ze niet.
 - Net na een wijziging in de planner (in Smartschool zelf of door Claude)
   kan het overzicht nog enkele seconden de oude toestand tonen. Een les of
   toets apart openen toont meteen de nieuwe.

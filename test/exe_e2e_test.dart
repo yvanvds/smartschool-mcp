@@ -109,6 +109,7 @@ void main() {
       'read_lesfiche',
       'read_lesfiche_attachment',
       'save_lesfiche_attachment',
+      'list_lesfiche_labels',
       'create_lesfiche',
       'edit_lesfiche',
       'set_lesfiche_weblink',
@@ -118,6 +119,7 @@ void main() {
       'remove_lesfiche_attachment',
       'trash_lesfiches',
       'plan_lesfiche',
+      'create_lesfiche_label',
       'list_curricula',
       'read_curriculum',
       'list_skore_gradebooks',
@@ -158,6 +160,8 @@ void main() {
       'list_lesfiches',
       'read_lesfiche',
       'read_lesfiche_attachment',
+      // The labels a lesfiche can get (#188).
+      'list_lesfiche_labels',
       // The learning goals of the goal selector (#186).
       'list_curricula',
       'read_curriculum',
@@ -446,6 +450,9 @@ void main() {
       ('remove_lesfiche_attachment', true),
       ('trash_lesfiches', true),
       ('plan_lesfiche', false),
+      // An own label (#188): a second call is refused, not made twice, but
+      // it is a create.
+      ('create_lesfiche_label', false),
       ('plan_assignment', false),
       ('trash_assignment', false),
       // The gradebook's first write (#142): a create, so not idempotent;
@@ -666,7 +673,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(71));
+    expect(tools, hasLength(73));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -740,7 +747,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(53));
+        expect(tools, hasLength(55));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -779,8 +786,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(61));
-      expect([for (final tool in tools.skip(53)) tool['name']], skoreTools);
+      expect(tools, hasLength(63));
+      expect([for (final tool in tools.skip(55)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -973,7 +980,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(53));
+        expect(tools, hasLength(55));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -1013,8 +1020,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(57));
-      expect([for (final tool in tools.skip(53)) tool['name']], presenceTools);
+      expect(tools, hasLength(59));
+      expect([for (final tool in tools.skip(55)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1210,10 +1217,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(65));
-      expect([for (final tool in tools.skip(61)) tool['name']], presenceTools);
+      expect(tools, hasLength(67));
+      expect([for (final tool in tools.skip(63)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(53).take(8)) tool['name'],
+        for (final tool in tools.skip(55).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1249,7 +1256,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(53));
+        expect(tools, hasLength(55));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1302,8 +1309,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(59));
-      expect([for (final tool in tools.skip(53)) tool['name']], lvsTools);
+      expect(tools, hasLength(61));
+      expect([for (final tool in tools.skip(55)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1487,10 +1494,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(71));
-      expect([for (final tool in tools.skip(65)) tool['name']], lvsTools);
+      expect(tools, hasLength(73));
+      expect([for (final tool in tools.skip(67)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(61).take(4)) tool['name']],
+        [for (final tool in tools.skip(63).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1499,7 +1506,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(53).take(8)) tool['name'],
+        for (final tool in tools.skip(55).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2392,6 +2399,7 @@ void main() {
       'private_info',
       'courses',
       'goals',
+      'labels',
       'weblinks',
       'attachments',
       'icon',
@@ -2579,6 +2587,7 @@ void main() {
           'private_info',
           'courses',
           'goals',
+          'labels',
           'visible',
         ],
       ),
@@ -2637,6 +2646,14 @@ void main() {
 
     for (final (name, arguments) in <(String, Map<String, Object?>)>[
       ('edit_lesfiche', {'lesfiche': lesfiche, 'name': 'Lussen 2'}),
+      // Labels by their text (#188): matched with the labels once logged in.
+      (
+        'edit_lesfiche',
+        {
+          'lesfiche': lesfiche,
+          'labels': ['JAAR 6'],
+        },
+      ),
       // Goals as read_curriculum shows them (#187): checked with the goal
       // selector once logged in.
       (
@@ -2720,6 +2737,14 @@ void main() {
             'which is not the id of a goal: take it from read_curriculum',
           ),
           (
+            'edit_lesfiche',
+            {
+              'lesfiche': lesfiche,
+              'labels': ['  '],
+            },
+            'each item of labels must be a label',
+          ),
+          (
             'set_lesfiche_weblink',
             {'lesfiche': lesfiche, 'name': 'Quiz', 'url': 'geen url'},
             'which is not a web address the Lesfiches web client takes',
@@ -2768,6 +2793,80 @@ void main() {
       expect(isError, isTrue, reason: '$name $arguments');
       expect(text, contains(message), reason: '$name $arguments');
       expect(text, isNot(startsWith('Not all Smartschool')));
+    }
+
+    await server.stop();
+    expect(await server.stderr, isNot(contains('sending username')));
+  });
+
+  test('the labels of lesfiches (#188): list_lesfiche_labels reads, '
+      'create_lesfiche_label is a write Claude Desktop asks approval for; '
+      'without settings: an error result that names the missing settings; '
+      'a text that is too long or empty: an error that says what to fix, '
+      'before any login', () async {
+    final server = await ServerProcess.start(
+      exePath,
+      environment: environmentWithoutSmartschool(),
+    );
+    await server.initialize();
+
+    final tools = {
+      for (final tool in (await server.request('tools/list'))['tools'] as List)
+        (tool as Map)['name']: tool,
+    };
+    expect(
+      (tools['list_lesfiche_labels']!['inputSchema'] as Map)['required'],
+      isNull,
+    );
+    final create = tools['create_lesfiche_label']!;
+    final schema = create['inputSchema'] as Map;
+    expect(schema['required'], ['text']);
+    expect((schema['properties'] as Map).keys, ['text', 'color']);
+    expect(((schema['properties'] as Map)['color'] as Map)['enum'], [
+      'aqua',
+      'black',
+      'blue',
+      'brown',
+      'grass',
+      'green',
+      'lavender',
+      'mint',
+      'olive',
+      'orange',
+      'pink',
+      'purple',
+      'red',
+      'silver',
+      'steel',
+      'tangerine',
+      'violet',
+      'yellow',
+    ]);
+
+    for (final (name, arguments) in <(String, Map<String, Object?>)>[
+      ('list_lesfiche_labels', {}),
+      ('create_lesfiche_label', {'text': 'Herhaling', 'color': 'aqua'}),
+    ]) {
+      final (isError, text) = await server.callTool(name, arguments: arguments);
+      expect(isError, isTrue, reason: name);
+      expect(
+        text,
+        startsWith('Not all Smartschool settings are filled in. Missing: '),
+        reason: name,
+      );
+      expect(text, isNot(contains('#0')), reason: 'no stack trace');
+    }
+
+    for (final (arguments, message) in <(Map<String, Object?>, String)>[
+      ({'text': 'x' * 51}, 'text is 51 characters long'),
+      ({'text': '  '}, 'text is empty'),
+    ]) {
+      final (isError, text) = await server.callTool(
+        'create_lesfiche_label',
+        arguments: arguments,
+      );
+      expect(isError, isTrue, reason: '$arguments');
+      expect(text, contains(message), reason: '$arguments');
     }
 
     await server.stop();

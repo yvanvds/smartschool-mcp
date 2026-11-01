@@ -188,6 +188,7 @@ void main() {
         'private_info',
         'courses',
         'goals',
+        'labels',
         'weblinks',
         'attachments',
         'icon',
@@ -203,7 +204,7 @@ void main() {
             'pupils see nothing of a lesfiche until a lesson is '
             'planned from it',
           ),
-          contains('Labels are not offered'),
+          contains('Labels are given by their text as list_lesfiche_labels'),
           contains('up to 10 files of 64 bytes each'),
           contains('always (the default), never, at_start'),
           contains(
@@ -326,8 +327,7 @@ void main() {
           'attachments with add_lesfiche_attachments, '
           'set_lesfiche_attachment_visibility and '
           'remove_lesfiche_attachment. Move it to the trash with '
-          'trash_lesfiches. Labels are set in the Lesfiches module '
-          'itself.\n'
+          'trash_lesfiches.\n'
           '\n'
           'Lesfiche $id\n'
           'Kind: lesson\n'
@@ -439,8 +439,7 @@ void main() {
           'attachments with add_lesfiche_attachments, '
           'set_lesfiche_attachment_visibility and '
           'remove_lesfiche_attachment. Move it to the trash with '
-          'trash_lesfiches. Labels are set in the Lesfiches module '
-          'itself.\n'
+          'trash_lesfiches.\n'
           'Note: you already had 1 other assignment lesfiche named "Taak: '
           'een eigen spel". The module keeps both; tell the user, who can '
           'tell them apart by their labels in the module:\n'

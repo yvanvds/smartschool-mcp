@@ -5,6 +5,7 @@ import '../goals/goals.dart';
 import '../intradesk/intradesk_format.dart';
 import '../log.dart';
 import '../planner/lesfiche_detail.dart';
+import '../planner/lesfiche_labels.dart';
 import '../planner/lesfiche_writes.dart';
 import '../planner/lesfiches.dart';
 import '../planner/planner_access.dart';
@@ -17,7 +18,8 @@ import 'server_tool.dart';
 /// `create_lesfiche`: makes a lesfiche in the user's own library ("Mijn
 /// lesfiches") of the Lesfiches module, a lesson or an assignment, with its
 /// name, icon, public and private info, courses, learning goals (#187),
-/// weblinks and attachments (files from this PC) in one create, as the web client makes one (the
+/// labels (#188), weblinks and attachments (files from this PC) in one
+/// create, as the web client makes one (the
 /// library's `LessonContentService.createLesson` and `createAssignment`,
 /// dartschool#129), and gives it back as `read_lesfiche` shows it.
 ///
@@ -35,9 +37,10 @@ import 'server_tool.dart';
 /// (`lesfiche_writes.dart`, the visibilities in `lesfiche_detail.dart`).
 /// The tool then reads the user's lesfiches, for the note on lesfiches of
 /// the same name and kind, the school's course list to find the courses by
-/// name, for an assignment the school's assignment types, and checks the
-/// goals with the goal selector ([checkGoals]), whose answer names them in
-/// the result. The library
+/// name, for an assignment the school's assignment types, the labels there
+/// are to find the labels by text ([lesficheLabels]), and checks the goals
+/// with the goal selector ([checkGoals]), whose answer names them in the
+/// result. The library
 /// checks the courses and the type again, uploads the files, sends the
 /// create once and reads the new lesfiche back; a create it cannot confirm
 /// is reported as maybe made, or as made with its id when the module
@@ -56,14 +59,14 @@ ServerTool createLesficheTool(
         'of the Smartschool Lesfiches module, in one call: a lesson lesfiche '
         '(the default) or an assignment lesfiche (type assignment, with '
         'assignment_type), with its name, public info (what pupils see once '
-        'it is planned), private info, courses, learning goals, weblinks and '
-        'attachments (files from this PC). The own library is private to the user: '
+        'it is planned), private info, courses, learning goals, labels, '
+        'weblinks and attachments (files from this PC). The own library is private to the user: '
         'pupils see nothing of a lesfiche until a lesson is planned from it. '
         'Use it to turn a lesson prepared with the user (in the chat, or '
         'from documents) into a lesfiche, which plan_lesfiche then plans '
         'into the user\'s lesson hours as often as needed. Before calling '
         'this tool, show the user the kind, the name, the courses, the info, '
-        'the goals, each weblink (name, address, when pupils see it) and each file '
+        'the goals, the labels, each weblink (name, address, when pupils see it) and each file '
         '(name, size, when pupils see it), and only call this tool after the '
         'user has explicitly confirmed it; then call it once per lesfiche. '
         'The server reads any file the user\'s Windows account can read, up '
@@ -71,8 +74,10 @@ ServerTool createLesficheTool(
         'you made for the user (for example in a Cowork project folder) or '
         'that the user names. A name that is taken is not refused: the '
         'module makes a second lesfiche of that name, and the result names '
-        'the others. Labels are not offered: the user sets them in the '
-        'Lesfiches module itself. Learning goals are given as read_curriculum '
+        'the others. Labels are given by their text as list_lesfiche_labels '
+        'shows them; a label that does not exist is refused, and nothing is '
+        'made (make an own label first with create_lesfiche_label, after the '
+        'user has confirmed it). Learning goals are given as read_curriculum '
         'shows them (find them with list_curricula and read_curriculum); a '
         'goal the goal selector does not know is refused, and nothing is '
         'made. Write the info as plain text, with a blank '
@@ -131,6 +136,11 @@ ServerTool createLesficheTool(
               'list_curricula and read_curriculum). A goal the goal selector '
               'does not know is refused, and nothing is made. Default: none.',
         ),
+        'labels': lesficheLabelsSchema(
+          description:
+              'The labels of the lesfiche, the school\'s and the user\'s own, '
+              'as list_lesfiche_labels shows them. Default: none.',
+        ),
         'weblinks': lesficheWeblinksSchema(
           description:
               'Weblinks pupils open from the lesfiche, each with its name, '
@@ -186,6 +196,7 @@ Future<CallToolResult> _create(
   );
   final wanted = lesficheCoursesArgument(arguments['courses']) ?? const [];
   final goals = goalsArgument(arguments['goals']) ?? const [];
+  final wantedLabels = lesficheLabelsArgument(arguments['labels']) ?? const [];
   final weblinks = lesficheWeblinksArgument(arguments['weblinks']);
   final files = lesficheAttachmentsArgument(
     arguments['attachments'],
@@ -207,6 +218,9 @@ Future<CallToolResult> _create(
             ? const <PlannerCourse>[]
             : lesficheCourses(await lesfiches.getCourses(), wanted);
         final courseIds = [for (final course in courses) course.id];
+        final labels = wantedLabels.isEmpty
+            ? const <LessonContentLabel>[]
+            : lesficheLabels(await lesfiches.getLabels(), wantedLabels);
         final curricula = goals.isEmpty
             ? const <Curriculum>[]
             : await checkGoals(
@@ -225,6 +239,7 @@ Future<CallToolResult> _create(
             weblinks: weblinks,
             attachments: lesficheAttachments(files),
             goals: goals,
+            labels: labels,
           );
         } else {
           final planner = PlannerService(client);
@@ -249,6 +264,7 @@ Future<CallToolResult> _create(
               weblinks: weblinks,
               attachments: lesficheAttachments(files),
               goals: goals,
+              labels: labels,
             );
           } on ArgumentError catch (error) {
             // The school's types changed since the session read them: the
@@ -272,7 +288,8 @@ Future<CallToolResult> _create(
       'create_lesfiche: made the $kind in ${watch.elapsedMilliseconds} ms '
       '(courses ${lesfiche.courses.length}, weblinks '
       '${lesfiche.weblinks.length}, attachments '
-      '${lesfiche.attachments.length}, goals ${lesfiche.goals.length}, of the '
+      '${lesfiche.attachments.length}, goals ${lesfiche.goals.length}, labels '
+      '${lesfiche.labels.length}, of the '
       'same name ${namesakes.length})',
     );
     // The library confirmed that the lesfiche read back has the goals sent,
@@ -385,8 +402,7 @@ CallToolResult _result(
               'attachments with add_lesfiche_attachments, '
               'set_lesfiche_attachment_visibility and '
               'remove_lesfiche_attachment. Move it to the trash with '
-              'trash_lesfiches. Labels are set in the Lesfiches module '
-              'itself.',
+              'trash_lesfiches.',
           if (namesakes.isNotEmpty) ...[
             'Note: you already had $others named "${lesfiche.name}". The '
                 'module keeps both; tell the user, who can tell them apart '
