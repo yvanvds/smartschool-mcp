@@ -11,20 +11,6 @@ import 'log.dart';
 import 'release_notes.dart' as release_notes;
 import 'version.dart';
 
-/// The system the server runs on, which decides the file an update needs.
-enum ServerPlatform {
-  /// Windows: the Claude Desktop extension and the self-installing exe.
-  windows,
-
-  /// Linux (x64): the standalone binary, configured in the MCP client.
-  linux;
-
-  /// The system this process runs on. Anything but Linux counts as
-  /// Windows: releases only have files for these two.
-  static ServerPlatform get current =>
-      Platform.isLinux ? ServerPlatform.linux : ServerPlatform.windows;
-}
-
 /// A release of this server published on GitHub.
 final class Release {
   const Release(

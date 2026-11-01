@@ -16,6 +16,15 @@ void main() {
     }
   });
 
+  test('the server runs on the system this process runs on, unless a test '
+      'says otherwise', () {
+    expect(ClientContext().platform, ServerPlatform.current);
+    expect(
+      ClientContext(ClientApp.codex, ServerPlatform.linux).platform,
+      ServerPlatform.linux,
+    );
+  });
+
   test('the server records the app the client names on initialize', () async {
     for (final (name, app) in [
       (ClientApp.codexClientName, ClientApp.codex),

@@ -47,6 +47,12 @@ final _lvsTools = [
     tool.definition.name,
 ];
 
+/// What `smartschool_status` calls the settings: on Linux, where there is
+/// no Claude Desktop, the server words them for the MCP client (#199).
+final _settingsLabel = Platform.isLinux
+    ? 'environment variables of the MCP server'
+    : 'extension settings';
+
 void main() {
   late Directory bundle;
   late Map<String, Object?> manifest;
@@ -203,10 +209,14 @@ void main() {
             as String;
     final required = [
       for (final MapEntry(:key, :value) in fields().entries)
-        if (value['required'] == true) '"${value['title']}" (${envVar(key)})',
+        if (value['required'] == true)
+          // On Linux the server names only the variable (#199).
+          Platform.isLinux
+              ? envVar(key)
+              : '"${value['title']}" (${envVar(key)})',
     ];
     expect(text, contains('Missing: ${required.join(', ')}.'));
-    expect(text, contains('Settings: extension settings'));
+    expect(text, contains('Settings: $_settingsLabel'));
     final folder = _join(_join(home.path, 'Downloads'), 'Smartschool');
     expect(
       text,
@@ -449,7 +459,7 @@ void main() {
         'Problem: $unreachable',
       ),
     );
-    expect(status, contains('\nSettings: extension settings (all filled in)'));
+    expect(status, contains('\nSettings: $_settingsLabel (all filled in)'));
     expect(listError, isTrue);
     expect(list, startsWith(unreachable));
 
@@ -512,9 +522,15 @@ void main() {
       expect(
         status,
         contains(
-          '\nSettings: extension settings (Smartschool-adres: filled in, '
-          'Gebruikersnaam: filled in, Wachtwoord: filled in, 2FA-sleutel: '
-          'empty (only needed for an account with 2FA))\n',
+          Platform.isLinux
+              ? '\nSettings: $_settingsLabel (SMARTSCHOOL_MAIN_URL: filled '
+                    'in, SMARTSCHOOL_USERNAME: filled in, '
+                    'SMARTSCHOOL_PASSWORD: filled in, SMARTSCHOOL_MFA: empty '
+                    '(only needed for an account with 2FA))\n'
+              : '\nSettings: extension settings (Smartschool-adres: filled '
+                    'in, Gebruikersnaam: filled in, Wachtwoord: filled in, '
+                    '2FA-sleutel: empty (only needed for an account with '
+                    '2FA))\n',
         ),
       );
 
@@ -548,11 +564,14 @@ void main() {
     final (_, text) = await server.callTool('smartschool_status');
 
     final title = fields()['download_dir']!['title'];
+    // On Linux the server names only the variable (#199).
+    final named = Platform.isLinux
+        ? 'SMARTSCHOOL_DOWNLOAD_DIR'
+        : '"$title" (SMARTSCHOOL_DOWNLOAD_DIR)';
     expect(
       text,
       contains(
-        '\nDownload folder: ${downloads.path} (set in "$title" '
-        '(SMARTSCHOOL_DOWNLOAD_DIR); writable)\n',
+        '\nDownload folder: ${downloads.path} (set in $named; writable)\n',
       ),
     );
     await server.stop();

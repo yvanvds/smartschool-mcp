@@ -258,6 +258,13 @@ Settings are named by their variable first (`SMARTSCHOOL_MFA
 ("2FA-sleutel")`), as the form shows them. Any other client gets the Claude
 Desktop wording.
 
+On Linux there is no extension and no ChatGPT form, so whatever the client
+calls itself, the messages name only the variable (`SMARTSCHOOL_MFA`), say
+to set it in the server's configuration in the MCP client (with a link to
+`docs/installatie-linux.md`) and to "restart the MCP client" (#199). Which
+of the three applies is `SettingsHome` in `lib/src/settings.dart`, from the
+app and `ClientContext.platform` (`ServerPlatform`).
+
 **Mistyped keys.** Codex starts a server with a cleared environment: a fixed
 list of Windows variables (`WINDOWS_CORE_ENV_VARS` in openai/codex) plus the
 form's. So a variable that is close to a setting's name
@@ -662,7 +669,7 @@ check gets one extra text after its content, for the model to pass on:
   app the server runs in (the release asset's `browser_download_url`):
   `smartschool-mcp.mcpb` in Claude Desktop, `smartschool-mcp.exe` under
   Codex, and on Linux `smartschool-mcp-linux-x64` in every app
-  (`ServerPlatform` in `lib/src/update_check.dart`). A release without that
+  (`ServerPlatform` in `lib/src/client_app.dart`). A release without that
   file gets the link to its release page instead;
 - what to do with it: double-click it (under Codex also: restart ChatGPT);
   on Linux, put it in place of the old binary, `chmod +x` it and restart the

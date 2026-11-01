@@ -90,7 +90,10 @@ void main() {
 
     test('worded for the app the server runs in, which is known only after '
         'the folder was resolved', () {
-      final client = ClientContext();
+      final client = ClientContext(
+        ClientApp.claudeDesktop,
+        ServerPlatform.windows,
+      );
       final folder = DownloadFolder.resolve(
         ExtensionSettings(client: client),
         environment: {'SMARTSCHOOL_DOWNLOAD_DIR': inRoot('Cowork')},
