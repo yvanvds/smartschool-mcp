@@ -136,6 +136,7 @@ void main() {
         'public_info',
         'private_info',
         'courses',
+        'goals',
         'visible',
       ]);
       expect(
@@ -324,7 +325,7 @@ void main() {
       expect(
         await refused({}),
         'Nothing to change: pass at least one of name, icon, public_info, '
-        'private_info, courses and visible. Nothing was sent.',
+        'private_info, courses, goals and visible. Nothing was sent.',
       );
       expect(
         await refused({'name': '  '}),

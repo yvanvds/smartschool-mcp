@@ -68,7 +68,10 @@ gets a new id, which the answer gives.
 ### `edit_planned_element`
 
 Changes the name, the public info or the private info of a lesson or an
-assignment of your own planner; an empty text empties an info. Asks for
+assignment of your own planner, and the learning goals of a lesson (from
+[`read_curriculum`](goals.md#read_curriculum); pupils see them); an empty
+text empties an info. The goals given replace all of them, and an empty list
+clears them; a goal the goal selector does not know is refused. Asks for
 approval. A colleague's element is refused.
 
 ### `clear_lesson`
@@ -213,10 +216,16 @@ once.
 ### How `edit_planned_element` works
 
 It changes `name`, `public_info` and/or `private_info` (plain text, as
-`plan_lesson`), by the element's id (`renameElement`, `changePublicInfo`,
-`changePrivateInfo`, in that order). Marked destructive and idempotent: each
-change sets a value, and the library sends nothing for a value the element
-already has. The library refuses a colleague's element, or a change the
+`plan_lesson`), and for a lesson `goals` (`{id, leerplanId, type}` as
+`read_curriculum` shows them), by the element's id (`renameElement`,
+`changePublicInfo`, `changePrivateInfo`, `changeGoals` of dartschool#226, in
+that order). Marked destructive and idempotent: each change sets a value,
+and the library sends nothing for a value the element already has. The goals
+are checked with the goal selector (at `GoalLocation.plannerLessonContent`)
+before any change is sent, and the answer names them, as
+`read_planned_element` does, when they were among the changes; goals for an
+assignment are refused before anything is sent (the library has not tried
+them). See [How goals are set](goals.md#how-goals-are-set). The library refuses a colleague's element, or a change the
 planner does not allow, before sending it. When one change fails after
 another was saved, the answer says which were saved.
 

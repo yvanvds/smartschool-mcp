@@ -33,7 +33,7 @@ offered only when the switch is on; every switch is off by default (see
 | [Intradesk](docs/tools/intradesk.md) | Find, read and save files; add folders, weblinks and files; trash | | 8 |
 | [Planner](docs/tools/planner.md) | Read planners; plan lessons, tests and tasks in your own | | 9 |
 | [Lesfiches](docs/tools/lesfiches.md) | Read, make, change, trash and plan your lesfiches | | 13 |
-| [Learning goals](docs/tools/goals.md) | The curricula of the goal selector and their goals; read only | | 2 |
+| [Learning goals](docs/tools/goals.md) | The curricula of the goal selector and their goals, to set on lesfiches and lessons; read only | | 2 |
 | [Gradebook (Puntenboek)](docs/tools/gradebook.md) | Your gradebooks in Skore: evaluations, grades, feedback, report comments | | 9 |
 | [Skore administration](docs/tools/skore.md) | Teachers per course and shared gradebooks, for Skore administrators | "Skore-beheer" (`SMARTSCHOOL_SKORE`) | 8 |
 | [Presences](docs/tools/presences.md) | Half-day presences of classes: late and present | "Aanwezigheden" (`SMARTSCHOOL_PRESENCE`) | 4 |

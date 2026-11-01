@@ -1,8 +1,10 @@
+import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
 import '../session.dart';
 import '../tools/server_tool.dart';
+import '../uploads/local_files.dart';
 
 // The learning goals of Smartschool's goal selector (`GoalService`,
 // dartschool#222): the curricula it offers (the eindtermen, the curricula of
@@ -322,4 +324,192 @@ String _namedGoal(SelectableGoal goal) {
       '${_nodeText(goal.node)}${_goalNotes(goal.node)}',
     ].join(' > '),
   ].join(' ');
+}
+
+/// What the goal writes say about their list (#187): it replaces the goals,
+/// so adding one means passing the current goals with it.
+const goalsReplaceNote =
+    'The list replaces all the goals: to add a goal, pass the goals it has '
+    'now (as read_lesfiche or read_planned_element shows them) plus the new '
+    'one; to remove one, pass the others; an empty list removes them all.';
+
+/// The input schema of a `goals` argument ([goalsArgument]): goals as
+/// `read_curriculum` shows them, each by its id with the leerplanId and the
+/// type of its curriculum.
+Schema goalsSchema({required String description}) => Schema.list(
+  description: description,
+  items: Schema.object(
+    properties: {
+      'id': Schema.string(
+        description:
+            'The id of the goal, as read_curriculum shows it at the end of '
+            'its line, like f0000000-0000-4000-8000-000000000011.',
+        minLength: 1,
+      ),
+      'leerplanId': Schema.string(
+        description:
+            'The leerplanId of its curriculum, as read_curriculum shows it '
+            'in its header (the curriculum\'s id).',
+        minLength: 1,
+      ),
+      'type': Schema.string(
+        description:
+            'The type of its curriculum, as read_curriculum shows it in its '
+            'header, like eindtermen-derde-graad-doorstroom or miniDB.',
+        minLength: 1,
+      ),
+    },
+    required: ['id', 'leerplanId', 'type'],
+  ),
+);
+
+final _uuid = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+  r'[0-9a-fA-F]{12}$',
+);
+
+/// [value], the `goals` argument [name] of a goal write: goals, each
+/// `{id, leerplanId, type}` as `read_curriculum` (or the read of the item)
+/// shows them, without the white space around a field and each once, in
+/// the order given; null when it is absent, empty to clear the goals.
+///
+/// Throws a [ToolError] that names the goal for one that is not an object
+/// with the three fields, an id that is not a UUID (a goal's id always is;
+/// the library refuses another), and two goals with the same id in another
+/// curriculum or of another type, before anything is sent. Whether the
+/// goals exist is checked by [checkGoals].
+List<LearningGoalRef>? goalsArgument(Object? value, {String name = 'goals'}) {
+  if (value == null) return null;
+  final items = value is List ? value : [value];
+  final goals = <LearningGoalRef>[];
+  for (final (index, item) in items.indexed) {
+    final where = 'Goal ${index + 1} of $name';
+    String field(String key) => switch (item is Map ? item[key] : null) {
+      final String text when text.trim().isNotEmpty => text.trim(),
+      _ => throw ToolError(
+        '$where has no $key: pass each goal as {id, leerplanId, type}, as '
+        'read_curriculum shows them (the id at the end of the goal\'s line, '
+        'the leerplanId and type in its header). $nothingSent',
+      ),
+    };
+    if (item is! Map) {
+      throw ToolError(
+        '$where is not a goal: pass each goal as {id, leerplanId, type}, as '
+        'read_curriculum shows them. $nothingSent',
+      );
+    }
+    final goal = LearningGoalRef(
+      id: field('id'),
+      leerplanId: field('leerplanId'),
+      type: field('type'),
+    );
+    if (!_uuid.hasMatch(goal.id)) {
+      throw ToolError(
+        '$where has the id "${goal.id}", which is not the id of a goal: take '
+        'it from read_curriculum, where it ends the goal\'s line, like '
+        'f0000000-0000-4000-8000-000000000011. $nothingSent',
+      );
+    }
+    final earlier = goals
+        .where((other) => other.id.toLowerCase() == goal.id.toLowerCase())
+        .firstOrNull;
+    if (earlier == null) {
+      goals.add(goal);
+    } else if (!sameGoals([earlier], [goal])) {
+      throw ToolError(
+        '$where has the id of another goal of the list, with another '
+        'leerplanId or type: ${formatGoalRef(goal)} and '
+        '${formatGoalRef(earlier)}. Take them from read_curriculum. '
+        '$nothingSent',
+      );
+    }
+  }
+  return goals;
+}
+
+/// Whether [a] and [b] hold the same goals, in any order, the ids and the
+/// leerplanIds in any case (as the library compares them).
+bool sameGoals(Iterable<LearningGoalRef> a, Iterable<LearningGoalRef> b) {
+  final left = {for (final goal in a) _goalKey(goal)};
+  final right = {for (final goal in b) _goalKey(goal)};
+  return left.length == right.length && left.containsAll(right);
+}
+
+(String, String, String) _goalKey(LearningGoalRef goal) =>
+    (goal.id.toLowerCase(), goal.leerplanId.toLowerCase(), goal.type);
+
+/// Checks with the goal selector (`GoalService.resolve` at [location], one
+/// request) that [goals] are goals it knows, before a goal write sends them:
+/// the lesfiche modules and the planner store any id without complaint, so
+/// a made-up id would be stored. Goals the item already stores ([stored])
+/// are kept without the check: they may be of a source the selector does
+/// not read (LLinkid, for instance), and passing them is how a goal is
+/// added. Returns the curricula of the answer, which name the goals checked
+/// ([NamedGoals]).
+///
+/// Throws a [ToolError] that lists the goals the selector does not have in
+/// that curriculum, or as a goal that can be picked (a heading), and those
+/// given with another type than their curriculum's, with what to do; or
+/// one for a selector that could not answer ([goalToolError]). Both say that
+/// nothing was sent.
+Future<List<Curriculum>> checkGoals(
+  SmartschoolClient client,
+  List<LearningGoalRef> goals, {
+  required GoalLocation location,
+  List<LearningGoalRef> stored = const [],
+}) async {
+  final storedKeys = {for (final goal in stored) _goalKey(goal)};
+  final asked = [
+    for (final goal in goals)
+      if (!storedKeys.contains(_goalKey(goal))) goal,
+  ];
+  if (asked.isEmpty) return const [];
+  final List<Curriculum> curricula;
+  try {
+    curricula = await GoalService(client).resolve(asked, location: location);
+  } on SmartschoolGoalError catch (error) {
+    final toolError = goalToolError(error)!;
+    throw ToolError(
+      'The goals could not be checked: ${toolError.message} $nothingSent',
+    );
+  } on ArgumentError catch (error) {
+    if (error is RangeError) rethrow;
+    log('goals: $error');
+    throw ToolError(
+      'The goals could not be checked: the goal selector refused '
+      '${error.name ?? 'them'}: ${error.message}. $nothingSent',
+    );
+  }
+  final problems = <String>[];
+  for (final goal in asked) {
+    final found = GoalService.findGoal(curricula, goal);
+    if (found == null) {
+      final known = curricula.any(
+        (curriculum) =>
+            curriculum.id.toLowerCase() == goal.leerplanId.toLowerCase(),
+      );
+      problems.add(
+        '- ${formatGoalRef(goal)}: ${known ? 'its curriculum has no goal '
+                  'with that id that can be picked' : 'the goal selector has '
+                  'no such goal (no curriculum with that leerplanId has it)'}',
+      );
+    } else if (found.ref.type != goal.type) {
+      problems.add(
+        '- ${formatGoalRef(goal)}: its curriculum has the type '
+        '${found.ref.type}, not ${goal.type}',
+      );
+    }
+  }
+  if (problems.isEmpty) return curricula;
+  log('goals: ${problems.length} of ${asked.length} goals refused');
+  throw ToolError(
+    [
+      '${problems.length == 1 ? 'A goal is' : '${problems.length} goals are'} '
+          'not known to the goal selector as given, so ${problems.length == 1 ? 'it' : 'they'} would be '
+          'stored as a goal without a name. $nothingSent',
+      ...problems,
+      'Find the goal with list_curricula and read_curriculum, and pass its '
+          'id with the leerplanId and type of the curriculum\'s header.',
+    ].join('\n'),
+  );
 }

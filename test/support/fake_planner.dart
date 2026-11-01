@@ -386,6 +386,7 @@ class FakePlannedElement {
         'canUserChangePublicInfo': isOwn,
         'canUserReplace': isOwn,
         'canUserRename': isOwn,
+        'canUserChangeGoals': isOwn,
       },
       'planned-assignments' => {
         'canUserTrash': isOwn,
@@ -715,6 +716,7 @@ class FakeLesfiche {
     List<FakePlannerCourse>? courses,
     List<FakeLesficheWeblink>? weblinks,
     List<FakeLesficheAttachment>? attachments,
+    List<Map<String, String>>? goals,
   }) => FakeLesfiche(
     id: id,
     name: name ?? this.name,
@@ -732,7 +734,7 @@ class FakeLesfiche {
     weblinks: weblinks ?? this.weblinks,
     attachments: attachments ?? this.attachments,
     partnerWeblinks: partnerWeblinks,
-    goals: goals,
+    goals: goals ?? this.goals,
   );
 
   Map<String, Object?> toJson() => {
@@ -970,7 +972,8 @@ class FakePlannerHit {
 ///   refuses one before sending);
 /// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/rename`
 ///   (`newName`), `.../change-public-info` and `.../change-private-info`
-///   (`newInfo`): changes the element, and answers with it;
+///   (`newInfo`), and `.../change-goals` (`goals`, dartschool#226, stored
+///   as sent): changes the element, and answers with it;
 /// - `POST /planner/api/v1/planned-elements/clear` (`type`, `elementId`,
 ///   `elementPlatformId`): clears the lesson as [clearLesson] does, and
 ///   answers with the empty lesson hour;
@@ -997,7 +1000,8 @@ class FakePlannerHit {
 ///   (`newPublicInfo`), `.../change-private-info` (`newPrivateInfo`),
 ///   `.../change-courses` (`newCourses`, each `{platformId, id}`, stored as
 ///   sent, also a course the course list does not have, as live),
-///   `.../mark-as-visible` and `.../mark-as-invisible`: change the lesfiche,
+///   `.../change-goals` (`newGoals`, dartschool#223, stored as sent, also a
+///   goal no curriculum has, as live), `.../mark-as-visible` and `.../mark-as-invisible`: change the lesfiche,
 ///   and answer `200` with the whole lesfiche;
 /// - `POST .../weblinks` (`newName`, `newIcon`, `newUrl`, `newVisibility`;
 ///   an address without `http(s)://` gets a bare `400`, as live) adds a
@@ -1377,7 +1381,10 @@ class FakePlanner {
           final platform,
           final id,
           final action &&
-              ('rename' || 'change-public-info' || 'change-private-info'),
+              ('rename' ||
+                  'change-public-info' ||
+                  'change-private-info' ||
+                  'change-goals'),
         ] =>
           _edit(
             '$type/$platform/${Uri.decodeComponent(id)}',
@@ -1538,6 +1545,7 @@ class FakePlanner {
               FakePlannerCourse('${course['id']}', ''),
       ],
       assignmentType: assignmentType,
+      goals: _storedGoals(body['goals']),
       weblinks: [
         for (final weblink in (body['weblinks'] as List).cast<Map>())
           FakeLesficheWeblink(
@@ -1567,6 +1575,18 @@ class FakePlanner {
     lesfiches.add(lesfiche);
     return _json(jsonEncode({'id': lesfiche.id}), status: 201);
   }
+
+  /// The goals of a goal write's body [goals] (each `{id, goalId,
+  /// leerplanId, type}`) as the module and the planner store them: `{id,
+  /// leerplanId, type}`, any id, also one no curriculum has (as live).
+  static List<Map<String, String>> _storedGoals(Object? goals) => [
+    for (final goal in (goals as List).cast<Map>())
+      fakeGoalRef(
+        goal['id'] as String,
+        goal['leerplanId'] as String,
+        goal['type'] as String,
+      ),
+  ];
 
   /// A new id for a weblink or an attachment, with [prefix] `e` for a
   /// weblink and `f` for an attachment: the creates and the writes of
@@ -1626,6 +1646,10 @@ class FakePlanner {
         final info = text('newPrivateInfo');
         if (info == null) return _badRequest();
         return changed(lesfiche.withChanges(privateInfo: info));
+      case ('POST', ['change-goals']):
+        final goals = body['newGoals'];
+        if (goals is! List) return _badRequest();
+        return changed(lesfiche.withChanges(goals: _storedGoals(goals)));
       case ('POST', ['change-courses']):
         final courses = body['newCourses'];
         if (courses is! List) return _badRequest();
@@ -1925,6 +1949,7 @@ class FakePlanner {
       'change-public-info' => element.withChanges(
         publicInfo: body['newInfo'] as String,
       ),
+      'change-goals' => element.withChanges(goals: _storedGoals(body['goals'])),
       _ => element.withChanges(privateInfo: body['newInfo'] as String),
     };
     _replace(element, changed);

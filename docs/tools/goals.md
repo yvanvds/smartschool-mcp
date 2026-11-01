@@ -8,7 +8,11 @@ lesson: the eindtermen, the curricula of the philosophies of life and your
 school's own mini-databases. For everyone, without a switch. Read only:
 nothing here changes Smartschool. [`read_lesfiche`](lesfiches.md#read_lesfiche)
 and [`read_planned_element`](planner.md#read_planned_element) show the goals
-a lesfiche or a lesson has.
+a lesfiche or a lesson has; [`create_lesfiche`](lesfiches.md#create_lesfiche),
+[`edit_lesfiche`](lesfiches.md#edit_lesfiche) and
+[`edit_planned_element`](planner.md#edit_planned_element) set them, with the
+goals as `read_curriculum` shows them (see [How goals are
+set](#how-goals-are-set)).
 
 | Tool | What it does | Changes Smartschool? |
 | --- | --- | --- |
@@ -86,6 +90,45 @@ cannot name the goals at all (a `SmartschoolGoalError`), the read is not
 lost: the goals are shown by their fields, with a note. Without goals,
 nothing is sent to the selector.
 
+### How goals are set
+
+`create_lesfiche`, `edit_lesfiche` and `edit_planned_element` (for a lesson)
+take `goals`: a list of `{id, leerplanId, type}`, the goal's id from its line
+in `read_curriculum` and the `leerplanId` and `type` from the head of that
+answer (or the three fields `read_lesfiche` and `read_planned_element` show).
+The list replaces the goals, as in the web clients, which send their whole
+selection: to add a goal, Claude passes the goals the item has plus the new
+one; an empty list clears them. The tools say this in their descriptions.
+The writes are the library's `LessonContentService.changeGoals` and the
+creates' `goals` (dartschool#223), and `PlannerService.changeGoals`
+(dartschool#226), which sends nothing when the lesson has those goals
+already.
+
+The Lesfiches module and the planner store any goal id without complaint
+(seen live), so before anything is sent the tools check the goals with the
+selector (`checkGoals`): one `GoalService.resolve` for the goals the item
+does not have yet, at the selector's place for the item (`lessonContent`, or
+`plannerLessonContent` for the planner). A goal it does not name in that
+curriculum (a made-up id, the id of a heading, a curriculum it does not have)
+or that is given with another `type` than its curriculum's is refused, with
+the goals listed, and nothing is sent. This costs one request per write and
+needs no whole curriculum (a curriculum of the eindtermen is large). The
+goals the item already stores are not checked, so that a goal of a source the
+selector does not read (LLinkid) stays when a goal is added. A selector that
+cannot answer refuses the write too. Before that, the arguments are checked
+without a request: each goal an object with the three fields, the id a UUID
+(as the library requires), and no id twice with other fields.
+
+The result names the goals the item has after the write, as the reads do:
+`create_lesfiche` with the selector's answer to the check (the library
+confirms that the lesfiche read back has exactly the goals sent), the
+lesfiche edits with the read-back of `read_lesfiche`, and
+`edit_planned_element` with `nameGoals` on the lesson it gets back, only when
+the goals were among the changes. A write the planner does not confirm
+(`SmartschoolPlannerSaveUnconfirmedError`) is reported as maybe saved, as
+for the other fields; the library's `ArgumentError`s cannot be reached past
+the checks above, and would be a "refused before it was sent" error.
+
 ### Helpers and tests
 
 The helpers live in `lib/src/goals/goals.dart`: the session runner with the
@@ -95,7 +138,9 @@ of a `query` (`goalQueryWords`, `goalMatches`), the answers of the two tools
 fields of a goal as every tool shows them (`formatGoalRef`: `id …,
 leerplanId …, type …`), and the naming of stored goals for the reads of a
 lesfiche or a lesson (`nameGoals`, which keeps the read when the selector
-fails, and `formatNamedGoals`).
+fails, and `formatNamedGoals`), and for the goal writes the `goals` argument
+(`goalsSchema`, `goalsArgument`, `goalsReplaceNote`), its comparison
+(`sameGoals`) and the check with the selector (`checkGoals`).
 
 The tests (`test/goal_tools_test.dart`) call the tools over MCP on the real
 server, session and library, against the fake goal selector
@@ -103,4 +148,7 @@ server, session and library, against the fake goal selector
 of dartschool's tests (`test/goal_service_test.dart` there): the list, a
 curriculum as a tree, and the naming of a selection, pruned, leaving out
 what it does not know. The goals of a lesfiche and of a planned lesson are
-tested there too, with the fake planner.
+tested there too, with the fake planner. The goal writes are tested in
+`test/goal_write_tools_test.dart`, against the fake Lesfiches module and
+planner, which store the goals of a create or a `change-goals` as sent, also
+a made-up one, as live.

@@ -138,7 +138,7 @@
     },
     {
       "name": "edit_planned_element",
-      "description": "Past de titel, de info voor leerlingen of de privé-info van een eigen les of toets in de planner aan. Pas na jouw bevestiging."
+      "description": "Past de titel, de info voor leerlingen of de privé-info van een eigen les of toets in de planner aan, en de leerdoelen van een les. Pas na jouw bevestiging."
     },
     {
       "name": "clear_lesson",
@@ -170,11 +170,11 @@
     },
     {
       "name": "create_lesfiche",
-      "description": "Maakt een nieuwe lesfiche in je eigen bibliotheek van de module Lesfiches, met de info, de vakken, weblinks en bijlagen van deze pc. Pas na jouw bevestiging."
+      "description": "Maakt een nieuwe lesfiche in je eigen bibliotheek van de module Lesfiches, met de info, de vakken, de leerdoelen, weblinks en bijlagen van deze pc. Pas na jouw bevestiging."
     },
     {
       "name": "edit_lesfiche",
-      "description": "Past een lesfiche in je eigen bibliotheek aan: de naam, het icoon, de info, de vakken, of ze zichtbaar is in de module. Pas na jouw bevestiging."
+      "description": "Past een lesfiche in je eigen bibliotheek aan: de naam, het icoon, de info, de vakken, de leerdoelen, of ze zichtbaar is in de module. Pas na jouw bevestiging."
     },
     {
       "name": "set_lesfiche_weblink",

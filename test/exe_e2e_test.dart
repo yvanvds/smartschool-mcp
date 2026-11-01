@@ -487,7 +487,14 @@ void main() {
       'name',
       'public_info',
       'private_info',
+      'goals',
     ]);
+    // The learning goals of a lesson (#187), as read_curriculum shows them.
+    expect(
+      (((editSchema['properties'] as Map)['goals'] as Map)['items']
+          as Map)['required'],
+      ['id', 'leerplanId', 'type'],
+    );
     final clearSchema = tools['clear_lesson']!['inputSchema'] as Map;
     expect(clearSchema['required'], ['id']);
     expect((clearSchema['properties'] as Map).keys, ['id']);
@@ -2083,7 +2090,21 @@ void main() {
       (
         'edit_planned_element',
         {'id': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
-        'pass at least one of name, public_info and private_info',
+        'pass at least one of name, public_info, private_info and goals',
+      ),
+      (
+        'edit_planned_element',
+        {
+          'id': 'planned-assignments/4069/225c0b54-0000-4000-8000-000000000000',
+          'goals': [
+            {
+              'id': 'f0000000-0000-4000-8000-000000000011',
+              'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+              'type': 'eindtermen-derde-graad-doorstroom',
+            },
+          ],
+        },
+        'goals are for a lesson only',
       ),
       (
         'clear_lesson',
@@ -2370,6 +2391,7 @@ void main() {
       'public_info',
       'private_info',
       'courses',
+      'goals',
       'weblinks',
       'attachments',
       'icon',
@@ -2556,6 +2578,7 @@ void main() {
           'public_info',
           'private_info',
           'courses',
+          'goals',
           'visible',
         ],
       ),
@@ -2614,6 +2637,21 @@ void main() {
 
     for (final (name, arguments) in <(String, Map<String, Object?>)>[
       ('edit_lesfiche', {'lesfiche': lesfiche, 'name': 'Lussen 2'}),
+      // Goals as read_curriculum shows them (#187): checked with the goal
+      // selector once logged in.
+      (
+        'edit_lesfiche',
+        {
+          'lesfiche': lesfiche,
+          'goals': [
+            {
+              'id': 'f0000000-0000-4000-8000-000000000011',
+              'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+              'type': 'eindtermen-derde-graad-doorstroom',
+            },
+          ],
+        },
+      ),
       (
         'set_lesfiche_weblink',
         {
@@ -2666,6 +2704,20 @@ void main() {
             'edit_lesfiche',
             {'lesfiche': lesfiche, 'name': '   '},
             'name is empty',
+          ),
+          (
+            'edit_lesfiche',
+            {
+              'lesfiche': lesfiche,
+              'goals': [
+                {
+                  'id': '01.01',
+                  'leerplanId': 'e0000000-0000-4000-8000-000000000001',
+                  'type': 'eindtermen-derde-graad-doorstroom',
+                },
+              ],
+            },
+            'which is not the id of a goal: take it from read_curriculum',
           ),
           (
             'set_lesfiche_weblink',

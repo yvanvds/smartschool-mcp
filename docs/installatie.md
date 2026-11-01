@@ -23,7 +23,9 @@ Je vraagt het gewoon in een gesprek:
   een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
   leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
-  minidatabanken van je school), en welke een lesfiche of een les heeft.
+  minidatabanken van je school), en welke een lesfiche of een les heeft. De
+  leerdoelen van een lesfiche of een eigen les instellen, pas nadat jij het
+  goedgekeurd hebt.
 - **Puntenboek:** je eigen puntenboeken in Skore bekijken, en de
   puntenboeken die collega's met je deelden: de periodes, de evaluaties met
   de punten of waarderingen van je leerlingen en of ze gepubliceerd zijn, de

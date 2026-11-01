@@ -187,6 +187,7 @@ void main() {
         'public_info',
         'private_info',
         'courses',
+        'goals',
         'weblinks',
         'attachments',
         'icon',

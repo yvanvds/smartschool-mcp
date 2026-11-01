@@ -189,6 +189,7 @@ void main() {
         'name',
         'public_info',
         'private_info',
+        'goals',
       ]);
       expect(tools['clear_lesson']!.inputSchema.required, ['id']);
       expect(tools['clear_lesson']!.inputSchema.properties!.keys, ['id']);
@@ -858,8 +859,8 @@ void main() {
         ),
         (
           {'id': fakeOwnLesson.ref},
-          'Nothing to change: pass at least one of name, public_info and '
-              'private_info. Nothing was sent.',
+          'Nothing to change: pass at least one of name, public_info, '
+              'private_info and goals. Nothing was sent.',
         ),
         (
           {'id': fakeOwnLesson.ref, 'name': ' ', 'public_info': 'Hallo'},

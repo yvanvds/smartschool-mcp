@@ -58,7 +58,9 @@ name and size.
 
 Makes a lesfiche in your own library ("Mijn lesfiches"): a lesson, or an
 assignment of one of the school's types, with a name and optionally public
-and private info, courses, weblinks, files from this PC and an icon. For each
+and private info, courses, learning goals (from
+[`read_curriculum`](goals.md#read_curriculum)), weblinks, files from this PC
+and an icon. For each
 weblink and file you choose when pupils see it: always, never, from the
 start or the end of the lesson it is planned in, or 1 to 14 days after its
 end. Labels are set in the module itself. Your library is private until you
@@ -70,9 +72,11 @@ the others.
 ### `edit_lesfiche`
 
 Changes one lesfiche of your own library: its name, icon, public or private
-info, courses, or whether it is visible in the module (a hidden lesfiche is
-still listed and can still be planned). An info is replaced whole, and an
-empty text empties it; the courses given replace all of them. Asks for
+info, courses, learning goals, or whether it is visible in the module (a
+hidden lesfiche is still listed and can still be planned). An info is
+replaced whole, and an empty text empties it; the courses and the goals
+given replace all of them (to add a goal, Claude passes the goals it has with
+the new one). A goal the goal selector does not know is refused. Asks for
 approval. A lesfiche in the trash cannot be changed: restore it in the
 module first. Whether a lesson planned from the lesfiche earlier changes
 with it has not been checked.
@@ -203,7 +207,9 @@ and optionally `public_info` and `private_info` (plain text, as
 `plan_lesson`), `courses` (each by its name as the tools show it, or by its
 id, found in the school's course list: one the list does not have is an
 error that lists the names, and a name two courses have one that gives
-their ids), `weblinks` (`{name, url, visibility?}`, the address as the web
+their ids), `goals` (`{id, leerplanId, type}` as `read_curriculum` shows
+them, checked with the goal selector before anything is sent, see [How goals
+are set](goals.md#how-goals-are-set)), `weblinks` (`{name, url, visibility?}`, the address as the web
 client sends it, `normalizeWeblinkUrl`; one it refuses is refused before
 sending), `attachments` (`{path, visibility?}`, 1 to 10 files from this PC,
 checked as `upload_intradesk_files` checks them, see
@@ -223,8 +229,9 @@ a second lesfiche, and it sends files from this PC; Claude Desktop and Codex
 ask for approval only for a tool marked destructive.
 
 Before sending, it reads the user's lesfiches (for the note on namesakes),
-the course list for the courses, and for an assignment the school's
-types (read once per session). The library checks the courses and the type
+the course list for the courses, for an assignment the school's
+types (read once per session), and checks the goals with the goal selector,
+whose answer names them in the result. The library checks the courses and the type
 again, uploads the files into a new upload directory, sends the create once
 (`POST lessons/` or `assignments/`, answered `201` with the id only) and
 reads the lesfiche back. When Smartschool refuses the session for the
@@ -258,14 +265,18 @@ per field given, in this order: `name` (`rename`, at most 255 characters),
 `changePrivateInfo`; plain text, as `edit_planned_element`: it replaces the
 whole info, and an empty text empties it), `courses` (`changeCourses`, by
 name or id as `create_lesfiche` takes them, in place of all its courses; an
-empty list removes them) and `visible` (`setVisible`: shown or hidden in the
-module). Marked destructive (as `create_lesfiche`, for Claude Desktop and
+empty list removes them), `goals` (`changeGoals`, dartschool#223, in place
+of all its goals; an empty list clears them; see [How goals are
+set](goals.md#how-goals-are-set)) and `visible` (`setVisible`: shown or
+hidden in the module). Marked destructive (as `create_lesfiche`, for Claude Desktop and
 Codex to ask approval) and idempotent: each edit sets a value. Claude shows
 the lesfiche and what changes, and calls after the user's confirmation.
 
-The tool reads the lesfiche first (the edits take it as read) and, for
-`courses`, the school's course list, so that an unknown course is refused
-before any edit; the library checks the courses again. It stops at the
+The tool reads the lesfiche first (the edits take it as read), for
+`courses` the school's course list, so that an unknown course is refused
+before any edit (the library checks the courses again), and for `goals`
+asks the goal selector about the goals the lesfiche does not have yet, so
+that an unknown goal is refused before any edit. It stops at the
 first edit that fails, and says which fields were changed before it and
 which were not sent, as `edit_planned_element` does; a field that already
 had the value given is sent all the same, and the result says so. The edits
