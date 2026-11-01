@@ -383,7 +383,10 @@ void main() {
       expect(text, contains('Its id is $id: plan it'));
 
       expect(
-        await ok('plan_lesfiche', {'hour': fakeOwnSlot.ref, 'lesfiche': id}),
+        await ok('plan_lesfiche', {
+          'hours': [fakeOwnSlot.ref],
+          'lesfiche': id,
+        }),
         startsWith('Planned the lesfiche $id in the '),
       );
       expect(

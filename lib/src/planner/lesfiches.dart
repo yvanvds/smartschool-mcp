@@ -4,8 +4,8 @@ import '../tools/server_tool.dart';
 import 'planner_format.dart';
 
 // The lesfiches of Smartschool's Lesfiches module (lesson content), which
-// `list_lesfiches` lists and `plan_lesfiche` plans into an empty lesson hour
-// of the user's own planner: the kinds a tool lists, the lesfiche id a tool
+// `list_lesfiches` lists and `plan_lesfiche` plans into lesson hours of
+// the user's own planner: the kinds a tool lists, the lesfiche id a tool
 // takes, the names of a lesfiche's courses, the order of the list, and one
 // line per lesfiche. Both tools reach the module with `withPlannerClient`
 // (`planner_access.dart`), which turns its errors into ToolErrors. One

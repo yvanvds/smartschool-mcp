@@ -1,7 +1,9 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../goals/goals.dart';
 import '../log.dart';
+import '../problems.dart';
 import '../session.dart';
 import '../tools/server_tool.dart';
 import 'planner_access.dart';
@@ -329,6 +331,12 @@ CallToolResult plannerWriteNotConfirmed({
 /// one that is not the user's own or no longer empty, and sends the fill
 /// once. A fill that the planner does not confirm is reported as maybe
 /// saved ([plannerWriteNotConfirmed]), with how to check it.
+///
+/// [hour] can also be a lesson that [fill] replaces, such as with
+/// [PlannerService.replaceWithLessonContent] (#190): the result then says
+/// that its old content is gone. With [withGoals] the result names the
+/// goals of the new lesson ([nameGoalsAfterWrite]), as a lesson planned from
+/// a lesfiche has the lesfiche's.
 Future<CallToolResult> fillLessonHour(
   SmartschoolSession session, {
   required String tool,
@@ -339,43 +347,94 @@ Future<CallToolResult> fillLessonHour(
     PlannedElementDetail slot,
   )
   fill,
+  bool withGoals = false,
 }) async {
+  final replaces = hour.type == PlannedElementType.lesson;
   PlannedElementDetail? slot;
   try {
     final lesson = await withPlannerWrite(session, (planner) async {
       final read = slot = await hour.read(planner);
       return fill(planner, read);
     });
+    final goals = withGoals
+        ? await nameGoalsAfterWrite(session, lesson.goals)
+        : null;
     final classes = elementClasses(lesson);
+    final pupils =
+        'Pupils${classes.isEmpty ? '' : ' of $classes'} see its name and '
+        'public info now.';
     return CallToolResult(
       content: [
         TextContent(
           text: [
-            'Planned $what in the ${formatElementSummary(slot!)}. Pupils'
-                '${classes.isEmpty ? '' : ' of $classes'} see its name and '
-                'public info now.',
-            'The empty lesson hour $hour no longer exists: the lesson has '
-                'the id ${PlannedElementRef.of(lesson)}.',
+            if (replaces)
+              'Replaced the ${formatElementSummary(slot!)} with $what: its '
+                  'old name, info and goals are gone, and the new lesson '
+                  'holds the content of $what. $pupils'
+            else
+              'Planned $what in the ${formatElementSummary(slot!)}. $pupils',
+            if (replaces)
+              'The lesson $hour no longer exists: the new lesson has the id '
+                  '${PlannedElementRef.of(lesson)}.'
+            else
+              'The empty lesson hour $hour no longer exists: the lesson has '
+                  'the id ${PlannedElementRef.of(lesson)}.',
             plannerListLagNote,
             '',
-            formatElementDetail(lesson),
+            formatElementDetail(lesson, goals: goals),
           ].join('\n'),
         ),
       ],
     );
   } on SmartschoolPlannerSaveUnconfirmedError catch (error) {
-    final where = slot == null
-        ? 'the empty lesson hour $hour'
-        : 'the ${formatElementSummary(slot!)}';
+    final where = slot != null
+        ? 'the ${formatElementSummary(slot!)}'
+        : replaces
+        ? 'the lesson $hour'
+        : 'the empty lesson hour $hour';
     return plannerWriteNotConfirmed(
       tool: tool,
       what: '${_capitalised(what)} in $where',
-      check:
-          'read the hour with read_planned_element (id $hour): when the '
-          'planner no longer has it, the hour was filled, and list_planner '
-          '(planner me) shows the lesson in its place, possibly only after a '
-          'few seconds; when the hour is still empty, nothing was saved',
+      check: replaces
+          ? 'read the lesson with read_planned_element (id $hour): when the '
+                'planner no longer has it, it was replaced, and list_planner '
+                '(planner me) shows the new lesson in its place, possibly '
+                'only after a few seconds; when the lesson is still there, '
+                'nothing was saved'
+          : 'read the hour with read_planned_element (id $hour): when the '
+                'planner no longer has it, the hour was filled, and '
+                'list_planner (planner me) shows the lesson in its place, '
+                'possibly only after a few seconds; when the hour is still '
+                'empty, nothing was saved',
       error: error,
+    );
+  }
+}
+
+/// The goals [refs] of what a write just made (a lesson, by default, or a
+/// lesfiche with [location] [GoalLocation.lessonContent]), named as
+/// `read_planned_element` and `read_lesfiche` name them ([nameGoals]), in
+/// a session action of its own: the write is never repeated for them.
+/// Without goals it sends nothing ([noGoals]). When they cannot be named,
+/// they are shown by their ids, with a note: the write itself was saved.
+Future<NamedGoals> nameGoalsAfterWrite(
+  SmartschoolSession session,
+  List<LearningGoalRef>? refs, {
+  GoalLocation location = GoalLocation.plannerLessonContent,
+}) async {
+  if (refs == null || refs.isEmpty) return noGoals;
+  try {
+    return await withPlannerClient(
+      session,
+      (client) => nameGoals(client, refs, location: location),
+    );
+  } on Object catch (error) {
+    if (error is! ToolError && error is! SmartschoolProblem) rethrow;
+    log('goals: naming the goals after a write failed: $error');
+    return (
+      refs: refs,
+      curricula: const <Curriculum>[],
+      error: const SmartschoolGoalError('naming the goals failed'),
     );
   }
 }

@@ -275,8 +275,9 @@ by reading the assignment again (the planner answers `404`).
 
 ### The planner writes
 
-For the six planner writes (`plan_lesson`, `edit_planned_element`,
-`clear_lesson`, `plan_lesfiche`, `plan_assignment`, `trash_assignment`), a
+For the seven planner writes (`plan_lesson`, `edit_planned_element`,
+`clear_lesson`, `plan_lesfiche`, `save_lesson_as_lesfiche`,
+`plan_assignment`, `trash_assignment`), a
 write that went out without the planner confirming it
 (`SmartschoolPlannerSaveUnconfirmedError`) is reported as maybe saved, with
 what to read to check it, and Claude is told not to call the tool again for
@@ -318,7 +319,9 @@ In `planner_writes.dart`, for the tools that change the planner: the info
 text Claude writes as HTML (`plainTextToHtml`), the `hour` argument
 (`emptyHourArgument`), the fill of an empty lesson hour with its result
 (`fillLessonHour`, which takes the library call that fills, so a lesfiche
-can be planned the same way), the lesson hour, the classes and the type of a
+can be planned the same way, and a lesson replaced by one), the goals of
+what a write just made, named in a session action of their own
+(`nameGoalsAfterWrite`), the lesson hour, the classes and the type of a
 new assignment (`lessonHourArgument`, `lessonHourClassesArgument`,
 `lessonHourClasses`, `assignmentTypeArgument`), `withPlannerWrite`
 (`withPlanner`, with a note that nothing changed on an error), and the

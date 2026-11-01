@@ -218,7 +218,11 @@
     },
     {
       "name": "plan_lesfiche",
-      "description": "Plant een lesfiche als les in een leeg lesuur van je eigen planner. Pas na jouw bevestiging."
+      "description": "Plant een lesfiche als les in een of meer lesuren van je eigen planner; een les vervangen alleen als je dat vraagt. Pas na jouw bevestiging."
+    },
+    {
+      "name": "save_lesson_as_lesfiche",
+      "description": "Bewaart een les van je eigen planner als nieuwe lesfiche in je bibliotheek. Pas na jouw bevestiging."
     },
     {
       "name": "create_lesfiche_label",

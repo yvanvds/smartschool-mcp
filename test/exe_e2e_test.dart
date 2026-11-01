@@ -122,6 +122,7 @@ void main() {
       'list_trashed_lesfiches',
       'restore_lesfiches',
       'plan_lesfiche',
+      'save_lesson_as_lesfiche',
       'create_lesfiche_label',
       'list_curricula',
       'read_curriculum',
@@ -459,6 +460,8 @@ void main() {
       ('duplicate_lesfiches', false),
       ('restore_lesfiches', true),
       ('plan_lesfiche', false),
+      // A save makes a new lesfiche each call (#190).
+      ('save_lesson_as_lesfiche', false),
       // An own label (#188): a second call is refused, not made twice, but
       // it is a create.
       ('create_lesfiche_label', false),
@@ -544,11 +547,25 @@ void main() {
       'query',
     ]);
     final planLesficheSchema = tools['plan_lesfiche']!['inputSchema'] as Map;
-    expect(planLesficheSchema['required'], ['hour', 'lesfiche']);
+    // Several hours in one call, and a lesson only replaced on request
+    // (#190).
+    expect(planLesficheSchema['required'], ['hours', 'lesfiche']);
     expect((planLesficheSchema['properties'] as Map).keys, [
-      'hour',
+      'hours',
       'lesfiche',
+      'replace',
     ]);
+    expect((planLesficheSchema['properties'] as Map)['hours'], {
+      'type': 'array',
+      'description': isA<String>(),
+      'items': {'type': 'string', 'minLength': 1},
+      'minItems': 1,
+      'maxItems': 20,
+    });
+    final saveLessonSchema =
+        tools['save_lesson_as_lesfiche']!['inputSchema'] as Map;
+    expect(saveLessonSchema['required'], ['lesson']);
+    expect((saveLessonSchema['properties'] as Map).keys, ['lesson', 'name']);
     // One lesfiche in full, and its attachments (#113): by the lesfiche's
     // id and kind, and the attachment by number or file name.
     final readLesficheSchema = tools['read_lesfiche']!['inputSchema'] as Map;
@@ -682,7 +699,7 @@ void main() {
     await server.initialize();
 
     final tools = (await server.request('tools/list'))['tools'] as List;
-    expect(tools, hasLength(76));
+    expect(tools, hasLength(77));
     expect(
       [for (final tool in tools) (tool as Map)['name']],
       containsAll([
@@ -756,7 +773,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(58));
+        expect(tools, hasLength(59));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(skoreTools))));
@@ -795,8 +812,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(66));
-      expect([for (final tool in tools.skip(58)) tool['name']], skoreTools);
+      expect(tools, hasLength(67));
+      expect([for (final tool in tools.skip(59)) tool['name']], skoreTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in skoreReads) {
         expect(byName[name]!['annotations'], {
@@ -989,7 +1006,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(58));
+        expect(tools, hasLength(59));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(presenceTools))));
@@ -1029,8 +1046,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(62));
-      expect([for (final tool in tools.skip(58)) tool['name']], presenceTools);
+      expect(tools, hasLength(63));
+      expect([for (final tool in tools.skip(59)) tool['name']], presenceTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in presenceReads) {
         expect(byName[name]!['annotations'], {
@@ -1226,10 +1243,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(70));
-      expect([for (final tool in tools.skip(66)) tool['name']], presenceTools);
+      expect(tools, hasLength(71));
+      expect([for (final tool in tools.skip(67)) tool['name']], presenceTools);
       expect([
-        for (final tool in tools.skip(58).take(8)) tool['name'],
+        for (final tool in tools.skip(59).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -1265,7 +1282,7 @@ void main() {
         await server.initialize();
 
         final tools = await listTools(server);
-        expect(tools, hasLength(58));
+        expect(tools, hasLength(59));
         expect([
           for (final tool in tools) tool['name'],
         ], everyElement(isNot(isIn(lvsTools))));
@@ -1318,8 +1335,8 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(64));
-      expect([for (final tool in tools.skip(58)) tool['name']], lvsTools);
+      expect(tools, hasLength(65));
+      expect([for (final tool in tools.skip(59)) tool['name']], lvsTools);
       final byName = {for (final tool in tools) tool['name']: tool};
       for (final name in lvsTools) {
         expect(byName[name]!['annotations'], {
@@ -1503,10 +1520,10 @@ void main() {
       await server.initialize();
 
       final tools = await listTools(server);
-      expect(tools, hasLength(76));
-      expect([for (final tool in tools.skip(70)) tool['name']], lvsTools);
+      expect(tools, hasLength(77));
+      expect([for (final tool in tools.skip(71)) tool['name']], lvsTools);
       expect(
-        [for (final tool in tools.skip(66).take(4)) tool['name']],
+        [for (final tool in tools.skip(67).take(4)) tool['name']],
         [
           'list_presence_classes',
           'list_class_presences',
@@ -1515,7 +1532,7 @@ void main() {
         ],
       );
       expect([
-        for (final tool in tools.skip(58).take(8)) tool['name'],
+        for (final tool in tools.skip(59).take(8)) tool['name'],
       ], _teachersAsSubject.toList());
 
       await server.stop();
@@ -2005,10 +2022,15 @@ void main() {
       (
         'plan_lesfiche',
         {
-          'hour':
-              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'hours': [
+            'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          ],
           'lesfiche': 'b0000000-0000-4000-8000-000000000001',
         },
+      ),
+      (
+        'save_lesson_as_lesfiche',
+        {'lesson': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000'},
       ),
       (
         'plan_assignment',
@@ -2139,19 +2161,30 @@ void main() {
       (
         'plan_lesfiche',
         {
-          'hour': 'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          'hours': [
+            'planned-lessons/4069/225c0b54-0000-4000-8000-000000000000',
+          ],
           'lesfiche': 'b0000000-0000-4000-8000-000000000001',
         },
-        'is a lesson, not an empty lesson hour',
+        'A lesson is only replaced by the lesfiche when replace is true',
       ),
       (
         'plan_lesfiche',
         {
-          'hour':
-              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          'hours': [
+            'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+          ],
           'lesfiche': 'Herhaling: lussen',
         },
         'lesfiche must be the id of a lesfiche as list_lesfiches shows it',
+      ),
+      (
+        'save_lesson_as_lesfiche',
+        {
+          'lesson':
+              'planned-placeholders/4069/225c0b54-0000-5000-8000-000000000000',
+        },
+        'is an empty lesson hour, which has nothing to save',
       ),
       (
         'read_lesfiche',

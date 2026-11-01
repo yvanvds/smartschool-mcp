@@ -20,8 +20,10 @@ Je vraagt het gewoon in een gesprek:
   kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
   weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
   prullenbak van de module verplaatsen en er weer uit terugzetten. Je eigen
-  lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
-  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
+  lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
+  lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
+  als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
+  Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
   leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
   minidatabanken van je school), en welke een lesfiche of een les heeft. De
@@ -346,6 +348,20 @@ Vraag het gewoon in je eigen woorden. Een paar voorbeelden:
   welke lesfiche in welk lesuur komt. Na jouw akkoord plant het ze, één per
   lesuur. De les krijgt de naam en de inhoud van de lesfiche. Alleen lessen
   kunnen zo: een lesfiche van een toets of taak niet.
+- "Plan mijn lesfiche Lussen in de lessen informatica van 6A1, 6A2 en 6A3
+  volgende week."
+  Claude zoekt die lesuren en toont welke lesfiche in welk lesuur komt. Na
+  jouw akkoord plant het de lesfiche in al die lesuren tegelijk, en zegt per
+  lesuur of het gelukt is. Staat er in een lesuur al een les (die je zelf
+  typte bijvoorbeeld), dan laat Claude die staan, tenzij je zelf vraagt om
+  ze te vervangen: dan verdwijnen haar titel, info en leerdoelen. Plannen
+  kopieert de lesfiche: pas je de lesfiche later aan, dan verandert de les
+  niet mee.
+- "Bewaar mijn les van vrijdag als lesfiche, voor volgend jaar."
+  Claude toont de les en de naam die de lesfiche krijgt. Na jouw akkoord
+  maakt het een nieuwe lesfiche in je eigen bibliotheek, met de info en de
+  leerdoelen van de les. De les zelf blijft zoals ze is. Elke keer maakt een
+  nieuwe lesfiche, ook als er al een met die naam is.
 - "Wat staat er in mijn lesfiche over recursie? Vat de bijlage samen."
   Claude zoekt de lesfiche en leest ze: de info voor leerlingen, je
   privé-info, de weblinks en de bijlagen, en wanneer je leerlingen die zien.
@@ -700,8 +716,9 @@ Claude waar het bestand staat: open het zelf, of sleep het in het gesprek.
   leerkrachten aan vakken en deelt ze puntenboeken: een lesopdracht
   verwijderen kan ze niet. In de planner verandert ze alleen je eigen
   planner: ze vult je lesuren in, plant toetsen en taken in je lesuren, past
-  je eigen lessen, toetsen en taken aan, maakt lesuren weer leeg en
-  verplaatst je toetsen en taken naar de prullenbak.
+  je eigen lessen, toetsen en taken aan, maakt lesuren weer leeg,
+  vervangt een eigen les door een lesfiche als je dat vraagt, bewaart een
+  les als lesfiche en verplaatst je toetsen en taken naar de prullenbak.
   Een toets of taak aankondigen, ze uit de prullenbak terugzetten of voor
   altijd verwijderen kan ze niet: dat doe je zelf in Smartschool. In de
   module Lesfiches leest ze je lesfiches, maakt en past ze lesfiches aan in

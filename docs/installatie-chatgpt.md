@@ -20,8 +20,10 @@ Smartschool-account. Je vraagt het gewoon in een gesprek:
   kopiëren en aanpassen in je eigen bibliotheek, met info, vakken, labels,
   weblinks en bestanden van je pc, eigen labels maken, en lesfiches naar de
   prullenbak van de module verplaatsen en er weer uit terugzetten. Je eigen
-  lesuren invullen met lessen of met je lesfiches, die lessen aanpassen en
-  een lesuur weer leegmaken. Een toets of taak naar de prullenbak van de
+  lesuren invullen met lessen of met je lesfiches (één lesfiche in meerdere
+  lesuren tegelijk, en een les vervangen alleen als je dat vraagt), een les
+  als lesfiche bewaren, die lessen aanpassen en een lesuur weer leegmaken.
+  Een toets of taak naar de prullenbak van de
   planner verplaatsen. Telkens pas nadat jij het goedgekeurd hebt. De
   leerdoelen bekijken (de eindtermen, de leerplannen levensbeschouwing en de
   minidatabanken van je school), en welke een lesfiche of een les heeft. De

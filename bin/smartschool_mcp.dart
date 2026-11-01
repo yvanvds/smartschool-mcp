@@ -56,6 +56,7 @@ import 'package:smartschool_mcp/src/tools/restore_lesfiches_tool.dart';
 import 'package:smartschool_mcp/src/tools/reply_to_message_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_intradesk_file_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_lesfiche_attachment_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_lesson_as_lesfiche_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_message_attachment_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
@@ -182,6 +183,7 @@ Future<void> _serve(ServerOptions options) async {
           listTrashedLesfichesTool(session),
           restoreLesfichesTool(session),
           planLesficheTool(session),
+          saveLessonAsLesficheTool(session),
           createLesficheLabelTool(session),
           // The learning goals of the goal selector (#186): read only.
           listCurriculaTool(session),

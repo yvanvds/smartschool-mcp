@@ -473,6 +473,7 @@ class FakePlannedElement {
         'canUserReplace': isOwn,
         'canUserRename': isOwn,
         'canUserChangeGoals': isOwn,
+        'canUserSaveInSourceModule': isOwn,
       },
       'planned-assignments' => {
         'canUserTrash': isOwn,
@@ -533,6 +534,7 @@ class FakePlannedElement {
     String publicInfo = '',
     String privateInfo = '',
     List<String> labels = const [],
+    List<Map<String, String>> goals = const [],
   }) => FakePlannedElement(
     id: id,
     type: type,
@@ -549,6 +551,7 @@ class FakePlannedElement {
     publicInfo: publicInfo,
     privateInfo: privateInfo,
     labels: labels,
+    goals: goals,
   );
 
   bool overlaps(DateTime start, DateTime end) =>
@@ -1060,7 +1063,17 @@ class FakePlannerHit {
 ///   public info, as the live planner did (it took the name, the labels and
 ///   the empty info of the lesfiche tried), and answers with the lesson; a
 ///   lesfiche it does not have is answered with `400` (made up: the library
-///   refuses one before sending);
+///   refuses one before sending); the lesson takes the lesfiche's private
+///   info and goals too, as live (dartschool#224, #226);
+/// - `POST /planner/api/v1/planned-lessons/replace/planned-lessons/{platformId}/{id}`
+///   (dartschool#224): the lesson becomes a new lesson of the lesfiche
+///   `sourceId` ([_replaceWithLesfiche]); `POST
+///   /planner/api/v1/planned-elements/replace-with-lesson-content` plans
+///   the lesfiche into several hours at once ([_planIntoSeveral],
+///   [bulkExceptions]);
+/// - `POST /planner/api/v1/planned-lessons/{platformId}/{id}/save-in-source-module`
+///   (dartschool#225): adds a lesson lesfiche of the lesson
+///   ([_saveAsLesfiche]);
 /// - `POST /planner/api/v1/{plannedElementType}/{platformId}/{id}/rename`
 ///   (`newName`), `.../change-public-info` and `.../change-private-info`
 ///   (`newInfo`), and `.../change-goals` (`goals`, dartschool#226, stored
@@ -1248,6 +1261,12 @@ class FakePlanner {
   /// instead.
   final Map<String, int> failing = {};
 
+  /// Exceptions the plan of a lesfiche into several hours
+  /// (`planned-elements/replace-with-lesson-content`) gives instead of
+  /// planning a target, by its ref (`planned-placeholders/4069/<id>`), as
+  /// the planner gives them (made up: none was seen live).
+  final Map<String, Object?> bulkExceptions = {};
+
   /// Paths of writes that are carried out, after which the connection drops
   /// before the answer arrives.
   final Set<String> lostAnswers = {};
@@ -1291,6 +1310,7 @@ class FakePlanner {
     String publicInfo = '',
     String privateInfo = '',
     List<String> labels = const [],
+    List<Map<String, String>> goals = const [],
   }) {
     final slot = elements[ref];
     if (slot == null || slot.type != 'planned-placeholders') return null;
@@ -1301,6 +1321,7 @@ class FakePlanner {
       publicInfo: publicInfo,
       privateInfo: privateInfo,
       labels: labels,
+      goals: goals,
     );
     _replace(slot, lesson);
     return lesson;
@@ -1538,6 +1559,30 @@ class FakePlanner {
             options.data,
           ),
         ['planned-elements', 'clear'] => _clear(options.data),
+        ['planned-elements', 'replace-with-lesson-content'] => _planIntoSeveral(
+          options.data,
+        ),
+        [
+          'planned-lessons',
+          'replace',
+          'planned-lessons',
+          final platform,
+          final id,
+        ] =>
+          _replaceWithLesfiche(
+            'planned-lessons/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
+        [
+          'planned-lessons',
+          final platform,
+          final id,
+          'save-in-source-module',
+        ] =>
+          _saveAsLesfiche(
+            'planned-lessons/$platform/${Uri.decodeComponent(id)}',
+            options.data,
+          ),
         ['planned-assignments', 'blanco'] => _createAssignment(options.data),
         [final type, final platform, final id, 'trash'] => _trash(
           '$type/$platform/${Uri.decodeComponent(id)}',
@@ -2237,10 +2282,125 @@ class FakePlanner {
       ref,
       name: lesfiche.name,
       publicInfo: lesfiche.publicInfo,
+      privateInfo: lesfiche.privateInfo,
       labels: [...lesfiche.labels, ...lesfiche.ownLabels],
+      goals: lesfiche.goals,
     );
     if (lesson == null) return _notFound();
     return _json(jsonEncode(lesson.detailJson()));
+  }
+
+  /// The lesfiche with the id [sourceId] (ignoring case), or null.
+  FakeLesfiche? _lesficheById(Object? sourceId) {
+    final id = '$sourceId'.toLowerCase();
+    return lesfiches
+        .where((lesfiche) => lesfiche.id.toLowerCase() == id)
+        .firstOrNull;
+  }
+
+  /// Makes a lesson of [lesfiche] in the place of [element], an empty
+  /// lesson hour or a lesson, as the planner does (dartschool#224): a new
+  /// lesson with a new id, named after the lesfiche, with its info, labels
+  /// and goals; the old content of a lesson is gone. Returns the lesson.
+  FakePlannedElement _lessonOf(
+    FakePlannedElement element,
+    FakeLesfiche lesfiche,
+  ) {
+    final lesson = element.inSameHour(
+      id: _newId('4000'),
+      type: 'planned-lessons',
+      name: lesfiche.name,
+      publicInfo: lesfiche.publicInfo,
+      privateInfo: lesfiche.privateInfo,
+      labels: [...lesfiche.labels, ...lesfiche.ownLabels],
+      goals: lesfiche.goals,
+    );
+    _replace(element, lesson);
+    return lesson;
+  }
+
+  /// `POST planned-lessons/replace/planned-lessons/{platformId}/{id}`
+  /// (dartschool#224): the lesson [ref] becomes a lesson of the lesfiche
+  /// `sourceId`, answered `201` with it, as live.
+  ResponseBody _replaceWithLesfiche(String ref, Object? data) {
+    final lesfiche = _lesficheById((data as Map)['sourceId']);
+    if (lesfiche == null) return _badRequest();
+    final lesson = elements[ref];
+    if (lesson == null || lesson.type != 'planned-lessons') return _notFound();
+    return _json(
+      jsonEncode(_lessonOf(lesson, lesfiche).detailJson()),
+      status: 201,
+    );
+  }
+
+  /// `POST planned-elements/replace-with-lesson-content` (dartschool#224):
+  /// plans the lesfiche `sourceId` into each of the `plannedElements`, but
+  /// those of [bulkExceptions] and those the fake does not have, which get
+  /// an exception by `{platformId}_{id}`; answered with the short lessons
+  /// (`id`, `platformId`, `plannedElementType`, `name`) and the
+  /// `exceptions`: an empty list when there are none, as live.
+  ResponseBody _planIntoSeveral(Object? data) {
+    final body = data as Map;
+    final lesfiche = _lesficheById(body['sourceId']);
+    final targets = body['plannedElements'];
+    if (lesfiche == null ||
+        body['sourceType'] != 'lesson' ||
+        targets is! List) {
+      return _badRequest();
+    }
+    final planned = <Map<String, Object?>>[];
+    final exceptions = <String, Object?>{};
+    for (final target in targets.cast<Map>()) {
+      final ref =
+          '${target['plannedElementType']}/${target['platformId']}/'
+          '${target['plannedElementId']}';
+      final element = elements[ref];
+      final key = '${target['platformId']}_${target['plannedElementId']}';
+      if (bulkExceptions[ref] case final exception?) {
+        exceptions[key] = exception;
+      } else if (element == null) {
+        exceptions[key] = {'message': 'Not found'};
+      } else {
+        final lesson = _lessonOf(element, lesfiche);
+        planned.add({
+          'id': lesson.id,
+          'platformId': lesson.platformId,
+          'plannedElementType': lesson.type,
+          'name': lesson.name,
+        });
+      }
+    }
+    return _json(
+      jsonEncode({
+        'plannedElements': planned,
+        'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions,
+      }),
+    );
+  }
+
+  /// `POST planned-lessons/{platformId}/{id}/save-in-source-module`
+  /// (`newName`, dartschool#225): adds a lesson lesfiche named `newName` to
+  /// [lesfiches], with the lesson's info, course, labels and goals and the
+  /// id [fakeNewLesficheId], and answers `200` with `{}`, as live. The
+  /// lesson stays as it is.
+  ResponseBody _saveAsLesfiche(String ref, Object? data) {
+    final lesson = elements[ref];
+    final name = (data as Map)['newName'];
+    if (lesson == null) return _notFound();
+    if (name is! String || name.trim().isEmpty) return _badRequest();
+    lesfiches.add(
+      FakeLesfiche(
+        id: fakeNewLesficheId(++_madeLesfiches),
+        name: name,
+        icon: 'document_observation',
+        publicInfo: lesson.publicInfo,
+        privateInfo: lesson.privateInfo,
+        lastChanged: '2026-11-01 10:00:00',
+        courses: lesson.courses,
+        goals: lesson.goals,
+      ),
+    );
+    return _json('{}');
   }
 
   ResponseBody _clear(Object? data) {

@@ -195,8 +195,19 @@ void main() {
         'all',
       ]);
       final plan = tools['plan_lesfiche']!.inputSchema;
-      expect(plan.required, ['hour', 'lesfiche']);
-      expect(plan.properties!.keys, ['hour', 'lesfiche']);
+      expect(plan.required, ['hours', 'lesfiche']);
+      expect(plan.properties!.keys, ['hours', 'lesfiche', 'replace']);
+      expect(plan.properties!['hours'], {
+        'type': 'array',
+        'description': isA<String>(),
+        'items': {'type': 'string', 'minLength': 1},
+        'minItems': 1,
+        'maxItems': 20,
+      });
+      expect(plan.properties!['replace'], {
+        'type': 'boolean',
+        'description': isA<String>(),
+      });
     });
 
     test('list_lesfiches says whose lesfiches it lists, how they are '
@@ -236,9 +247,20 @@ void main() {
         'list_planner (planner me)',
         'Only lesson lesfiches can be planned (hidden ones too)',
         'Show the user, per hour, the date and time, the class, the course, '
-            'and the name of the lesfiche that goes there',
+            'the name of the lesfiche that goes there, and any lesson it '
+            'replaces',
         'For a series of lesfiches, one confirmation of the full mapping is '
-            'enough; then call this tool once per hour, in order.',
+            'enough; then call this tool once per lesfiche, with all its '
+            'hours.',
+        // The product decision of #190: a lesson is never overwritten by
+        // accident.
+        'an hour that already holds a lesson (one typed in by hand, say) is '
+            'refused, so nothing is overwritten by accident, unless replace '
+            'is true',
+        'Set replace only when the user explicitly asked to replace those '
+            'lessons.',
+        'a later change to the lesfiche does not reach the lesson',
+        'save_lesson_as_lesfiche',
       ]) {
         expect(description, contains(phrase));
       }
@@ -557,7 +579,7 @@ void main() {
       final lessonId = _lessonId(1);
       expect(
         await ok('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': 'id ${fakeLesficheFuncties.id}',
         }),
         'Planned the lesfiche ${fakeLesficheFuncties.id} in the empty lesson '
@@ -576,6 +598,7 @@ void main() {
         'Classes: 6A1, 6A2\n'
         'Organised by: Jan Peeters\n'
         'Room: 101\n'
+        'Goals: none\n'
         '\n'
         'Public info (what pupils see):\n'
         'Hoofdstuk 4\n'
@@ -610,7 +633,7 @@ void main() {
         'name and labels', () async {
       expect(
         await ok('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': fakeLesficheLussen.id.toUpperCase(),
         }),
         allOf(
@@ -624,7 +647,7 @@ void main() {
 
     test('a planned lesfiche is cleared again with clear_lesson', () async {
       await ok('plan_lesfiche', {
-        'hour': fakeOwnSlot.ref,
+        'hours': [fakeOwnSlot.ref],
         'lesfiche': fakeLesficheLussen.id,
       });
       expect(
@@ -648,7 +671,7 @@ void main() {
         'reads the lesfiches and refuses it', () async {
       expect(
         await error('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': fakeLesficheGame.id,
         }),
         // In the tool's words, from the reason of the refusal
@@ -668,7 +691,7 @@ void main() {
       const unknown = 'b0000000-0000-4000-8000-000000000099';
       expect(
         await error('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': unknown,
         }),
         'The planner refused the change before it was sent: you have no '
@@ -684,7 +707,7 @@ void main() {
       () async {
         expect(
           await error('plan_lesfiche', {
-            'hour': fakeSlot.ref,
+            'hours': [fakeSlot.ref],
             'lesfiche': fakeLesficheFuncties.id,
           }),
           allOf(
@@ -701,21 +724,38 @@ void main() {
         'before asking Smartschool', () async {
       for (final (arguments, message) in [
         (
-          {'hour': fakeOwnLesson.ref, 'lesfiche': fakeLesficheFuncties.id},
-          'hour must be an empty lesson hour of your own planner',
+          {
+            'hours': [fakeOwnLesson.ref],
+            'lesfiche': fakeLesficheFuncties.id,
+          },
+          'hours holds a lesson, not an empty lesson hour: '
+              '${fakeOwnLesson.ref}. A lesson is only replaced by the '
+              'lesfiche when replace is true, and then its old name, info '
+              'and goals are gone. Set replace only when the user explicitly '
+              'asked to replace that lesson; else leave it out. Nothing was '
+              'sent.',
         ),
         (
-          {'hour': fakeOwnSlot.ref, 'lesfiche': fakeOwnLesson.ref},
+          {
+            'hours': [fakeOwnSlot.ref],
+            'lesfiche': fakeOwnLesson.ref,
+          },
           'lesfiche must be the id of a lesfiche as list_lesfiches shows it, '
               'like b0000000-0000-4000-8000-000000000001; '
               '"${fakeOwnLesson.ref}" is not. Nothing was sent.',
         ),
         (
-          {'hour': fakeOwnSlot.ref, 'lesfiche': 'Herhaling: lussen'},
+          {
+            'hours': [fakeOwnSlot.ref],
+            'lesfiche': 'Herhaling: lussen',
+          },
           'lesfiche must be the id of a lesfiche',
         ),
         (
-          {'hour': fakeOwnSlot.ref, 'lesfiche': '  '},
+          {
+            'hours': [fakeOwnSlot.ref],
+            'lesfiche': '  ',
+          },
           'lesfiche must be the id of a lesfiche',
         ),
       ]) {
@@ -734,7 +774,7 @@ void main() {
 
       expect(
         await error('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': fakeLesficheFuncties.id,
         }),
         'The Lesfiches module gave an answer the server could not use (HTTP '
@@ -752,7 +792,7 @@ void main() {
 
         expect(
           await error('plan_lesfiche', {
-            'hour': fakeOwnSlot.ref,
+            'hours': [fakeOwnSlot.ref],
             'lesfiche': fakeLesficheFuncties.id,
           }),
           'The lesfiche ${fakeLesficheFuncties.id} in the empty lesson hour '
@@ -775,7 +815,7 @@ void main() {
 
         expect(
           await error('plan_lesfiche', {
-            'hour': fakeOwnSlot.ref,
+            'hours': [fakeOwnSlot.ref],
             'lesfiche': fakeLesficheFuncties.id,
           }),
           contains('may or may not have been saved'),
@@ -790,7 +830,7 @@ void main() {
         );
         expect(
           await error('plan_lesfiche', {
-            'hour': fakeOwnSlot.ref,
+            'hours': [fakeOwnSlot.ref],
             'lesfiche': fakeLesficheFuncties.id,
           }),
           startsWith('The planner has no element ${fakeOwnSlot.ref}'),
@@ -815,7 +855,7 @@ void main() {
 
       expect(
         await ok('plan_lesfiche', {
-          'hour': fakeOwnSlot.ref,
+          'hours': [fakeOwnSlot.ref],
           'lesfiche': fakeLesficheFuncties.id,
         }),
         startsWith('Planned the lesfiche ${fakeLesficheFuncties.id} in the '),
@@ -873,7 +913,10 @@ void main() {
       for (final (hour, id) in [
         for (var i = 0; i < 3; i++) (hours[i], ids[i]),
       ]) {
-        await ok('plan_lesfiche', {'hour': hour.ref, 'lesfiche': id});
+        await ok('plan_lesfiche', {
+          'hours': [hour.ref],
+          'lesfiche': id,
+        });
       }
 
       expect(planner.writes, [

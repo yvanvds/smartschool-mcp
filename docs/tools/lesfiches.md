@@ -25,7 +25,8 @@ everyone, without a switch. Tools that change something follow the
 | [`trash_lesfiches`](#trash_lesfiches) | Moves lesfiches to the module's trash | Yes, asks approval |
 | [`list_trashed_lesfiches`](#list_trashed_lesfiches) | Lists the lesfiches in the module's trash | No |
 | [`restore_lesfiches`](#restore_lesfiches) | Takes lesfiches out of the trash, back into your library | Yes, asks approval |
-| [`plan_lesfiche`](#plan_lesfiche) | Plans a lesfiche as a lesson in an empty lesson hour | Yes, asks approval |
+| [`plan_lesfiche`](#plan_lesfiche) | Plans a lesfiche as a lesson in one or more lesson hours, replacing a lesson only when asked | Yes, asks approval |
+| [`save_lesson_as_lesfiche`](#save_lesson_as_lesfiche) | Saves a lesson of your planner as a new lesfiche | Yes, asks approval |
 | [`create_lesfiche_label`](#create_lesfiche_label) | Makes an own label, with its colour | Yes, asks approval |
 
 ## Tools
@@ -157,13 +158,32 @@ first.
 
 ### `plan_lesfiche`
 
-Plans a lesson lesfiche into an empty lesson hour of your own planner: the
-lesson is named after the lesfiche and takes over its public and private
-info, labels and goals, attachments and weblinks, each attachment and
-weblink with the visibility it has in the lesfiche. The lesson keeps the
-course of the hour, not the lesfiche's. It works as [`plan_lesson`](planner.md#plan_lesson):
-asks for approval, after Claude shows you which lesfiche goes into which
-hour. An assignment lesfiche cannot be planned.
+Plans a lesson lesfiche into 1 to 20 lesson hours of your own planner in one
+call, such as the same lesson in all your parallel classes: each lesson is
+named after the lesfiche and takes over its public and private info, labels
+and goals, attachments and weblinks, each attachment and weblink with the
+visibility it has in the lesfiche. The lesson keeps the course of the hour,
+not the lesfiche's. Planning **copies** the lesfiche: a later change to the
+lesfiche does not reach the lessons planned from it. The result says per
+hour whether it was planned, with the new lesson's id.
+
+An hour that already holds a lesson (one you typed in by hand, say) is
+**refused, unless `replace` is set**: then the lesson is replaced by the
+lesfiche, and its old name, info and goals are gone. Nothing is overwritten
+by accident: Claude sets `replace` only when you asked to replace those
+lessons. It works as [`plan_lesson`](planner.md#plan_lesson): asks for
+approval, after Claude shows you which lesfiche goes into which hour, and
+which lesson it replaces. An assignment lesfiche cannot be planned.
+
+### `save_lesson_as_lesfiche`
+
+Saves a lesson of your own planner as a new lesson lesfiche in your library,
+as the planner's "Opslaan in Lesfiches" does: to reuse it next year, or plan
+it into other hours with `plan_lesfiche`. The lesfiche gets the lesson's
+icon, public and private info and goals, and its name, or the `name` you
+give. The lesson stays as it is and keeps no link to the lesfiche. Every
+call makes a new lesfiche, also when one of that name exists. Asks for
+approval; the result gives the lesfiche with its id.
 
 ### `create_lesfiche_label`
 
@@ -568,25 +588,85 @@ carries them as data (#195 tracks it), that read is the workaround.
 
 ### How `plan_lesfiche` works
 
-It plans the lesfiche (`lesfiche`, an id from `list_lesfiches`) into `hour`,
-as `plan_lesson` takes it, with the library's `planLessonContent`
-(dartschool#88): the planner names the lesson after the lesfiche and takes
-over its content. Seen live: its labels and goals (dartschool#88), and its
-public and private info, attachments and weblinks, each attachment and
-weblink with the visibility it has in the lesfiche (#117: one from the start
-of the lesson, one from its end, a weblink always, as the web client
-showed). The description says what is copied. It works as `plan_lesson`
-does: marked destructive, Claude shows the mapping of lesfiches onto hours
-(date and time, class, course, lesfiche) and plans after the user's
-confirmation, one call per hour, in order; the result gives the lesson as
-saved and its new id. The library reads the lesfiches before it plans and
+It plans the lesfiche (`lesfiche`, an id from `list_lesfiches`) into the
+`hours` (1 to 20 ids from `list_planner`, each planned once): the planner
+names each lesson after the lesfiche and takes over its content. Seen live:
+its labels and goals (dartschool#88), and its public and private info,
+attachments and weblinks, each attachment and weblink with the visibility it
+has in the lesfiche (#117: one from the start of the lesson, one from its
+end, a weblink always, as the web client showed). Planning copies the
+lesfiche: a planned lesson keeps no link to it, and a later change to the
+lesfiche does not reach the lesson (dartschool#224). The description says
+what is copied.
+
+An hour is an empty lesson hour (`planned-placeholders/…`) or, only with
+`replace` true, a lesson (`planned-lessons/…`). The product decision of #190:
+a lesson among the `hours` without `replace` is refused before anything is
+sent, so that a lesson typed in by hand is never overwritten by accident;
+the description tells Claude to set `replace` only when the user asked to
+replace those lessons, and to show any lesson that is replaced. An empty
+lesson hour id of an hour that was filled meanwhile is gone (its id
+changed), so the library refuses it too: only the ids of lessons are
+replaced.
+
+One empty hour is filled with the library's `planLessonContent`
+(dartschool#88), one lesson replaced with `replaceWithLessonContent`
+(dartschool#224, `POST planned-lessons/replace/planned-lessons/{platformId}/{id}`);
+both give the lesson as saved, with its new id, and its goals named as
+`read_planned_element` names them (in a session action of their own, after
+the write: `nameGoalsAfterWrite`). Two or more hours go in one request,
+`planLessonContentInto` (dartschool#224, `POST
+planned-elements/replace-with-lesson-content`, the planner's copy dialog):
+the tool reads the hours first, and the library reads them again and checks
+every one before it sends (the first that fails refuses the whole call,
+and nothing is sent). The planner answers per hour; the result has a line
+per hour, planned (with the lesson's new id) or not planned (with the
+planner's reason when it gives a text, else that its answer is in the
+server log), then the first new lesson in full: the others hold the same
+content, each in its own hour. When an hour was not planned, the result is
+an error, and Claude is told not to plan the others again. An hour the
+planner did not plan is left as it was, and is not retried.
+
+It works as `plan_lesson` does: marked destructive, Claude shows the mapping
+of lesfiches onto hours (date and time, class, course, lesfiche, any lesson
+replaced) and plans after the user's confirmation, one call per lesfiche
+with all its hours. The library reads the lesfiches before it plans and
 refuses, before sending anything, an id the user has no lesfiche with and an
 assignment lesfiche; the tool says so in its own words and points to
 `list_lesfiches`. A hidden lesfiche is planned like any other. Its
 description points to `create_lesfiche` for a lesfiche that does not exist
-yet. It is one of the planner writes, which report a write the planner did
-not confirm as the others do (see
-[The planner writes](planner.md#the-planner-writes)).
+yet, and to `save_lesson_as_lesfiche` for a lesson to keep as one. It is one
+of the planner writes, which report a write the planner did not confirm as
+the others do (see [The planner writes](planner.md#the-planner-writes)): for
+several hours, that it may have been saved in all or some of them, with
+`read_planned_element` for each hour to check (an hour the planner no longer
+has under its id was planned).
+
+### How `save_lesson_as_lesfiche` works
+
+It saves the `lesson` (a `planned-lessons/…` id from `list_planner`; an empty
+lesson hour or an assignment is refused before anything is sent) with the
+library's `saveAsLessonContent` (dartschool#225, `POST
+planned-lessons/{platformId}/{id}/save-in-source-module` with `{"newName"}`),
+named `name` (checked as `create_lesfiche` checks a name) or, when it is
+left out, the lesson's name; a lesson without a name needs `name`. The
+library reads the lesson again and refuses one that is not the user's own,
+or that the planner does not let the user save (`canUserSaveInSourceModule`).
+The planner answers `{}`, which does not name the new lesfiche: the library
+reads the lesfiches before and after the save and takes the one new lesson
+lesfiche of that name. Seen live: the lesfiche gets the lesson's icon, public
+and private info and goals; whether attachments, weblinks and labels are
+copied was not seen. The lesson stays as it is and keeps no link to the
+lesfiche. The result gives the lesfiche as `read_lesfiche` shows it, with its
+goals named, and its id for `plan_lesfiche`.
+
+Marked destructive, for Claude Desktop and Codex to ask approval, and not
+idempotent: the module keeps two lesfiches of one name, so a second call
+makes a second lesfiche. The library sends the save once, never again after
+logging in again. When the list does not confirm it
+(`SmartschoolPlannerSaveUnconfirmedError`), the result says the lesfiche
+may or may not have been made, and tells Claude to look for it with
+`list_lesfiches` before anything else, never to call the tool again for it.
 
 ### How `create_lesfiche_label` works
 
@@ -700,4 +780,11 @@ the lesfiche as sent (`fakeLesficheRefKey`); these tools are tested in
 (`name.already.used`, a bare `400` for a long text), and the labels of
 `change-labels` and of the create (a bare `500` for a label without its
 owner or platform). The label tools are tested in
-`test/lesfiche_label_tools_test.dart`.
+`test/lesfiche_label_tools_test.dart`. The planner plans a lesfiche into an empty hour
+with its info, labels and goals; it replaces a lesson by a lesfiche (`201`
+with the new lesson), plans one into several hours at once (the short
+lessons and the `exceptions`, with `bulkExceptions` for a target it does not
+plan), and saves a lesson as a new lesson lesfiche (`{}`, the lesfiche with
+the next `fakeNewLesficheId`). `plan_lesfiche` over several hours and over a
+lesson, and `save_lesson_as_lesfiche`, are tested in
+`test/plan_lesfiche_hours_tool_test.dart` (#190).
