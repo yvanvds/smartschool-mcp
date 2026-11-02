@@ -139,9 +139,11 @@ void main() {
       .firstOrNull;
 
   group('read_skore_gradebook', () {
-    test('says a gradebook without evaluation periods is a project gradebook, '
-        'lists its project periods and points to the project tools; its '
-        'report periods are left out', () async {
+    test('says a gradebook is a project gradebook when Skore\'s init lists '
+        'its project period among its periods, as live (#205): lists its '
+        'project periods, not as evaluation periods, and points to the '
+        'project tools; its report periods are left out; no second '
+        'init', () async {
       book.reports.add(fakeSkoreReportR1D);
       expect(
         await ok('read_skore_gradebook', {'gradebook_id': 34990}),
@@ -164,14 +166,55 @@ void main() {
         'getNavigation',
         'accessableList',
         'init wy=24',
-        'init wy=24 projects',
+        'getGradebookContext wy=24',
       ]);
     });
 
-    test('a gradebook with evaluation periods: its project periods are not '
-        'read', () async {
-      await ok('read_skore_gradebook', {'gradebook_id': 32508});
-      expect(skore.calls, isNot(contains('init wy=24 projects')));
+    test('a gradebook with evaluation periods only is not a project '
+        'gradebook, and costs no extra request', () async {
+      final text = await ok('read_skore_gradebook', {'gradebook_id': 32508});
+      expect(text, isNot(contains('project')));
+      expect(text, contains('\nSkore lets the user change it.\n'));
+      expect(skore.calls.where((c) => c.startsWith('init')), ['init wy=24']);
+    });
+
+    test('a gradebook with evaluation and project periods (not seen live) '
+        'lists both apart, and Skore opens it on an evaluation '
+        'period', () async {
+      book.periods.add(
+        const FakeSkoreGradebookPeriod(
+          1704,
+          'DW1',
+          open: true,
+          opens: '2026-09-01 08:00',
+          timestamp: '2026-12-18T20:00:00+0100',
+          note: 'Eerste dagelijks werk.',
+        ),
+      );
+      final text = await ok('read_skore_gradebook', {'gradebook_id': 34990});
+      expect(
+        text,
+        contains(
+          '\nIt is a project gradebook (Skore\'s "Projecten"): besides the '
+          'evaluation periods listed below, its pupils are rated per '
+          'learning goal in projects',
+        ),
+      );
+      expect(
+        text,
+        contains(
+          '\n1 project period, in Skore\'s order; only an open one takes '
+          'ratings:\n- $_period\n',
+        ),
+      );
+      expect(
+        text,
+        contains(
+          '\n1 period, in Skore\'s order; only an open period takes grades, '
+          'and Skore opens the gradebook on DW1 (active):\n- DW1 | period id '
+          '1704 |',
+        ),
+      );
     });
   });
 

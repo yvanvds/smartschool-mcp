@@ -18,7 +18,11 @@ import 'fake_skore_projects.dart';
 //     of a gradebook (`left_0`, ...: `1.  Last, First`, or `- Last, First`
 //     without a class number, a `gbc_hidden` span for an inactive pupil),
 //     and its report periods (`reports`, dartschool#195), none unless a
-//     test gives the gradebook some.
+//     test gives the gradebook some. As seen live (2026-11-02, #205),
+//     `periods` lists the evaluation periods (`scope` 1) and then the
+//     project periods (`scope` 2), whatever the page (0, the evaluations,
+//     or 1, the projects); `activePeriodE` is -1 without evaluation periods
+//     and `activePeriodP` -1 without project periods.
 //   - getGradebookContext(pathIds, courses, owners, userID, periodId, 0, wy):
 //     whether the user may change the gradebook.
 //   - getEvaluations(periodID, userID, courses, groupID, classID, pathIds)
@@ -720,8 +724,9 @@ class FakeSkoreOwnGradebook {
 
   final List<FakeSkoreGradebookPeriod> periods;
 
-  /// The project periods ("Projecten", #192), as `init` with the page `1`
-  /// gives them; none by default.
+  /// The project periods ("Projecten", #192), which `init` lists after
+  /// [periods] with `scope` 2, on either page (seen live, #205); none by
+  /// default.
   final List<FakeSkoreGradebookPeriod> projectPeriods;
 
   /// The templates of each project period, by period id, with their
@@ -2817,17 +2822,17 @@ class FakeSkoreGradebook {
       'left_1': rows,
       'left_2': rows,
       'periods': [
-        for (final period
-            in _isProjectsInit(method, params)
-                ? book.projectPeriods
-                : book.periods)
+        for (final (scope, period) in [
+          for (final period in book.periods) ('1', period),
+          for (final period in book.projectPeriods) ('2', period),
+        ])
           {
             'name': period.name,
             'fullname': period.name,
             'id': '${period.id}',
             'info': period.info,
             'virtual': '0',
-            'scope': '1',
+            'scope': scope,
             'open': period.open ? 1 : 0,
             'timestamp': period.timestamp,
             'lockIcon': period.open ? 0 : 1,
@@ -2848,8 +2853,8 @@ class FakeSkoreGradebook {
             'lockIcon': report.open ? 0 : 1,
           },
       ],
-      'activePeriodE': book.activePeriod,
-      'activePeriodP': -1,
+      'activePeriodE': book.periods.isEmpty ? -1 : book.activePeriod,
+      'activePeriodP': book.projectPeriods.isEmpty ? -1 : 0,
       'activeReport': 0,
       'projectAdmin': 1,
       'classesMap': {

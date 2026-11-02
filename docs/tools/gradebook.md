@@ -210,15 +210,27 @@ name first, the pupil id, and whether Skore greys the pupil out as inactive.
 A gradebook with report periods only also names `read_skore_report` and
 `save_skore_report_comment` in its sentence on the course comments.
 
-A gradebook without evaluation periods may be a project gradebook, so for
-one its project periods are read too (`getProjectPeriods`, Skore's `init`
-with the page `1`: one more request, only then; #192). A project gradebook
-says that it is one, that its pupils are rated per learning goal in
-projects, which tools read and save them, and that a project course is not
-on the gradebook's reports; then its project periods, as its periods are
-listed. Its report periods are left out. An answer about the project
-periods the server cannot use is logged and leaves them out: the gradebook
-is what was asked for (`skoreProjectPeriodsOrNone`).
+Skore's `init` lists a gradebook's evaluation periods and its project
+periods together, in `periods`, whatever its page, and tells them apart by
+the period's `scope`: `1` an evaluation period, `2` a project period (seen
+live, 2026-11-02, #205: the project gradebook "Digitale vaardigheden" of
+5WW1 gave its project period with `scope` 2; `categoryMode` is 1 in both).
+flutter_smartschool 0.4.2 does not read `scope`, so its `getGradebook`
+gives a project period as an evaluation period (yvanvds/dartschool#236).
+As a workaround (removal tracked in #207), the tool reads `scope` from the
+raw answer of the `init` the library sends anyway, with a Dio interceptor
+on the client for the length of the read
+(`lib/src/skore/skore_period_scopes.dart`,
+`SkoreGradebooks.readingProjectPeriodIds`): no gradebook costs an extra
+request. When that answer cannot be read, the periods are shown as the
+library gives them.
+
+A gradebook with project periods says that it is a project gradebook, that
+its pupils are rated per learning goal in projects, which tools read and
+save them, and that a project course is not on the gradebook's reports;
+then its project periods, as its periods are listed, apart from its
+evaluation periods (a gradebook with both was not seen live; Skore opens
+it on an evaluation period). Its report periods are left out.
 
 ### How `list_skore_evaluations` works
 
@@ -574,7 +586,10 @@ project sheet (`/Gradebook/Main/<method>`) does, and never makes, publishes
 or removes a project: the user does that in Smartschool. The helpers are in
 `lib/src/skore/skore_projects.dart`: `readSkoreProjectPeriods` (the project
 periods, or the one of a `period_id`; a gradebook without any is an error
-that says it is not a project gradebook), `findSkoreProject` (a
+that says it is not a project gradebook; the library's `getProjectPeriods`
+also lists the evaluation periods, so only the periods with Skore's
+project `scope` are kept, the workaround of
+[How `read_skore_gradebook` works](#how-read_skore_gradebook-works), #207), `findSkoreProject` (a
 `project_id`, period by period and template by template, with
 `getProjectTemplates` and `getProjects`), `skoreProjectLevel` (a level by
 name or symbol, ignoring case and accents; one not on the scale is an error

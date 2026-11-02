@@ -5,6 +5,7 @@ import '../session.dart';
 import '../tools/server_tool.dart';
 import 'skore_format.dart';
 import 'skore_gradebook_format.dart';
+import 'skore_period_scopes.dart';
 import 'skore_writes.dart';
 
 // Reaching the user's gradebooks in Skore ("Puntenboek", `/SkoreGradebook`)
@@ -77,6 +78,16 @@ final class SkoreGradebooks extends SkoreGradebookService {
   /// Smartschool did not give in that form is a [SmartschoolParsingError]
   /// ([skoreGradebookToolError]).
   Future<int> userId() async => (await _client.getCurrentUser()).id;
+
+  /// Runs [read] and returns its result with the ids of the project periods
+  /// of gradebook [gradebookId] from the `init` it sends, or null when it
+  /// sent none that could be used: a workaround for the library, which does
+  /// not tell project periods from evaluation periods
+  /// ([readingSkoreProjectPeriodIds], #207, yvanvds/dartschool#236).
+  Future<(T, Set<int>?)> readingProjectPeriodIds<T>(
+    int gradebookId,
+    Future<T> Function() read,
+  ) => readingSkoreProjectPeriodIds(_client, gradebookId, read);
 }
 
 /// Runs [action] with a [SkoreGradebooks] on the session's logged-in

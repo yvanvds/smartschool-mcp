@@ -1,9 +1,9 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
-import '../log.dart';
 import '../messages/message_search.dart';
 import '../tools/server_tool.dart';
 import 'skore_format.dart';
+import 'skore_gradebook_access.dart';
 import 'skore_gradebook_format.dart';
 
 // The project gradebooks of Skore ("Projecten", #192, yvanvds/dartschool#204)
@@ -13,7 +13,9 @@ import 'skore_gradebook_format.dart';
 // the lines of a project, its scale and its learning goals.
 //
 // A project gradebook has project periods instead of evaluation periods
-// (`getProjectPeriods`, Skore's `init` with the page `1`); a project period
+// (`getProjectPeriods`, Skore's `init` with the page `1`, which lists the
+// evaluation periods too: `scope` 1, against 2 for a project period, which
+// the library does not read yet, yvanvds/dartschool#236); a project period
 // has templates (`getProjectTemplates`), each with its rating scale, its
 // learning goals ("rubrieken", `getLearningGoals`) and its projects
 // (`getProjects`). A pupil's rating of a learning goal in a project is a
@@ -33,15 +35,28 @@ typedef FoundSkoreProject = ({
 /// The project periods of [gradebook] ([SkoreGradebookService.
 /// getProjectPeriods]), or only the one with [periodId].
 ///
+/// Skore's answer lists the evaluation periods too, and the library does
+/// not tell them apart (yvanvds/dartschool#236): only the periods its
+/// `init` marks as project periods are kept
+/// ([SkoreGradebooks.readingProjectPeriodIds], a workaround, #207). When
+/// that mark cannot be read, the library's list is kept as it is.
+///
 /// Throws a [ToolError] for a gradebook without project periods (it is not a
 /// project gradebook: its evaluations are read with list_skore_evaluations),
 /// and for a [periodId] that is not one of them, which lists them.
 Future<List<SkoreGradebookPeriod>> readSkoreProjectPeriods(
-  SkoreGradebookService gradebooks,
+  SkoreGradebooks gradebooks,
   SkoreGradebook gradebook, {
   int? periodId,
 }) async {
-  final periods = await gradebooks.getProjectPeriods(gradebook);
+  final (listed, projectPeriodIds) = await gradebooks.readingProjectPeriodIds(
+    gradebook.gradebookId,
+    () => gradebooks.getProjectPeriods(gradebook),
+  );
+  final periods = [
+    for (final period in listed)
+      if (projectPeriodIds?.contains(period.id) ?? true) period,
+  ];
   final name = formatSkoreGradebookName(gradebook);
   if (periods.isEmpty) {
     throw ToolError(
@@ -63,22 +78,6 @@ Future<List<SkoreGradebookPeriod>> readSkoreProjectPeriods(
   );
 }
 
-/// The project periods of [gradebook] for `read_skore_gradebook`, which
-/// reads them only for a gradebook without evaluation periods: empty for
-/// none, and also when Skore's answer cannot be used, which is logged (the
-/// gradebook is what was asked for).
-Future<List<SkoreGradebookPeriod>> skoreProjectPeriodsOrNone(
-  SkoreGradebookService gradebooks,
-  SkoreGradebook gradebook,
-) async {
-  try {
-    return await gradebooks.getProjectPeriods(gradebook);
-  } on SmartschoolSkoreError catch (error) {
-    log('skore gradebook: the project periods: $error');
-    return const [];
-  }
-}
-
 /// Finds project [projectId] of [gradebook] (by its [SkoreProject.id]): in
 /// project period [periodId], or without it in every project period, in
 /// Skore's order, template by template.
@@ -88,7 +87,7 @@ Future<List<SkoreGradebookPeriod>> skoreProjectPeriodsOrNone(
 /// found. Throws a [ToolError] that says where to take the ids from for a
 /// project that is not there ([readSkoreProjectPeriods] for the periods).
 Future<FoundSkoreProject> findSkoreProject(
-  SkoreGradebookService gradebooks,
+  SkoreGradebooks gradebooks,
   SkoreGradebook gradebook,
   int projectId, {
   int? periodId,
