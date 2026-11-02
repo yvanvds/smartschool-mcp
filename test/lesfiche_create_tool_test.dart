@@ -387,7 +387,7 @@ void main() {
           'hours': [fakeOwnSlot.ref],
           'lesfiche': id,
         }),
-        startsWith('Planned the lesfiche $id in the '),
+        startsWith('Planned the lesfiche "Recursie" in the '),
       );
       expect(
         planner.writes.last,

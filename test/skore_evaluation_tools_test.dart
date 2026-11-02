@@ -12,6 +12,7 @@ import 'package:dart_mcp/client.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/skore/skore_gradebook_access.dart';
+import 'package:smartschool_mcp/src/skore/skore_gradebook_format.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:test/test.dart';
@@ -108,6 +109,10 @@ const _attitudesNotRead =
     'Smartschool itself.';
 
 void main() {
+  // A time before the closing time of every open period of the fake, so
+  // that they read as open (#206).
+  setUp(() => skoreClock = () => DateTime.utc(2026, 10, 1));
+  tearDown(() => skoreClock = DateTime.now);
   late FakeSmartschool server;
   late FakeSkoreGradebook skore;
   late SmartschoolSession session;

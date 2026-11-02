@@ -123,11 +123,23 @@ String formatSkoreGradebookPeriod(
   ].join(' | ');
 }
 
+/// The clock [formatSkorePeriodState] and [formatSkoreReportState] compare
+/// a closing time with; the tests set a fixed one.
+DateTime Function() skoreClock = DateTime.now;
+
 /// Whether [period] is open, and when it closes (or closed), in the time of
 /// this PC: `open, closes 2026-12-18 20:00`, `closed, closing time
-/// 2026-06-30 00:00`.
+/// 2026-06-30 00:00`. Open is Skore's flag, which Skore can keep after the
+/// closing time (seen live, #206): then `Skore still marks it open, though
+/// its closing time 2026-10-30 14:00 has passed`.
 String formatSkorePeriodState(SkoreGradebookPeriod period) =>
-    switch ((period.isOpen, period.closesAt)) {
+    _skoreState(period.isOpen, period.closesAt);
+
+String _skoreState(bool isOpen, DateTime? closesAt) =>
+    switch ((isOpen, closesAt)) {
+      (true, final time?) when !time.isAfter(skoreClock()) =>
+        'Skore still marks it open, though its closing time '
+            '${formatSkoreTime(time)} has passed',
       (true, final time?) => 'open, closes ${formatSkoreTime(time)}',
       (true, null) => 'open, no closing time',
       (false, final time?) => 'closed, closing time ${formatSkoreTime(time)}',
@@ -196,12 +208,7 @@ String formatSkoreReportPeriod(SkoreReportPeriod report) {
 /// Whether [report] is open, and when it closes (or closed), in the time of
 /// this PC, as [formatSkorePeriodState] says it of a period.
 String formatSkoreReportState(SkoreReportPeriod report) =>
-    switch ((report.isOpen, report.closesAt)) {
-      (true, final time?) => 'open, closes ${formatSkoreTime(time)}',
-      (true, null) => 'open, no closing time',
-      (false, final time?) => 'closed, closing time ${formatSkoreTime(time)}',
-      (false, null) => 'closed',
-    };
+    _skoreState(report.isOpen, report.closesAt);
 
 /// A report period by its name and id, as a sentence or an error names it:
 /// `report R1D (Rapport 1, report id 2762)`, or `report R1D (report id

@@ -13,6 +13,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/session.dart';
 import 'package:smartschool_mcp/src/skore/skore_gradebook_access.dart';
+import 'package:smartschool_mcp/src/skore/skore_gradebook_format.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_gradebooks_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
 import 'package:smartschool_mcp/src/tools/server_tool.dart';
@@ -43,6 +44,10 @@ const _schoolYears =
     '2025-2026 (workyear id 22), 2024-2025 (workyear id 20).';
 
 void main() {
+  // A time before the closing time of every open period of the fake, so
+  // that they read as open (#206).
+  setUp(() => skoreClock = () => DateTime.utc(2026, 10, 1));
+  tearDown(() => skoreClock = DateTime.now);
   late FakeSmartschool server;
   late FakeSkoreGradebook skore;
   late SmartschoolSession session;
@@ -508,6 +513,29 @@ void main() {
       // period with Skore's project scope (#205).
       expect(skore.calls, ['init wy=24']);
     });
+  });
+
+  test('a period and a report period that Skore still marks open after '
+      'their closing time say so, as live on 2026-11-02 (#206)', () async {
+    skoreClock = () => DateTime.utc(2026, 12, 19);
+    expect(
+      await read(32508),
+      contains(
+        '- DW1 | period id 1704 | Skore still marks it open, though its '
+        'closing time ${_time('2026-12-18T20:00:00+0100')} has passed | '
+        'active | note: ',
+      ),
+    );
+    skoreClock = () => DateTime.utc(2026, 11, 2);
+    skore.gradebooks.add(fakeSkoreGradebookGedrag());
+    expect(
+      await read(34901),
+      contains(
+        '- R1D (Rapport 1) | report id 2762 | Skore still marks it open, '
+        'though its closing time ${_time('2026-10-30T23:00:00+0100')} has '
+        'passed | note: Open tot 2026-10-30 23:00.',
+      ),
+    );
   });
 
   group('a session Smartschool no longer accepts, which Skore\'s gradebook '

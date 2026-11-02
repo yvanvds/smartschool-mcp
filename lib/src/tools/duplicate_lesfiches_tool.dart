@@ -99,6 +99,7 @@ Future<CallToolResult> _duplicate(
 
   var chosen = const <LessonContentItem>[];
   var before = const <LessonContentItem>[];
+  LesficheCourseNames names = (byId: null, error: null);
   final watch = Stopwatch()..start();
   late final List<LessonContentDetail> copies;
   try {
@@ -116,6 +117,9 @@ Future<CallToolResult> _duplicate(
         }
         refuseOtherLesficheKinds(found, action: 'copy');
         chosen = found;
+        // The copies have the courses of their lesfiches; a lesfiche new
+        // in the library after an unconfirmed copy may have any.
+        names = await readLesficheCourseNames(lesfiches, items);
         try {
           return await lesfiches.duplicate(found);
         } on SmartschoolLessonContentWriteRefusedError catch (error) {
@@ -138,7 +142,7 @@ Future<CallToolResult> _duplicate(
       nothingDone: nothingDone,
     );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
-    return _notConfirmed(session, chosen, before, error);
+    return _notConfirmed(session, chosen, before, names, error);
   }
   log(
     'duplicate_lesfiches: copied ${copies.length} in '
@@ -152,8 +156,9 @@ Future<CallToolResult> _duplicate(
           'Made ${one ? '1 copy' : '${copies.length} copies'} in the own '
               'library of the Lesfiches module:',
           for (final (index, copy) in copies.indexed)
-            '- ${formatLesficheLine(copy, withCourseNames: false)} '
+            '- ${formatLesficheLineNamed(copy, names)} '
                 '(a copy of id ${chosen[index].id})',
+          ...lesficheCourseNamesNote(copies, names),
           'Each copy has the icon, info, visibility, courses, labels, '
               'learning goals, weblinks and attachments of its lesfiche. '
               'Change ${one ? 'it' : 'a copy'} with edit_lesfiche (its name, '
@@ -201,6 +206,7 @@ Future<CallToolResult> _notConfirmed(
   SmartschoolSession session,
   List<LessonContentItem> chosen,
   List<LessonContentItem> before,
+  LesficheCourseNames names,
   SmartschoolLessonContentSaveUnconfirmedError error,
 ) async {
   final one = chosen.length == 1;
@@ -238,11 +244,11 @@ Future<CallToolResult> _notConfirmed(
         )
         .firstOrNull;
     if (copy == null) {
-      notDone.add('- ${formatLesficheLine(item, withCourseNames: false)}');
+      notDone.add('- ${formatLesficheLineNamed(item, names)}');
     } else {
       fresh.remove(copy);
       done.add(
-        '- ${formatLesficheLine(copy, withCourseNames: false)} (a copy of '
+        '- ${formatLesficheLineNamed(copy, names)} (a copy of '
         'id ${item.id})',
       );
     }
@@ -260,9 +266,9 @@ Future<CallToolResult> _notConfirmed(
     extra: [
       if (fresh.isNotEmpty) ...[
         'Also new in the library since the copy was sent:',
-        for (final item in fresh)
-          '- ${formatLesficheLine(item, withCourseNames: false)}',
+        for (final item in fresh) '- ${formatLesficheLineNamed(item, names)}',
       ],
+      ...lesficheCourseNamesNote([...chosen, ...fresh], names),
     ],
     advice:
         'Do not call duplicate_lesfiches again for the lesfiches that were '

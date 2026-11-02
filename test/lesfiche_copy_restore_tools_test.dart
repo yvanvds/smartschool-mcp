@@ -32,13 +32,13 @@ final _assignment = fakeLesficheDetailAssignment;
 final _copy1 = fakeNewLesficheId(1);
 final _copy2 = fakeNewLesficheId(2);
 
-/// The lines of the lesfiches in a result of a bulk write (no course
-/// names).
+/// The lines of the lesfiches in a result of a bulk write, with their
+/// courses named as `list_lesfiches` names them (#206).
 final _lessonLine =
-    '- lesson | Lussen | no labels | 1 course | visible | changed '
+    '- lesson | Lussen | no labels | informatica | visible | changed '
     '2026-10-05 | id ${_lesson.id}';
 final _assignmentLine =
-    '- assignment KT Kleine Taak | Lussen | no labels | 1 course | visible | '
+    '- assignment KT Kleine Taak | Lussen | no labels | informatica | visible | '
     'changed 2026-10-05 | id ${_assignment.id}';
 
 /// The body of a bulk write of [lesfiches], each with its id, kind and
@@ -184,7 +184,7 @@ void main() {
     expect(
       copied,
       'Made 1 copy in the own library of the Lesfiches module:\n'
-      '- lesson | Lussen - kopie | no labels | 1 course | visible | id '
+      '- lesson | Lussen - kopie | no labels | informatica | visible | id '
       '$_copy1 (a copy of id ${_lesson.id})\n'
       'Each copy has the icon, info, visibility, courses, labels, learning '
       'goals, weblinks and attachments of its lesfiche. Change it with '
@@ -218,7 +218,7 @@ void main() {
       }),
       'Restored 1 lesfiche from the trash into the own library of the '
       'Lesfiches module:\n'
-      '- lesson | Lussen - kopie | no labels | 1 course | visible | changed '
+      '- lesson | Lussen - kopie | no labels | informatica | visible | changed '
       '2026-11-01 | id $_copy1\n'
       'list_lesfiches lists it again, and it can be changed, copied and '
       'planned as before.',
@@ -256,10 +256,15 @@ void main() {
         'lesfiches': [_lesson.id, _assignment.id.toUpperCase(), _lesson.id],
       });
 
-      expect(server.requests, [
-        'GET $fakeLesfichesPath',
-        'POST $fakeLesficheDuplicatePath',
-      ], reason: 'the list without the course names, then one write');
+      expect(
+        server.requests,
+        [
+          'GET $fakeLesfichesPath',
+          'GET $fakeCourseListPath',
+          'POST $fakeLesficheDuplicatePath',
+        ],
+        reason: 'the list, the course list to name the courses, then one write',
+      );
       expect(bodies(fakeLesficheDuplicatePath), [
         _bulkOf([_lesson, _assignment]),
       ]);
@@ -267,10 +272,10 @@ void main() {
         text,
         startsWith(
           'Made 2 copies in the own library of the Lesfiches module:\n'
-          '- lesson | Lussen - kopie | labels JAAR 6, Lussen | 1 course | '
+          '- lesson | Lussen - kopie | labels JAAR 6, Lussen | informatica | '
           'visible | id $_copy1 (a copy of id ${_lesson.id})\n'
-          '- assignment KT Kleine Taak | Lussen - kopie | no labels | 1 '
-          'course | visible | id $_copy2 (a copy of id ${_assignment.id})\n'
+          '- assignment KT Kleine Taak | Lussen - kopie | no labels | '
+          'informatica | visible | id $_copy2 (a copy of id ${_assignment.id})\n'
           'Each copy has',
         ),
       );
@@ -345,7 +350,7 @@ void main() {
         'confirm all of it. Read again after it, the list of lesfiches shows '
         'what was done.\n'
         'Copies made:\n'
-        '- lesson | Lussen - kopie | no labels | 1 course | visible | changed '
+        '- lesson | Lussen - kopie | no labels | informatica | visible | changed '
         '2026-11-01 | id $_copy1 (a copy of id ${_lesson.id})\n'
         'No copy found of:\n'
         '$_assignmentLine\n'
@@ -356,6 +361,7 @@ void main() {
       );
       expect(server.requests, [
         'GET $fakeLesfichesPath',
+        'GET $fakeCourseListPath',
         'POST $fakeLesficheDuplicatePath',
         'GET $fakeLesfichesPath',
       ], reason: 'sent once, then the list again');
@@ -373,7 +379,7 @@ void main() {
         found,
         contains(
           'Copies made:\n'
-          '- lesson | Lussen - kopie | no labels | 1 course | visible | '
+          '- lesson | Lussen - kopie | no labels | informatica | visible | '
           'changed 2026-11-01 | id $_copy1 (a copy of id ${_lesson.id})\n',
         ),
       );
@@ -481,6 +487,7 @@ void main() {
         );
         expect(server.requests, [
           'GET $fakeLesficheTrashedPath',
+          'GET $fakeCourseListPath',
           'POST $fakeLesficheRestorePath',
         ]);
         expect(bodies(fakeLesficheRestorePath), [
@@ -550,6 +557,7 @@ void main() {
       );
       expect(server.requests, [
         'GET $fakeLesficheTrashedPath',
+        'GET $fakeCourseListPath',
         'POST $fakeLesficheRestorePath',
         'GET $fakeLesficheTrashedPath',
       ]);

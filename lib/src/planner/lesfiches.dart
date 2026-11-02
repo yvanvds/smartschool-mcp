@@ -1,5 +1,6 @@
 import 'package:flutter_smartschool/flutter_smartschool.dart';
 
+import '../log.dart';
 import '../tools/server_tool.dart';
 import 'planner_format.dart';
 
@@ -140,7 +141,8 @@ String formatLesficheKind(LessonContentItem item) => switch (item.type) {
 };
 
 /// The courses of [item], by the names the library gave them
-/// ([LessonContentCourse.name], from the school's course list):
+/// ([LessonContentCourse.name], from the school's course list) or else
+/// those of [courseNames] (by course id, [readLesficheCourseNames]):
 /// `informatica`, `informatica, chemie`, `informatica, 1 unnamed course`
 /// (a course the course list does not name), or `no course`. A name is
 /// given once, also for two courses of that name. Without
@@ -149,6 +151,7 @@ String formatLesficheKind(LessonContentItem item) => switch (item.type) {
 String formatLesficheCourses(
   LessonContentItem item, {
   bool withCourseNames = true,
+  Map<String, String> courseNames = const {},
 }) {
   final courses = item.courses;
   if (courses.isEmpty) return 'no course';
@@ -158,7 +161,7 @@ String formatLesficheCourses(
   final names = <String>[];
   var unnamed = 0;
   for (final course in courses) {
-    final name = course.name;
+    final name = course.name ?? courseNames[course.id];
     if (name == null) {
       unnamed++;
     } else if (!names.contains(name)) {
@@ -181,6 +184,65 @@ String lesficheCourseListNote(SmartschoolLessonContentError error) =>
     '${error.statusCode == null ? '' : ' (HTTP ${error.statusCode})'}, so '
     'only the number of courses is shown.';
 
+/// The names of the school's courses by course id, to name the courses of
+/// lesfiches the library read or gave without them
+/// ([formatLesficheCourses]): `byId` is null, with the `error`, when the
+/// course list could not be read.
+typedef LesficheCourseNames = ({
+  Map<String, String>? byId,
+  SmartschoolLessonContentError? error,
+});
+
+/// Reads the school's course list ([LessonContentService.getCourses]) to
+/// name the courses of [items], as `list_lesfiches` names them (#206): the
+/// bulk writes read the lesfiches without the names, and their results
+/// list them. No request when none of [items] has a course. A course list
+/// the server cannot use is no error: the lines then give only the number
+/// of courses, with [lesficheCourseNamesNote].
+Future<LesficheCourseNames> readLesficheCourseNames(
+  LessonContentService lesfiches,
+  Iterable<LessonContentItem> items,
+) async {
+  if (items.every((item) => item.courses.isEmpty)) {
+    return (byId: const <String, String>{}, error: null);
+  }
+  try {
+    final courses = await lesfiches.getCourses();
+    return (
+      byId: {
+        for (final course in courses)
+          if (course.name.isNotEmpty) course.id: course.name,
+      },
+      error: null,
+    );
+  } on SmartschoolLessonContentError catch (error) {
+    log('lesfiches: the course list could not be read: $error');
+    return (byId: null, error: error);
+  }
+}
+
+/// [formatLesficheLine] for [item], its courses named by [names].
+String formatLesficheLineNamed(
+  LessonContentItem item,
+  LesficheCourseNames names,
+) => formatLesficheLine(
+  item,
+  withCourseNames: names.byId != null,
+  courseNames: names.byId ?? const {},
+);
+
+/// The notes under the lines of [items] named by [names]: that the course
+/// list could not be read ([lesficheCourseListNote]), when one of them has
+/// a course.
+List<String> lesficheCourseNamesNote(
+  Iterable<LessonContentItem> items,
+  LesficheCourseNames names,
+) => [
+  if (names.error case final error?
+      when items.any((item) => item.courses.isNotEmpty))
+    lesficheCourseListNote(error),
+];
+
 /// The note under lesfiches with a course that the school's course list
 /// does not name ([formatLesficheCourses]).
 const unnamedLesficheCourseNote =
@@ -188,7 +250,8 @@ const unnamedLesficheCourseNote =
     '"unnamed course".';
 
 /// One line describing [item]: kind, name, labels, courses
-/// ([formatLesficheCourses], by name unless not [withCourseNames]), visible
+/// ([formatLesficheCourses], by name unless not [withCourseNames], those
+/// the library did not name by [courseNames]), visible
 /// or hidden in the module, the day it was last changed, and its id.
 ///
 /// For example `lesson | Herhaling: lussen | labels JAAR 6, TRIMESTER 1 |
@@ -202,6 +265,7 @@ const unnamedLesficheCourseNote =
 String formatLesficheLine(
   LessonContentItem item, {
   bool withCourseNames = true,
+  Map<String, String> courseNames = const {},
   bool inTrash = false,
 }) {
   final labels = [
@@ -212,7 +276,11 @@ String formatLesficheLine(
     formatLesficheKind(item),
     if (item.name.isEmpty) '(no name)' else item.name,
     if (labels.isEmpty) 'no labels' else 'labels ${labels.join(', ')}',
-    formatLesficheCourses(item, withCourseNames: withCourseNames),
+    formatLesficheCourses(
+      item,
+      withCourseNames: withCourseNames,
+      courseNames: courseNames,
+    ),
     if (item.isVisible) 'visible' else 'hidden',
     if (inTrash)
       if (item.dateStateChanged case final trashed?)

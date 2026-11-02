@@ -62,7 +62,14 @@ class FakeLessonCluster {
     ],
     'numberOfLessons': _count('lessons'),
     'numberOfAssignments': _count('assignments'),
-    'numberOfGoals': goals.length,
+    // As seen live (#206): the goals of the cluster and of its lesfiches,
+    // each counted once, and the hours its lesfiches give (1 each here), 0
+    // for none.
+    'numberOfGoals': {
+      for (final goal in goals) goal['id'],
+      for (final entry in entries)
+        ...?entry.lesfiche?.goals.map((g) => g['id']),
+    }.length,
     'teachingHoursEstimate': entries.where((e) => e.lesfiche != null).length,
     'numberOfAttachments': 0,
     'numberOfWebLinks': 0,

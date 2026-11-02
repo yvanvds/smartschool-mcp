@@ -403,13 +403,16 @@ String _pupilGoal(_Target to, SkoreProjectRatingChange change) {
 }
 
 /// One rating as Skore lists it: the pupil, the goal, the level by name and
-/// the info, if any.
+/// the info, if any; `cleared` for one with neither (#206).
 String _ratingLine(
   _Target to,
   SkoreProjectRatingChange change,
   SkoreProjectRating rating,
 ) {
   final info = rating.info?.trim() ?? '';
+  if (rating.ratingId == null && info.isEmpty) {
+    return '- ${_pupilGoal(to, change)}: cleared';
+  }
   return [
     '- ${_pupilGoal(to, change)}: '
         '${formatSkoreProjectRatingLevel(to.found.template, rating.ratingId)}',

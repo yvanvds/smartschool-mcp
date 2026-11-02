@@ -582,7 +582,7 @@ void main() {
           'hours': [fakeOwnSlot.ref],
           'lesfiche': 'id ${fakeLesficheFuncties.id}',
         }),
-        'Planned the lesfiche ${fakeLesficheFuncties.id} in the empty lesson '
+        'Planned the lesfiche "Functies" in the empty lesson '
         'hour on Friday 2026-11-20 11:10–12:00 (6A1, 6A2, informatica). '
         'Pupils of 6A1, 6A2 see its name and public info now.\n'
         'The empty lesson hour ${fakeOwnSlot.ref} no longer exists: the '
@@ -858,7 +858,7 @@ void main() {
           'hours': [fakeOwnSlot.ref],
           'lesfiche': fakeLesficheFuncties.id,
         }),
-        startsWith('Planned the lesfiche ${fakeLesficheFuncties.id} in the '),
+        startsWith('Planned the lesfiche "Functies" in the '),
       );
       expect(postsTo(planPath), 2, reason: 'the refused one and the plan');
       expect(planner.writes, ['POST $planPath'], reason: 'planned once');

@@ -9,6 +9,7 @@ library;
 
 import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/session.dart';
+import 'package:smartschool_mcp/src/skore/skore_gradebook_format.dart';
 import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
@@ -84,6 +85,10 @@ String _refused(String reason) =>
     'call. Nothing was changed in Skore.';
 
 void main() {
+  // A time before the closing time of every open period of the fake, so
+  // that they read as open (#206).
+  setUp(() => skoreClock = () => DateTime.utc(2026, 10, 1));
+  tearDown(() => skoreClock = DateTime.now);
   late FakeSmartschool server;
   late FakeSkoreGradebook skore;
   late FakeSkoreOwnGradebook book;
@@ -550,9 +555,26 @@ void main() {
         'Project: $_webquest\n'
         'Ratings as Skore lists them after the save, in the order given:\n'
         '- $_gert | $_zoekt: Niet behaald (NB)\n'
-        '- $_gert | $_bronnen: no level\n'
+        '- $_gert | $_bronnen: cleared\n'
         '- $_ilse | $_bronnen: Behaald (B) | info: Mooie bronnen.',
       );
+      // The cleared cell holds nothing: read_skore_project leaves it out
+      // (#206).
+      final read = await ok('read_skore_project', {
+        'gradebook_id': 34990,
+        'project_id': 8101,
+        'period_id': 1710,
+        'pupil_id': 1221,
+      });
+      expect(
+        read,
+        endsWith(
+          'The pupil\'s ratings, in the order of the goals:\n'
+          '- $_gert\n'
+          '  - $_zoekt: Niet behaald (NB)',
+        ),
+      );
+      expect(read, isNot(contains('no level')));
       expect(skore.projects.saves, hasLength(1));
       final sent = skore.projects.saves.single.cast<Map>();
       expect(
