@@ -99,7 +99,7 @@ Future<CallToolResult> _read(
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
   final text = await withSkoreGradebook(session, (gradebooks) async {
-    final (:sheet, :workyear) = await readSkoreGradebook(
+    final (:sheet, projectPeriods: _, :workyear) = await readSkoreGradebook(
       gradebooks,
       years,
       gradebookId,

@@ -510,11 +510,77 @@ final class SkoreGradebookYears {
       };
 }
 
+/// A gradebook read with [SkoreGradebookService.getGradebook], its project
+/// periods ("Projecten", #192) split off: [sheet] has only its evaluation
+/// periods, and [projectPeriods] are the others, in Skore's order (empty
+/// for a gradebook without project periods).
+typedef SkoreEvaluationSheet = ({
+  SkoreGradebookSheet sheet,
+  List<SkoreGradebookPeriod> projectPeriods,
+});
+
+/// Reads [gradebook] with [gradebooks] ([SkoreGradebookService.getGradebook]:
+/// Skore's `init` and `getGradebookContext`), with its project periods
+/// split off its periods ([SkoreEvaluationSheet]), so that no tool takes a
+/// project period for an evaluation period (#208).
+///
+/// WORKAROUND (#205, #208, removal tracked in #207, yvanvds/dartschool#236):
+/// the library gives a gradebook's project periods as evaluation periods,
+/// and a project gradebook's project period as its
+/// [SkoreGradebookSheet.activePeriod]. Which periods are project periods is
+/// read from the `init` the library sends anyway
+/// ([SkoreGradebooks.readingProjectPeriodIds]): no extra request. When that
+/// cannot be read, the library's periods are kept as they are.
+///
+/// The period Skore opens the gradebook on is kept when it is an
+/// evaluation period; a project period is not, and Skore's `init` lists the
+/// evaluation periods first (seen live, #205), so it is then the first
+/// evaluation period, as the library takes it, or null for a gradebook
+/// without evaluation periods.
+Future<SkoreEvaluationSheet> readSkoreEvaluationSheet(
+  SkoreGradebooks gradebooks,
+  SkoreGradebook gradebook,
+) async {
+  final (sheet, projectPeriodIds) = await gradebooks.readingProjectPeriodIds(
+    gradebook.gradebookId,
+    () => gradebooks.getGradebook(gradebook),
+  );
+  if (projectPeriodIds == null ||
+      !sheet.periods.any((p) => projectPeriodIds.contains(p.id))) {
+    return (sheet: sheet, projectPeriods: const <SkoreGradebookPeriod>[]);
+  }
+  final periods = [
+    for (final period in sheet.periods)
+      if (!projectPeriodIds.contains(period.id)) period,
+  ];
+  final active = sheet.activePeriod;
+  return (
+    sheet: SkoreGradebookSheet(
+      gradebook: sheet.gradebook,
+      courseName: sheet.courseName,
+      periods: periods,
+      activePeriod: active != null && !projectPeriodIds.contains(active.id)
+          ? active
+          : periods.firstOrNull,
+      pupils: sheet.pupils,
+      writable: sheet.writable,
+      isCoordinator: sheet.isCoordinator,
+      reports: sheet.reports,
+    ),
+    projectPeriods: [
+      for (final period in sheet.periods)
+        if (projectPeriodIds.contains(period.id)) period,
+    ],
+  );
+}
+
 /// One of the user's gradebooks (their own, or one shared with them) read
-/// with its periods and pupils ([SkoreGradebookService.getGradebook]), with
-/// the school year it is of.
+/// with its periods and pupils ([readSkoreEvaluationSheet]), with the
+/// school year it is of: [sheet] has only its evaluation periods, and
+/// [projectPeriods] are its project periods.
 typedef ReadSkoreGradebook = ({
   SkoreGradebookSheet sheet,
+  List<SkoreGradebookPeriod> projectPeriods,
   SkoreWorkyear workyear,
 });
 
@@ -522,10 +588,11 @@ typedef ReadSkoreGradebook = ({
 /// (their own, or one shared with them) with its periods, its pupils and
 /// whether Skore lets the user change it:
 /// found in [years] ([SkoreGradebookYears.find], which throws a [ToolError]
-/// for an unknown id), then read with [gradebooks] (Skore's `init` and
-/// `getGradebookContext`).
+/// for an unknown id), then read with [gradebooks]
+/// ([readSkoreEvaluationSheet]: Skore's `init` and `getGradebookContext`,
+/// its project periods split off).
 Future<ReadSkoreGradebook> readSkoreGradebook(
-  SkoreGradebookService gradebooks,
+  SkoreGradebooks gradebooks,
   SkoreGradebookYears years,
   int gradebookId, {
   int? workyearId,
@@ -535,47 +602,75 @@ Future<ReadSkoreGradebook> readSkoreGradebook(
     gradebookId,
     workyearId: workyearId,
   );
+  final (:sheet, :projectPeriods) = await readSkoreEvaluationSheet(
+    gradebooks,
+    found.gradebook,
+  );
   return (
-    sheet: await gradebooks.getGradebook(found.gradebook),
+    sheet: sheet,
+    projectPeriods: projectPeriods,
     workyear: found.workyear,
   );
 }
 
-/// The period of [sheet] with [periodId], or without it the period Skore
-/// opens the gradebook on ([SkoreGradebookSheet.activePeriod]): null only
-/// then, for a gradebook without periods.
+/// The evaluation period of [sheet] with [periodId], or without it the
+/// period Skore opens the gradebook on ([SkoreGradebookSheet.activePeriod]):
+/// null only then, for a gradebook without evaluation periods.
+///
+/// [sheet] has only the gradebook's evaluation periods and
+/// [projectPeriods] are its project periods ([readSkoreEvaluationSheet]):
+/// a project period's id is refused as an evaluation period, with where its
+/// projects are (#208).
 ///
 /// Throws a [ToolError] that lists the gradebook's periods for a [periodId]
 /// that is not one of them; nothing is sent.
 SkoreGradebookPeriod? skoreGradebookPeriod(
   SkoreGradebookSheet sheet,
-  int? periodId,
-) {
+  int? periodId, {
+  required List<SkoreGradebookPeriod> projectPeriods,
+}) {
   if (periodId == null) return sheet.activePeriod;
   for (final period in sheet.periods) {
     if (period.id == periodId) return period;
   }
   final gradebook = formatSkoreGradebookName(sheet.gradebook);
+  final project = projectPeriods.where((p) => p.id == periodId).firstOrNull;
+  if (project != null) {
+    throw ToolError(
+      'Period id $periodId of the $gradebook is the project period '
+      '${skoreName(project.name)} (Skore\'s "Projecten"), not an evaluation '
+      'period: it has no evaluations and takes no grades, its pupils are '
+      'rated per learning goal in projects. list_skore_projects lists its '
+      'projects, read_skore_project reads their ratings and '
+      'save_skore_project_ratings saves them. '
+      '${sheet.periods.isEmpty ? 'The gradebook has no evaluation periods.' : 'Its evaluation periods, in Skore\'s order: ${_periodList(sheet)}.'}',
+    );
+  }
   if (sheet.periods.isEmpty) {
     throw ToolError(
       'The $gradebook has no period with period id $periodId: it has '
-      '${formatSkoreMissingPeriods(sheet)}, so it has no evaluations. Leave '
-      'out period_id.',
+      '${formatSkoreMissingPeriods(sheet, projectPeriods: projectPeriods)}, '
+      'so it has no evaluations. Leave out period_id.',
     );
   }
+  throw ToolError(
+    'The $gradebook has no period with period id $periodId. Its periods, in '
+    'Skore\'s order: ${_periodList(sheet)}. Take a period id from these, or '
+    'leave out period_id for the period Skore opens the gradebook on '
+    '(active).',
+  );
+}
+
+/// The periods of [sheet], each with its period id, whether it is open and
+/// whether Skore opens the gradebook on it, for a [ToolError].
+String _periodList(SkoreGradebookSheet sheet) {
   final active = sheet.activePeriod;
-  final periods = [
+  return [
     for (final period in sheet.periods)
       '${skoreName(period.name)} (period id ${period.id}, '
           '${period.isOpen ? 'open' : 'closed'}'
           '${period.id == active?.id ? ', active' : ''})',
-  ];
-  throw ToolError(
-    'The $gradebook has no period with period id $periodId. Its periods, in '
-    'Skore\'s order: ${periods.join(', ')}. Take a period id from these, or '
-    'leave out period_id for the period Skore opens the gradebook on '
-    '(active).',
-  );
+  ].join(', ');
 }
 
 /// The pupil of [sheet] with [pupilId].
@@ -702,19 +797,24 @@ typedef FoundSkoreEvaluation = ({
 /// with [periodId] or for an evaluation of the active period, one per
 /// period at most. Passing the period id keeps it at one.
 ///
+/// [sheet] has only the gradebook's evaluation periods and
+/// [projectPeriods] are its project periods ([readSkoreEvaluationSheet]):
+/// a project period is never read for evaluations (#208).
+///
 /// Throws a [ToolError] with where to take the ids from for a [periodId]
-/// that is not one of the gradebook's (nothing is sent), and for an
-/// evaluation that is not in the periods read.
+/// that is not one of the gradebook's evaluation periods (nothing is sent),
+/// and for an evaluation that is not in the periods read.
 Future<FoundSkoreEvaluation> findSkoreEvaluation(
   SkoreGradebookService gradebooks,
   SkoreGradebookSheet sheet,
   int evaluationId, {
+  required List<SkoreGradebookPeriod> projectPeriods,
   int? periodId,
 }) async {
   final gradebook = formatSkoreGradebookName(sheet.gradebook);
   final active = sheet.activePeriod;
   final periods = periodId != null
-      ? [skoreGradebookPeriod(sheet, periodId)!]
+      ? [skoreGradebookPeriod(sheet, periodId, projectPeriods: projectPeriods)!]
       : [
           ?active,
           for (final period in sheet.periods.reversed)
@@ -722,8 +822,9 @@ Future<FoundSkoreEvaluation> findSkoreEvaluation(
         ];
   if (periods.isEmpty) {
     throw ToolError(
-      'The $gradebook has ${formatSkoreMissingPeriods(sheet)}, so it has no '
-      'evaluation with evaluation id $evaluationId.',
+      'The $gradebook has '
+      '${formatSkoreMissingPeriods(sheet, projectPeriods: projectPeriods)}, '
+      'so it has no evaluation with evaluation id $evaluationId.',
     );
   }
   for (final period in periods) {

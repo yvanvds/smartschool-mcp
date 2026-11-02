@@ -124,7 +124,7 @@ Future<CallToolResult> _list(
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
   final text = await withSkoreGradebook(session, (gradebooks) async {
-    final (:sheet, :workyear) = await readSkoreGradebook(
+    final (:sheet, :projectPeriods, :workyear) = await readSkoreGradebook(
       gradebooks,
       years,
       gradebookId,
@@ -136,6 +136,7 @@ Future<CallToolResult> _list(
         gradebooks,
         sheet,
         evaluationId,
+        projectPeriods: projectPeriods,
         periodId: periodId,
       );
       return formatSkoreEvaluationGrades(
@@ -146,13 +147,18 @@ Future<CallToolResult> _list(
         scale: await readSkoreScaleFor(gradebooks, [found.evaluation]),
       );
     }
-    final period = skoreGradebookPeriod(sheet, periodId);
+    final period = skoreGradebookPeriod(
+      sheet,
+      periodId,
+      projectPeriods: projectPeriods,
+    );
     if (period == null) {
       return [
         title,
-        'It has ${formatSkoreMissingPeriods(sheet)}, so it has no '
-            'evaluations.',
-        ?skoreReportPeriodsOnlyNote(sheet),
+        'It has '
+            '${formatSkoreMissingPeriods(sheet, projectPeriods: projectPeriods)}, '
+            'so it has no evaluations.',
+        ?skoreReportPeriodsOnlyNote(sheet, projectPeriods: projectPeriods),
       ].join('\n');
     }
     final evaluations = await gradebooks.getEvaluations(

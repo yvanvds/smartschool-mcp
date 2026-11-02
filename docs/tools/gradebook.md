@@ -166,6 +166,18 @@ For a project gradebook, `list_skore_projects` and `read_skore_project`
 change nothing, and `save_skore_project_ratings` saves the pupils' ratings
 in a project (see [Project gradebooks](#project-gradebooks)).
 
+A gradebook's project periods are never taken for evaluation periods
+(#208): every tool that reads a gradebook's periods (`read_skore_gradebook`,
+`list_skore_evaluations`, `read_skore_feedback`, `create_skore_evaluation`,
+`save_skore_grades`, `save_skore_feedback`, through `readSkoreEvaluationSheet`
+in `lib/src/skore/skore_gradebook_access.dart`) splits them off, as
+[read_skore_gradebook](#how-read_skore_gradebook-works) tells them apart,
+without an extra request. So a project gradebook has no evaluation periods
+for them: they say so and point to `list_skore_projects`, and a project
+period's id given as `period_id` is refused as one, before anything is sent,
+with the project tools and the gradebook's evaluation periods, if any. A
+gradebook with both kinds (not seen live) keeps its evaluation periods.
+
 ### How `list_skore_gradebooks` works
 
 It reads the user's own gradebooks of one school year
@@ -221,9 +233,10 @@ As a workaround (removal tracked in #207), the tool reads `scope` from the
 raw answer of the `init` the library sends anyway, with a Dio interceptor
 on the client for the length of the read
 (`lib/src/skore/skore_period_scopes.dart`,
-`SkoreGradebooks.readingProjectPeriodIds`): no gradebook costs an extra
-request. When that answer cannot be read, the periods are shown as the
-library gives them.
+`SkoreGradebooks.readingProjectPeriodIds`, used by `readSkoreEvaluationSheet`,
+which the evaluation tools share): no gradebook costs an extra request.
+When that answer cannot be read, the periods are shown as the library gives
+them.
 
 A gradebook with project periods says that it is a project gradebook, that
 its pupils are rated per learning goal in projects, which tools read and

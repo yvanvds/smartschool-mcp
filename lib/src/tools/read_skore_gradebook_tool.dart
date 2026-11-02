@@ -18,8 +18,8 @@ import 'server_tool.dart';
 /// a gradebook's project periods with its evaluation periods, and the
 /// library gives them all as periods (yvanvds/dartschool#236): which ones
 /// are project periods is read from that same `init`
-/// ([SkoreGradebooks.readingProjectPeriodIds], a workaround, #205, #207),
-/// so no gradebook costs an extra request.
+/// ([readSkoreEvaluationSheet], a workaround, #205, #207), so no gradebook
+/// costs an extra request.
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -87,22 +87,15 @@ Future<CallToolResult> _read(
   final gradebookId = requiredIntArgument(arguments, 'gradebook_id');
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
-  final ((:sheet, :workyear), projectPeriodIds) = await withSkoreGradebook(
+  final (:sheet, :projectPeriods, :workyear) = await withSkoreGradebook(
     session,
-    (gradebooks) => gradebooks.readingProjectPeriodIds(
+    (gradebooks) => readSkoreGradebook(
+      gradebooks,
+      years,
       gradebookId,
-      () => readSkoreGradebook(
-        gradebooks,
-        years,
-        gradebookId,
-        workyearId: workyearId,
-      ),
+      workyearId: workyearId,
     ),
   );
-  final projectPeriods = [
-    for (final period in sheet.periods)
-      if (projectPeriodIds?.contains(period.id) ?? false) period,
-  ];
   return CallToolResult(
     content: [
       TextContent(
@@ -128,9 +121,11 @@ Future<CallToolResult> _read(
 /// gradebook (one with [projectPeriods], #192) says so and lists them, with
 /// the project tools, instead; its report periods are left out, as a
 /// project course is not on the gradebook's reports (dartschool#204).
-/// [projectPeriods] are periods of [sheet] (Skore lists them with the
-/// evaluation periods, #205): the others are its evaluation periods, and
-/// only one of those is the period Skore opens the gradebook on.
+/// [projectPeriods] are left out of [sheet]'s periods when they are among
+/// them (Skore lists them with the evaluation periods, #205;
+/// [readSkoreEvaluationSheet] splits them off): the others are its
+/// evaluation periods, and only one of those is the period Skore opens the
+/// gradebook on.
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear, {

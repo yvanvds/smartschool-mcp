@@ -184,12 +184,16 @@ Future<CallToolResult> _save(
         // The library refuses it as well, before anything is sent; this
         // says it in the server's words, before the gradebook is read.
         checkSkoreGradebookChangeable(found.gradebook);
-        final sheet = await gradebooks.getGradebook(found.gradebook);
+        final (:sheet, :projectPeriods) = await readSkoreEvaluationSheet(
+          gradebooks,
+          found.gradebook,
+        );
         final pupils = _pupils(sheet, grades.keys);
         final listed = await findSkoreEvaluation(
           gradebooks,
           sheet,
           evaluationId,
+          projectPeriods: projectPeriods,
           periodId: periodId,
         );
         final evaluation = listed.evaluation;

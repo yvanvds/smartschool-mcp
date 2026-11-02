@@ -143,19 +143,32 @@ String formatSkorePeriodName(SkoreGradebookPeriod period) =>
 /// are empty) has, after "has": `no evaluation periods yet`; or `no
 /// evaluation periods, only report periods` for one with report periods
 /// only, as Skore shows a behaviour gradebook such as "Gedrag (A-stroom,
-/// D/A en D)" (#168, flutter_smartschool 0.4.0). Either way it has no
-/// evaluations and takes no grades.
-String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
-    sheet.reports.isEmpty
+/// D/A en D)" (#168, flutter_smartschool 0.4.0). For a project gradebook
+/// (one with [projectPeriods], #192, #208), `no evaluation periods, only
+/// project periods`, with the tool that lists its projects. Either way it
+/// has no evaluations and takes no grades.
+String formatSkoreMissingPeriods(
+  SkoreGradebookSheet sheet, {
+  List<SkoreGradebookPeriod> projectPeriods = const [],
+}) => projectPeriods.isNotEmpty
+    ? 'no evaluation periods, only project periods (it is a project '
+          'gradebook, Skore\'s "Projecten", whose pupils are rated per '
+          'learning goal in projects: list_skore_projects lists its projects)'
+    : sheet.reports.isEmpty
     ? 'no evaluation periods yet'
     : 'no evaluation periods, only report periods';
 
 /// For a gradebook with report periods only ([sheet], see
 /// [formatSkoreMissingPeriods]), the sentence on where its course comments
 /// are, and which tools read and write them (#171), for the tools that read
-/// it; null for any other gradebook.
-String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
-    sheet.periods.isEmpty && sheet.reports.isNotEmpty
+/// it; null for any other gradebook, and for a project gradebook (one with
+/// [projectPeriods]), as a project course is not on the reports
+/// (dartschool#204).
+String? skoreReportPeriodsOnlyNote(
+  SkoreGradebookSheet sheet, {
+  List<SkoreGradebookPeriod> projectPeriods = const [],
+}) =>
+    sheet.periods.isEmpty && sheet.reports.isNotEmpty && projectPeriods.isEmpty
     ? 'Its course comments, one per pupil, are written in its report '
           'periods and go on the report: read_skore_report reads them, and '
           'save_skore_report_comment writes them.'

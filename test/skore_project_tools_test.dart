@@ -9,10 +9,15 @@ library;
 
 import 'package:dart_mcp/client.dart';
 import 'package:smartschool_mcp/src/session.dart';
+import 'package:smartschool_mcp/src/tools/create_skore_evaluation_tool.dart';
+import 'package:smartschool_mcp/src/tools/list_skore_evaluations_tool.dart';
 import 'package:smartschool_mcp/src/tools/list_skore_projects_tool.dart';
+import 'package:smartschool_mcp/src/tools/read_skore_feedback_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_gradebook_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_project_tool.dart';
 import 'package:smartschool_mcp/src/tools/read_skore_report_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_feedback_tool.dart';
+import 'package:smartschool_mcp/src/tools/save_skore_grades_tool.dart';
 import 'package:smartschool_mcp/src/tools/save_skore_project_ratings_tool.dart';
 import 'package:test/test.dart';
 
@@ -101,6 +106,11 @@ void main() {
         listSkoreProjectsTool(session),
         readSkoreProjectTool(session),
         saveSkoreProjectRatingsTool(session),
+        listSkoreEvaluationsTool(session),
+        readSkoreFeedbackTool(session),
+        createSkoreEvaluationTool(session),
+        saveSkoreGradesTool(session),
+        saveSkoreFeedbackTool(session),
       ],
     );
   });
@@ -214,6 +224,170 @@ void main() {
           'and Skore opens the gradebook on DW1 (active):\n- DW1 | period id '
           '1704 |',
         ),
+      );
+    });
+  });
+
+  group('the evaluation tools on a project gradebook (#208)', () {
+    /// What the evaluation tools say of a gradebook with project periods
+    /// only, after "has".
+    const noEvaluationPeriods =
+        'no evaluation periods, only project periods (it is a project '
+        'gradebook, Skore\'s "Projecten", whose pupils are rated per learning '
+        'goal in projects: list_skore_projects lists its projects)';
+
+    /// What they say of project period PR1's id taken for an evaluation
+    /// period, up to the gradebook's evaluation periods.
+    const projectPeriod =
+        'Period id 1710 of the $_gradebookName is the project period PR1 '
+        '(Skore\'s "Projecten"), not an evaluation period: it has no '
+        'evaluations and takes no grades, its pupils are rated per learning '
+        'goal in projects. list_skore_projects lists its projects, '
+        'read_skore_project reads their ratings and save_skore_project_ratings '
+        'saves them.';
+
+    /// The calls of reading the gradebook once: nothing else was asked of
+    /// Skore, and no evaluation of the project period was read or written.
+    const readOnly = [
+      'getNavigation',
+      'accessableList',
+      'init wy=24',
+      'getGradebookContext wy=24',
+    ];
+
+    test('list_skore_evaluations says it has no evaluation periods and '
+        'points to list_skore_projects; it reads no evaluations of the '
+        'project period', () async {
+      book.reports.add(fakeSkoreReportR1D);
+      expect(
+        await ok('list_skore_evaluations', {'gradebook_id': 34990}),
+        '$_title\nIt has $noEvaluationPeriods, so it has no evaluations.',
+      );
+      expect(skore.calls, readOnly);
+    });
+
+    test('list_skore_evaluations and read_skore_feedback refuse the project '
+        'period\'s id, and look for an evaluation in no period', () async {
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34990,
+          'period_id': 1710,
+        }),
+        '$projectPeriod The gradebook has no evaluation periods.',
+      );
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34990,
+          'evaluation_id': 500003,
+        }),
+        'The $_gradebookName has $noEvaluationPeriods, so it has no '
+        'evaluation with evaluation id 500003.',
+      );
+      expect(
+        await error('read_skore_feedback', {
+          'gradebook_id': 34990,
+          'evaluation_id': 500003,
+          'pupil_id': 1221,
+          'period_id': 1710,
+        }),
+        '$projectPeriod The gradebook has no evaluation periods.',
+      );
+      expect(skore.calls.where((c) => c.startsWith('getEvaluations')), isEmpty);
+    });
+
+    test('create_skore_evaluation, save_skore_grades and save_skore_feedback '
+        'refuse it before anything is sent', () async {
+      Future<void> refused(
+        String tool,
+        Map<String, Object?> arguments,
+        String message,
+      ) async {
+        skore.requests.clear();
+        expect(
+          await error(tool, {'gradebook_id': 34990, ...arguments}),
+          contains(message),
+        );
+        // Only the gradebook is read (the school year's gradebooks are
+        // listed once per session): no evaluation, component or save.
+        expect(
+          skore.calls.where(
+            (c) => c != 'getNavigation' && c != 'accessableList',
+          ),
+          ['init wy=24', 'getGradebookContext wy=24'],
+          reason: tool,
+        );
+      }
+
+      const create = {'title': 'Toets', 'date': '2026-10-14', 'max': 20};
+      await refused(
+        'create_skore_evaluation',
+        create,
+        'The $_gradebookName has $noEvaluationPeriods, so no evaluation can '
+            'be created in it.',
+      );
+      await refused('create_skore_evaluation', {
+        ...create,
+        'period_id': 1710,
+      }, projectPeriod);
+      const grades = {
+        'evaluation_id': 500003,
+        'grades': [
+          {'pupil_id': 1221, 'grade': '7'},
+        ],
+      };
+      await refused(
+        'save_skore_grades',
+        grades,
+        'The $_gradebookName has $noEvaluationPeriods, so it has no '
+            'evaluation with evaluation id 500003.',
+      );
+      await refused('save_skore_grades', {
+        ...grades,
+        'period_id': 1710,
+      }, projectPeriod);
+      const feedback = {
+        'evaluation_id': 500003,
+        'pupil_id': 1221,
+        'text': 'Goed gedaan.',
+      };
+      await refused(
+        'save_skore_feedback',
+        feedback,
+        'The $_gradebookName has $noEvaluationPeriods, so it has no '
+            'evaluation with evaluation id 500003.',
+      );
+      await refused('save_skore_feedback', {
+        ...feedback,
+        'period_id': 1710,
+      }, projectPeriod);
+    });
+
+    test('a gradebook with evaluation and project periods (not seen live) '
+        'keeps its evaluation periods: Skore\'s active one is read, and the '
+        'project period\'s id is refused with them listed', () async {
+      book.periods.add(
+        const FakeSkoreGradebookPeriod(
+          1704,
+          'DW1',
+          open: true,
+          opens: '2026-09-01 08:00',
+          timestamp: '2026-12-18T20:00:00+0100',
+          note: 'Eerste dagelijks werk.',
+        ),
+      );
+      final text = await ok('list_skore_evaluations', {'gradebook_id': 34990});
+      expect(text, contains('DW1'));
+      expect(text, isNot(contains('PR1')));
+      expect(skore.calls.where((c) => c.startsWith('getEvaluations')), [
+        'getEvaluations wy=24',
+      ]);
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 34990,
+          'period_id': 1710,
+        }),
+        '$projectPeriod Its evaluation periods, in Skore\'s order: DW1 '
+        '(period id 1704, open, active).',
       );
     });
   });
