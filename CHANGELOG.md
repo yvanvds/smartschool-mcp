@@ -8,6 +8,27 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.8.0
+
+- Leerdoelen: Claude kan de eindtermen, de leerplannen en de minidatabanken
+  van de school doorzoeken, en toont welke doelen een lesfiche of een les in
+  je planner heeft. Je kunt Claude ook doelen laten koppelen aan een lesfiche
+  of aan een les.
+- Lesfiches: labels bekijken, op je lesfiches zetten en een eigen label maken;
+  een lesfiche kopiëren; de prullenbak bekijken en lesfiches eruit terugzetten.
+- Planner: één lesfiche in één keer in meerdere lesuren plannen, bijvoorbeeld
+  in al je parallelklassen. Een les die al in een lesuur staat, wordt alleen
+  vervangen als je dat uitdrukkelijk vraagt. Een les die je in de planner
+  typte, kun je bewaren als lesfiche.
+- Jaarplannen in Lesfiches: een jaarplan maken met lesclusters, er titels en
+  lesfiches in zetten, doelen aan een cluster geven, en een cluster plannen
+  voor een klas over een periode.
+- Puntenboek: projecten ("Projecten", zoals Digitale vaardigheden) bekijken en
+  leerlingen per leerdoel beoordelen. De gewone puntenboektools verwarren een
+  projectperiode niet langer met een periode voor punten.
+- Er is nu ook een versie voor Linux, voor wie Claude of een ander programma
+  op Linux gebruikt.
+
 ## 0.7.1
 
 - Planner en puntenboek werken weer. Sinds Smartschool onlangs zijn pagina's
