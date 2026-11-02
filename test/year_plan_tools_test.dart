@@ -207,7 +207,7 @@ void main() {
         ),
         contains(
           'Cluster 2: Recursie | 0 lesson lesfiches | 0 assignment '
-          'lesfiches | 0 goals | about 0 teaching hours | id $_otherClusterId\n'
+          'lesfiches | 0 goals | id $_otherClusterId\n'
           '  Goals: none\n'
           '  Content: none',
         ),
@@ -221,6 +221,74 @@ void main() {
     expect(one, contains('Cluster: Recursie'));
     expect(one, isNot(contains('Lussen |')));
     expect(yearPlans.writes, isEmpty);
+  });
+
+  test('the cluster line counts only the cluster\'s own goals, not those of '
+      'its lesfiches the module counts too, and leaves out an estimate of 0 '
+      'hours (#206)', () async {
+    final goal2 = fakeGoalRef(
+      fakeGoal2Id,
+      fakeEindtermenId,
+      fakeEindtermenType,
+    );
+    final goal3 = fakeGoalRef(
+      fakeGoal3Id,
+      fakeEindtermenId,
+      fakeEindtermenType,
+    );
+    final withGoals = [
+      for (final (n, name) in ['Lussen 1', 'Lussen 2'].indexed)
+        FakeLesfiche(
+          id: 'b0000000-0000-4000-8000-00000000007$n',
+          name: name,
+          goals: [goal2, goal3],
+        ),
+    ];
+    server.planner.lesfiches.addAll(withGoals);
+    yearPlans.plans.add(
+      FakeYearPlan(
+        id: _planId,
+        name: 'Informatica 5',
+        clusters: [
+          FakeLessonCluster(
+            id: _clusterId,
+            name: 'Lussen',
+            goals: [_goal1],
+            entries: [for (final f in withGoals) FakeClusterEntry.lesfiche(f)],
+          ),
+          FakeLessonCluster(id: _otherClusterId, name: 'Recursie'),
+        ],
+      ),
+    );
+    expect(
+      await ok('read_year_plan', {'year_plan': _planId}),
+      allOf(
+        contains(
+          'Cluster 1: Lussen | 2 lesson lesfiches | 0 assignment lesfiches | '
+          '1 goal | about 2 teaching hours | id $_clusterId\n'
+          '  Goals:\n'
+          '  - Eindtermen derde graad, voorbeeld: Competenties',
+        ),
+        contains(
+          'Cluster 2: Recursie | 0 lesson lesfiches | 0 assignment '
+          'lesfiches | 0 goals | id $_otherClusterId\n',
+        ),
+        isNot(contains('teaching hours | id $_otherClusterId')),
+      ),
+    );
+
+    expect(
+      await ok('set_lesson_cluster_goals', {
+        'year_plan': _planId,
+        'cluster': _clusterId,
+        'goals': <Object>[],
+      }),
+      contains(
+        'Lussen | 2 lesson lesfiches | 0 assignment lesfiches | 0 goals | '
+        'about 2 teaching hours | id $_clusterId\n'
+        '  Goals: none',
+      ),
+    );
   });
 
   test('read_year_plan refuses an id that is not one, before any login, and '

@@ -187,7 +187,7 @@ void main() {
       expect(
         text,
         startsWith(
-          'Planned the lesfiche ${_algoritmen.id} into all 2 hours. Pupils '
+          'Planned the lesfiche "Algoritmen" into all 2 hours. Pupils '
           'of their classes see its name and public info now.\n'
           '- The empty lesson hour on Friday 2026-11-20 11:10–12:00 (6A1, '
           '6A2, informatica) (${fakeOwnSlot.ref}): planned; the lesson has '
@@ -322,9 +322,9 @@ void main() {
           startsWith(
             'Replaced the lesson "Herhaling" on Friday 2026-11-27 '
             '11:10–12:00 (6A1, informatica) with the lesfiche '
-            '${_algoritmen.id}: its old name, info and goals are gone, and '
+            '"Algoritmen": its old name, info and goals are gone, and '
             'the new lesson holds the content of the lesfiche '
-            '${_algoritmen.id}. Pupils of 6A1 see its name and public info '
+            '"Algoritmen". Pupils of 6A1 see its name and public info '
             'now.\n'
             'The lesson ${_typed.ref} no longer exists: the new lesson has '
             'the id ${_lessonId(1)}.\n',
@@ -350,7 +350,7 @@ void main() {
         }),
         allOf(
           startsWith(
-            'Planned the lesfiche ${_algoritmen.id} into 1 of the 2 hours.',
+            'Planned the lesfiche "Algoritmen" into 1 of the 2 hours.',
           ),
           contains(
             '- The empty lesson hour on Monday 2026-11-23 11:10–12:00 (6A2, '

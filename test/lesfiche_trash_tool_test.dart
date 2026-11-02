@@ -28,12 +28,12 @@ final _lesson = fakeLesficheDetailLesson;
 final _assignment = fakeLesficheDetailAssignment;
 
 /// Their lines in a result, as `list_lesfiches` shows them, with their
-/// courses counted.
+/// courses named (#206).
 final _lessonLine =
-    '- lesson | Lussen | no labels | 1 course | visible | changed '
+    '- lesson | Lussen | no labels | informatica | visible | changed '
     '2026-10-05 | id ${_lesson.id}';
 final _assignmentLine =
-    '- assignment KT Kleine Taak | Lussen | no labels | 1 course | visible | '
+    '- assignment KT Kleine Taak | Lussen | no labels | informatica | visible | '
     'changed 2026-10-05 | id ${_assignment.id}';
 
 /// The move of [lesfiches] as the web client sends it, each with its id,
@@ -195,10 +195,16 @@ void main() {
         _lesson.id,
       ]);
 
-      expect(server.requests, [
-        'GET $fakeLesfichesPath',
-        'POST $fakeLesficheTrashPath',
-      ], reason: 'the list without the course names, then one move');
+      expect(
+        server.requests,
+        [
+          'GET $fakeLesfichesPath',
+          'GET $fakeCourseListPath',
+          'POST $fakeLesficheTrashPath',
+        ],
+        reason:
+            'the list, the course list to name their courses, then one move',
+      );
       expect(planner.writes, ['POST $fakeLesficheTrashPath']);
       expect(moves(), [
         _moveOf([_lesson, _assignment]),
@@ -280,6 +286,26 @@ void main() {
       expect(planner.trashedLesfiches, {fakeLesficheGame.id});
     });
 
+    test('a course list that cannot be read is no error: the courses are '
+        'counted, with a note, and the move is made (#206)', () async {
+      await openSession();
+      planner.failing[fakeCourseListPath] = 500;
+
+      final text = await trash([_lesson.id]);
+
+      expect(
+        text,
+        contains(
+          '- lesson | Lussen | no labels | 1 course | visible | changed '
+          '2026-10-05 | id ${_lesson.id}\n'
+          'Note: the names of the courses could not be read from the '
+          'school\'s course list (HTTP 500), so only the number of courses '
+          'is shown.\n',
+        ),
+      );
+      expect(planner.writes, ['POST $fakeLesficheTrashPath']);
+    });
+
     test('refuses, before anything is sent, an item that is not the id of a '
         'lesfiche', () async {
       expect(
@@ -338,6 +364,7 @@ void main() {
       expect(planner.writes, ['POST $fakeLesficheTrashPath'], reason: 'once');
       expect(server.requests, [
         'GET $fakeLesfichesPath',
+        'GET $fakeCourseListPath',
         'POST $fakeLesficheTrashPath',
         'GET $fakeLesficheTrashedPath',
       ]);

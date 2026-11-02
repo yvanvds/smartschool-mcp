@@ -207,8 +207,11 @@ course comments, one per pupil, are written in its report periods and go on
 the report (`formatSkoreMissingPeriods`, `skoreReportPeriodsOnlyNote`).
 
 Then its periods in Skore's order, each with its period id, whether it is
-open, its closing time (in the time of this PC, Belgium), whether Skore
-opens the gradebook on it (`activePeriod`) and Skore's note on it (the
+open, its closing time (in the time of this PC, Belgium; open is Skore's
+flag, which Skore can keep after the closing time: then `Skore still marks
+it open, though its closing time 2026-10-30 23:00 has passed`, #206),
+whether Skore opens the gradebook on it (`activePeriod`) and Skore's note on
+it (the
 period's `info` as one line, without the paragraphs that only repeat its
 name or say `Gesloten!`: what is left is when it opened and the school's
 note, such as which weeks it covers); its report periods (#171,
@@ -637,8 +640,10 @@ learning goals as a tree in Skore's order (indented under their parent;
 `the course`, `heading`, and `not enabled: it takes no ratings` marked; the
 count of goals that take a rating), and per pupil in the gradebook's order
 their ratings in the order of the goals: the goal, the level by name and
-symbol (`no level` for a cleared one, `level id N (not on the scale)` for
-one the scale does not hold), a grade when Skore has one, and the info.
+symbol (`no level` for one with only a grade or info, `level id N (not on
+the scale)` for one the scale does not hold), a grade when Skore has one,
+and the info. A cell with no level, grade or info (a cleared rating leaves
+one, seen live, #206) is left out.
 Ratings of pupils the gradebook does not list come last, by pupil id. An
 unknown pupil or project is an error.
 
@@ -678,7 +683,8 @@ check, from the project the error carries.
 Then the library sends Skore's `saveCategoryGrades` (at most 30 cells per
 request; a new cell for a pupil's first rating of a goal) and reads the
 ratings again once. The result lists each rating as Skore lists it after
-the save, in the order given. When it cannot confirm every rating
+the save, in the order given; a rating left with no level and no info says
+`cleared`. When it cannot confirm every rating
 (`SmartschoolSkoreProjectRatingSaveUnconfirmedError`), the result lists the
 ratings it confirmed and the ones that may or may not have been saved, with
 what was sent; saving a rating again is harmless, so it says to read the

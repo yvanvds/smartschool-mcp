@@ -215,6 +215,10 @@ String _count(int? count, String singular, String plural) =>
 /// One line describing [cluster], as `getClusters` gives it: its name, how
 /// many lesson and assignment lesfiches and goals it has, the estimate of
 /// its teaching hours, hidden, and its id.
+///
+/// The goals counted are the cluster's own, those its `Goals:` lists: the
+/// module's `numberOfGoals` also counts those of its lesfiches (seen live,
+/// #206). An estimate of 0 hours is the module's for none: left out.
 String formatClusterLine(LessonCluster cluster) => [
   if (cluster.name.isEmpty) '(no name)' else cluster.name,
   _count(cluster.numberOfLessons, 'lesson lesfiche', 'lesson lesfiches'),
@@ -223,8 +227,8 @@ String formatClusterLine(LessonCluster cluster) => [
     'assignment lesfiche',
     'assignment lesfiches',
   ),
-  _count(cluster.numberOfGoals ?? cluster.goals.length, 'goal', 'goals'),
-  if (cluster.teachingHoursEstimate case final hours?)
+  _count(cluster.goals.length, 'goal', 'goals'),
+  if (cluster.teachingHoursEstimate case final hours? when hours > 0)
     'about ${_number(hours)} teaching ${hours == 1 ? 'hour' : 'hours'}',
   if (!cluster.isVisible) 'hidden',
   'id ${cluster.id}',
@@ -246,7 +250,7 @@ String formatClusterEntry(LessonClusterEntry entry) => switch (entry) {
     [
       formatLesficheKind(item),
       if (item.name.isEmpty) '(no name)' else item.name,
-      if (teachingHoursEstimate case final hours?)
+      if (teachingHoursEstimate case final hours? when hours > 0)
         '${_number(hours)} teaching ${hours == 1 ? 'hour' : 'hours'}',
       if (numberOfGoals case final goals?) _count(goals, 'goal', 'goals'),
       'id ${item.id}',

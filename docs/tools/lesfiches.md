@@ -210,8 +210,9 @@ made here), its clusters by name, hidden or a favourite, and its id.
 ### `read_year_plan`
 
 Reads one year plan, by its id: each lesson cluster with its number of
-lesson and assignment lesfiches and of goals, its estimate of teaching
-hours, its learning goals by name (see [Learning goals](goals.md)), and its
+lesson and assignment lesfiches and of its own goals (those its `Goals:`
+lists), its estimate of teaching hours (left out when the module gives none
+or 0), its learning goals by name (see [Learning goals](goals.md)), and its
 content in order: titles such as "Week 1", and lesfiches with their
 teaching hours, number of goals and id. With `cluster`, only that cluster.
 
@@ -555,8 +556,12 @@ Marked destructive, for Claude Desktop and Codex to ask approval: Claude
 shows each lesfiche by name and kind, and calls once after the user's
 confirmation. Idempotent, as `remove_lesfiche_attachment`: a second call
 finds the lesfiches no longer listed and sends nothing. The result lists the
-lesfiches moved, one line each as `list_lesfiches` shows them (their courses
-counted). The library retries the move after logging in again, as a read.
+lesfiches moved, one line each as `list_lesfiches` shows them, their courses
+by name (#206): the list is read without the course names, so the tool reads
+the school's course list (`getCourses`) once before the move, when one of the
+lesfiches has a course; when that list cannot be read, the move goes ahead
+and the courses are counted, with a note. `restore_lesfiches` and
+`duplicate_lesfiches` name the courses the same way. The library retries the move after logging in again, as a read.
 The module answers the move of a lesfiche that is in the trash already with
 a bare `500` (seen live; it was moved there after the tool read the list),
 and an answer whose `exceptions` are not empty is not confirmed either
@@ -609,8 +614,9 @@ with the library's `duplicate` (dartschool#227): one
 `POST lesson-content/duplicate/bulk` with the body of the trash, which the
 module answers with each copy, keyed by the lesfiche as sent. The library
 returns the copies in the order given; the result has a line per copy (as
-`list_lesfiches` shows it, its courses counted, without a date: the copy
-comes in the shape of the detail) with the id of the lesfiche it copies.
+`list_lesfiches` shows it, its courses by name as for `trash_lesfiches`,
+without a date: the copy comes in the shape of the detail) with the id of
+the lesfiche it copies.
 
 As `trash_lesfiches`, the tool reads the list first, in the session action
 of the copy. An id the list does not hold is looked up in the trash
@@ -699,7 +705,10 @@ of the planner writes, which report a write the planner did not confirm as
 the others do (see [The planner writes](planner.md#the-planner-writes)): for
 several hours, that it may have been saved in all or some of them, with
 `read_planned_element` for each hour to check (an hour the planner no longer
-has under its id was planned).
+has under its id was planned). The result names the lesfiche by its name, as
+the planner names the lesson after it (`Planned the lesfiche "Lussen 1" into
+all 2 hours`, #206); by its id only when no lesson was planned, or when the
+planner did not confirm the write.
 
 ### How `save_lesson_as_lesfiche` works
 

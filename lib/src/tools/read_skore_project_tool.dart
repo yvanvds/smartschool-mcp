@@ -135,7 +135,8 @@ Future<CallToolResult> _read(
 /// gradebook of [sheet] (of school year [workyear]), the scale, the
 /// learning goals [goals] as a tree, and per pupil of [pupils] their
 /// [ratings], in the order of the goals. Ratings of pupils the gradebook
-/// does not list come last, by pupil id, unless [onePupil].
+/// does not list come last, by pupil id, unless [onePupil]. A rating with
+/// no level, grade or info (one that was cleared) is left out.
 String _format(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear,
@@ -150,6 +151,13 @@ String _format(
   final order = {for (final (i, goal) in goals.indexed) goal.id: i};
   final byPupil = <int, List<SkoreProjectRating>>{};
   for (final rating in ratings) {
+    // A cleared rating leaves a cell with nothing in it (seen live, #206):
+    // left out.
+    if (rating.ratingId == null &&
+        (rating.grade?.trim() ?? '').isEmpty &&
+        (rating.info?.trim() ?? '').isEmpty) {
+      continue;
+    }
     byPupil.putIfAbsent(rating.pupilId, () => []).add(rating);
   }
   for (final list in byPupil.values) {

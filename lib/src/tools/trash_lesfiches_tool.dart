@@ -112,6 +112,7 @@ Future<CallToolResult> _trash(
       : 'None of the lesfiches was moved to the trash.';
 
   var chosen = const <LessonContentItem>[];
+  LesficheCourseNames names = (byId: null, error: null);
   final watch = Stopwatch()..start();
   try {
     await withLesficheWrite(
@@ -122,6 +123,7 @@ Future<CallToolResult> _trash(
         // lesfiche as listed, with its kind and platform.
         final items = await lesfiches.getItems(withCourseNames: false);
         final found = chosen = _chosen(items, ids);
+        names = await readLesficheCourseNames(lesfiches, found);
         await lesfiches.trash(found);
       },
       what: () => chosen.isEmpty
@@ -156,15 +158,14 @@ Future<CallToolResult> _trash(
       doneHeader: 'In the trash now:',
       done: [
         for (final item in chosen)
-          if (moved(item))
-            '- ${formatLesficheLine(item, withCourseNames: false)}',
+          if (moved(item)) '- ${formatLesficheLineNamed(item, names)}',
       ],
       notDoneHeader: 'Not in the trash (still in the library):',
       notDone: [
         for (final item in chosen)
-          if (!moved(item))
-            '- ${formatLesficheLine(item, withCourseNames: false)}',
+          if (!moved(item)) '- ${formatLesficheLineNamed(item, names)}',
       ],
+      extra: lesficheCourseNamesNote(chosen, names),
       advice:
           'Do not call trash_lesfiches again for those in the trash. Tell '
           'the user which were moved and which not, and ask before moving '
@@ -184,7 +185,8 @@ Future<CallToolResult> _trash(
           'Moved ${LesficheKind.all.count(chosen.length)} to the trash of the '
               'Lesfiches module:',
           for (final item in chosen)
-            '- ${formatLesficheLine(item, withCourseNames: false)}',
+            '- ${formatLesficheLineNamed(item, names)}',
+          ...lesficheCourseNamesNote(chosen, names),
           'list_lesfiches no longer lists $them; list_trashed_lesfiches '
               'lists the trash, and restore_lesfiches takes $them back out '
               'of it. A lesson planned from '

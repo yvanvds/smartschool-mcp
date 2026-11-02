@@ -149,6 +149,7 @@ Future<CallToolResult> _plan(
     hour: hour,
     what: 'the lesfiche $lesfiche',
     withGoals: true,
+    savedWhat: (lesson) => _lesficheNamed(lesson, lesfiche),
     fill: (planner, slot) => hour.type == PlannedElementType.lesson
         ? planner.replaceWithLessonContent(
             lesson: slot,
@@ -160,6 +161,15 @@ Future<CallToolResult> _plan(
           ),
   );
 }
+
+/// The lesfiche [id] by its name, which the planner gives [lesson], a
+/// lesson planned from it (#206): `the lesfiche "Lussen 1"`; by its id when
+/// the lesson has no name.
+String _lesficheNamed(PlannedElementDetail lesson, String id) =>
+    switch (lesson.name?.trim()) {
+      final name? when name.isNotEmpty => 'the lesfiche "$name"',
+      _ => 'the lesfiche $id',
+    };
 
 /// The `hours` argument [value]: 1 to [maxPlanLesficheHours] ids of lesson
 /// hours ([lessonHourArgument]: an empty lesson hour or a lesson), each
@@ -264,7 +274,7 @@ CallToolResult _severalResult(
       'The planner planned the lesfiche $lesfiche into none of the '
           '${outcomes.length} hours.'
     else
-      'Planned the lesfiche $lesfiche into '
+      'Planned ${_lesficheNamed(planned.first, lesfiche)} into '
           '${failed.isEmpty ? 'all ${outcomes.length}' : '${planned.length} of the ${outcomes.length}'} '
           'hours. Pupils of their classes see its name and public info now.',
     for (final outcome in outcomes) _outcomeLine(outcome),

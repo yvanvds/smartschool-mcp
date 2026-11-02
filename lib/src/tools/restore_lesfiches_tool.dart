@@ -83,6 +83,7 @@ Future<CallToolResult> _restore(
       : 'None of the lesfiches was restored.';
 
   var chosen = const <LessonContentItem>[];
+  LesficheCourseNames names = (byId: null, error: null);
   final watch = Stopwatch()..start();
   try {
     await withLesficheWrite(
@@ -99,6 +100,7 @@ Future<CallToolResult> _restore(
         }
         refuseOtherLesficheKinds(found, action: 'restore');
         chosen = found;
+        names = await readLesficheCourseNames(lesfiches, found);
         await lesfiches.restore(found);
       },
       what: () => chosen.isEmpty
@@ -107,7 +109,7 @@ Future<CallToolResult> _restore(
       nothingDone: nothingDone,
     );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
-    return _notConfirmed(session, chosen, error);
+    return _notConfirmed(session, chosen, names, error);
   }
   log(
     'restore_lesfiches: restored ${chosen.length} in '
@@ -121,7 +123,8 @@ Future<CallToolResult> _restore(
           'Restored ${LesficheKind.all.count(chosen.length)} from the trash '
               'into the own library of the Lesfiches module:',
           for (final item in chosen)
-            '- ${formatLesficheLine(item, withCourseNames: false)}',
+            '- ${formatLesficheLineNamed(item, names)}',
+          ...lesficheCourseNamesNote(chosen, names),
           'list_lesfiches lists $them again, and '
               '${chosen.length == 1 ? 'it' : 'they'} can be changed, '
               'copied and planned as before.',
@@ -161,6 +164,7 @@ Never _refuseUnlisted(
 Future<CallToolResult> _notConfirmed(
   SmartschoolSession session,
   List<LessonContentItem> chosen,
+  LesficheCourseNames names,
   SmartschoolLessonContentSaveUnconfirmedError error,
 ) async {
   final one = chosen.length == 1;
@@ -189,15 +193,14 @@ Future<CallToolResult> _notConfirmed(
     doneHeader: 'Out of the trash, in the library now:',
     done: [
       for (final item in chosen)
-        if (restored(item))
-          '- ${formatLesficheLine(item, withCourseNames: false)}',
+        if (restored(item)) '- ${formatLesficheLineNamed(item, names)}',
     ],
     notDoneHeader: 'Still in the trash:',
     notDone: [
       for (final item in chosen)
-        if (!restored(item))
-          '- ${formatLesficheLine(item, withCourseNames: false)}',
+        if (!restored(item)) '- ${formatLesficheLineNamed(item, names)}',
     ],
+    extra: lesficheCourseNamesNote(chosen, names),
     advice:
         'Tell the user which were restored and which not, and ask before '
         'trying the others again.',

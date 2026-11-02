@@ -361,7 +361,9 @@ CallToolResult plannerWriteNotConfirmed({
 /// [PlannerService.replaceWithLessonContent] (#190): the result then says
 /// that its old content is gone. With [withGoals] the result names the
 /// goals of the new lesson ([nameGoalsAfterWrite]), as a lesson planned from
-/// a lesfiche has the lesfiche's.
+/// a lesfiche has the lesfiche's. [savedWhat], when given, names what was
+/// planned from the lesson as saved, in the result (like the lesfiche by
+/// its name, which the lesson has, #206).
 Future<CallToolResult> fillLessonHour(
   SmartschoolSession session, {
   required String tool,
@@ -373,6 +375,7 @@ Future<CallToolResult> fillLessonHour(
   )
   fill,
   bool withGoals = false,
+  String Function(PlannedElementDetail lesson)? savedWhat,
 }) async {
   final replaces = hour.type == PlannedElementType.lesson;
   PlannedElementDetail? slot;
@@ -384,6 +387,7 @@ Future<CallToolResult> fillLessonHour(
     final goals = withGoals
         ? await nameGoalsAfterWrite(session, lesson.goals)
         : null;
+    final saved = savedWhat?.call(lesson) ?? what;
     final classes = elementClasses(lesson);
     final pupils =
         'Pupils${classes.isEmpty ? '' : ' of $classes'} see its name and '
@@ -393,11 +397,11 @@ Future<CallToolResult> fillLessonHour(
         TextContent(
           text: [
             if (replaces)
-              'Replaced the ${formatElementSummary(slot!)} with $what: its '
+              'Replaced the ${formatElementSummary(slot!)} with $saved: its '
                   'old name, info and goals are gone, and the new lesson '
-                  'holds the content of $what. $pupils'
+                  'holds the content of $saved. $pupils'
             else
-              'Planned $what in the ${formatElementSummary(slot!)}. $pupils',
+              'Planned $saved in the ${formatElementSummary(slot!)}. $pupils',
             if (replaces)
               'The lesson $hour no longer exists: the new lesson has the id '
                   '${PlannedElementRef.of(lesson)}.'
