@@ -23,8 +23,10 @@ import 'fake_skore_gradebook.dart';
 //   - saveCategoryGrades {context, grades}: the cells to save (a new one
 //     with the `id` null; `ratingId` -1 clears the level), answered with the
 //     cells saved.
-// The project periods themselves come from `init` with the page `1`
-// (`FakeSkoreGradebook`).
+// The project periods themselves come from `init` (`FakeSkoreGradebook`),
+// which lists them, as live (2026-11-02, #205), after the evaluation
+// periods with `scope` 2, on the page `1` and the page `0` alike: so the
+// library's `getGradebook` gives them as periods too.
 
 /// The path of Skore's project sheet's API.
 const fakeSkoreProjectPath = '/Gradebook/Main/';
@@ -187,8 +189,9 @@ const fakeSkoreProjectPeriod = FakeSkoreGradebookPeriod(
 );
 
 /// A project gradebook of 2026-2027 in the shape seen live for "Digitale
-/// vaardigheden" (dartschool#204): no evaluation periods, one open project
-/// period PR1 with one template, "Digitale vaardigheden", on the scale
+/// vaardigheden" (dartschool#204, #205): no evaluation periods, one open
+/// project period PR1, which `init` lists with `scope` 2 (and
+/// `activePeriodE` -1, `activePeriodP` 0) on either page, with one template, "Digitale vaardigheden", on the scale
 /// "Behaald" (B, level id 71) / "Niet behaald" (NB, 72), whose learning
 /// goals are the course's root, a heading "Informatie verwerken" (9001) and
 /// under it LPD 16.1.1 "Zoekt informatie op" (9002), LPD 16.1.2 "Beoordeelt

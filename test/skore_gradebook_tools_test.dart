@@ -462,7 +462,7 @@ void main() {
         '- 1. Goossens, Emma | pupil id 1211\n'
         '- 2. Hermans, Finn | pupil id 1212',
       );
-      expect(skore.calls, ['init wy=24', 'init wy=24 projects']);
+      expect(skore.calls, ['init wy=24']);
     });
 
     test('a gradebook without pupils', () async {
@@ -504,9 +504,9 @@ void main() {
         '- 1. Jacobs, Gert | pupil id 1221\n'
         '- 2. Lemmens, Ilse | pupil id 1222',
       );
-      // One init, as for any gradebook without evaluation periods, and one
-      // of its projects page: it may be a project gradebook (#192).
-      expect(skore.calls, ['init wy=24', 'init wy=24 projects']);
+      // One init, which also tells that it is not a project gradebook: no
+      // period with Skore's project scope (#205).
+      expect(skore.calls, ['init wy=24']);
     });
   });
 
@@ -537,7 +537,7 @@ void main() {
       expect(server.requests.first, 'POST $fakeSkoreGradebookRpcPath');
       expect(server.requests, contains('POST /login'));
       expect(server.requests.last, 'POST $fakeSkoreGradebookRpcPath');
-      expect(skore.calls, ['init wy=24', 'init wy=24 projects']);
+      expect(skore.calls, ['init wy=24']);
     });
 
     test('still refused after logging in again: the session\'s message, '

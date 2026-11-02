@@ -4,7 +4,6 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import '../session.dart';
 import '../skore/skore_gradebook_access.dart';
 import '../skore/skore_gradebook_format.dart';
-import '../skore/skore_projects.dart';
 import 'arguments.dart';
 import 'server_tool.dart';
 
@@ -14,10 +13,13 @@ import 'server_tool.dart';
 /// lets the user change it ([SkoreGradebookService.getGradebook],
 /// dartschool#148).
 ///
-/// A gradebook without evaluation periods may be a project gradebook
-/// (Skore's "Projecten", #192): for one, its project periods are read too
-/// ([skoreProjectPeriodsOrNone]), and the result says so and points to the
-/// project tools.
+/// A project gradebook (Skore's "Projecten", #192) says so, with its
+/// project periods, and points to the project tools. Skore's `init` lists
+/// a gradebook's project periods with its evaluation periods, and the
+/// library gives them all as periods (yvanvds/dartschool#236): which ones
+/// are project periods is read from that same `init`
+/// ([readSkoreEvaluationSheet], a workaround, #205, #207), so no gradebook
+/// costs an extra request.
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -85,25 +87,14 @@ Future<CallToolResult> _read(
   final gradebookId = requiredIntArgument(arguments, 'gradebook_id');
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
-  final (:sheet, :workyear, :projectPeriods) = await withSkoreGradebook(
+  final (:sheet, :projectPeriods, :workyear) = await withSkoreGradebook(
     session,
-    (gradebooks) async {
-      final (:sheet, :workyear) = await readSkoreGradebook(
-        gradebooks,
-        years,
-        gradebookId,
-        workyearId: workyearId,
-      );
-      return (
-        sheet: sheet,
-        workyear: workyear,
-        // Only a gradebook without evaluation periods can be a project
-        // gradebook (seen live, dartschool#204): one more request then.
-        projectPeriods: sheet.periods.isEmpty
-            ? await skoreProjectPeriodsOrNone(gradebooks, sheet.gradebook)
-            : const <SkoreGradebookPeriod>[],
-      );
-    },
+    (gradebooks) => readSkoreGradebook(
+      gradebooks,
+      years,
+      gradebookId,
+      workyearId: workyearId,
+    ),
   );
   return CallToolResult(
     content: [
@@ -130,22 +121,33 @@ Future<CallToolResult> _read(
 /// gradebook (one with [projectPeriods], #192) says so and lists them, with
 /// the project tools, instead; its report periods are left out, as a
 /// project course is not on the gradebook's reports (dartschool#204).
+/// [projectPeriods] are left out of [sheet]'s periods when they are among
+/// them (Skore lists them with the evaluation periods, #205;
+/// [readSkoreEvaluationSheet] splits them off): the others are its
+/// evaluation periods, and only one of those is the period Skore opens the
+/// gradebook on.
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
   SkoreWorkyear workyear, {
   List<SkoreGradebookPeriod> projectPeriods = const [],
 }) {
   final isProject = projectPeriods.isNotEmpty;
-  final periods = sheet.periods;
+  final projectIds = {for (final period in projectPeriods) period.id};
+  final periods = [
+    for (final period in sheet.periods)
+      if (!projectIds.contains(period.id)) period,
+  ];
   final reports = sheet.reports;
   final pupils = sheet.pupils;
   final inactive = pupils.where((p) => !p.isActive).length;
-  final active = sheet.activePeriod;
+  final active = projectIds.contains(sheet.activePeriod?.id)
+      ? null
+      : sheet.activePeriod;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
     if (isProject) ...[
-      'It is a project gradebook (Skore\'s "Projecten"): it has no '
-          'evaluation periods, so no evaluations and no grades; its pupils '
+      'It is a project gradebook (Skore\'s "Projecten"): '
+          '${periods.isEmpty ? 'it has no evaluation periods, so no evaluations and no grades; its pupils' : 'besides the evaluation periods listed below, its pupils'} '
           'are rated per learning goal in projects, on the scale of the '
           'project\'s template. list_skore_projects lists its projects, '
           'read_skore_project reads their ratings, and '
@@ -156,7 +158,7 @@ String formatSkoreGradebookSheet(
           'order; only an open one takes ratings:',
       for (final period in projectPeriods)
         '- ${formatSkoreGradebookPeriod(period, active: false)}',
-    ] else if (periods.isEmpty && sheet.reports.isEmpty)
+    ] else if (periods.isEmpty && reports.isEmpty)
       'It has ${formatSkoreMissingPeriods(sheet)}, so it takes no grades; '
           'Skore was not asked whether the user may change it.'
     else if (periods.isEmpty)
