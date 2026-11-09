@@ -238,10 +238,12 @@ the lesson takes a `name`, and optionally `public_info` and `private_info`,
 written as plain text (the library's `planLesson`, dartschool#87). The
 server turns the text into the HTML the planner's own editor makes
 (`plainTextToHtml`: a `<p>` per paragraph, `<br />` per line break),
-escaping `&`, `<` and `>`. Quotes stay as they are: the planner answers
-`&quot;` and `&#39;` as quotes, and the library compares the info of an edit
-literally, so an escaped quote made a saved edit unconfirmed (seen live in
-#72; dartschool#155, until then #137).
+escaping `&`, `<` and `>`. Quotes stay as they are: they are not markup in
+text content, and the planner keeps them as quotes (it answers `&quot;` and
+`&#39;` as `"` and `'`, seen live in #72). The HTML sent is then the info as
+the planner keeps it, which `edit_planned_element` relies on: the library
+compares an info as HTML (`&quot;` and `"` alike), but the tool's "already
+had the value given" compares it as it is.
 
 The tool is marked destructive, so Claude Desktop asks for approval every
 time, and Claude is told to show the user every hour and wait for the user's

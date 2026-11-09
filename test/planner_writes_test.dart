@@ -39,10 +39,10 @@ void main() {
       expect(plainTextToHtml('&amp;'), '<p>&amp;amp;</p>');
     });
 
-    // The planner answers &quot; and &#39; as quotes, and the library
-    // compares the info literally, so an edit with an escaped quote is
-    // saved but reported as unconfirmed (dartschool#155, #137).
-    test('leaves quotes as they are', () {
+    // Quotes are not markup in text content, and the planner keeps them as
+    // quotes (it answers &quot; and &#39; as " and '): the HTML is the info
+    // as the planner keeps it.
+    test('leaves quotes as they are, as the planner keeps them', () {
       expect(
         plainTextToHtml('Breng "je" laptop & lader mee <3, \'t is nodig'),
         '<p>Breng "je" laptop &amp; lader mee &lt;3, \'t is nodig</p>',

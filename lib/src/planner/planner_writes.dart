@@ -42,10 +42,12 @@ const plannerListLagNote =
 ///
 /// `&`, `<` and `>` are escaped, so HTML in [text] shows as text and never
 /// becomes markup. Quotes are left as they are: they are not markup in text
-/// content, and the planner answers `&quot;` and `&#39;` as quotes, so the
-/// library would report the edit of an info with one as unconfirmed
-/// (dartschool#155, #137). White space around a paragraph or a line is left
-/// out. Text that is empty or white space only is `""`: no info.
+/// content, and the planner keeps them as quotes (it answers `&quot;` and
+/// `&#39;` as `"` and `'`, seen live). So the HTML is the info as the
+/// planner keeps it, and `edit_planned_element`, which compares the info it
+/// read with this HTML as it is, finds that an info with quotes already has
+/// the text given. White space around a paragraph or a line is left out.
+/// Text that is empty or white space only is `""`: no info.
 String plainTextToHtml(String text) {
   final paragraphs = text
       .replaceAll('\r\n', '\n')
