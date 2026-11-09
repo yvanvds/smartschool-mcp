@@ -6,7 +6,10 @@
 /// `restore/bulk` with the body of the trash, answered keyed by each
 /// lesfiche as sent, and `GET lesson-content/trashed`; a lesfiche in the
 /// trash gets a `403` for a copy, one not in it a `404` for a restore;
-/// `test/support/fake_planner.dart`).
+/// `test/support/fake_planner.dart`). A write whose answer says lesfiche by
+/// lesfiche what was done is told from the library's record of it, without
+/// reading again (#195); only one whose answer says nothing usable (no
+/// answer) is checked against the trash or the list, read again.
 library;
 
 import 'package:dart_mcp/client.dart';
@@ -333,8 +336,9 @@ void main() {
       expect(planner.writes, ['POST $fakeLesficheDuplicatePath']);
     });
 
-    test('some copies made and others not: the list, read again, says which '
-        'were copied and which not', () async {
+    test('some copies made and others not: the answer, as the library '
+        'records it, pairs each copy with its lesfiche and says which were '
+        'not copied, without reading the list again (#195)', () async {
       planner.beforeAnswer = (method, path) {
         if (path == fakeLesficheDuplicatePath) {
           planner.trashedLesfiches.add(_assignment.id);
@@ -347,12 +351,44 @@ void main() {
           'lesfiches': [_lesson.id, _assignment.id],
         }),
         'The copy of 2 lesfiches was sent, but the Lesfiches module did not '
-        'confirm all of it. Read again after it, the list of lesfiches shows '
-        'what was done.\n'
+        'confirm all of it. Its answer says what was done.\n'
         'Copies made:\n'
-        '- lesson | Lussen - kopie | no labels | informatica | visible | changed '
-        '2026-11-01 | id $_copy1 (a copy of id ${_lesson.id})\n'
-        'No copy found of:\n'
+        '- lesson | Lussen - kopie | no labels | informatica | visible | id '
+        '$_copy1 (a copy of id ${_lesson.id})\n'
+        'Not copied, with the exception the module gave for each (it answers '
+        'HTTP 403 for a lesfiche in the trash):\n'
+        '$_assignmentLine (HTTP 403, "Forbidden")\n'
+        'Do not call duplicate_lesfiches again for the lesfiches that were '
+        'copied: it would make more copies. Tell the user which were copied '
+        'and which not, and ask before copying the others again; one in the '
+        'trash (list_trashed_lesfiches) cannot be copied.',
+      );
+      expect(server.requests, [
+        'GET $fakeLesfichesPath',
+        'GET $fakeCourseListPath',
+        'POST $fakeLesficheDuplicatePath',
+      ], reason: 'sent once, and the list not read again');
+    });
+
+    test('a lesfiche the answer names neither way: its copy may or may not '
+        'have been made, with list_lesfiches to check, without reading the '
+        'list again', () async {
+      planner.lesficheDuplicateUnanswered.add(_assignment.id.toLowerCase());
+      await openSession();
+
+      expect(
+        await error('duplicate_lesfiches', {
+          'lesfiches': [_lesson.id, _assignment.id],
+        }),
+        'The copy of 2 lesfiches was sent, but the Lesfiches module did not '
+        'confirm all of it. Its answer says what was done.\n'
+        'Copies made:\n'
+        '- lesson | Lussen - kopie | no labels | informatica | visible | id '
+        '$_copy1 (a copy of id ${_lesson.id})\n'
+        'Not named in the answer, so a copy may or may not have been made: '
+        'before copying one of these again, list the lesfiches with '
+        'list_lesfiches (type all) and look for its copy, named after it '
+        'with " - kopie" behind it:\n'
         '$_assignmentLine\n'
         'Do not call duplicate_lesfiches again for the lesfiches that were '
         'copied: it would make more copies. Tell the user which were copied '
@@ -363,8 +399,8 @@ void main() {
         'GET $fakeLesfichesPath',
         'GET $fakeCourseListPath',
         'POST $fakeLesficheDuplicatePath',
-        'GET $fakeLesfichesPath',
-      ], reason: 'sent once, then the list again');
+      ], reason: 'sent once, and the list not read again');
+      expect(await listed(), contains('| id $_copy2'));
     });
 
     test('an answer that does not arrive: the list, read again, finds the '
@@ -530,8 +566,9 @@ void main() {
       expect(planner.writes, ['POST $fakeLesficheRestorePath']);
     });
 
-    test('an exception for one of them: the trash, read again, says which '
-        'were restored and which not', () async {
+    test('an exception for one of them: the answer, as the library records '
+        'it, says which were restored and which not, without reading the '
+        'trash again (#195)', () async {
       planner
         ..trashedLesfiches.addAll([_lesson.id, _assignment.id])
         ..lesficheRestoreExceptions[_lesson.id] = {
@@ -546,12 +583,12 @@ void main() {
           'lesfiches': [_lesson.id, _assignment.id],
         }),
         'The restore of 2 lesfiches was sent, but the Lesfiches module did '
-        'not confirm all of it. Read again after it, the trash shows what '
-        'was done.\n'
+        'not confirm all of it. Its answer says what was done.\n'
         'Out of the trash, in the library now:\n'
         '$_assignmentLine\n'
-        'Still in the trash:\n'
-        '$_lessonLine\n'
+        'Not restored, with the exception the module gave for each (it '
+        'answers HTTP 404 for a lesfiche that is not in the trash):\n'
+        '$_lessonLine (HTTP 409, "Conflict")\n'
         'Tell the user which were restored and which not, and ask before '
         'trying the others again.',
       );
@@ -559,9 +596,63 @@ void main() {
         'GET $fakeLesficheTrashedPath',
         'GET $fakeCourseListPath',
         'POST $fakeLesficheRestorePath',
-        'GET $fakeLesficheTrashedPath',
-      ]);
+      ], reason: 'the trash not read again');
       expect(await listed(), contains(_assignment.id));
+    });
+
+    test('exceptions in the answer that name no lesfiche: maybe restored, '
+        'with list_trashed_lesfiches to check', () async {
+      planner
+        ..trashedLesfiches.add(_lesson.id)
+        ..lesficheBulkListExceptions.add({
+          'status': 500,
+          'title': 'Internal Server Error',
+        });
+
+      expect(
+        await error('restore_lesfiches', {
+          'lesfiches': [_lesson.id],
+        }),
+        'The restore of the lesson lesfiche "Lussen" was sent, but the '
+        'Lesfiches module did not confirm it. Its answer says what was '
+        'done.\n'
+        'Not named in the answer, so they may or may not have been restored '
+        '(list_trashed_lesfiches shows whether they are still in the '
+        'trash):\n'
+        '$_lessonLine\n'
+        'Tell the user which were restored and which not, and ask before '
+        'trying the others again.',
+      );
+      expect(planner.writes, ['POST $fakeLesficheRestorePath']);
+      expect(
+        planner.requests.where((r) => r.path == fakeLesficheTrashedPath),
+        hasLength(1),
+        reason: 'the trash read before the restore only',
+      );
+    });
+
+    test('an answer that does not arrive: the trash, read again, shows which '
+        'lesfiches left it', () async {
+      planner
+        ..trashedLesfiches.addAll([_lesson.id, _assignment.id])
+        ..lostAnswers.add(fakeLesficheRestorePath);
+      await openSession();
+
+      expect(
+        await ok('restore_lesfiches', {
+          'lesfiches': [_lesson.id, _assignment.id],
+        }),
+        'The restore of 2 lesfiches was sent, but the Lesfiches module did '
+        'not confirm all of it. Read again after it, the trash shows what '
+        'was done.\n'
+        'Out of the trash, in the library now:\n'
+        '$_lessonLine\n'
+        '$_assignmentLine\n'
+        'Tell the user which were restored and which not, and ask before '
+        'trying the others again.',
+      );
+      expect(planner.writes, ['POST $fakeLesficheRestorePath']);
+      expect(server.requests.last, 'GET $fakeLesficheTrashedPath');
     });
 
     test('an answer that does not arrive, and the trash cannot be read '

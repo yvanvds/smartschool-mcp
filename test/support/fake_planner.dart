@@ -1257,9 +1257,22 @@ class FakePlanner {
 
   /// The exceptions the module answers a move of these lesfiches to the
   /// trash with, by lesfiche id in lower case: the move answers `200` with
-  /// them in its `exceptions`, by id, and leaves these lesfiches where they
-  /// are (in the shape of dartschool's test of the trash; not seen live).
+  /// them in its `exceptions`, keyed by the lesfiche as sent (as the
+  /// restore's, seen live), and leaves these lesfiches where they are (not
+  /// seen live for a move).
   final Map<String, Map<String, Object?>> lesficheTrashExceptions = {};
+
+  /// Exceptions that a move to the trash or a restore answers in a list,
+  /// keyed by no lesfiche (made up, in the shape of dartschool's test of
+  /// #235): the write is carried out as without them, and the answer has
+  /// this list as its `exceptions` instead. A test sets these or the
+  /// exceptions keyed by a lesfiche, not both.
+  final List<Map<String, Object?>> lesficheBulkListExceptions = [];
+
+  /// Lesfiches, by id in lower case, whose copy a duplicate makes but
+  /// leaves out of its answer, without an exception for them either (made
+  /// up: an answer that names a lesfiche neither way, dartschool#235).
+  final Set<String> lesficheDuplicateUnanswered = {};
 
   /// When the lesfiches of [trashedLesfiches] went to the trash, by id in
   /// lower case, as the module writes it; [fakeLesficheTrashDate] for one
@@ -2089,26 +2102,14 @@ class FakePlanner {
   /// A lesfiche that is in the trash already gets a bare `500`, as live,
   /// and so does one the fake does not have of that kind (made up); then
   /// none is moved. A lesfiche of [lesficheTrashExceptions] stays where it
-  /// is, and the answer has its exception in `exceptions`, by its id; the
-  /// others are moved. A body without the list, or with an item without
-  /// its id, kind or platform, gets a bare `400` (made up).
+  /// is, and the answer has its exception in `exceptions`, keyed by the
+  /// lesfiche as sent; the others are moved. With
+  /// [lesficheBulkListExceptions], those are the answer's `exceptions`. A
+  /// body without the list, or with an item without its id, kind or
+  /// platform, gets a bare `400` (made up).
   ResponseBody _trashLesfiches(Object? data) {
-    final list = data is Map ? data['lessonContent'] : null;
-    if (list is! List ||
-        list.isEmpty ||
-        list.any(
-          (item) =>
-              item is! Map ||
-              item['id'] is! String ||
-              item['type'] is! String ||
-              item['platformId'] is! int,
-        )) {
-      return _badRequest();
-    }
-    final items = [
-      for (final item in list.cast<Map<Object?, Object?>>())
-        (id: item['id']! as String, type: item['type']! as String),
-    ];
+    final items = _bulkItems(data);
+    if (items == null) return _badRequest();
     if (items.any(
       (item) =>
           trashedLesfiches.contains(item.id.toLowerCase()) ||
@@ -2123,15 +2124,26 @@ class FakePlanner {
     final exceptions = <String, Object?>{};
     for (final item in items) {
       if (lesficheTrashExceptions[item.id.toLowerCase()] case final error?) {
-        exceptions[item.id] = error;
+        exceptions[item.key] = error;
       } else {
         trashedLesfiches.add(item.id.toLowerCase());
       }
     }
-    return _json(
-      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
-    );
+    return _bulkExceptionsAnswer(exceptions);
   }
+
+  /// The answer `200` of a move to the trash or a restore with the
+  /// [exceptions] keyed by a lesfiche, or [lesficheBulkListExceptions] when
+  /// there are any.
+  ResponseBody _bulkExceptionsAnswer(Map<String, Object?> exceptions) => _json(
+    jsonEncode({
+      'exceptions': lesficheBulkListExceptions.isNotEmpty
+          ? lesficheBulkListExceptions
+          : exceptions.isEmpty
+          ? <Object?>[]
+          : exceptions,
+    }),
+  );
 
   /// The lesfiches the body [data] of a bulk write names (`lessonContent`,
   /// each `{id, type, platformId}`, as the web client sends it), each with
@@ -2171,8 +2183,9 @@ class FakePlanner {
   /// A lesfiche that is not in the trash (also one the fake does not have)
   /// gets an exception with the status `404`, keyed by the lesfiche as
   /// sent, as live; so does one of [lesficheRestoreExceptions], with its
-  /// exception, and it stays in the trash; the others are restored. A body
-  /// without the list gets a bare `400` (made up).
+  /// exception, and it stays in the trash; the others are restored. With
+  /// [lesficheBulkListExceptions], those are the answer's `exceptions`. A
+  /// body without the list gets a bare `400` (made up).
   ResponseBody _restoreLesfiches(Object? data) {
     final items = _bulkItems(data);
     if (items == null) return _badRequest();
@@ -2194,9 +2207,7 @@ class FakePlanner {
         lesficheTrashDates.remove(id);
       }
     }
-    return _json(
-      jsonEncode({'exceptions': exceptions.isEmpty ? <Object?>[] : exceptions}),
-    );
+    return _bulkExceptionsAnswer(exceptions);
   }
 
   /// Copies the lesfiches of the body [data] of a duplicate (the body of
@@ -2209,8 +2220,10 @@ class FakePlanner {
   /// lesfiche as sent, each copy as its detail.
   ///
   /// A lesfiche in the trash (also one the fake does not have, made up)
-  /// gets an exception with the status `403` and no copy, as live. A body
-  /// without the list gets a bare `400` (made up).
+  /// gets an exception with the status `403` and no copy, as live. One of
+  /// [lesficheDuplicateUnanswered] is copied, but the answer names neither
+  /// its copy nor an exception. A body without the list gets a bare `400`
+  /// (made up).
   ResponseBody _duplicateLesfiches(Object? data) {
     final items = _bulkItems(data);
     if (items == null) return _badRequest();
@@ -2258,7 +2271,9 @@ class FakePlanner {
         goals: lesfiche.goals,
       );
       lesfiches.add(copy);
-      copies[item.key] = copy.detailJson();
+      if (!lesficheDuplicateUnanswered.contains(item.id.toLowerCase())) {
+        copies[item.key] = copy.detailJson();
+      }
     }
     return _json(
       jsonEncode({

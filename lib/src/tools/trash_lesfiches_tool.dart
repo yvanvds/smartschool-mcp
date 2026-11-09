@@ -42,10 +42,15 @@ const maxLesficheTrashItems = maxLesficheBulkItems;
 /// the read (`SmartschoolSession.run`), so a move is never sent with a
 /// list read in an earlier session.
 ///
-/// The module answers the move of a lesfiche that is in the trash already
-/// with a bare `500`, and the library throws a
-/// [SmartschoolLessonContentSaveUnconfirmedError] for it, and for an answer
-/// whose `exceptions` are not empty: the tool then reads the trash again
+/// An answer whose `exceptions` are not empty is not confirmed: the library
+/// throws a [SmartschoolLessonContentBulkSaveUnconfirmedError] that says
+/// which lesfiches were moved, which the module answered with an exception
+/// (still in the library) and which its answer names neither way, and the
+/// tool says so from it ([lesficheBulkAnswerResult]). The module answers
+/// the move of a lesfiche that is in the trash already with a bare `500`,
+/// and the library throws a plain
+/// [SmartschoolLessonContentSaveUnconfirmedError] for it, as for no answer:
+/// that says nothing about any lesfiche, so the tool reads the trash again
 /// ([readLesficheTrashAfter]) and says which of them are in it and which
 /// not ([lesficheBulkPartialResult]); when that read fails too, that they
 /// may or may not have been moved, and to check with
@@ -131,7 +136,25 @@ Future<CallToolResult> _trash(
           : 'the move of ${lesficheTitles(chosen)} to the trash',
       nothingDone: nothingDone,
     );
+  } on SmartschoolLessonContentBulkSaveUnconfirmedError catch (error) {
+    return lesficheBulkAnswerResult(
+      tool: 'trash_lesfiches',
+      sent: _sent(chosen),
+      error: error,
+      line: (item) => formatLesficheLineNamed(item, names),
+      doneHeader: 'Moved to the trash:',
+      failedHeader:
+          'Not moved (still in the library), with the exception the module '
+          'gave for each:',
+      unansweredHeader:
+          'Not named in the answer, so they may or may not have been moved '
+          '(list_trashed_lesfiches shows whether they are in the trash):',
+      extra: lesficheCourseNamesNote(chosen, names),
+      advice: _partialAdvice,
+    );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
+    // The answer says nothing usable about any lesfiche: the trash, read
+    // again, shows which are in it.
     final one = chosen.length == 1;
     final trash = await readLesficheTrashAfter(session);
     if (trash == null) {
@@ -151,9 +174,7 @@ Future<CallToolResult> _trash(
         inTrash.contains(item.id.toLowerCase());
     return lesficheBulkPartialResult(
       tool: 'trash_lesfiches',
-      sent: one
-          ? 'The move of ${lesficheTitle(chosen.single)} to the trash'
-          : 'The move of ${chosen.length} lesfiches to the trash',
+      sent: _sent(chosen),
       readFrom: 'the trash',
       doneHeader: 'In the trash now:',
       done: [
@@ -166,11 +187,7 @@ Future<CallToolResult> _trash(
           if (!moved(item)) '- ${formatLesficheLineNamed(item, names)}',
       ],
       extra: lesficheCourseNamesNote(chosen, names),
-      advice:
-          'Do not call trash_lesfiches again for those in the trash. Tell '
-          'the user which were moved and which not, and ask before moving '
-          'the others again. restore_lesfiches takes a lesfiche back out of '
-          'the trash.',
+      advice: _partialAdvice,
     );
   }
   log(
@@ -197,6 +214,18 @@ Future<CallToolResult> _trash(
     ],
   );
 }
+
+/// What a move of [chosen] that the module did not confirm sent, for its
+/// result: `The move of 2 lesfiches to the trash`.
+String _sent(List<LessonContentItem> chosen) => chosen.length == 1
+    ? 'The move of ${lesficheTitle(chosen.single)} to the trash'
+    : 'The move of ${chosen.length} lesfiches to the trash';
+
+/// What Claude does after a move that the module did not confirm.
+const _partialAdvice =
+    'Do not call trash_lesfiches again for those in the trash. Tell the user '
+    'which were moved and which not, and ask before moving the others '
+    'again. restore_lesfiches takes a lesfiche back out of the trash.';
 
 /// The lesfiches of [items] (the user's, as listed) with the ids [ids], in
 /// that order (ignoring case).
