@@ -8,6 +8,17 @@ pubspec.yaml. The release workflow puts the section at the top of the release
 notes, under "## Nieuw in deze versie" (tool/release_notes.dart), and a server
 of an older version shows it when it announces the update. -->
 
+## 0.9.0
+
+- Berichten: Claude vindt nu ook mensen van de andere scholen van je
+  scholengroep, en kan hen een bericht sturen. Daarvoor zet Claude in
+  Smartschool even het vinkje "Toon personen van andere scholen" aan, en
+  daarna terug zoals het stond.
+- Biedt Smartschool die andere scholen niet aan, bijvoorbeeld omdat je school
+  geen scholengroep heeft, dan zegt Claude dat. Lukt het terugzetten van het
+  vinkje niet, dan zegt Claude of je het zelf moet aan- of uitvinken, en
+  waar.
+
 ## 0.8.0
 
 - Leerdoelen: Claude kan de eindtermen, de leerplannen en de minidatabanken
