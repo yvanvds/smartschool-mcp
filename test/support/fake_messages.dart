@@ -345,6 +345,11 @@ class FakeMailbox {
   /// a search says it (`<sgrselect>`, `1` or `0`).
   bool otherSchoolsOffered = true;
 
+  /// Whether each answer to a search says the two above (its
+  /// `<sgrdetails>`); without it, the answers leave them out, which no
+  /// answer of Smartschool has been seen to do.
+  bool otherSchoolsInAnswers = true;
+
   /// Whether a switch of [otherSchools] is answered as Smartschool does,
   /// with an empty `200`; without it, the switch changes nothing and is
   /// answered with an error page (what Smartschool answers then has not
@@ -1057,10 +1062,10 @@ ${spans(bcc, '3')}
 <parentNodeId>insertSearchFieldContainer_0_0</parentNodeId>
 ${list('groups', groups)}
 ${list('users', users)}
-<sgrdetails>
+${otherSchoolsInAnswers ? '''<sgrdetails>
 <sgrselect>${otherSchoolsOffered ? 1 : 0}</sgrselect>
 <dosgrsearch>${otherSchools ? 1 : 0}</dosgrsearch>
-</sgrdetails>
+</sgrdetails>''' : ''}
 </results>''';
   }
 

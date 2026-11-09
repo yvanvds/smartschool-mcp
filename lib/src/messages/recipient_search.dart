@@ -159,12 +159,14 @@ Future<List<Recipient>> searchRecipients(
 /// only; `null` searches with the account's setting of that checkbox, as
 /// before (yvanvds/dartschool#238). The setting belongs to the account, so
 /// for `true` or `false` the library switches it only when it differs and
-/// sets it back after the searches. Its [SmartschoolComposeError]s then
-/// also say that Smartschool does not offer the option to the account, or
-/// that the setting could not be set back; the [ToolError] passes the
-/// library's message on, a workaround: the library does not tell them apart
-/// by type (yvanvds/dartschool#241, removal tracked in
-/// yvanvds/smartschool-mcp#213).
+/// sets it back after the searches. The [ToolError] then says it in its own
+/// words when Smartschool does not offer the option to the account
+/// ([SmartschoolOtherSchoolsNotOfferedError]: nothing was switched), and
+/// leads with what the user has to do in Smartschool when the setting could
+/// not be set back ([SmartschoolOtherSchoolsNotRestoredError]: the account
+/// may be left switched); yvanvds/dartschool#241. For its other
+/// [SmartschoolComposeError]s, which leave the setting as it was found, the
+/// [ToolError] passes the library's message on.
 ///
 /// A search goes out only in the session of the compose form whose token it
 /// sends (yvanvds/dartschool#97): when Smartschool refuses the session for
@@ -187,27 +189,29 @@ Future<Map<String, List<Recipient>>> searchRecipientsAll(
       includeOtherSchools: includeOtherSchools,
     );
   } on SmartschoolComposeError catch (error) {
-    log('recipient search: compose form refused: $error');
-    if (includeOtherSchools == null) {
-      throw const ToolError(
+    log('recipient search: refused: $error');
+    throw switch (error) {
+      SmartschoolOtherSchoolsNotOfferedError() => const ToolError(
+        'Smartschool does not offer the people of other schools to this '
+        'account (its option "Toon personen van andere scholen"): the school '
+        'has no school group, or the account does not have the right. '
+        'Nothing was switched in Smartschool, and nothing was sent.',
+      ),
+      SmartschoolOtherSchoolsNotRestoredError(:final leftOn) => ToolError(
+        _otherSchoolsNotSetBack(leftOn: leftOn),
+      ),
+      _ when includeOtherSchools == null => const ToolError(
         'Smartschool did not open its compose form, so recipients cannot be '
         'looked up, and nothing was sent. The account may not be allowed to '
         'send messages; the details are in the server log.',
-      );
-    }
-    // Without the library's own markers: the method's name, the type of the
-    // errors it names, and its issue numbers.
-    final message = error.message.replaceAll(
-      RegExp(
-        r'SmartschoolComposeError: |searchRecipientsForCompose: | \(#\d+\)',
       ),
-      '',
-    );
-    throw ToolError(
-      'Smartschool could not look up recipients with its option "Toon '
-      'personen van andere scholen" ${includeOtherSchools ? 'on' : 'off'}, '
-      'and nothing was sent: $message',
-    );
+      _ => ToolError(
+        'Smartschool could not look up recipients with its option "Toon '
+        'personen van andere scholen" '
+        '${includeOtherSchools == true ? 'on' : 'off'}, and nothing was '
+        'sent: ${error.message}',
+      ),
+    };
   }
   return {
     for (final MapEntry(key: query, value: (users, groups)) in results.entries)
@@ -216,6 +220,27 @@ Future<Map<String, List<Recipient>>> searchRecipientsAll(
         for (final group in groups) GroupRecipient(group),
       ]),
   };
+}
+
+/// What a recipient search tells the user when the library could not set
+/// the account's option "Toon personen van andere scholen" back after
+/// switching it for the search, so that it may be left [leftOn]
+/// ([SmartschoolOtherSchoolsNotRestoredError], yvanvds/dartschool#241): first
+/// what the user has to do in Smartschool, then what the option may be left
+/// at and what that does.
+String _otherSchoolsNotSetBack({required bool leftOn}) {
+  final left = leftOn ? 'on' : 'off';
+  final back = leftOn ? 'off' : 'on';
+  final meanwhile = leftOn
+      ? 'also finds the people of the other schools of the school group'
+      : 'finds the people of the own school only';
+  return 'Tell the user to turn the checkbox "Toon personen van andere '
+      'scholen" back $back in Smartschool: it is under the search results '
+      'when a name is looked up in a new message. The option was turned '
+      '$left for this search and could not be turned back $back, so the '
+      'account may be left with it $left, in Smartschool\'s web interface and '
+      'in every session: until it is $back again, the search of a new message '
+      '$meanwhile. The recipients were not looked up, and nothing was sent.';
 }
 
 /// How many users and groups [recipients] holds, like `2 users` or `1 user
