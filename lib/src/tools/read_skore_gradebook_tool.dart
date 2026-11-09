@@ -106,7 +106,11 @@ Future<CallToolResult> _read(
 /// its report periods (#171) and its pupils. One shared to read only says the user may not change it,
 /// whatever Skore answers (#167): the write tools refuse it. A gradebook
 /// without evaluation periods says so instead of whether the user may
-/// change it (Skore is not asked then); one with
+/// change it (Skore is not asked then); so does one with evaluation periods
+/// that Skore opens on none of them ([skoreOpensOnNoPeriod], #227), with
+/// #226's words ([formatSkoreOpensOnNoPeriod]): its
+/// [SkoreGradebookSheet.writable] is false because Skore was not asked, and
+/// a write asks Skore for the period it writes in. One with
 /// report periods only, such as a behaviour gradebook (#168), also where
 /// its course comments are ([skoreReportPeriodsOnlyNote]). A project
 /// gradebook (one with [SkoreGradebookSheet.projectPeriods], #192) says so
@@ -150,6 +154,12 @@ String formatSkoreGradebookSheet(
     else if (sheet.gradebook.access == SkoreGradebookAccess.read)
       'The user may read it, not change it: it is shared with them to read '
           'only.'
+    else if (skoreOpensOnNoPeriod(sheet))
+      // `writable` is false then because Skore was not asked (#227), not
+      // Skore's answer: said as list_skore_evaluations says it (#226).
+      '${formatSkoreOpensOnNoPeriod('it')}, so Skore was not asked whether '
+          'the user may change it; a tool that writes in it asks Skore for '
+          'the period it writes in.'
     else if (sheet.isCoordinator)
       'Skore opens it read-only for the user, in coordinator mode.'
     else if (sheet.writable)

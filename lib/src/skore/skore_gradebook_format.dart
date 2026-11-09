@@ -168,6 +168,25 @@ String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
     ? 'no evaluation periods yet'
     : 'no evaluation periods, only report periods';
 
+/// Whether Skore opens [sheet], a gradebook with evaluation periods, on
+/// none of them (`init`'s `activePeriodE` -1, #226, #227).
+/// flutter_smartschool 0.4.5 gives it no [SkoreGradebookSheet.activePeriod]
+/// (yvanvds/dartschool#236; 0.4.4 took its first period), as for a
+/// gradebook without evaluation periods, and sends no `getGradebookContext`
+/// then: its [SkoreGradebookSheet.writable] is false because Skore was not
+/// asked, not because Skore said no. Not seen live: Skore gave
+/// `activePeriodE` -1 only for gradebooks without evaluation periods (a
+/// project or behaviour gradebook).
+bool skoreOpensOnNoPeriod(SkoreGradebookSheet sheet) =>
+    sheet.activePeriod == null && sheet.periods.isNotEmpty;
+
+/// How every tool says that Skore opens [gradebook] on none of its periods
+/// ([skoreOpensOnNoPeriod]), so that they say it alike (#226, #227):
+/// `Skore opens it on none of its periods (none is active)` for [gradebook]
+/// `it`, or the gradebook as `the ` and [formatSkoreGradebookName] name it.
+String formatSkoreOpensOnNoPeriod(String gradebook) =>
+    'Skore opens $gradebook on none of its periods (none is active)';
+
 /// For a gradebook with report periods only ([sheet], see
 /// [formatSkoreMissingPeriods]), the sentence on where its course comments
 /// are, and which tools read and write them (#171), for the tools that read

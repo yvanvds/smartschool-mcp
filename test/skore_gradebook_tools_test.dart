@@ -470,6 +470,32 @@ void main() {
       expect(skore.calls, ['init wy=24']);
     });
 
+    test('a gradebook with periods that Skore opens on none of them '
+        '(activePeriodE -1, #227): Skore was not asked whether the user may '
+        'change it, said as list_skore_evaluations says the case (#226), not '
+        '"read-only"; no period is active and getGradebookContext is not '
+        'sent', () async {
+      skore.gradebooks.firstWhere((g) => g.id == 32508).activePeriod = -1;
+      expect(
+        await read(32508),
+        'Gradebook id 32508: Informaticawetenschappen (2 uur) (6e j DO), '
+        'class 6EWI, school year 2026-2027 (workyear id 24).\n'
+        'Skore opens it on none of its periods (none is active), so Skore '
+        'was not asked whether the user may change it; a tool that writes '
+        'in it asks Skore for the period it writes in.\n'
+        '1 period, in Skore\'s order; only an open period takes grades:\n'
+        '- DW1 | period id 1704 | open, closes '
+        '${_time('2026-12-18T20:00:00+0100')} | note: Open van '
+        '2026-09-18 15:30 tot en met 2026-12-18 20:00. Vul hier je punten '
+        'voor Dagelijks werk (periode september- oktober) in!\n'
+        '3 pupils, in Skore\'s order:\n'
+        '- 1. Aerts, An | pupil id 1201\n'
+        '- 2. Claes, Bart | pupil id 1202\n'
+        '- 3. Dupont, Chloé | pupil id 1203',
+      );
+      expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
+    });
+
     test('a gradebook without pupils', () async {
       skore.gradebooks.firstWhere((g) => g.id == 34826).pupils.clear();
       expect(await read(34826), endsWith('\nNo pupils.'));

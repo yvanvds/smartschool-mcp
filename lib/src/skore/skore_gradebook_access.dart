@@ -554,13 +554,14 @@ Future<ReadSkoreGradebook> readSkoreGradebook(
 /// evaluation period, with where its projects are (#208).
 ///
 /// Without [periodId], a gradebook with evaluation periods that Skore opens
-/// on none of them (`init`'s `activePeriodE` -1) is not taken for one
-/// without (#226): flutter_smartschool 0.4.5 gives it no
+/// on none of them ([skoreOpensOnNoPeriod], `init`'s `activePeriodE` -1) is
+/// not taken for one without (#226): flutter_smartschool 0.4.5 gives it no
 /// [SkoreGradebookSheet.activePeriod] (dartschool#236; 0.4.4 took its first
 /// period), and no period is guessed for it. That throws a [ToolError] that
-/// lists its periods and ends with [choose], which says how to pick one. Not
-/// seen live: Skore gave `activePeriodE` -1 only for gradebooks without
-/// evaluation periods (a project or behaviour gradebook).
+/// says so as `read_skore_gradebook` does ([formatSkoreOpensOnNoPeriod],
+/// #227), lists its periods and ends with [choose], which says how to pick
+/// one. Not seen live: Skore gave `activePeriodE` -1 only for gradebooks
+/// without evaluation periods (a project or behaviour gradebook).
 ///
 /// Throws a [ToolError] that lists the gradebook's periods for a [periodId]
 /// that is not one of them; nothing is sent.
@@ -570,12 +571,11 @@ SkoreGradebookPeriod? skoreGradebookPeriod(
   String choose = 'Pass period_id for one of them.',
 }) {
   if (periodId == null) {
-    if (sheet.activePeriod == null && sheet.periods.isNotEmpty) {
+    if (skoreOpensOnNoPeriod(sheet)) {
       throw ToolError(
-        'Skore opens the ${formatSkoreGradebookName(sheet.gradebook)} on '
-        'none of its periods (none is active), so leaving out period_id '
-        'names no period. Its periods, in Skore\'s order: '
-        '${_periodList(sheet)}. $choose',
+        '${formatSkoreOpensOnNoPeriod('the ${formatSkoreGradebookName(sheet.gradebook)}')}, '
+        'so leaving out period_id names no period. Its periods, in Skore\'s '
+        'order: ${_periodList(sheet)}. $choose',
       );
     }
     return sheet.activePeriod;

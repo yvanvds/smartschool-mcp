@@ -197,7 +197,8 @@ a sentence that names the year, not an error.
 
 It reads one gradebook (`gradebook_id`, optional `workyear_id`;
 `getGradebook`): whether Skore lets the user change it (`writable`;
-read-only in coordinator mode; not asked for a gradebook without periods),
+read-only in coordinator mode; not asked for a gradebook without periods,
+nor for one Skore opens on none of its periods),
 and when it does but no period is open, that it takes no grades now. A
 gradebook without evaluation periods says so instead ("no evaluation periods
 yet"); one with report periods only (`SkoreGradebookSheet.reports`,
@@ -206,6 +207,22 @@ flutter_smartschool 0.4.0), as Skore shows a behaviour gradebook such as
 periods, only report periods, so no evaluations and no grades, and that its
 course comments, one per pupil, are written in its report periods and go on
 the report (`formatSkoreMissingPeriods`, `skoreReportPeriodsOnlyNote`).
+
+Skore is not asked either for a gradebook with evaluation periods that
+Skore opens on none of them (`init`'s `activePeriodE` -1, #227):
+flutter_smartschool gives it no `activePeriod` since 0.4.5
+(yvanvds/dartschool#236; 0.4.4 took its first period) and then sends no
+`getGradebookContext`, so its `writable` is false because Skore was not
+asked, not because Skore said no. The tool does not read that as
+read-only: it says, in the words `list_skore_evaluations` and
+`create_skore_evaluation` use for the case (#226,
+`formatSkoreOpensOnNoPeriod`), `Skore opens it on none of its periods (none
+is active), so Skore was not asked whether the user may change it`, and
+that a tool that writes in it asks Skore for the period it writes in (the
+library reads `getGradebookContext` for that period before a write). No
+period is marked active then. A gradebook shared to read only still says
+so. Not seen live: Skore gave `activePeriodE` -1 only for gradebooks
+without evaluation periods, a project or a behaviour gradebook.
 
 Then its periods in Skore's order, each with its period id, whether it is
 open, its closing time (in the time of this PC, Belgium; open is Skore's
