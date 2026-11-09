@@ -292,11 +292,10 @@ instance, `DW`), each with its component id, and the default
 `create_skore_evaluation` takes without a component, as the library picks it
 (`SkoreGradebookService.defaultComponent`, flutter_smartschool 0.4.1,
 dartschool#156): the second when Skore offers exactly two, else `geen` (none
-when it offers no `geen`). Components
-Skore gives in a shape the library does not know leave the evaluations
-listed, with a line that says the components could not be read. A closed
-period gets no line, and its components are not read: no evaluation can be
-created in it.
+when it offers no `geen`). Components Skore gives in a shape the library
+does not know leave the evaluations listed, with a line that says the
+components could not be read. A closed period gets no line, and its
+components are not read: no evaluation can be created in it.
 
 An evaluation on a scale (Skore's "Waarderingen", `evaltype` 2, such as for
 behaviour; #169, flutter_smartschool 0.4.0, yvanvds/dartschool#193) shows
@@ -492,11 +491,11 @@ text, under the evaluation with its publication.
 
 The server reads the gradebook, the pupil, the evaluation and the pupil's
 feedback (`getFeedback`) before the library is asked, and keeps the user's
-own feedback (by the gradebook's teacher, the user). Two
-cases get their own words, and nothing is sent: the user has **more than
-one** feedback of their own for the pupil there (the library changes none of
-them, as it cannot tell which one is meant: the user keeps one in
-Smartschool), and feedback Skore does not let the user change (`can_edit`
+own feedback (by the gradebook's teacher, the user). Two cases get their
+own words, and nothing is sent: the user has **more than one** feedback of
+their own for the pupil there (the library changes none of them, as it
+cannot tell which one is meant: the user keeps one in Smartschool), and
+feedback Skore does not let the user change (`can_edit`
 false: no second feedback is added next to it). The library refuses both
 too, right before the save, but with a `SmartschoolSkoreChangeRefusedError`
 that cannot be told apart from its other refusals, and its result does not
@@ -512,11 +511,10 @@ before it reads the feedback, and the server words that refusal itself, as
 for the grades (dartschool#157). Another refusal of its checks (also when the
 feedback changed between the two reads) is passed on with what to read
 again (`read_skore_feedback`, `read_skore_gradebook`); a
-`SmartschoolSkoreError` from the save (Skore
-refused it with a `4xx`, whose `title` and `detail` can quote the text, or a
-read before it gave an answer the library cannot use) means nothing was
-saved: the library's message goes to the log only, and the result says Skore
-did not save it. A save Skore did not confirm
+`SmartschoolSkoreError` from the save (Skore refused it with a `4xx`, whose
+`title` and `detail` can quote the text, or a read before it gave an answer
+the library cannot use) means nothing was saved: the library's message goes
+to the log only, and the result says Skore did not save it. A save Skore did not confirm
 (`SmartschoolSkoreFeedbackSaveUnconfirmedError`) may or may not have gone
 through: the result says to read the pupil's feedback with
 `read_skore_feedback` and tell the user, and that calling the tool again
