@@ -25,12 +25,13 @@ import 'planner_access.dart';
 // data: the lesfiches done (with their copies, from a copy), those the
 // module answered with an exception, and those its answer names neither
 // way. The tool says so from that record, without reading anything
-// ([lesficheBulkAnswerResult]). Only when the answer says nothing usable
-// about any lesfiche (no answer, a bare `500`) does the tool read again
-// where the lesfiches are now (the library or the trash), in a session
-// action of its own, and say from that read which were done and which not
-// ([lesficheBulkPartialResult]). The library's message, which names the
-// lesfiches, is never shown or logged.
+// ([lesficheBulkAnswerResult]; `add_to_lesson_cluster` does the same for
+// the lesfiches it adds to a cluster, #224). Only when the answer says
+// nothing usable about any lesfiche (no answer, a bare `500`) does the
+// tool read again where the lesfiches are now (the library or the trash),
+// in a session action of its own, and say from that read which were done
+// and which not ([lesficheBulkPartialResult]). The library's message,
+// which names the lesfiches, is never shown or logged.
 
 /// At most this many lesfiches per call of a bulk write.
 const maxLesficheBulkItems = 20;

@@ -236,7 +236,10 @@ cluster, in the order given. The lesfiches are not copied or changed: the
 cluster refers to them. A lesfiche the year plan does not take is refused
 before anything is sent. Every call adds them again, also a lesfiche that is
 in the cluster already. Asks for approval; the result shows the cluster as
-it is now.
+it is now. When Smartschool adds some of the lesfiches and not others, the
+result says which were added (Claude does not add those again), which not
+and why, and which Smartschool's answer leaves out, to check with
+`read_year_plan` first.
 
 ### `set_lesson_cluster_goals`
 
@@ -649,24 +652,29 @@ new in the library. When that read fails too, maybe made, with
 
 ### How the bulk writes check an unconfirmed answer
 
-When the module's answer to `trash_lesfiches`, `restore_lesfiches` or
-`duplicate_lesfiches` says lesfiche by lesfiche what it did, but not that it
-did all of it, the library throws a
-`SmartschoolLessonContentBulkSaveUnconfirmedError`: each lesfiche sent is in
-its `done` (with its copy in `copies`, from a copy), in `failed` (with the
-module's exception: its status and words, never a name) or in `unanswered`
-(the answer names it neither way). The tool says so from that record,
-without reading anything again (`lesficheBulkAnswerResult`): an error
-result, with Claude told not to repeat the ones that were done, and to check
-the ones not named with `list_trashed_lesfiches` or `list_lesfiches` first.
+When the module's answer to `trash_lesfiches`, `restore_lesfiches`,
+`duplicate_lesfiches` or the lesfiches of `add_to_lesson_cluster` says
+lesfiche by lesfiche what it did, but not that it did all of it, the library
+throws a `SmartschoolLessonContentBulkSaveUnconfirmedError`: each lesfiche
+sent is in its `done` (with its copy in `copies`, from a copy), in `failed`
+(with the module's exception: its status and words, never a name) or in
+`unanswered` (the answer names it neither way). The tool says so from that
+record, without reading anything again (`lesficheBulkAnswerResult`): an
+error result, with Claude told not to repeat the ones that were done, and to
+check the ones not named with `list_trashed_lesfiches`, `list_lesfiches` or
+`read_year_plan` first.
 
 A plain `SmartschoolLessonContentSaveUnconfirmedError` means the answer
 says nothing usable about any lesfiche (no answer, a bare `500`). Only then
 does the tool read again where the lesfiches are (the trash, or the list for
 a copy), in a session action of its own, and say from that read which were
 done and which not (`lesficheBulkPartialResult`; an error result when some
-were not done). The library's message, which names the lesfiches, is never
-shown or logged; the log gives only the counts and statuses.
+were not done). `add_to_lesson_cluster` reads nothing then: a lesfiche can
+be in a cluster twice, so the cluster cannot say which were added now, and
+the result says that they may or may not have been added, with
+`read_year_plan` to check. The library's message, which names the
+lesfiches, is never shown or logged; the log gives only the counts and
+statuses.
 
 ### How `plan_lesfiche` works
 
@@ -803,8 +811,17 @@ A text that is not a UUID is refused before any login.
   title again. When the lesfiches fail after the title, the result says
   that the title was added. The module answers a lesfiche it refuses with
   an exception for it (`403`); the library makes that a refusal when it
-  added none. The result reads the cluster back, in a session action of its
-  own.
+  added none. When it added some and not others, or its answer names a
+  lesfiche neither way, the library throws a
+  `SmartschoolLessonContentBulkSaveUnconfirmedError` (dartschool#244), and
+  the result says from that record which were added, which got an exception
+  and which the answer leaves out, as the bulk writes of the library do (see
+  [How the bulk writes check an unconfirmed
+  answer](#how-the-bulk-writes-check-an-unconfirmed-answer); #224), without
+  reading the cluster. An answer that says nothing usable (no answer,
+  another status) is "may or may not have been added", with
+  `read_year_plan` to check. Otherwise the result reads the cluster back, in
+  a session action of its own.
 - `set_lesson_cluster_goals` reads the cluster (`getCluster`), sends
   nothing when it has those goals already, checks the goals it does not
   have yet with the goal selector (`checkGoals`, as the goal writes of
@@ -823,7 +840,9 @@ so the library retries them after logging in again, and they are marked
 idempotent. A write the module refuses says so: a `404` that the year plan
 or cluster is gone, a `403` that the year plan does not take the lesfiches.
 The helpers live in `lib/src/planner/year_plans.dart`; the tests in
-`test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`.
+`test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`
+(`addExceptions` for a lesfiche the add answers with an exception,
+`addUnanswered` for one it adds but leaves out of its answer).
 
 Planning a cluster for classes is on the Planner page:
 [`plan_lesson_cluster`](planner.md#plan_lesson_cluster) (#196, part two of
@@ -884,7 +903,8 @@ In `lesfiche_bulk.dart`, for the bulk writes (`trash_lesfiches`,
 (`findLesfiches`), the refusal of a kind the library cannot write
 (`refuseOtherLesficheKinds`), the lesfiches in words (`lesficheTitles`,
 `lesficheSubject`), the result of an unconfirmed write from the library's
-record of its answer (`lesficheBulkAnswerResult`), and, for an answer that
+record of its answer (`lesficheBulkAnswerResult`, also for the lesfiches of
+`add_to_lesson_cluster`, #224), and, for an answer that
 says nothing usable, the read after it (`readLesficheTrashAfter`,
 `readLesfichesAfter`) with its result (`lesficheBulkPartialResult`).
 

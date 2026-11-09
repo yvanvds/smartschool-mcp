@@ -174,6 +174,12 @@ class FakeYearPlans {
   /// lesfiche the filter does not take, seen live).
   final Map<String, int> addExceptions = {};
 
+  /// Lesfiches, by id in lower case, that the add of lesfiches puts in the
+  /// cluster but leaves out of its answer, without an exception for them
+  /// either (made up: an answer that names a lesfiche neither way,
+  /// dartschool#244).
+  final Set<String> addUnanswered = {};
+
   int _made = 0;
 
   /// The writes, as `POST path` or `DELETE path`, in order.
@@ -339,7 +345,7 @@ class FakeYearPlans {
             continue;
           }
           cluster.entries.add(FakeClusterEntry.lesfiche(lesfiche));
-          added.add(_lesficheJson(lesfiche));
+          if (!addUnanswered.contains(id)) added.add(_lesficheJson(lesfiche));
         }
         return _json(
           jsonEncode({
