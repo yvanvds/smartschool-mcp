@@ -489,32 +489,32 @@ result is the feedback as Skore lists it after the save: whether it is new
 or a change of the user's feedback, its times (written, changed) and its
 text, under the evaluation with its publication.
 
-The server reads the gradebook, the pupil, the evaluation and the pupil's
-feedback (`getFeedback`) before the library is asked, and keeps the user's
-own feedback (by the gradebook's teacher, the user). Two cases get their
-own words, and nothing is sent: the user has **more than one** feedback of
-their own for the pupil there (the library changes none of them, as it
-cannot tell which one is meant: the user keeps one in Smartschool), and
-feedback Skore does not let the user change (`can_edit`
-false: no second feedback is added next to it). The library refuses both
-too, right before the save, but with a `SmartschoolSkoreChangeRefusedError`
-that cannot be told apart from its other refusals, and its result does not
-say whether it created or changed the feedback; the server's own read tells
-both (dartschool#158, removal tracked in #149).
-
-Then the library reads the gradebook, the evaluation and the pupil's
-feedback again and creates the user's feedback
-(`POST /skore/api/v1/gradebook/feedback`) or changes its text
-(`POST .../feedback/{id}`, its attachments sent back as they are). It
+The server reads the gradebook, the pupil and the evaluation before the
+library is asked; it does not read the pupil's feedback itself. Then the
+library reads the gradebook, the evaluation and the pupil's feedback again,
+keeps the user's own (by the logged-in user), and creates the user's
+feedback (`POST /skore/api/v1/gradebook/feedback`) or changes its text
+(`POST .../feedback/{id}`, its attachments sent back as they are). Its
+result says which of the two it did (`SkoreSavedFeedback.isUpdate`). It
 refuses a published or scheduled evaluation without `allow_published`
 before it reads the feedback, and the server words that refusal itself, as
-for the grades (dartschool#157). Another refusal of its checks (also when the
-feedback changed between the two reads) is passed on with what to read
-again (`read_skore_feedback`, `read_skore_gradebook`); a
-`SmartschoolSkoreError` from the save (Skore refused it with a `4xx`, whose
-`title` and `detail` can quote the text, or a read before it gave an answer
-the library cannot use) means nothing was saved: the library's message goes
-to the log only, and the result says Skore did not save it. A save Skore did not confirm
+for the grades (dartschool#157). Two refusals about the user's own feedback
+get the server's own words too, from the feedback the library read right
+before the save, and nothing is sent (dartschool#158): the user has **more
+than one** feedback of their own for the pupil there
+(`SmartschoolSkoreFeedbackAmbiguousError`: the library changes none of
+them, as it cannot tell which one is meant, so the user keeps one in
+Smartschool), and feedback Skore does not let the user change
+(`SmartschoolSkoreFeedbackNotEditableError`, `can_edit` false: no second
+feedback is added next to it).
+
+Another refusal of the library's checks (such as a closed period) is passed
+on with what to read again (`read_skore_feedback`, `read_skore_gradebook`);
+a `SmartschoolSkoreError` from the save (Skore refused it with a `4xx`,
+whose `title` and `detail` can quote the text, or a read before it gave an
+answer the library cannot use) means nothing was saved: the library's
+message goes to the log only, and the result says Skore did not save it. A
+save Skore did not confirm
 (`SmartschoolSkoreFeedbackSaveUnconfirmedError`) may or may not have gone
 through: the result says to read the pupil's feedback with
 `read_skore_feedback` and tell the user, and that calling the tool again
@@ -932,7 +932,13 @@ what it writes and its name: from the evaluation as the library read it
 right before the save (published or scheduled, without `allow_published`),
 a `ToolError` that says what the pupils would see and that
 `allow_published: true` comes only after the user said yes to exactly that
-(dartschool#157).
+(dartschool#157). `save_skore_feedback` likewise catches the library's
+`SmartschoolSkoreFeedbackAmbiguousError` and
+`SmartschoolSkoreFeedbackNotEditableError` around its save and words them
+itself (`_ambiguousFeedbackError`, `_notEditableFeedbackError`), from the
+feedback they carry as the library read it right before the save; whether
+the save created or changed the feedback comes from the library's result,
+`SkoreSavedFeedback.isUpdate` (dartschool#158).
 `formatSkoreEvaluationName` (in `skore_gradebook_format.dart`) names an
 evaluation in such a sentence. The fake gradebook carries out `saveGrade` as
 the live Skore did in dartschool#151: a grade with a comma is kept with a

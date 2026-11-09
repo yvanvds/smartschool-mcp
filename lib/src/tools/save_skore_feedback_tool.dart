@@ -38,16 +38,15 @@ const _tool = 'save_skore_feedback';
 /// An evaluation its pupils see (published or scheduled) is refused unless
 /// `allow_published` is true: the library refuses it right before the save,
 /// and the tool says what the pupil would see
-/// ([skorePublishedEvaluationToolError]). The tool reads
-/// the pupil's feedback itself before the library is asked, and refuses in
-/// its own words when the user has more than one feedback of their own
-/// there or one Skore does not let them change ([_checkOwnFeedback]): the
-/// library refuses both too, but with a refusal that cannot be told apart
-/// from its others (yvanvds/dartschool#158, removal tracked in
-/// yvanvds/smartschool-mcp#149). That read also tells whether the save
-/// changed the user's feedback or created one, which the library's result
-/// does not say. Feedback by others is never sent: the library keeps to the
-/// user's own.
+/// ([skorePublishedEvaluationToolError]). When the user has more than one
+/// feedback of their own for the pupil there, or one Skore does not let them
+/// change, the library refuses the save right before it, from the pupil's
+/// feedback as it reads it then, with a refusal of its own for each
+/// (yvanvds/dartschool#158): the tool words both itself, from the feedback
+/// they carry ([_ambiguousFeedbackError], [_notEditableFeedbackError]). The
+/// library's result says whether the save changed the user's feedback or
+/// created one ([SkoreSavedFeedback.isUpdate]). Feedback by others is never
+/// sent: the library keeps to the user's own.
 ///
 /// Feedback on an evaluation on a scale ("Waarderingen", such as for
 /// behaviour) goes as on one in points, with the same checks (#169): the
@@ -148,14 +147,12 @@ ServerTool saveSkoreFeedbackTool(SmartschoolSession session) => ServerTool(
 );
 
 /// What the feedback goes into: the gradebook as read, the period and the
-/// evaluation as read right before the save, the pupil, and the user's own
-/// feedback for the pupil there as the tool read it (null for none).
+/// evaluation as read right before the save, and the pupil.
 typedef _Target = ({
   SkoreGradebookSheet sheet,
   SkoreGradebookPeriod period,
   SkoreEvaluation evaluation,
   SkoreGradebookPupil pupil,
-  SkoreFeedback? existing,
 });
 
 Future<CallToolResult> _save(
@@ -216,28 +213,12 @@ Future<CallToolResult> _save(
             'Skore in Smartschool itself.',
           );
         }
-        // The user's own feedback, as the library keeps to it: by the
-        // logged-in user, not by the gradebook's teacher, who is the owner
-        // of a gradebook shared with the user (#167).
-        final userId = await gradebooks.userId();
-        final own = [
-          for (final feedback in await gradebooks.getFeedback(
-            sheet.gradebook,
-            evaluation,
-            pupil.id,
-          ))
-            if (feedback.teacherId == userId) feedback,
-        ];
         final to = (
           sheet: sheet,
           period: listed.period,
           evaluation: evaluation,
           pupil: pupil,
-          existing: own.firstOrNull,
         );
-        // The library refuses these as well, but its refusals cannot be
-        // told apart from the others (dartschool#158, #149).
-        _checkOwnFeedback(to, own);
         target = to;
         try {
           final saved = await gradebooks.saveFeedback(
@@ -255,6 +236,10 @@ Future<CallToolResult> _save(
             what: 'the feedback',
             tool: _tool,
           );
+        } on SmartschoolSkoreFeedbackAmbiguousError catch (error) {
+          throw _ambiguousFeedbackError(to, error);
+        } on SmartschoolSkoreFeedbackNotEditableError catch (error) {
+          throw _notEditableFeedbackError(to, error);
         } on SmartschoolSkoreChangeRefusedError {
           rethrow;
         } on SmartschoolSkoreError catch (error) {
@@ -288,48 +273,56 @@ Future<CallToolResult> _save(
   }
 }
 
-/// Refuses the save in [to] when the user's own feedback for the pupil,
-/// [own] as the tool has just read it, is more than one (the library
-/// changes none of them, as it cannot tell which one is meant) or one that
-/// Skore does not let the user change.
+/// The [ToolError] for the library's refusal of the save in [to] because
+/// the user has more than one feedback of their own for the pupil there
+/// ([error], yvanvds/dartschool#158): it changes none of them, as it cannot
+/// tell which one is meant. Nothing was saved.
 ///
-/// Throws a [ToolError] that says so and what to tell the user; nothing is
-/// sent. The library refuses both as well, from the feedback as it reads
-/// it right before the save, but with a `SmartschoolSkoreChangeRefusedError`
-/// that cannot be told apart from its other refusals, worded for a caller
-/// of the library (yvanvds/dartschool#158, removal tracked in
-/// yvanvds/smartschool-mcp#149). When the feedback changes between the two
-/// reads, the library's refusal is passed on as any other.
-void _checkOwnFeedback(_Target to, List<SkoreFeedback> own) {
-  final on =
-      '${_pupilName(to.pupil)} on the '
-      '${formatSkoreEvaluationName(to.evaluation)} in '
-      '${_where(to.sheet, to.period)}';
-  if (own.length > 1) {
-    final written = [
-      for (final feedback in own)
-        if (feedback.createdAt case final at?) formatSkoreTime(at),
-    ];
-    throw ToolError(
-      'The user has ${own.length} feedback texts of their own for $on'
-      '${written.length == own.length ? ' (written ${written.join(', ')})' : ''}: '
-      'the server changes none of them, as it cannot tell which one is '
-      'meant. Show them to the user with read_skore_feedback, and tell the '
-      'user to keep only one of them in Smartschool; then '
-      '$_tool changes that one.',
-    );
-  }
-  final existing = own.firstOrNull;
-  if (existing != null && !existing.canEdit) {
-    final at = existing.createdAt;
-    throw ToolError(
-      'Skore does not let the user change their feedback for $on'
-      '${at == null ? '' : ' (written ${formatSkoreTime(at)})'}, so the '
-      'server cannot save the new text, and it does not add a second '
-      'feedback next to it. Tell the user so; read_skore_feedback shows the '
-      'feedback as it is.',
-    );
-  }
+/// It says so from the feedback [error] carries, as the library read it
+/// right before the save, and what to tell the user. The library's message,
+/// worded for its caller, goes to the log.
+ToolError _ambiguousFeedbackError(
+  _Target to,
+  SmartschoolSkoreFeedbackAmbiguousError error,
+) {
+  log('$_tool: $error');
+  final own = error.feedbacks;
+  final written = [
+    for (final feedback in own)
+      if (feedback.createdAt case final at?) formatSkoreTime(at),
+  ];
+  return ToolError(
+    'The user has ${own.length} feedback texts of their own '
+    '${_forPupilOn(to)}'
+    '${written.length == own.length ? ' (written ${written.join(', ')})' : ''}: '
+    'the server changes none of them, as it cannot tell which one is '
+    'meant. Show them to the user with read_skore_feedback, and tell the '
+    'user to keep only one of them in Smartschool; then '
+    '$_tool changes that one.',
+  );
+}
+
+/// The [ToolError] for the library's refusal of the save in [to] because
+/// Skore does not let the user change their feedback for the pupil there
+/// ([error], `can_edit` false, yvanvds/dartschool#158). Nothing was saved,
+/// and no second feedback was added next to it.
+///
+/// It says so from the feedback [error] carries, as the library read it
+/// right before the save, and what to tell the user. The library's message,
+/// worded for its caller, goes to the log.
+ToolError _notEditableFeedbackError(
+  _Target to,
+  SmartschoolSkoreFeedbackNotEditableError error,
+) {
+  log('$_tool: $error');
+  final at = error.feedback.createdAt;
+  return ToolError(
+    'Skore does not let the user change their feedback ${_forPupilOn(to)}'
+    '${at == null ? '' : ' (written ${formatSkoreTime(at)})'}, so the '
+    'server cannot save the new text, and it does not add a second '
+    'feedback next to it. Tell the user so; read_skore_feedback shows the '
+    'feedback as it is.',
+  );
 }
 
 /// What to read again after a change Skore refused, to correct the call.
@@ -351,7 +344,7 @@ String _pupilName(SkoreGradebookPupil pupil) =>
     '${skoreName(pupil.name)} (pupil id ${pupil.id})';
 
 /// The pupil and the evaluation of [to] and where it is, for the first line
-/// of a result.
+/// of a result or a refusal.
 String _forPupilOn(_Target to) =>
     'for ${_pupilName(to.pupil)} on the '
     '${formatSkoreEvaluationName(to.evaluation)} in '
@@ -361,19 +354,16 @@ String _forPupilOn(_Target to) =>
 /// the user's feedback or is new, the evaluation with its publication, and
 /// [saved] as Skore lists it after the save.
 ///
-/// It is a change when the library saved the feedback the tool read as the
-/// user's ([_Target.existing]); the library's result does not say it.
-String _savedText(_Target to, SkoreFeedback saved) {
-  final changed = to.existing?.id == saved.id;
-  return [
-    changed
-        ? 'Changed the text of the user\'s feedback ${_forPupilOn(to)}.'
-        : 'Saved new feedback of the user ${_forPupilOn(to)}.',
-    'Evaluation: ${formatSkoreEvaluation(to.evaluation)}',
-    'The feedback as Skore lists it after the save:',
-    formatSkoreFeedback(saved, byUser: true),
-  ].join('\n');
-}
+/// It is a change when the library changed the user's feedback rather than
+/// creating one ([SkoreSavedFeedback.isUpdate]).
+String _savedText(_Target to, SkoreSavedFeedback saved) => [
+  saved.isUpdate
+      ? 'Changed the text of the user\'s feedback ${_forPupilOn(to)}.'
+      : 'Saved new feedback of the user ${_forPupilOn(to)}.',
+  'Evaluation: ${formatSkoreEvaluation(to.evaluation)}',
+  'The feedback as Skore lists it after the save:',
+  formatSkoreFeedback(saved, byUser: true),
+].join('\n');
 
 /// The result for feedback that went out to Skore without Skore confirming
 /// it ([error]): it may or may not have been saved. Claude reads the pupil's
@@ -392,13 +382,16 @@ CallToolResult _notConfirmed(
     '$_tool: Skore did not confirm the feedback, not retrying: '
     '${'$error'.replaceAll(RegExp(r'\s+'), ' ')}',
   );
+  // saveFeedback throws only the feedback's subtype. Without it, whether it
+  // was a change is not known: the create's words are the careful ones (read
+  // first; calling again changes the feedback a create made).
   final (isUpdate, createdId) = switch (error) {
     SmartschoolSkoreFeedbackSaveUnconfirmedError(
       :final isUpdate,
       :final feedbackId,
     ) =>
       (isUpdate, isUpdate ? null : feedbackId),
-    _ => (to.existing != null, null),
+    _ => (false, null),
   };
   final read =
       'First read the pupil\'s feedback with read_skore_feedback '
