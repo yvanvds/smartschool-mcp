@@ -238,6 +238,11 @@ on the client for the length of the read
 (`lib/src/skore/skore_period_scopes.dart`,
 `SkoreGradebooks.readingProjectPeriodIds`, used by `readSkoreEvaluationSheet`,
 which the evaluation tools share): no gradebook costs an extra request.
+flutter_smartschool 0.4.5 reads `scope` itself and gives the project periods
+apart (`SkoreGradebookSheet.projectPeriods`), which
+`readSkoreEvaluationSheet` then takes as they are (#220); a project
+gradebook no longer has an active period, so the library no longer sends
+`getGradebookContext` for it.
 When that answer cannot be read, the periods are shown as the library gives
 them.
 

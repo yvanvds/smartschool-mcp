@@ -536,6 +536,11 @@ typedef SkoreEvaluationSheet = ({
 /// ([SkoreGradebooks.readingProjectPeriodIds]): no extra request. When that
 /// cannot be read, the library's periods are kept as they are.
 ///
+/// Since flutter_smartschool 0.4.5 (yvanvds/dartschool#236) the library
+/// splits them itself: its [SkoreGradebookSheet.periods] are the evaluation
+/// periods and its [SkoreGradebookSheet.projectPeriods] the project
+/// periods, which are then taken as they are (#220).
+///
 /// The period Skore opens the gradebook on is kept when it is an
 /// evaluation period; a project period is not, and Skore's `init` lists the
 /// evaluation periods first (seen live, #205), so it is then the first
@@ -551,7 +556,7 @@ Future<SkoreEvaluationSheet> readSkoreEvaluationSheet(
   );
   if (projectPeriodIds == null ||
       !sheet.periods.any((p) => projectPeriodIds.contains(p.id))) {
-    return (sheet: sheet, projectPeriods: const <SkoreGradebookPeriod>[]);
+    return (sheet: sheet, projectPeriods: sheet.projectPeriods);
   }
   final periods = [
     for (final period in sheet.periods)

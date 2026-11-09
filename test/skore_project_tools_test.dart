@@ -177,12 +177,10 @@ void main() {
         '- $_gert\n'
         '- $_ilse',
       );
-      expect(skore.calls, [
-        'getNavigation',
-        'accessableList',
-        'init wy=24',
-        'getGradebookContext wy=24',
-      ]);
+      // No getGradebookContext: since flutter_smartschool 0.4.5 a project
+      // gradebook has no active period to ask it for (#220,
+      // yvanvds/dartschool#236).
+      expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
     });
 
     test('a gradebook with evaluation periods only is not a project '
@@ -253,12 +251,9 @@ void main() {
 
     /// The calls of reading the gradebook once: nothing else was asked of
     /// Skore, and no evaluation of the project period was read or written.
-    const readOnly = [
-      'getNavigation',
-      'accessableList',
-      'init wy=24',
-      'getGradebookContext wy=24',
-    ];
+    /// No getGradebookContext: since flutter_smartschool 0.4.5 a project
+    /// gradebook has no active period to ask it for (#220).
+    const readOnly = ['getNavigation', 'accessableList', 'init wy=24'];
 
     test('list_skore_evaluations says it has no evaluation periods and '
         'points to list_skore_projects; it reads no evaluations of the '
@@ -318,7 +313,7 @@ void main() {
           skore.calls.where(
             (c) => c != 'getNavigation' && c != 'accessableList',
           ),
-          ['init wy=24', 'getGradebookContext wy=24'],
+          ['init wy=24'],
           reason: tool,
         );
       }
