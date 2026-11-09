@@ -162,7 +162,16 @@ Future<CallToolResult> _create(
         final found = await years.findInCurrentYear(gradebooks, gradebookId);
         _checkOwn(found.gradebook);
         final sheet = await gradebooks.getGradebook(found.gradebook);
-        final period = skoreGradebookPeriod(sheet, periodId);
+        // Without period_id, a gradebook Skore opens on none of its periods
+        // is an error that asks the user for one (#226): no period is
+        // guessed for a write.
+        final period = skoreGradebookPeriod(
+          sheet,
+          periodId,
+          choose:
+              'Ask the user in which of them to create the evaluation (an '
+              'open one), and pass its period_id.',
+        );
         if (period == null) {
           throw ToolError(
             'The ${formatSkoreGradebookName(sheet.gradebook)} has '

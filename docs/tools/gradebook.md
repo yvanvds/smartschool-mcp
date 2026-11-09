@@ -285,6 +285,18 @@ gradebook without evaluation periods, a `period_id` (also a report's id) and
 an `evaluation_id` are errors that say it has none, as are the other
 gradebook tools' calls on it.
 
+A gradebook with evaluation periods that Skore opens on none of them
+(`init`'s `activePeriodE` -1) is not taken for one without (#226).
+flutter_smartschool gives it no `activePeriod` since 0.4.5
+(yvanvds/dartschool#236; 0.4.4 took its first period), so without
+`period_id` the tool picks none: it is an error that says Skore opens the
+gradebook on none of its periods and lists them with their period ids,
+asking for one, before any evaluations are read; a `period_id` that is not
+one of them no longer says to leave it out. `evaluation_id` without
+`period_id` is looked for in every period, from the last to the first. Not
+seen live: Skore gave `activePeriodE` -1 only for gradebooks without
+evaluation periods, a project or a behaviour gradebook.
+
 For an open period, a last line lists the components a new evaluation in it
 can count for (`getComponents`, one small request: `geen` for none and, for
 instance, `DW`), each with its component id, and the default
@@ -379,7 +391,12 @@ current school year (`gradebook_id`, `title`, `date` as a day like
 `2026-10-14`, `max` a positive whole number; optional `period_id`, else the
 period Skore opens the gradebook on, `short_name` and `component`;
 `createEvaluation`), always unpublished: the library sends `public` 0 and no
-publication time, and has no way to publish. Marked destructive and not
+publication time, and has no way to publish. No period is guessed for a
+gradebook Skore opens on none of its periods (#226, see
+[How `list_skore_evaluations` works](#how-list_skore_evaluations-works)):
+without `period_id`, that is an error that lists its periods with their
+period ids and tells Claude to ask the user in which to create the
+evaluation, before the library is asked. Marked destructive and not
 idempotent, so Claude Desktop asks for approval before every call; its
 description tells Claude to read the period with `list_skore_evaluations`
 first (not to make an evaluation with the same title and date twice), to
@@ -790,7 +807,8 @@ The library takes an evaluation as `getEvaluations` lists it, so a gradebook
 tool that takes an `evaluation_id` looks it up in its period
 (`findSkoreEvaluation`): with `period_id`, one `getEvaluations` for that
 period; without it, the period Skore opens the gradebook on first, then the
-others from the last to the first, until it is found, one request per
+others from the last to the first (all of them so for a gradebook Skore
+opens on none of its periods, #226), until it is found, one request per
 period. The error for an id that is not there names the periods read, and
 says to take the id from `list_skore_evaluations`, with the `period_id` of
 its period; with a `period_id`, that the evaluation is not in that period.

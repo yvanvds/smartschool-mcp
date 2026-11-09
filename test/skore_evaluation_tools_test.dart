@@ -387,6 +387,68 @@ void main() {
       expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
     });
 
+    test('a gradebook with periods that Skore opens on none of them '
+        '(activePeriodE -1, #226): without period_id, an error that lists '
+        'its periods and asks for one, not "no evaluation periods", before '
+        'any evaluations are read; with period_id, that period, and with '
+        'evaluation_id, every period', () async {
+      book(28998).activePeriod = -1;
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 28998,
+          'workyear_id': 22,
+        }),
+        'Skore opens the gradebook of 5BW for Informaticawetenschappen (2 '
+        'uur) (5e j DG) (gradebook id 28998) on none of its periods (none is '
+        'active), so leaving out period_id names no period. Its periods, in '
+        'Skore\'s order: DW1 (period id 1446, closed), DW4 (period id 1608, '
+        'closed), DW5 (period id 1610, closed). Pass period_id for one of '
+        'them.',
+      );
+      expect(evaluationReads(), isEmpty);
+      expect(skore.calls, isNot(contains(startsWith('getGradebookContext'))));
+      // A period_id that is not one of them: no period to leave it out for.
+      expect(
+        await error('list_skore_evaluations', {
+          'gradebook_id': 28998,
+          'workyear_id': 22,
+          'period_id': 1704,
+        }),
+        endsWith('DW5 (period id 1610, closed). Take a period id from these.'),
+      );
+      expect(evaluationReads(), isEmpty);
+      expect(
+        await list({
+          'gradebook_id': 28998,
+          'workyear_id': 22,
+          'period_id': 1608,
+        }),
+        '$_bwTitle\n'
+        'Period DW4 (period id 1608): closed, closing time '
+        '${_time('2026-04-02T23:00:00+0200')}.\n'
+        'It has no evaluations.\n'
+        'Other periods of the gradebook: DW1 (period id 1446), DW5 (period id '
+        '1610). Pass period_id for one of them.',
+      );
+      expect(evaluationReads(), [1608]);
+      skore.requests.clear();
+      expect(
+        await list({
+          'gradebook_id': 28998,
+          'workyear_id': 22,
+          'evaluation_id': 400101,
+        }),
+        startsWith(
+          '$_bwTitle\n'
+          'Period DW1 (period id 1446): closed, closing time '
+          '${_time('2025-12-18T20:00:00+0100')}.\n'
+          'Evaluation: Databanken | evaluation id 400101 |',
+        ),
+      );
+      // From the last period to the first, as none is active.
+      expect(evaluationReads(), [1610, 1608, 1446]);
+    });
+
     test('a gradebook with report periods only, as Skore shows the behaviour '
         'gradebook "Gedrag" (#168): no evaluation periods, so no '
         'evaluations, and its course comments are in its report periods; '

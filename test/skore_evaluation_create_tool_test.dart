@@ -591,6 +591,44 @@ void main() {
       expect(skore.calls, isNot(contains('getNewEvalDialogBox wy=24')));
     });
 
+    test('a gradebook with periods that Skore opens on none of them '
+        '(activePeriodE -1, #226): without period_id, an error that lists '
+        'its periods and asks the user for one, not "no evaluation '
+        'periods", before the library is asked; with period_id, it is '
+        'created there', () async {
+      book(34826)
+        ..periods.add(
+          const FakeSkoreGradebookPeriod(
+            1705,
+            'DW2',
+            open: false,
+            timestamp: '2027-03-26T20:00:00+0100',
+            note: 'Vul hier je punten voor Dagelijks werk in!',
+          ),
+        )
+        ..activePeriod = -1;
+      expect(
+        await error('create_skore_evaluation', {
+          'gradebook_id': 34826,
+          'title': 'Toets Python',
+          'date': '2026-10-14',
+          'max': 20,
+        }),
+        'Skore opens the $_gradebookName on none of its periods (none is '
+        'active), so leaving out period_id names no period. Its periods, in '
+        'Skore\'s order: DW1 (period id 1704, open), DW2 (period id 1705, '
+        'closed). Ask the user in which of them to create the evaluation (an '
+        'open one), and pass its period_id. Nothing was changed in Skore.',
+      );
+      expect(skore.evaluationSaves, isEmpty);
+      expect(skore.calls, ['getNavigation', 'accessableList', 'init wy=24']);
+
+      final (isError, text) = await create({'period_id': 1704});
+      expect(isError, isFalse, reason: text);
+      expect(text, startsWith('Created evaluation "Toets Python" in $_where.'));
+      expect(skore.evaluationSaves, [_saveParams()]);
+    });
+
     test('an answer the server cannot use before the save: says so, and '
         'that nothing was changed', () async {
       skore.answers['getPosComponents'] = (

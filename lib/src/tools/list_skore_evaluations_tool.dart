@@ -146,6 +146,9 @@ Future<CallToolResult> _list(
         scale: await readSkoreScaleFor(gradebooks, [found.evaluation]),
       );
     }
+    // Without period_id, a gradebook Skore opens on none of its periods is
+    // an error that lists them and asks for one (#226); null is a gradebook
+    // without evaluation periods.
     final period = skoreGradebookPeriod(sheet, periodId);
     if (period == null) {
       return [
