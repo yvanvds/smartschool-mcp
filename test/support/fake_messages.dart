@@ -225,6 +225,11 @@ class FakeMailbox {
   /// The platform id (`ssID`) of every fake user.
   static const platformId = 4069;
 
+  /// The name of the own school, on [platformId]: the `schoolname` of its
+  /// users, and their `ssPlName` with the people of other schools searched
+  /// too.
+  static const ownSchool = 'Sint-Jozefscollege';
+
   /// The user id of the [owner].
   static const ownerId = 146;
 
@@ -1003,6 +1008,11 @@ ${spans(bcc, '3')}
   /// named by `uniqueUsc`, and answers like the live platform (the
   /// dartschool fixtures `search-user.xml` and `search-group.xml`).
   ///
+  /// Each user's `ssPlName` names their platform: for a person of another
+  /// school always, and for one of the own school ([ownSchool]) only with
+  /// [otherSchools] on, as Smartschool fills it then (seen live on
+  /// 2026-11-09, yvanvds/dartschool#246).
+  ///
   /// Refuses a search in another [session] than the one the form was loaded
   /// in: the `uniqueUsc` belongs to that session, and the library does not
   /// send it in another (yvanvds/dartschool#97, #107). What Smartschool
@@ -1036,10 +1046,10 @@ ${spans(bcc, '3')}
             '<text>${_escape(user.name)}</text>'
             '<value>${_escape(user.name)}</value><selectable>on</selectable>'
             '<ssID>${user.platform ?? platformId}</ssID>'
-            '${element('ssPlName', user.school)}<userLT>0</userLT>'
+            '${element('ssPlName', user.school ?? (otherSchools ? ownSchool : null))}'
+            '<userLT>0</userLT>'
             '<coaccountname />${element('classname', user.className)}'
-            '<schoolname>${_escape(user.school ?? 'Sint-Jozefscollege')}'
-            '</schoolname>'
+            '<schoolname>${_escape(user.school ?? ownSchool)}</schoolname>'
             '<picture>https://userpicture20.smartschool.be/User/x</picture>'
             '</user>',
     ];

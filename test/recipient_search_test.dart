@@ -7,6 +7,10 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 import 'package:smartschool_mcp/src/messages/recipient_search.dart';
 import 'package:test/test.dart';
 
+/// A user as a search on a compose form of the own platform [ownPlatform]
+/// finds them: [MessageSearchUser.otherSchool] says whether [ssId] is
+/// another platform, as the library sets it (yvanvds/dartschool#246), and
+/// is `null` without [ownPlatform], when the library cannot tell.
 UserRecipient _user(
   String name,
   int id, {
@@ -14,6 +18,7 @@ UserRecipient _user(
   String? className,
   String? coaccountName,
   int ssId = 4069,
+  int? ownPlatform = 4069,
   String schoolName = 'Sint-Jozefscollege',
   String? platformName,
 }) => UserRecipient(
@@ -21,6 +26,7 @@ UserRecipient _user(
     userId: id,
     displayName: name,
     ssId: ssId,
+    otherSchool: ownPlatform == null ? null : ssId != ownPlatform,
     userLt: userLt,
     className: className,
     coaccountName: coaccountName,
@@ -38,12 +44,14 @@ UserRecipient _elsewhere(
   int userLt = 0,
   String? className,
   String? coaccountName,
+  int? ownPlatform = 4069,
 }) => _user(
   name,
   id,
   userLt: userLt,
   className: className,
   coaccountName: coaccountName,
+  ownPlatform: ownPlatform,
   ssId: 5810,
   schoolName: 'Sint-Lodewijkscollege',
   platformName: 'Sint-Lodewijkscollege',
@@ -109,10 +117,54 @@ void main() {
         'school: Sint-Lodewijkscollege, co-account: Vader',
       );
 
+      expect(_user('Sven Lamber', 146).platform, isNull, reason: 'own school');
+    });
+
+    test('a person of the own school without a platform, also when the search '
+        'included the people of the other schools and so named the own '
+        'school as their platform (#219)', () {
+      final me = _user(
+        'Jan Peeters',
+        146,
+        className: 'Leerkracht',
+        platformName: 'Sint-Jozefscollege',
+      );
+      expect(me.platform, isNull);
+      expect(me.reference, 'Jan Peeters (user 146)');
+      expect(me.listing, 'Jan Peeters (user 146) | Leerkracht');
+    });
+
+    test("a person of another school with the platform, by the library's "
+        'otherSchool, also without a platform name', () {
+      final ned = _user(
+        'Ned Flanders',
+        2231,
+        ssId: 5810,
+        schoolName: 'Sint-Lodewijkscollege',
+      );
+      expect(ned.platform, 5810);
       expect(
-        _user('Sven Lamber', 146).platform,
-        isNull,
-        reason: 'the own school: Smartschool leaves ssPlName empty',
+        ned.listing,
+        'Ned Flanders (user 2231, platform 5810) | '
+        'school: Sint-Lodewijkscollege',
+      );
+    });
+
+    test('when the library cannot tell the own school from another, a '
+        'platform name marks another school, as with the option off', () {
+      expect(
+        _elsewhere('Ned Flanders', 2231, ownPlatform: null).platform,
+        5810,
+      );
+      expect(_user('Sven Lamber', 146, ownPlatform: null).platform, isNull);
+      expect(
+        _user(
+          'Sven Lamber',
+          146,
+          ownPlatform: null,
+          platformName: 'Sint-Jozefscollege',
+        ).reference,
+        'Sven Lamber (user 146, platform 4069)',
       );
     });
 
@@ -233,9 +285,30 @@ void main() {
       expect(matches('Sven Lamber', found), [sven, ned, otherSven]);
     });
 
+    test('a reference without a platform names a person of the own school '
+        'whom a search with the other schools found with the own school as '
+        'their platform name (#219)', () {
+      final svenWithOthers = _user(
+        'Sven Lamber',
+        146,
+        className: 'Klas: 5GZ',
+        platformName: 'Sint-Jozefscollege',
+      );
+      final ned = _elsewhere('Sven Lamber', 146);
+      final found = [svenWithOthers, ned];
+      expect(matches('Sven Lamber (user 146)', found), [svenWithOthers]);
+      expect(matches('Sven Lamber (user 146, platform 4069)', found), isEmpty);
+      expect(matches('Sven Lamber (user 146, platform 5810)', found), [ned]);
+    });
+
     test('a reference finds several only when the search found the same id '
-        'twice, in another school', () {
-      final elsewhere = _user('Sven Lamber', 146, ssId: 5000);
+        'twice, in another school the library cannot tell apart', () {
+      final elsewhere = _user(
+        'Sven Lamber',
+        146,
+        ssId: 5000,
+        ownPlatform: null,
+      );
       expect(matches('Sven Lamber (user 146)', [sven, elsewhere]), [
         sven,
         elsewhere,

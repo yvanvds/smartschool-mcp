@@ -209,12 +209,21 @@ shared with the web interface and every session. The library therefore
 switches it only when it differs from what was asked, and sets it back after
 the search, also when the search fails.
 
-A person of another school is on that school's own platform. The search
-names it (`ssPlName`), and leaves that name empty for the own school. Such a
-person is listed with the platform in the brackets and their school first
-after the `|`, like `Ned Flanders (user 2231, platform 5810) | school:
-Sint-Lodewijkscollege`. The same user id can belong to someone else at
-another school, so the platform belongs in the reference.
+A person of another school is on that school's own platform (their
+`ssId`). The library tells them apart from the own school by comparing that
+platform with the own one, the `ssID` of the compose form it searches on
+(`MessageSearchUser.otherSchool`, flutter_smartschool 0.4.5,
+yvanvds/dartschool#246). The platform name the search gives (`ssPlName`)
+does not tell: with the checkbox on, Smartschool fills it for the people of
+the own school too. A person of another school is listed with the platform
+in the brackets and their school first after the `|`, like `Ned Flanders
+(user 2231, platform 5810) | school: Sint-Lodewijkscollege`. The same user
+id can belong to someone else at another school, so the platform belongs in
+the reference. A person of the own school is listed without a platform and
+without a school, with the checkbox on or off, so their reference is the
+same in every search (#219). Should the library not be able to tell (a
+compose form that does not name the own platform, which has not been seen),
+a platform name marks another school, as it does with the checkbox off.
 
 The library tells two refusals apart by type (flutter_smartschool 0.4.4,
 yvanvds/dartschool#241), and the error words each in its own way. When
@@ -245,9 +254,11 @@ exactly one user or group (the name exactly, ignoring case and extra spaces,
 and the kind and id of a reference). A reference with a platform names a
 person of another school. When there is one, every recipient is looked up
 with `include_other_schools` on, since only then does the search find that
-person. A reference without a platform names someone of the own school. A
-name alone can then also find a namesake at another school, and stops the
-send with both listed. A name that no one has exactly, or that
+person. A reference without a platform names someone of the own school,
+whether or not the search includes the other schools, as it does when the
+account has the checkbox on (#219). With the other schools included, a name
+alone can also find a namesake at another school, and stops the send with
+both listed. A name that no one has exactly, or that
 several users or groups have (also a user and a group), stops the send
 before anything is sent, with who the search finds, for the user to choose:
 the tool never picks one. It sends once, as `reply_to_message` does

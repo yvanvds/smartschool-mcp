@@ -216,6 +216,13 @@ void main() {
           'other schools of the school group',
         ),
       );
+      expect(
+        search.description,
+        contains(
+          'The people of the own school are listed without a platform, with '
+          'include_other_schools or without it.',
+        ),
+      );
     });
 
     test('send_message as destructive and not idempotent, telling Claude to '
@@ -558,6 +565,64 @@ void main() {
       ]);
       expect(mailbox.otherSchools, isFalse);
     });
+
+    test('a person of the own school by the reference search_recipients '
+        'lists, with or without the people of the other schools, along with '
+        'a person of another school in BCC (#219)', () async {
+      // With the option on, Smartschool names the own school in ssPlName
+      // too (yvanvds/dartschool#246): the reference stays the same.
+      const me = 'Smartschool finds 1 user for "$_me":\n- $_me (user 146)';
+      expect(await search(_me), me);
+      expect(await search(_me, otherSchools: true), me);
+
+      expect(
+        await ok({
+          'to': ['$_me (user 146)'],
+          'bcc': [_ned],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        'Sent the message.\n'
+        'To: $_me\n'
+        'BCC: Ned Flanders\n'
+        'Subject: Uitstap',
+      );
+      expect(sends(), ['send to=$_me cc= bcc=Ned Flanders subject=Uitstap']);
+      expect(mailbox.otherSchools, isFalse);
+    });
+
+    test(
+      'a person of the own school by reference, when the account has the '
+      'option "Toon personen van andere scholen" on: the search goes as '
+      'the account has it, and the reference has no platform (#219)',
+      () async {
+        mailbox.otherSchools = true;
+        expect(
+          await search('Sven Lamber'),
+          'Smartschool finds 3 users for "Sven Lamber":\n'
+          '- $_sven\n'
+          '- $_otherSven\n'
+          '- $_svenja',
+        );
+
+        expect(
+          await ok({
+            'to': ['Sven Lamber (user 1146)'],
+            'subject': 'Uitstap',
+            'body': 'Hallo',
+          }),
+          'Sent the message.\n'
+          'To: Sven Lamber\n'
+          'Subject: Uitstap',
+        );
+        expect(sends(), ['send to=Sven Lamber #1146 cc= bcc= subject=Uitstap']);
+        expect(searchesAndSwitches(), [
+          'search val=Sven Lamber',
+          'search val=Sven Lamber',
+        ]);
+        expect(mailbox.otherSchools, isTrue);
+      },
+    );
 
     test('a recipient whose name only one user has, by name', () async {
       expect(
