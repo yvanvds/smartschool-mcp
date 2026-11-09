@@ -111,11 +111,14 @@ enum _Field {
   final String label;
 
   /// Whether this field of [element] has [value] already, as the library
-  /// compares it.
+  /// compares it before it sends a change (and sends nothing when it has):
+  /// the name as it is, without the white space around it; an info as HTML,
+  /// so `<br>` is `<br />` ([samePlannerInfo], #222); the goals in any
+  /// order.
   bool has(PlannedElementDetail element, Object value) => switch (this) {
     name => (element.name ?? '').trim() == value,
-    publicInfo => element.publicInfo == value,
-    privateInfo => element.privateInfo == value,
+    publicInfo => samePlannerInfo(element.publicInfo, value as String),
+    privateInfo => samePlannerInfo(element.privateInfo, value as String),
     goals => sameGoals(
       element.goals ?? const [],
       value as List<LearningGoalRef>,

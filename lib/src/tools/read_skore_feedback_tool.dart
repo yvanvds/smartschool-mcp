@@ -101,7 +101,7 @@ Future<CallToolResult> _read(
   final years = SkoreGradebookYears.of(session);
   final text = await withSkoreGradebook(session, (gradebooks) async {
     final userId = await gradebooks.userId();
-    final (:sheet, :projectPeriods, :workyear) = await readSkoreGradebook(
+    final (:sheet, :workyear) = await readSkoreGradebook(
       gradebooks,
       years,
       gradebookId,
@@ -112,7 +112,6 @@ Future<CallToolResult> _read(
       gradebooks,
       sheet,
       evaluationId,
-      projectPeriods: projectPeriods,
       periodId: periodId,
     );
     final feedback = await gradebooks.getFeedback(

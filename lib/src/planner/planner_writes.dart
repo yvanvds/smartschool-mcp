@@ -1,5 +1,6 @@
 import 'package:dart_mcp/server.dart';
 import 'package:flutter_smartschool/flutter_smartschool.dart';
+import 'package:html/parser.dart' as html_parser;
 
 import '../goals/goals.dart';
 import '../log.dart';
@@ -42,10 +43,10 @@ const plannerListLagNote =
 ///
 /// `&`, `<` and `>` are escaped, so HTML in [text] shows as text and never
 /// becomes markup. Quotes are left as they are: they are not markup in text
-/// content, and the planner answers `&quot;` and `&#39;` as quotes, so the
-/// library would report the edit of an info with one as unconfirmed
-/// (dartschool#155, #137). White space around a paragraph or a line is left
-/// out. Text that is empty or white space only is `""`: no info.
+/// content, and the planner keeps them as quotes (it answers `&quot;` and
+/// `&#39;` as `"` and `'`, seen live). So the HTML is the info as the
+/// planner keeps it. White space around a paragraph or a line is left out.
+/// Text that is empty or white space only is `""`: no info.
 String plainTextToHtml(String text) {
   final paragraphs = text
       .replaceAll('\r\n', '\n')
@@ -63,6 +64,23 @@ String _line(String line) => line
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+
+/// Whether [a] and [b] are the same info of a planned element, as
+/// `PlannerService.changePublicInfo` and `changePrivateInfo` compare an info
+/// before they send it (and send nothing when it is the same): the same
+/// text, or the same once each is parsed as an HTML fragment and written
+/// out again (flutter_smartschool 0.4.1, dartschool#155). So `<br>` and
+/// `<br />`, `&quot;` and `"`, or `&#233;` and `é` are the same info;
+/// `&lt;b&gt;` (text) and `<b>` (a tag) are not.
+///
+/// A copy of the library's private `_sameHtml`, so that
+/// `edit_planned_element` says "already had the value given" exactly when
+/// the library sent nothing (#222). It goes once the library exposes its
+/// comparison (dartschool#250, #223).
+bool samePlannerInfo(String a, String b) =>
+    a == b ||
+    html_parser.parseFragment(a).outerHtml ==
+        html_parser.parseFragment(b).outerHtml;
 
 /// [value], the argument [name] of a tool, as the id of an empty lesson
 /// hour as `list_planner` prints it: `planned-placeholders/4069/<id>`.

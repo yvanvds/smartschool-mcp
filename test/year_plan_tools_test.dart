@@ -22,6 +22,7 @@ import 'package:smartschool_mcp/src/tools/set_lesson_cluster_goals_tool.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_smartschool.dart';
+import 'support/log_capture.dart';
 import 'support/mcp.dart';
 
 final _lussen = FakeLesfiche(
@@ -56,6 +57,7 @@ const _clusterPath =
 void main() {
   late FakeSmartschool server;
   late FakeYearPlans yearPlans;
+  late SmartschoolSession session;
   late ServerConnection connection;
 
   setUp(() async {
@@ -63,7 +65,7 @@ void main() {
     server.planner.lesfiches.addAll([_lussen, _lussen2, _toets]);
     server.goals.loadSample();
     yearPlans = server.yearPlans;
-    final session = SmartschoolSession(
+    session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
     );
@@ -480,6 +482,104 @@ void main() {
         contains('The lesfiches were not added. The title "Week 2" was added.'),
       ),
     );
+  });
+
+  test('add_to_lesson_cluster: an answer that adds some lesfiches, refuses '
+      'one and names one neither way says, from the library\'s record, which '
+      'were added, without reading the cluster (#224); the log names no '
+      'lesfiche', () async {
+    addPlan();
+    yearPlans.addExceptions[_toets.id.toLowerCase()] = 403;
+    yearPlans.addUnanswered.add(_lussen.id.toLowerCase());
+
+    final ((result, text), logged) = await captureLog(() async {
+      final (connection, _) = await connect(
+        tools: [addToLessonClusterTool(session)],
+      );
+      return callTool(connection, 'add_to_lesson_cluster', {
+        'year_plan': _planId,
+        'cluster': _clusterId,
+        'title': 'Week 2',
+        'lesfiches': [_lussen2.id, _toets.id, _lussen.id],
+      });
+    });
+    expect(result.isError, isTrue, reason: text);
+    expect(
+      text,
+      'The add of 3 lesfiches to the lesson cluster "Lussen" was sent, but '
+      'the Lesfiches module did not confirm all of it. Its answer says what '
+      'was done.\n'
+      'Added to the end of the cluster (a lesfiche can be in a cluster '
+      'twice, so do not add these again):\n'
+      '- lesson | Lussen 2 | id ${_lussen2.id}\n'
+      'Not added, with the exception the module gave for each (it answers '
+      'HTTP 403 for a lesfiche the year plan does not take):\n'
+      '- assignment | Toets lussen | id ${_toets.id} (HTTP 403, '
+      '"{"status":403}")\n'
+      'Not named in the answer, so they may or may not have been added '
+      '(before adding one of these again, read the cluster with '
+      'read_year_plan (year_plan $_planId, cluster $_clusterId): the module '
+      'adds to its end):\n'
+      '- lesson | Lussen 1 | id ${_lussen.id}\n'
+      'The title "Week 2" was added.\n'
+      'Do not call add_to_lesson_cluster again for those added: a second '
+      'call adds them to the cluster twice. Tell the user which were added '
+      'and which not, and ask before adding the others again.',
+    );
+    expect(
+      yearPlans.requests.last.path,
+      '$_clusterPath/lesson-content-from-teaching-assignment',
+      reason: 'no read of the cluster after the add',
+    );
+    expect(yearPlans.writes, [
+      'POST $_clusterPath/titles',
+      'POST $_clusterPath/lesson-content-from-teaching-assignment',
+    ]);
+    expect(
+      logged,
+      contains(
+        'add_to_lesson_cluster: the Lesfiches module did not confirm all of '
+        'a write; its answer: 1 done, 1 with an exception (HTTP 403), 1 not '
+        'named',
+      ),
+    );
+    expect(logged, isNot(contains('Lussen')));
+    expect(logged, isNot(contains('Toets')));
+  });
+
+  test('add_to_lesson_cluster: lesfiches without an answer may or may not '
+      'have been added, with read_year_plan to check, and the title was '
+      'added', () async {
+    addPlan();
+    yearPlans.lostAnswers.add(
+      '$_clusterPath/lesson-content-from-teaching-assignment',
+    );
+    final text = await error('add_to_lesson_cluster', {
+      'year_plan': _planId,
+      'cluster': _clusterId,
+      'title': 'Week 2',
+      'lesfiches': [_lussen2.id, _lussen.id],
+    });
+    expect(
+      text,
+      allOf(
+        contains(
+          'The 2 lesfiches (the lesson lesfiche "Lussen 2" and the lesson '
+          'lesfiche "Lussen 1") in the lesson cluster "Lussen" may or may not '
+          'have been added',
+        ),
+        contains('The title "Week 2" was added.'),
+        contains(
+          'read the cluster with read_year_plan (year_plan $_planId, cluster '
+          '$_clusterId) to see which are there',
+        ),
+        contains('Do not call add_to_lesson_cluster again'),
+      ),
+    );
+    expect(yearPlans.writes, [
+      'POST $_clusterPath/titles',
+      'POST $_clusterPath/lesson-content-from-teaching-assignment',
+    ], reason: 'sent once, never again after the lost answer');
   });
 
   test('set_lesson_cluster_goals checks the new goals with the goal selector, '

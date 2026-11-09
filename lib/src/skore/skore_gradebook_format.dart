@@ -156,13 +156,11 @@ String formatSkorePeriodName(SkoreGradebookPeriod period) =>
 /// evaluation periods, only report periods` for one with report periods
 /// only, as Skore shows a behaviour gradebook such as "Gedrag (A-stroom,
 /// D/A en D)" (#168, flutter_smartschool 0.4.0). For a project gradebook
-/// (one with [projectPeriods], #192, #208), `no evaluation periods, only
-/// project periods`, with the tool that lists its projects. Either way it
-/// has no evaluations and takes no grades.
-String formatSkoreMissingPeriods(
-  SkoreGradebookSheet sheet, {
-  List<SkoreGradebookPeriod> projectPeriods = const [],
-}) => projectPeriods.isNotEmpty
+/// (one with [SkoreGradebookSheet.projectPeriods], #192, #208), `no
+/// evaluation periods, only project periods`, with the tool that lists its
+/// projects. Either way it has no evaluations and takes no grades.
+String formatSkoreMissingPeriods(SkoreGradebookSheet sheet) =>
+    sheet.projectPeriods.isNotEmpty
     ? 'no evaluation periods, only project periods (it is a project '
           'gradebook, Skore\'s "Projecten", whose pupils are rated per '
           'learning goal in projects: list_skore_projects lists its projects)'
@@ -170,17 +168,35 @@ String formatSkoreMissingPeriods(
     ? 'no evaluation periods yet'
     : 'no evaluation periods, only report periods';
 
+/// Whether Skore opens [sheet], a gradebook with evaluation periods, on
+/// none of them (`init`'s `activePeriodE` -1, #226, #227).
+/// flutter_smartschool 0.4.5 gives it no [SkoreGradebookSheet.activePeriod]
+/// (yvanvds/dartschool#236; 0.4.4 took its first period), as for a
+/// gradebook without evaluation periods, and sends no `getGradebookContext`
+/// then: its [SkoreGradebookSheet.writable] is false because Skore was not
+/// asked, not because Skore said no. Not seen live: Skore gave
+/// `activePeriodE` -1 only for gradebooks without evaluation periods (a
+/// project or behaviour gradebook).
+bool skoreOpensOnNoPeriod(SkoreGradebookSheet sheet) =>
+    sheet.activePeriod == null && sheet.periods.isNotEmpty;
+
+/// How every tool says that Skore opens [gradebook] on none of its periods
+/// ([skoreOpensOnNoPeriod]), so that they say it alike (#226, #227):
+/// `Skore opens it on none of its periods (none is active)` for [gradebook]
+/// `it`, or the gradebook as `the ` and [formatSkoreGradebookName] name it.
+String formatSkoreOpensOnNoPeriod(String gradebook) =>
+    'Skore opens $gradebook on none of its periods (none is active)';
+
 /// For a gradebook with report periods only ([sheet], see
 /// [formatSkoreMissingPeriods]), the sentence on where its course comments
 /// are, and which tools read and write them (#171), for the tools that read
 /// it; null for any other gradebook, and for a project gradebook (one with
-/// [projectPeriods]), as a project course is not on the reports
-/// (dartschool#204).
-String? skoreReportPeriodsOnlyNote(
-  SkoreGradebookSheet sheet, {
-  List<SkoreGradebookPeriod> projectPeriods = const [],
-}) =>
-    sheet.periods.isEmpty && sheet.reports.isNotEmpty && projectPeriods.isEmpty
+/// [SkoreGradebookSheet.projectPeriods]), as a project course is not on the
+/// reports (dartschool#204).
+String? skoreReportPeriodsOnlyNote(SkoreGradebookSheet sheet) =>
+    sheet.periods.isEmpty &&
+        sheet.reports.isNotEmpty &&
+        sheet.projectPeriods.isEmpty
     ? 'Its course comments, one per pupil, are written in its report '
           'periods and go on the report: read_skore_report reads them, and '
           'save_skore_report_comment writes them.'

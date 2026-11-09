@@ -16,10 +16,9 @@ import 'server_tool.dart';
 /// A project gradebook (Skore's "Projecten", #192) says so, with its
 /// project periods, and points to the project tools. Skore's `init` lists
 /// a gradebook's project periods with its evaluation periods, and the
-/// library gives them all as periods (yvanvds/dartschool#236): which ones
-/// are project periods is read from that same `init`
-/// ([readSkoreEvaluationSheet], a workaround, #205, #207), so no gradebook
-/// costs an extra request.
+/// library tells them apart by Skore's `scope` of each
+/// ([SkoreGradebookSheet.projectPeriods], yvanvds/dartschool#236, #207), so
+/// no gradebook costs an extra request.
 ///
 /// Offered to every account, without a switch: the gradebook needs no
 /// extra rights in Smartschool.
@@ -87,7 +86,7 @@ Future<CallToolResult> _read(
   final gradebookId = requiredIntArgument(arguments, 'gradebook_id');
   final workyearId = intArgument(arguments, 'workyear_id');
   final years = SkoreGradebookYears.of(session);
-  final (:sheet, :projectPeriods, :workyear) = await withSkoreGradebook(
+  final (:sheet, :workyear) = await withSkoreGradebook(
     session,
     (gradebooks) => readSkoreGradebook(
       gradebooks,
@@ -97,15 +96,7 @@ Future<CallToolResult> _read(
     ),
   );
   return CallToolResult(
-    content: [
-      TextContent(
-        text: formatSkoreGradebookSheet(
-          sheet,
-          workyear,
-          projectPeriods: projectPeriods,
-        ),
-      ),
-    ],
+    content: [TextContent(text: formatSkoreGradebookSheet(sheet, workyear))],
   );
 }
 
@@ -115,34 +106,30 @@ Future<CallToolResult> _read(
 /// its report periods (#171) and its pupils. One shared to read only says the user may not change it,
 /// whatever Skore answers (#167): the write tools refuse it. A gradebook
 /// without evaluation periods says so instead of whether the user may
-/// change it (Skore is not asked then); one with
+/// change it (Skore is not asked then); so does one with evaluation periods
+/// that Skore opens on none of them ([skoreOpensOnNoPeriod], #227), with
+/// #226's words ([formatSkoreOpensOnNoPeriod]): its
+/// [SkoreGradebookSheet.writable] is false because Skore was not asked, and
+/// a write asks Skore for the period it writes in. One with
 /// report periods only, such as a behaviour gradebook (#168), also where
 /// its course comments are ([skoreReportPeriodsOnlyNote]). A project
-/// gradebook (one with [projectPeriods], #192) says so and lists them, with
-/// the project tools, instead; its report periods are left out, as a
-/// project course is not on the gradebook's reports (dartschool#204).
-/// [projectPeriods] are left out of [sheet]'s periods when they are among
-/// them (Skore lists them with the evaluation periods, #205;
-/// [readSkoreEvaluationSheet] splits them off): the others are its
-/// evaluation periods, and only one of those is the period Skore opens the
-/// gradebook on.
+/// gradebook (one with [SkoreGradebookSheet.projectPeriods], #192) says so
+/// and lists them, with the project tools, instead; its report periods are
+/// left out, as a project course is not on the gradebook's reports
+/// (dartschool#204). [sheet]'s periods are its evaluation periods only,
+/// apart from its project periods, and its active period is never a project
+/// period (yvanvds/dartschool#236).
 String formatSkoreGradebookSheet(
   SkoreGradebookSheet sheet,
-  SkoreWorkyear workyear, {
-  List<SkoreGradebookPeriod> projectPeriods = const [],
-}) {
+  SkoreWorkyear workyear,
+) {
+  final projectPeriods = sheet.projectPeriods;
   final isProject = projectPeriods.isNotEmpty;
-  final projectIds = {for (final period in projectPeriods) period.id};
-  final periods = [
-    for (final period in sheet.periods)
-      if (!projectIds.contains(period.id)) period,
-  ];
+  final periods = sheet.periods;
   final reports = sheet.reports;
   final pupils = sheet.pupils;
   final inactive = pupils.where((p) => !p.isActive).length;
-  final active = projectIds.contains(sheet.activePeriod?.id)
-      ? null
-      : sheet.activePeriod;
+  final active = sheet.activePeriod;
   return [
     '${formatSkoreGradebookTitle(sheet.gradebook, workyear)}.',
     if (isProject) ...[
@@ -167,6 +154,12 @@ String formatSkoreGradebookSheet(
     else if (sheet.gradebook.access == SkoreGradebookAccess.read)
       'The user may read it, not change it: it is shared with them to read '
           'only.'
+    else if (skoreOpensOnNoPeriod(sheet))
+      // `writable` is false then because Skore was not asked (#227), not
+      // Skore's answer: said as list_skore_evaluations says it (#226).
+      '${formatSkoreOpensOnNoPeriod('it')}, so Skore was not asked whether '
+          'the user may change it; a tool that writes in it asks Skore for '
+          'the period it writes in.'
     else if (sheet.isCoordinator)
       'Skore opens it read-only for the user, in coordinator mode.'
     else if (sheet.writable)

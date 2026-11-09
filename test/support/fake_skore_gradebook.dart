@@ -747,7 +747,8 @@ class FakeSkoreOwnGradebook {
       reportContents.putIfAbsent(id, FakeSkoreReport.new);
 
   /// The index in [periods] of the period Skore opens the gradebook on
-  /// (`activePeriodE`).
+  /// (`activePeriodE`); -1 for none, which was seen live only for a
+  /// gradebook without evaluation periods (#226).
   int activePeriod;
 
   final List<FakeSkoreGradebookPupil> pupils;

@@ -169,8 +169,9 @@ in a project (see [Project gradebooks](#project-gradebooks)).
 A gradebook's project periods are never taken for evaluation periods
 (#208): every tool that reads a gradebook's periods (`read_skore_gradebook`,
 `list_skore_evaluations`, `read_skore_feedback`, `create_skore_evaluation`,
-`save_skore_grades`, `save_skore_feedback`, through `readSkoreEvaluationSheet`
-in `lib/src/skore/skore_gradebook_access.dart`) splits them off, as
+`save_skore_grades`, `save_skore_feedback`) takes its evaluation periods
+from the library's `SkoreGradebookSheet.periods` and its project periods
+from `SkoreGradebookSheet.projectPeriods`, as
 [read_skore_gradebook](#how-read_skore_gradebook-works) tells them apart,
 without an extra request. So a project gradebook has no evaluation periods
 for them: they say so and point to `list_skore_projects`, and a project
@@ -196,7 +197,8 @@ a sentence that names the year, not an error.
 
 It reads one gradebook (`gradebook_id`, optional `workyear_id`;
 `getGradebook`): whether Skore lets the user change it (`writable`;
-read-only in coordinator mode; not asked for a gradebook without periods),
+read-only in coordinator mode; not asked for a gradebook without periods,
+nor for one Skore opens on none of its periods),
 and when it does but no period is open, that it takes no grades now. A
 gradebook without evaluation periods says so instead ("no evaluation periods
 yet"); one with report periods only (`SkoreGradebookSheet.reports`,
@@ -205,6 +207,22 @@ flutter_smartschool 0.4.0), as Skore shows a behaviour gradebook such as
 periods, only report periods, so no evaluations and no grades, and that its
 course comments, one per pupil, are written in its report periods and go on
 the report (`formatSkoreMissingPeriods`, `skoreReportPeriodsOnlyNote`).
+
+Skore is not asked either for a gradebook with evaluation periods that
+Skore opens on none of them (`init`'s `activePeriodE` -1, #227):
+flutter_smartschool gives it no `activePeriod` since 0.4.5
+(yvanvds/dartschool#236; 0.4.4 took its first period) and then sends no
+`getGradebookContext`, so its `writable` is false because Skore was not
+asked, not because Skore said no. The tool does not read that as
+read-only: it says, in the words `list_skore_evaluations` and
+`create_skore_evaluation` use for the case (#226,
+`formatSkoreOpensOnNoPeriod`), `Skore opens it on none of its periods (none
+is active), so Skore was not asked whether the user may change it`, and
+that a tool that writes in it asks Skore for the period it writes in (the
+library reads `getGradebookContext` for that period before a write). No
+period is marked active then. A gradebook shared to read only still says
+so. Not seen live: Skore gave `activePeriodE` -1 only for gradebooks
+without evaluation periods, a project or a behaviour gradebook.
 
 Then its periods in Skore's order, each with its period id, whether it is
 open, its closing time (in the time of this PC, Belgium; open is Skore's
@@ -230,21 +248,14 @@ periods together, in `periods`, whatever its page, and tells them apart by
 the period's `scope`: `1` an evaluation period, `2` a project period (seen
 live, 2026-11-02, #205: the project gradebook "Digitale vaardigheden" of
 5WW1 gave its project period with `scope` 2; `categoryMode` is 1 in both).
-flutter_smartschool 0.4.2 does not read `scope`, so its `getGradebook`
-gives a project period as an evaluation period (yvanvds/dartschool#236).
-As a workaround (removal tracked in #207), the tool reads `scope` from the
-raw answer of the `init` the library sends anyway, with a Dio interceptor
-on the client for the length of the read
-(`lib/src/skore/skore_period_scopes.dart`,
-`SkoreGradebooks.readingProjectPeriodIds`, used by `readSkoreEvaluationSheet`,
-which the evaluation tools share): no gradebook costs an extra request.
-flutter_smartschool 0.4.5 reads `scope` itself and gives the project periods
-apart (`SkoreGradebookSheet.projectPeriods`), which
-`readSkoreEvaluationSheet` then takes as they are (#220); a project
-gradebook no longer has an active period, so the library no longer sends
-`getGradebookContext` for it.
-When that answer cannot be read, the periods are shown as the library gives
-them.
+flutter_smartschool reads `scope` since 0.4.5 (yvanvds/dartschool#236): its
+`getGradebook` gives the evaluation periods as `SkoreGradebookSheet.periods`
+and the project periods apart, as `SkoreGradebookSheet.projectPeriods`
+(`SkoreGradebookPeriod.isProject`), from the same `init`, so no gradebook
+costs an extra request; the tools take them as they are (#207, which
+removed the server's own reading of `scope`, the workaround of #205). A
+project gradebook has no active period, so the library sends no
+`getGradebookContext` for it, and it is not `writable`.
 
 A gradebook with project periods says that it is a project gradebook, that
 its pupils are rated per learning goal in projects, which tools read and
@@ -290,6 +301,18 @@ an error that lists its periods, before any evaluations are read. In a
 gradebook without evaluation periods, a `period_id` (also a report's id) and
 an `evaluation_id` are errors that say it has none, as are the other
 gradebook tools' calls on it.
+
+A gradebook with evaluation periods that Skore opens on none of them
+(`init`'s `activePeriodE` -1) is not taken for one without (#226).
+flutter_smartschool gives it no `activePeriod` since 0.4.5
+(yvanvds/dartschool#236; 0.4.4 took its first period), so without
+`period_id` the tool picks none: it is an error that says Skore opens the
+gradebook on none of its periods and lists them with their period ids,
+asking for one, before any evaluations are read; a `period_id` that is not
+one of them no longer says to leave it out. `evaluation_id` without
+`period_id` is looked for in every period, from the last to the first. Not
+seen live: Skore gave `activePeriodE` -1 only for gradebooks without
+evaluation periods, a project or a behaviour gradebook.
 
 For an open period, a last line lists the components a new evaluation in it
 can count for (`getComponents`, one small request: `geen` for none and, for
@@ -385,7 +408,12 @@ current school year (`gradebook_id`, `title`, `date` as a day like
 `2026-10-14`, `max` a positive whole number; optional `period_id`, else the
 period Skore opens the gradebook on, `short_name` and `component`;
 `createEvaluation`), always unpublished: the library sends `public` 0 and no
-publication time, and has no way to publish. Marked destructive and not
+publication time, and has no way to publish. No period is guessed for a
+gradebook Skore opens on none of its periods (#226, see
+[How `list_skore_evaluations` works](#how-list_skore_evaluations-works)):
+without `period_id`, that is an error that lists its periods with their
+period ids and tells Claude to ask the user in which to create the
+evaluation, before the library is asked. Marked destructive and not
 idempotent, so Claude Desktop asks for approval before every call; its
 description tells Claude to read the period with `list_skore_evaluations`
 first (not to make an evaluation with the same title and date twice), to
@@ -608,9 +636,9 @@ or removes a project: the user does that in Smartschool. The helpers are in
 `lib/src/skore/skore_projects.dart`: `readSkoreProjectPeriods` (the project
 periods, or the one of a `period_id`; a gradebook without any is an error
 that says it is not a project gradebook; the library's `getProjectPeriods`
-also lists the evaluation periods, so only the periods with Skore's
-project `scope` are kept, the workaround of
-[How `read_skore_gradebook` works](#how-read_skore_gradebook-works), #207), `findSkoreProject` (a
+gives only the periods with Skore's project `scope`, as
+[How `read_skore_gradebook` works](#how-read_skore_gradebook-works) says,
+so it is empty for a normal gradebook), `findSkoreProject` (a
 `project_id`, period by period and template by template, with
 `getProjectTemplates` and `getProjects`), `skoreProjectLevel` (a level by
 name or symbol, ignoring case and accents; one not on the scale is an error
@@ -796,7 +824,8 @@ The library takes an evaluation as `getEvaluations` lists it, so a gradebook
 tool that takes an `evaluation_id` looks it up in its period
 (`findSkoreEvaluation`): with `period_id`, one `getEvaluations` for that
 period; without it, the period Skore opens the gradebook on first, then the
-others from the last to the first, until it is found, one request per
+others from the last to the first (all of them so for a gradebook Skore
+opens on none of its periods, #226), until it is found, one request per
 period. The error for an id that is not there names the periods read, and
 says to take the id from `list_skore_evaluations`, with the `period_id` of
 its period; with a `period_id`, that the evaluation is not in that period.

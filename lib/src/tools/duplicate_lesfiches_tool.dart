@@ -36,12 +36,16 @@ const lesficheCopySuffix = ' - kopie';
 /// library throws a [SmartschoolLessonContentWriteRefusedError]: no copy
 /// was made, and the tool says the same.
 ///
-/// When some copies were made and others not, or the answer does not
-/// arrive, the library throws a
-/// [SmartschoolLessonContentSaveUnconfirmedError]: the tool reads the list
-/// again and takes the lesfiches that are new since the read before the
-/// write as the copies made, each matched with the lesfiche of its name
-/// (with " - kopie" behind it) and kind ([lesficheBulkPartialResult]).
+/// When some copies were made and others not, the library throws a
+/// [SmartschoolLessonContentBulkSaveUnconfirmedError] with each copy made
+/// paired with its lesfiche, the lesfiches the module answered with an
+/// exception, and those its answer names neither way: the tool says so
+/// from it ([lesficheBulkAnswerResult]). When the answer says nothing
+/// usable about any lesfiche (it does not arrive), the library throws a
+/// plain [SmartschoolLessonContentSaveUnconfirmedError]: the tool reads the
+/// list again and takes the lesfiches that are new since the read before
+/// the write as the copies made, each matched with the lesfiche of its
+/// name (with " - kopie" behind it) and kind ([lesficheBulkPartialResult]).
 ServerTool duplicateLesfichesTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'duplicate_lesfiches',
@@ -141,6 +145,27 @@ Future<CallToolResult> _duplicate(
           : 'the copy of ${lesficheTitles(chosen)}',
       nothingDone: nothingDone,
     );
+  } on SmartschoolLessonContentBulkSaveUnconfirmedError catch (error) {
+    return lesficheBulkAnswerResult(
+      tool: 'duplicate_lesfiches',
+      sent: _sent(chosen),
+      error: error,
+      line: (item) => formatLesficheLineNamed(item, names),
+      doneLine: (item) =>
+          '${formatLesficheLineNamed(error.copies[item]!, names)} (a copy of '
+          'id ${item.id})',
+      doneHeader: 'Copies made:',
+      failedHeader:
+          'Not copied, with the exception the module gave for each (it '
+          'answers HTTP 403 for a lesfiche in the trash):',
+      unansweredHeader:
+          'Not named in the answer, so a copy may or may not have been made: '
+          'before copying one of these again, list the lesfiches with '
+          'list_lesfiches (type all) and look for its copy, named after it '
+          'with "$lesficheCopySuffix" behind it:',
+      extra: lesficheCourseNamesNote(chosen, names),
+      advice: _partialAdvice,
+    );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
     return _notConfirmed(session, chosen, before, names, error);
   }
@@ -199,9 +224,24 @@ Never _refuseUnlisted(
   throw ToolError('${parts.join(' ')} $nothingSent');
 }
 
-/// The result when the module did not confirm the copy of [chosen]
-/// ([error]): the lesfiches new in the library since [before], read again,
-/// as the copies made.
+/// What a copy of [chosen] that the module did not confirm sent, for its
+/// result: `The copy of 2 lesfiches`.
+String _sent(List<LessonContentItem> chosen) => chosen.length == 1
+    ? 'The copy of ${lesficheTitle(chosen.single)}'
+    : 'The copy of ${chosen.length} lesfiches';
+
+/// What Claude does after a copy that the module did not confirm.
+const _partialAdvice =
+    'Do not call duplicate_lesfiches again for the lesfiches that were '
+    'copied: it would make more copies. Tell the user which were copied and '
+    'which not, and ask before copying the others again; one in the trash '
+    '(list_trashed_lesfiches) cannot be copied.';
+
+/// The result when the module's answer to the copy of [chosen] said nothing
+/// usable about any lesfiche ([error]: no answer): the lesfiches new in the
+/// library since [before], read again, as the copies made. Without the
+/// module's answer, nothing pairs a copy with its lesfiche but its name
+/// (with " - kopie" behind it) and kind.
 Future<CallToolResult> _notConfirmed(
   SmartschoolSession session,
   List<LessonContentItem> chosen,
@@ -255,9 +295,7 @@ Future<CallToolResult> _notConfirmed(
   }
   return lesficheBulkPartialResult(
     tool: 'duplicate_lesfiches',
-    sent: one
-        ? 'The copy of ${lesficheTitle(chosen.single)}'
-        : 'The copy of ${chosen.length} lesfiches',
+    sent: _sent(chosen),
     readFrom: 'the list of lesfiches',
     doneHeader: 'Copies made:',
     done: done,
@@ -270,10 +308,6 @@ Future<CallToolResult> _notConfirmed(
       ],
       ...lesficheCourseNamesNote([...chosen, ...fresh], names),
     ],
-    advice:
-        'Do not call duplicate_lesfiches again for the lesfiches that were '
-        'copied: it would make more copies. Tell the user which were copied '
-        'and which not, and ask before copying the others again; one in the '
-        'trash (list_trashed_lesfiches) cannot be copied.',
+    advice: _partialAdvice,
   );
 }

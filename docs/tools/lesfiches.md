@@ -236,7 +236,10 @@ cluster, in the order given. The lesfiches are not copied or changed: the
 cluster refers to them. A lesfiche the year plan does not take is refused
 before anything is sent. Every call adds them again, also a lesfiche that is
 in the cluster already. Asks for approval; the result shows the cluster as
-it is now.
+it is now. When Smartschool adds some of the lesfiches and not others, the
+result says which were added (Claude does not add those again), which not
+and why, and which Smartschool's answer leaves out, to check with
+`read_year_plan` first.
 
 ### `set_lesson_cluster_goals`
 
@@ -562,17 +565,19 @@ the school's course list (`getCourses`) once before the move, when one of the
 lesfiches has a course; when that list cannot be read, the move goes ahead
 and the courses are counted, with a note. `restore_lesfiches` and
 `duplicate_lesfiches` name the courses the same way. The library retries the move after logging in again, as a read.
-The module answers the move of a lesfiche that is in the trash already with
-a bare `500` (seen live; it was moved there after the tool read the list),
-and an answer whose `exceptions` are not empty is not confirmed either
-(`SmartschoolLessonContentSaveUnconfirmedError`): the tool then reads the
-trash again, in a session action of its own, and lists which lesfiches are
-in it and which are still in the library (an error result when some were
-not moved; see [How the bulk writes check an unconfirmed
-answer](#how-the-bulk-writes-check-an-unconfirmed-answer)). When that read
-fails too, the result says that some or all of them may or may not have
-been moved, and to check with `list_trashed_lesfiches`. A refusal by the
-module (`400` to `499`) says that none was moved.
+An answer whose `exceptions` are not empty is not confirmed: the result says
+from the library's record of it which lesfiches were moved, which the module
+answered with an exception (each with its status and words), and which its
+answer names neither way. The module answers the move of a lesfiche that is
+in the trash already with a bare `500` (seen live; it was moved there after
+the tool read the list), which says nothing about any lesfiche: the tool
+then reads the trash again, in a session action of its own, and lists which
+lesfiches are in it and which are still in the library. Either is an error
+result when some were not moved (see [How the bulk writes check an
+unconfirmed answer](#how-the-bulk-writes-check-an-unconfirmed-answer)). When
+that read fails too, the result says that some or all of them may or may
+not have been moved, and to check with `list_trashed_lesfiches`. A refusal
+by the module (`400` to `499`) says that none was moved.
 
 ### How `list_trashed_lesfiches` works
 
@@ -601,10 +606,11 @@ finds them no longer in the trash and sends nothing. The library retries
 the restore after logging in again, as a read.
 
 The module answers the restore of a lesfiche that is not in the trash with
-an exception (`404`, seen live), and the library throws a
-`SmartschoolLessonContentSaveUnconfirmedError` for any exception or for no
-answer: the tool reads the trash again and lists which lesfiches left it
-and which are still there. When that read fails too, maybe restored, with
+an exception (`404`, seen live): the result says from the library's record
+of the answer which lesfiches were restored, which got an exception (with
+its status and words) and which the answer names neither way. Only for no
+answer does the tool read the trash again and list which lesfiches left it
+and which are still there; when that read fails too, maybe restored, with
 `list_trashed_lesfiches` to check.
 
 ### How `duplicate_lesfiches` works
@@ -631,25 +637,44 @@ is safe: the library did not send the copy then.
 When the module refuses every lesfiche (`403`: one went to the trash after
 the read), the library throws a `SmartschoolLessonContentWriteRefusedError`
 and the tool says no copy was made, and to restore it first. When some
-copies were made and others not, or no answer came, it throws a
-`SmartschoolLessonContentSaveUnconfirmedError`: the tool reads the list
-again and takes the lesfiches new since its first read as the copies made,
-each matched with the lesfiche of its name (with ` - kopie` behind it) and
-kind. The result lists the copies made, the lesfiches without a copy, and
-any other lesfiche new in the library. When that read fails too, maybe
-made, with `list_lesfiches` to check.
+copies were made and others not, it throws a
+`SmartschoolLessonContentBulkSaveUnconfirmedError`, which pairs each copy
+made with its lesfiche: the result lists the copies made (each with the id
+of the lesfiche it copies), the lesfiches the module answered with an
+exception (`403` for one in the trash), and those its answer names neither
+way, which Claude checks with `list_lesfiches` before copying them again.
+Only when no answer came does the tool read the list again, and take the
+lesfiches new since its first read as the copies made, each matched with
+the lesfiche of its name (with ` - kopie` behind it) and kind: the result
+lists the copies made, the lesfiches without a copy, and any other lesfiche
+new in the library. When that read fails too, maybe made, with
+`list_lesfiches` to check.
 
 ### How the bulk writes check an unconfirmed answer
 
-The library names the lesfiches an unconfirmed bulk write did and did not
-do only in the message of its `SmartschoolLessonContentSaveUnconfirmedError`
-(yvanvds/dartschool#235), and the server never shows or logs that message
-(it holds names). So `trash_lesfiches`, `restore_lesfiches` and
-`duplicate_lesfiches` read again where the lesfiches are (the trash, or the
-list for a copy) and say which were done and which not
-(`lesficheBulkPartialResult`): an error result when some were not done,
-with Claude told not to repeat the ones that were. Until the library
-carries them as data (#195 tracks it), that read is the workaround.
+When the module's answer to `trash_lesfiches`, `restore_lesfiches`,
+`duplicate_lesfiches` or the lesfiches of `add_to_lesson_cluster` says
+lesfiche by lesfiche what it did, but not that it did all of it, the library
+throws a `SmartschoolLessonContentBulkSaveUnconfirmedError`: each lesfiche
+sent is in its `done` (with its copy in `copies`, from a copy), in `failed`
+(with the module's exception: its status and words, never a name) or in
+`unanswered` (the answer names it neither way). The tool says so from that
+record, without reading anything again (`lesficheBulkAnswerResult`): an
+error result, with Claude told not to repeat the ones that were done, and to
+check the ones not named with `list_trashed_lesfiches`, `list_lesfiches` or
+`read_year_plan` first.
+
+A plain `SmartschoolLessonContentSaveUnconfirmedError` means the answer
+says nothing usable about any lesfiche (no answer, a bare `500`). Only then
+does the tool read again where the lesfiches are (the trash, or the list for
+a copy), in a session action of its own, and say from that read which were
+done and which not (`lesficheBulkPartialResult`; an error result when some
+were not done). `add_to_lesson_cluster` reads nothing then: a lesfiche can
+be in a cluster twice, so the cluster cannot say which were added now, and
+the result says that they may or may not have been added, with
+`read_year_plan` to check. The library's message, which names the
+lesfiches, is never shown or logged; the log gives only the counts and
+statuses.
 
 ### How `plan_lesfiche` works
 
@@ -786,8 +811,17 @@ A text that is not a UUID is refused before any login.
   title again. When the lesfiches fail after the title, the result says
   that the title was added. The module answers a lesfiche it refuses with
   an exception for it (`403`); the library makes that a refusal when it
-  added none. The result reads the cluster back, in a session action of its
-  own.
+  added none. When it added some and not others, or its answer names a
+  lesfiche neither way, the library throws a
+  `SmartschoolLessonContentBulkSaveUnconfirmedError` (dartschool#244), and
+  the result says from that record which were added, which got an exception
+  and which the answer leaves out, as the bulk writes of the library do (see
+  [How the bulk writes check an unconfirmed
+  answer](#how-the-bulk-writes-check-an-unconfirmed-answer); #224), without
+  reading the cluster. An answer that says nothing usable (no answer,
+  another status) is "may or may not have been added", with
+  `read_year_plan` to check. Otherwise the result reads the cluster back, in
+  a session action of its own.
 - `set_lesson_cluster_goals` reads the cluster (`getCluster`), sends
   nothing when it has those goals already, checks the goals it does not
   have yet with the goal selector (`checkGoals`, as the goal writes of
@@ -806,7 +840,9 @@ so the library retries them after logging in again, and they are marked
 idempotent. A write the module refuses says so: a `404` that the year plan
 or cluster is gone, a `403` that the year plan does not take the lesfiches.
 The helpers live in `lib/src/planner/year_plans.dart`; the tests in
-`test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`.
+`test/year_plan_tools_test.dart`, against `test/support/fake_year_plans.dart`
+(`addExceptions` for a lesfiche the add answers with an exception,
+`addUnanswered` for one it adds but leaves out of its answer).
 
 Planning a cluster for classes is on the Planner page:
 [`plan_lesson_cluster`](planner.md#plan_lesson_cluster) (#196, part two of
@@ -866,9 +902,11 @@ In `lesfiche_bulk.dart`, for the bulk writes (`trash_lesfiches`,
 `maxLesficheBulkItems`), the lesfiches of a read with those ids
 (`findLesfiches`), the refusal of a kind the library cannot write
 (`refuseOtherLesficheKinds`), the lesfiches in words (`lesficheTitles`,
-`lesficheSubject`), and the read after an unconfirmed write
-(`readLesficheTrashAfter`, `readLesfichesAfter`) with its result
-(`lesficheBulkPartialResult`).
+`lesficheSubject`), the result of an unconfirmed write from the library's
+record of its answer (`lesficheBulkAnswerResult`, also for the lesfiches of
+`add_to_lesson_cluster`, #224), and, for an answer that
+says nothing usable, the read after it (`readLesficheTrashAfter`,
+`readLesfichesAfter`) with its result (`lesficheBulkPartialResult`).
 
 In `lesfiche_labels.dart`, the labels (#188): the `labels` argument of
 `create_lesfiche` and `edit_lesfiche` (`lesficheLabelsSchema`,
@@ -888,7 +926,9 @@ its attachments from the fake upload step (`fakeLesficheCreatePath`,
 `fakeNewLesficheId`), the edits, and the weblinks and attachments added,
 changed and removed, and the move of lesfiches to the trash
 (`fakeLesficheTrashPath`; a lesfiche in the trash already answered with a
-bare `500`, and `lesficheTrashExceptions` for an answer with `exceptions`),
+bare `500`, `lesficheTrashExceptions` for an answer with `exceptions` keyed
+by the lesfiche, and `lesficheBulkListExceptions` for a move or a restore
+answered with exceptions that name no lesfiche),
 with a trash (`trashedLesfiches`) whose lesfiches are read but not written,
 and no longer listed, as live. The trash is listed
 (`fakeLesficheTrashedPath`, with `lesficheTrashDates`), restored from
@@ -896,7 +936,9 @@ and no longer listed, as live. The trash is listed
 `lesficheRestoreExceptions`) and the lesfiches copied
 (`fakeLesficheDuplicatePath`: each copy with the next `fakeNewLesficheId`,
 " - kopie", and the lesfiche's labels, goals, weblinks with new ids and
-attachments; a `403` exception for one in the trash), each answer keyed by
+attachments; a `403` exception for one in the trash, and
+`lesficheDuplicateUnanswered` for a copy the answer leaves out), each answer
+keyed by
 the lesfiche as sent (`fakeLesficheRefKey`); these tools are tested in
 `test/lesfiche_copy_restore_tools_test.dart`. It serves the labels module too
 (`fakeLabelsApi`): the school's labels (`schoolLabels`) and the own ones

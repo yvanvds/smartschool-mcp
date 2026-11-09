@@ -3,6 +3,8 @@ import 'package:flutter_smartschool/flutter_smartschool.dart';
 
 import '../log.dart';
 import '../planner/lesfiche_bulk.dart';
+import '../planner/lesfiche_detail.dart';
+import '../planner/lesfiches.dart';
 import '../planner/year_plans.dart';
 import '../session.dart';
 import 'server_tool.dart';
@@ -21,6 +23,16 @@ import 'server_tool.dart';
 /// destructive for approval, and not idempotent: the module adds a title or
 /// a lesfiche again on a second call (the same lesfiche can be in a cluster
 /// twice, seen live). The result shows the cluster read back.
+///
+/// When the module's answer to the lesfiches says, lesfiche by lesfiche,
+/// which it added and which not, but not that it added all of them, the
+/// library throws a `SmartschoolLessonContentBulkSaveUnconfirmedError`
+/// (dartschool#244): the result says from that record which were added,
+/// which got an exception (with its status and words) and which the answer
+/// names neither way ([lesficheBulkAnswerResult], #224), without reading the
+/// cluster. Only an answer that says nothing usable about any lesfiche (no
+/// answer, another status) is "may or may not have been added", with
+/// `read_year_plan` to check.
 ServerTool addToLessonClusterTool(SmartschoolSession session) => ServerTool(
   definition: Tool(
     name: 'add_to_lesson_cluster',
@@ -37,9 +49,11 @@ ServerTool addToLessonClusterTool(SmartschoolSession session) => ServerTool(
         'it. A title of more than $maxYearPlanNameLength characters, and a '
         'lesfiche the year plan does not take, are refused, and nothing is '
         'added. Every call adds them again, also when they are in the '
-        'cluster already. If the result says they may or may not have been '
-        'added, do not call this tool again: check with read_year_plan, and '
-        'tell the user. The result shows the cluster as it is now. For '
+        'cluster already. If the result says the module did not confirm the '
+        'add, do not call this tool again for what it says was added, nor '
+        'for what it says may or may not have been added before checking '
+        'the cluster with read_year_plan; tell the user what was added and '
+        'what not. The result shows the cluster as it is now. For '
         'requests like "zet mijn lesfiches over lussen in de cluster '
         'Lussen, onder de titel Week 1".',
     inputSchema: Schema.object(
@@ -150,7 +164,38 @@ Future<CallToolResult> _add(
         what: 'the add of ${lesficheTitles(items)} to the lesson cluster',
         nothingDone: 'The lesfiches were not added.$titleNote',
       );
+    } on SmartschoolLessonContentBulkSaveUnconfirmedError catch (error) {
+      // The answer says lesfiche by lesfiche what the module did.
+      final check =
+          'read the cluster with read_year_plan (year_plan $planId, cluster '
+          '$clusterId): the module adds to its end';
+      return lesficheBulkAnswerResult(
+        tool: 'add_to_lesson_cluster',
+        sent: items.length == 1
+            ? 'The add of ${lesficheTitle(items.single)} to the lesson '
+                  'cluster "$clusterName"'
+            : 'The add of ${items.length} lesfiches to the lesson cluster '
+                  '"$clusterName"',
+        error: error,
+        line: _lesficheLine,
+        doneHeader:
+            'Added to the end of the cluster (a lesfiche can be in a cluster '
+            'twice, so do not add these again):',
+        failedHeader:
+            'Not added, with the exception the module gave for each (it '
+            'answers HTTP 403 for a lesfiche the year plan does not take):',
+        unansweredHeader:
+            'Not named in the answer, so they may or may not have been added '
+            '(before adding one of these again, $check):',
+        extra: [if (title != null) 'The title "$title" was added.'],
+        advice:
+            'Do not call add_to_lesson_cluster again for those added: a '
+            'second call adds them to the cluster twice. Tell the user which '
+            'were added and which not, and ask before adding the others '
+            'again.',
+      );
     } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
+      // No answer, or one that says nothing usable about any lesfiche.
       return yearPlanWriteNotConfirmed(
         tool: 'add_to_lesson_cluster',
         what: '${lesficheSubject(items)} in the lesson cluster "$clusterName"',
@@ -175,3 +220,12 @@ Future<CallToolResult> _add(
     ],
   );
 }
+
+/// One line for [item], a lesfiche of an add the module did not confirm
+/// all of, as `read_year_plan` shows a lesfiche of a cluster: kind, name and
+/// id.
+String _lesficheLine(LessonContentItem item) => [
+  formatLesficheKind(item),
+  if (item.name.isEmpty) '(no name)' else item.name,
+  'id ${item.id}',
+].join(' | ');

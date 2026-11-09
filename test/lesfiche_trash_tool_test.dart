@@ -6,8 +6,10 @@
 /// platform, answered with `{"exceptions":[]}`, and a lesfiche in the trash
 /// already with a bare `500`), after which the list leaves the lesfiches
 /// out and their detail is still served (`test/support/fake_planner.dart`).
-/// A move the module does not confirm is checked against the trash, read
-/// again (`GET lesson-content/trashed`, dartschool#227).
+/// A move whose answer says lesfiche by lesfiche what was done is told from
+/// the library's record of it, without reading again (#195); only one whose
+/// answer says nothing usable (a bare `500`, no answer) is checked against
+/// the trash, read again (`GET lesson-content/trashed`).
 library;
 
 import 'package:dart_mcp/client.dart';
@@ -20,6 +22,7 @@ import 'package:smartschool_mcp/src/tools/trash_lesfiches_tool.dart';
 import 'package:test/test.dart';
 
 import 'support/fake_smartschool.dart';
+import 'support/log_capture.dart';
 import 'support/mcp.dart';
 
 /// The lesson lesfiche and the assignment lesfiche of dartschool's capture
@@ -51,6 +54,7 @@ const _unknown = 'b0000000-0000-4000-8000-000000000099';
 void main() {
   late FakeSmartschool server;
   late FakePlanner planner;
+  late SmartschoolSession session;
   late ServerConnection connection;
 
   setUp(() async {
@@ -59,7 +63,7 @@ void main() {
       ..loadCaptures()
       ..loadLesfiches()
       ..loadLesficheDetails();
-    final session = SmartschoolSession(
+    session = SmartschoolSession(
       fakeExtensionSettings(),
       createClient: fakeClientFactory(server, await tempCache()),
     );
@@ -338,8 +342,9 @@ void main() {
       expect(planner.writes, isEmpty);
     });
 
-    test('exceptions in the answer: the trash, read again, says which were '
-        'moved and which not', () async {
+    test('an exception for one of them in the answer: the answer, as the '
+        'library records it, says which were moved and which not, without '
+        'reading the trash again (#195); the log names no lesfiche', () async {
       planner.lesficheTrashExceptions[_lesson.id] = {
         'status': 403,
         'title': 'Forbidden',
@@ -347,15 +352,24 @@ void main() {
       };
       await openSession();
 
+      final ((result, text), logged) = await captureLog(() async {
+        final (connection, _) = await connect(
+          tools: [trashLesfichesTool(session)],
+        );
+        return callTool(connection, 'trash_lesfiches', {
+          'lesfiches': [_lesson.id, _assignment.id],
+        });
+      });
+      expect(result.isError, isTrue, reason: text);
       expect(
-        await refused([_lesson.id, _assignment.id]),
+        text,
         'The move of 2 lesfiches to the trash was sent, but the Lesfiches '
-        'module did not confirm all of it. Read again after it, the trash '
-        'shows what was done.\n'
-        'In the trash now:\n'
+        'module did not confirm all of it. Its answer says what was done.\n'
+        'Moved to the trash:\n'
         '$_assignmentLine\n'
-        'Not in the trash (still in the library):\n'
-        '$_lessonLine\n'
+        'Not moved (still in the library), with the exception the module '
+        'gave for each:\n'
+        '$_lessonLine (HTTP 403, "Forbidden")\n'
         'Do not call trash_lesfiches again for those in the trash. Tell the '
         'user which were moved and which not, and ask before moving the '
         'others again. restore_lesfiches takes a lesfiche back out of the '
@@ -366,12 +380,50 @@ void main() {
         'GET $fakeLesfichesPath',
         'GET $fakeCourseListPath',
         'POST $fakeLesficheTrashPath',
-        'GET $fakeLesficheTrashedPath',
-      ]);
+      ], reason: 'no read of the trash after the move');
+      expect(
+        logged,
+        contains(
+          'trash_lesfiches: the Lesfiches module did not confirm all of a '
+          'write; its answer: 1 done, 1 with an exception (HTTP 403), 0 not '
+          'named',
+        ),
+      );
+      expect(logged, isNot(contains('Lussen')));
 
       final list = await listed();
       expect(list, contains(_lesson.id));
       expect(list, isNot(contains(_assignment.id)));
+    });
+
+    test('exceptions in the answer that name no lesfiche: maybe moved, with '
+        'list_trashed_lesfiches to check, without reading the trash '
+        'again', () async {
+      planner.lesficheBulkListExceptions.add({
+        'status': 500,
+        'title': 'Internal Server Error',
+      });
+      await openSession();
+
+      expect(
+        await refused([_lesson.id, _assignment.id]),
+        'The move of 2 lesfiches to the trash was sent, but the Lesfiches '
+        'module did not confirm all of it. Its answer says what was done.\n'
+        'Not named in the answer, so they may or may not have been moved '
+        '(list_trashed_lesfiches shows whether they are in the trash):\n'
+        '$_lessonLine\n'
+        '$_assignmentLine\n'
+        'Do not call trash_lesfiches again for those in the trash. Tell the '
+        'user which were moved and which not, and ask before moving the '
+        'others again. restore_lesfiches takes a lesfiche back out of the '
+        'trash.',
+      );
+      expect(server.requests, [
+        'GET $fakeLesfichesPath',
+        'GET $fakeCourseListPath',
+        'POST $fakeLesficheTrashPath',
+      ], reason: 'no read of the trash after the move');
+      expect(planner.trashedLesfiches, {_lesson.id, _assignment.id});
     });
 
     test('a bare 500 (the lesfiche was moved to the trash after the list was '

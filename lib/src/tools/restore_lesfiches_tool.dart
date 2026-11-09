@@ -25,9 +25,13 @@ import 'server_tool.dart';
 /// `trash_lesfiches` is.
 ///
 /// The library retries the restore after logging in again, as a read (it
-/// names what it restores). When the module does not confirm it (an
-/// exception for a lesfiche, such as the `404` of one that is no longer in
-/// the trash, or no answer), the library throws a
+/// names what it restores). When the module answers some lesfiches with an
+/// exception (such as the `404` of one that is no longer in the trash), the
+/// library throws a [SmartschoolLessonContentBulkSaveUnconfirmedError] that
+/// says which were restored, which got an exception and which the answer
+/// names neither way, and the tool says so from it
+/// ([lesficheBulkAnswerResult]). When the answer says nothing usable about
+/// any lesfiche (no answer), it throws a plain
 /// [SmartschoolLessonContentSaveUnconfirmedError]: the tool reads the trash
 /// again and says which lesfiches left it and which are still there
 /// ([lesficheBulkPartialResult]).
@@ -108,6 +112,23 @@ Future<CallToolResult> _restore(
           : 'the restore of ${lesficheTitles(chosen)} from the trash',
       nothingDone: nothingDone,
     );
+  } on SmartschoolLessonContentBulkSaveUnconfirmedError catch (error) {
+    return lesficheBulkAnswerResult(
+      tool: 'restore_lesfiches',
+      sent: _sent(chosen),
+      error: error,
+      line: (item) => formatLesficheLineNamed(item, names),
+      doneHeader: 'Out of the trash, in the library now:',
+      failedHeader:
+          'Not restored, with the exception the module gave for each (it '
+          'answers HTTP 404 for a lesfiche that is not in the trash):',
+      unansweredHeader:
+          'Not named in the answer, so they may or may not have been '
+          'restored (list_trashed_lesfiches shows whether they are still in '
+          'the trash):',
+      extra: lesficheCourseNamesNote(chosen, names),
+      advice: _partialAdvice,
+    );
   } on SmartschoolLessonContentSaveUnconfirmedError catch (error) {
     return _notConfirmed(session, chosen, names, error);
   }
@@ -159,8 +180,20 @@ Never _refuseUnlisted(
   throw ToolError('${parts.join(' ')} $nothingSent');
 }
 
-/// The result when the module did not confirm the restore of [chosen]
-/// ([error]): which of them left the trash, read again, and which not.
+/// What a restore of [chosen] that the module did not confirm sent, for its
+/// result: `The restore of 2 lesfiches`.
+String _sent(List<LessonContentItem> chosen) => chosen.length == 1
+    ? 'The restore of ${lesficheTitle(chosen.single)}'
+    : 'The restore of ${chosen.length} lesfiches';
+
+/// What Claude does after a restore that the module did not confirm.
+const _partialAdvice =
+    'Tell the user which were restored and which not, and ask before trying '
+    'the others again.';
+
+/// The result when the module's answer to the restore of [chosen] said
+/// nothing usable about any lesfiche ([error]): which of them left the
+/// trash, read again, and which not.
 Future<CallToolResult> _notConfirmed(
   SmartschoolSession session,
   List<LessonContentItem> chosen,
@@ -186,9 +219,7 @@ Future<CallToolResult> _notConfirmed(
       !inTrash.contains(item.id.toLowerCase());
   return lesficheBulkPartialResult(
     tool: 'restore_lesfiches',
-    sent: one
-        ? 'The restore of ${lesficheTitle(chosen.single)}'
-        : 'The restore of ${chosen.length} lesfiches',
+    sent: _sent(chosen),
     readFrom: 'the trash',
     doneHeader: 'Out of the trash, in the library now:',
     done: [
@@ -201,8 +232,6 @@ Future<CallToolResult> _notConfirmed(
         if (!restored(item)) '- ${formatLesficheLineNamed(item, names)}',
     ],
     extra: lesficheCourseNamesNote(chosen, names),
-    advice:
-        'Tell the user which were restored and which not, and ask before '
-        'trying the others again.',
+    advice: _partialAdvice,
   );
 }
