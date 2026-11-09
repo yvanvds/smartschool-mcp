@@ -1,6 +1,7 @@
 /// The pieces the planner tools that write share
 /// (`lib/src/planner/planner_writes.dart`): the info text Claude writes as
-/// the planner's HTML, the empty lesson hour a fill takes, and the lesson
+/// the planner's HTML and how an info is compared with it, the empty lesson
+/// hour a fill takes, and the lesson
 /// hour, the classes and the type of a new assignment. The writes
 /// themselves are tested over MCP in `planner_lesson_tools_test.dart` and
 /// `planner_assignment_tools_test.dart`.
@@ -62,6 +63,38 @@ void main() {
     test('is empty for no text', () {
       expect(plainTextToHtml(''), '');
       expect(plainTextToHtml(' \n\n \t'), '');
+    });
+  });
+
+  // As the library's PlannerService compares an info before it sends a
+  // change (its private _sameHtml, flutter_smartschool 0.4.1); a copy
+  // until the library exposes it (dartschool#250, #223).
+  group('samePlannerInfo', () {
+    test('is the same text', () {
+      expect(samePlannerInfo('', ''), isTrue);
+      expect(samePlannerInfo('<p>a</p>', '<p>a</p>'), isTrue);
+    });
+
+    test('is the same HTML written another way: a line break, a character '
+        'reference, the case of a tag', () {
+      expect(samePlannerInfo('<p>a<br>b</p>', '<p>a<br />b</p>'), isTrue);
+      expect(samePlannerInfo('<P>a<BR/>b</P>', '<p>a<br />b</p>'), isTrue);
+      expect(samePlannerInfo('<p>&quot;a&#39;</p>', '<p>"a\'</p>'), isTrue);
+      expect(samePlannerInfo('<p>caf&eacute;</p>', '<p>café</p>'), isTrue);
+      expect(samePlannerInfo('<p>caf&#233;</p>', '<p>café</p>'), isTrue);
+    });
+
+    test('is not other text or other markup', () {
+      expect(samePlannerInfo('<p>a</p>', '<p>b</p>'), isFalse);
+      expect(samePlannerInfo('<p>a</p>', ''), isFalse);
+      expect(samePlannerInfo('<p>a</p><p>b</p>', '<p>a<br />b</p>'), isFalse);
+      // A tag is not the same as its text: HTML that Claude writes shows
+      // as text (plainTextToHtml).
+      expect(
+        samePlannerInfo('<p><b>vet</b></p>', '<p>&lt;b&gt;vet&lt;/b&gt;</p>'),
+        isFalse,
+      );
+      expect(samePlannerInfo('<p>a&amp;b</p>', '<p>a&amp;amp;b</p>'), isFalse);
     });
   });
 

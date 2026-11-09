@@ -833,6 +833,92 @@ void main() {
       expect(planner.writes, isEmpty);
     });
 
+    // The library compares an info as HTML (flutter_smartschool 0.4.1):
+    // the same text and markup written another way is the same info, and it
+    // sends nothing for it. The result says so, and does not claim a change
+    // that was not sent (#222).
+    group('an info the lesson holds as the same HTML, written another way', () {
+      FakePlannedElement held({String public = '', String private = ''}) =>
+          FakePlannedElement(
+            id: 'e0000000-0000-4000-8000-000000000024',
+            type: 'planned-lessons',
+            name: 'Lussen',
+            from: plannerTime(2026, 10, 6, 10, 20),
+            to: plannerTime(2026, 10, 6, 11, 10),
+            organisers: [FakePlannerUser.me],
+            groups: [fake6A1],
+            courses: [fakeInformatica],
+            publicInfo: public,
+            privateInfo: private,
+          );
+
+      test('is not sent, and the result says nothing changed', () async {
+        // plainTextToHtml writes "a\nb" as <p>a<br />b</p>.
+        final lesson = held(public: '<p>a<br>b</p>');
+        planner.add(lesson, calendars: ['user/$fakePlannerMe']);
+
+        expect(
+          await ok('edit_planned_element', {
+            'id': lesson.ref,
+            'public_info': 'a\nb',
+          }),
+          startsWith(
+            'Nothing to change: the lesson "Lussen" on Tuesday 2026-10-06 '
+            '10:20–11:10 (6A1, informatica) already has what was given.\n'
+            '\n'
+            'Planner element ${lesson.ref}\n',
+          ),
+        );
+        expect(planner.writes, isEmpty);
+      });
+
+      test('is named as already having the value given, next to the change '
+          'that was sent', () async {
+        final lesson = held(
+          public: '<p>Breng je laptop mee.</p>',
+          private: '<P>Oefening 3<BR>Oefening &eacute;&eacute;n</P>',
+        );
+        planner.add(lesson, calendars: ['user/$fakePlannerMe']);
+        final renamed = _editPath(lesson, 'rename');
+
+        expect(
+          await ok('edit_planned_element', {
+            'id': lesson.ref,
+            'name': 'Lussen: for en while',
+            'private_info': 'Oefening 3\nOefening één',
+          }),
+          startsWith(
+            'Changed the name of the lesson "Lussen" on Tuesday 2026-10-06 '
+            '10:20–11:10 (6A1, informatica).\n'
+            'The private info already had the value given.\n',
+          ),
+        );
+        expect(planner.writes, ['POST $renamed']);
+      });
+
+      test('but HTML that Claude writes is text, not markup: an info with '
+          'the tag is changed to the text', () async {
+        final lesson = held(public: '<p><b>vet</b></p>');
+        planner.add(lesson, calendars: ['user/$fakePlannerMe']);
+        final public = _editPath(lesson, 'change-public-info');
+
+        expect(
+          await ok('edit_planned_element', {
+            'id': lesson.ref,
+            'public_info': '<b>vet</b>',
+          }),
+          startsWith(
+            'Changed the public info of the lesson "Lussen" on Tuesday '
+            '2026-10-06 10:20–11:10 (6A1, informatica).\n',
+          ),
+        );
+        expect(planner.writes, ['POST $public']);
+        expect(bodiesTo(public), [
+          {'newInfo': '<p>&lt;b&gt;vet&lt;/b&gt;</p>'},
+        ]);
+      });
+    });
+
     test('changes an own assignment at its own route', () async {
       planner.add(
         _ownAssignment,

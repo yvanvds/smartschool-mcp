@@ -241,9 +241,7 @@ server turns the text into the HTML the planner's own editor makes
 escaping `&`, `<` and `>`. Quotes stay as they are: they are not markup in
 text content, and the planner keeps them as quotes (it answers `&quot;` and
 `&#39;` as `"` and `'`, seen live in #72). The HTML sent is then the info as
-the planner keeps it, which `edit_planned_element` relies on: the library
-compares an info as HTML (`&quot;` and `"` alike), but the tool's "already
-had the value given" compares it as it is.
+the planner keeps it.
 
 The tool is marked destructive, so Claude Desktop asks for approval every
 time, and Claude is told to show the user every hour and wait for the user's
@@ -263,7 +261,14 @@ It changes `name`, `public_info` and/or `private_info` (plain text, as
 `read_curriculum` shows them), by the element's id (`renameElement`,
 `changePublicInfo`, `changePrivateInfo`, `changeGoals` of dartschool#226, in
 that order). Marked destructive and idempotent: each change sets a value,
-and the library sends nothing for a value the element already has. The goals
+and the library sends nothing for a value the element already has. It
+compares an info as HTML (since flutter_smartschool 0.4.1): the same text
+and markup, written another way (`<br>` and `<br />`, `&quot;` and `"`), is
+the same info. The result says "already had the value given" (or "Nothing
+to change") exactly when the library sent nothing: `_Field.has` compares an
+info the same way, with `samePlannerInfo` in `planner_writes.dart`, a copy
+of the library's private comparison (#222) until the library exposes it
+(dartschool#250, #223). The goals
 are checked with the goal selector (at `GoalLocation.plannerLessonContent`)
 before any change is sent, and the answer names them, as
 `read_planned_element` does, when they were among the changes; goals for an
