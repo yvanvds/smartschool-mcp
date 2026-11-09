@@ -83,6 +83,7 @@ Future<CallToolResult> _add(
       tool: 'add_lesson_cluster',
       what: 'The lesson cluster "$name" of the year plan "$planName"',
       done: 'added',
+      why: 'a second call could add it twice',
       check:
           'read the year plan with read_year_plan (year_plan $planId) to '
           'see whether it is there',

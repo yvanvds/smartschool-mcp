@@ -389,12 +389,15 @@ ToolError? yearPlanWriteToolError(
 
 /// The result of a year-plan write that went out without the module
 /// confirming it ([error]): [what] (like `The year plan "Informatica 5"`)
-/// may or may not have been [done]. [also] comes after that. Claude must
-/// not call [tool] again for it, but first [check] and tell the user.
+/// may or may not have been [done] (a past participle). [also] comes after
+/// that. Claude must not call [tool] again for it ([why] says what a second
+/// call could do, like `a second call could add it twice`: its own words,
+/// not [done]'s, #225), but first [check] and tell the user.
 CallToolResult yearPlanWriteNotConfirmed({
   required String tool,
   required String what,
   required String check,
+  required String why,
   required SmartschoolLessonContentSaveUnconfirmedError error,
   String done = 'made',
   String? also,
@@ -412,8 +415,8 @@ CallToolResult yearPlanWriteNotConfirmed({
           '$what may or may not have been $done: it was sent, but the '
               'Lesfiches module did not confirm it.',
           ?also,
-          'Do not call $tool again for it: a second call could $done it '
-              'twice. First $check. Then tell the user what you found.',
+          'Do not call $tool again for it: $why. First $check. Then tell the '
+              'user what you found.',
         ].join(' '),
       ),
     ],
