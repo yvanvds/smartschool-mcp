@@ -413,6 +413,41 @@ void main() {
     },
   );
 
+  test('create_year_plan and add_lesson_cluster: a create the module does '
+      'not confirm may or may not have been made, in plain English (#225), '
+      'and is sent once', () async {
+    yearPlans.lostAnswers.add(_yearPlansPath);
+    expect(
+      await error('create_year_plan', {'name': 'Informatica 6'}),
+      'The year plan "Informatica 6" may or may not have been made: it was '
+      'sent, but the Lesfiches module did not confirm it. Do not call '
+      'create_year_plan again for it: a second call could make it twice. '
+      'First list the year plans with list_year_plans to see whether it is '
+      'there. Then tell the user what you found.',
+    );
+
+    addPlan();
+    const clustersPath =
+        '$fakeYearPlansApi/$fakePlannerMe/4069/$_planId/lesson-clusters';
+    yearPlans.lostAnswers.add(clustersPath);
+    expect(
+      await error('add_lesson_cluster', {
+        'year_plan': _planId,
+        'name': 'Sorteren',
+      }),
+      'The lesson cluster "Sorteren" of the year plan "Informatica 5" may '
+      'or may not have been added: it was sent, but the Lesfiches module did '
+      'not confirm it. Do not call add_lesson_cluster again for it: a second '
+      'call could add it twice. First read the year plan with read_year_plan '
+      '(year_plan $_planId) to see whether it is there. Then tell the user '
+      'what you found.',
+    );
+    expect(yearPlans.writes, [
+      'POST $_yearPlansPath',
+      'POST $clustersPath',
+    ], reason: 'each sent once, never again after the lost answer');
+  });
+
   test('add_to_lesson_cluster refuses a lesfiche the year plan does not '
       'take, and nothing to add, before anything is sent', () async {
     addPlan(filter: 'none');
@@ -442,7 +477,8 @@ void main() {
   });
 
   test('add_to_lesson_cluster: a title the module does not confirm is maybe '
-      'added, and the lesfiches are not sent', () async {
+      'added, in plain English (#225), and the lesfiches are not '
+      'sent', () async {
     addPlan();
     yearPlans.lostAnswers.add('$_clusterPath/titles');
     final text = await error('add_to_lesson_cluster', {
@@ -453,14 +489,12 @@ void main() {
     });
     expect(
       text,
-      allOf(
-        contains(
-          'The title "Week 2" of the lesson cluster "Lussen" may or may '
-          'not have been added',
-        ),
-        contains('The lesfiches were not sent.'),
-        contains('Do not call add_to_lesson_cluster again'),
-      ),
+      'The title "Week 2" of the lesson cluster "Lussen" may or may not have '
+      'been added: it was sent, but the Lesfiches module did not confirm it. '
+      'The lesfiches were not sent. Do not call add_to_lesson_cluster again '
+      'for it: a second call could add it twice. First read the cluster with '
+      'read_year_plan (year_plan $_planId, cluster $_clusterId) to see '
+      'whether it is there. Then tell the user what you found.',
     );
     expect(yearPlans.writes, ['POST $_clusterPath/titles']);
   });
@@ -570,16 +604,42 @@ void main() {
         ),
         contains('The title "Week 2" was added.'),
         contains(
-          'read the cluster with read_year_plan (year_plan $_planId, cluster '
-          '$_clusterId) to see which are there',
+          // In plain English (#225).
+          'Do not call add_to_lesson_cluster again for it: a second call '
+          'could add them twice. First read the cluster with '
+          'read_year_plan (year_plan $_planId, cluster $_clusterId) to see '
+          'which are there.',
         ),
-        contains('Do not call add_to_lesson_cluster again'),
       ),
     );
     expect(yearPlans.writes, [
       'POST $_clusterPath/titles',
       'POST $_clusterPath/lesson-content-from-teaching-assignment',
     ], reason: 'sent once, never again after the lost answer');
+  });
+
+  test('add_to_lesson_cluster: one lesfiche without an answer may or may not '
+      'have been added, in plain English (#225)', () async {
+    addPlan();
+    yearPlans.lostAnswers.add(
+      '$_clusterPath/lesson-content-from-teaching-assignment',
+    );
+    expect(
+      await error('add_to_lesson_cluster', {
+        'year_plan': _planId,
+        'cluster': _clusterId,
+        'lesfiches': [_lussen2.id],
+      }),
+      'The lesson lesfiche "Lussen 2" in the lesson cluster "Lussen" may or '
+      'may not have been added: it was sent, but the Lesfiches module did '
+      'not confirm it. Do not call add_to_lesson_cluster again for it: a '
+      'second call could add it twice. First read the cluster with '
+      'read_year_plan (year_plan $_planId, cluster $_clusterId) to see which '
+      'are there. Then tell the user what you found.',
+    );
+    expect(yearPlans.writes, [
+      'POST $_clusterPath/lesson-content-from-teaching-assignment',
+    ]);
   });
 
   test('set_lesson_cluster_goals checks the new goals with the goal selector, '

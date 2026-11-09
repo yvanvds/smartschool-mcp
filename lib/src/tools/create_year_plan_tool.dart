@@ -78,6 +78,7 @@ Future<CallToolResult> _create(
     return yearPlanWriteNotConfirmed(
       tool: 'create_year_plan',
       what: 'The year plan "$name"',
+      why: 'a second call could make it twice',
       check:
           'list the year plans with list_year_plans to see whether it is '
           'there',

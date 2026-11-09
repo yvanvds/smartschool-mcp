@@ -67,11 +67,27 @@ final class UserRecipient extends Recipient {
   }
 
   /// A person of another school of the school group has their school's
-  /// platform as [MessageSearchUser.ssId], and its name as
-  /// [MessageSearchUser.platformName], which Smartschool leaves empty for
-  /// the own school (yvanvds/dartschool#238, seen live on 2026-11-09).
+  /// platform as [MessageSearchUser.ssId] (yvanvds/dartschool#238), which
+  /// the library compares with the own platform for
+  /// [MessageSearchUser.otherSchool] (yvanvds/dartschool#246). So a person of
+  /// the own school has no platform, whether or not the search included the
+  /// people of the other schools (#219): with that option on, Smartschool
+  /// names the own school in [MessageSearchUser.platformName] too (seen live
+  /// on 2026-11-09), so the platform name does not tell.
+  ///
+  /// When the library cannot tell ([MessageSearchUser.otherSchool] `null`: a
+  /// compose form that does not name the own platform, which has not been
+  /// seen, or an answer without `ssID`), a platform name still marks another
+  /// school, as it does for a search with the option off. A person of the
+  /// own school found with the option on then gets the own platform, and a
+  /// reference without it stops `send_message` with that reference listed,
+  /// rather than a person of another school losing their platform.
   @override
-  int? get platform => user.platformName == null ? null : user.ssId;
+  int? get platform => switch (user.otherSchool) {
+    true => user.ssId,
+    false => null,
+    null => user.platformName == null ? null : user.ssId,
+  };
 
   @override
   String? get details {

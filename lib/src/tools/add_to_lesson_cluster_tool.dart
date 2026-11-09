@@ -141,6 +141,7 @@ Future<CallToolResult> _add(
       tool: 'add_to_lesson_cluster',
       what: 'The title "$title" of the lesson cluster "$clusterName"',
       done: 'added',
+      why: 'a second call could add it twice',
       also: ids.isEmpty ? null : 'The lesfiches were not sent.',
       check:
           'read the cluster with read_year_plan (year_plan $planId, '
@@ -200,6 +201,9 @@ Future<CallToolResult> _add(
         tool: 'add_to_lesson_cluster',
         what: '${lesficheSubject(items)} in the lesson cluster "$clusterName"',
         done: 'added',
+        why:
+            'a second call could add ${items.length == 1 ? 'it' : 'them'} '
+            'twice',
         also: titleNote.isEmpty ? null : titleNote.trim(),
         check:
             'read the cluster with read_year_plan (year_plan $planId, '

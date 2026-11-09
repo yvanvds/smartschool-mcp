@@ -27,7 +27,9 @@ ServerTool searchRecipientsTool(SmartschoolSession session) => ServerTool(
         'group goes to all its members. With include_other_schools true, it '
         'also finds the people of the other schools of the school group; '
         'each of them is listed with ", platform <id>" in the brackets and '
-        'their school after the "|". Finding recipients changes nothing in '
+        'their school after the "|". The people of the own school are '
+        'listed without a platform, with include_other_schools or without '
+        'it. Finding recipients changes nothing in '
         'Smartschool: a switch of include_other_schools is set back after '
         'the search.',
     inputSchema: Schema.object(
