@@ -375,14 +375,15 @@ void main() {
         'may change it\n'
         '  Goed gewerkt.',
       );
-      // The tool's reads (the school year from memory) and its read of the
-      // pupil's feedback; then the library's checks, its read of the
-      // feedback, the create, and the feedback read again to check it.
+      // The tool's reads (the school year from memory); then the library's
+      // checks, its read of the pupil's feedback, the create, and the
+      // feedback read again to check it. The tool does not read the
+      // feedback itself (#149).
       expect(skore.calls, [..._toolReads.skip(2), ..._libraryReads]);
       expect([
         for (final read in skore.feedbackReads)
           (read.evaluationId, read.pupilId),
-      ], List.filled(3, (500003, 1201)));
+      ], List.filled(2, (500003, 1201)));
       final create = skore.feedbackSaves.single;
       expect(create.path, fakeSkoreFeedbackCreatePath);
       expect(create.body, _createBody('Goed gewerkt.'));
@@ -619,9 +620,8 @@ void main() {
 
       tearDown(() {
         expect(skore.feedbackSaves, isEmpty);
-        // The tool's own read of the pupil's feedback; the library refused
-        // before it read the feedback.
-        expect(skore.feedbackReads, hasLength(1));
+        // The library refused before it read the pupil's feedback.
+        expect(skore.feedbackReads, isEmpty);
         expect(skore.calls, [
           ..._toolReads,
           ..._libraryReads,
@@ -782,8 +782,9 @@ void main() {
       });
     });
 
-    group('refused in its own words, with what to tell the user, before the '
-        'library is asked:', () {
+    group('refused by the library right before the save, from the pupil\'s '
+        'feedback as it read it then, in the tool\'s own words, with what to '
+        'tell the user (dartschool#158, #149):', () {
       test('the user has more than one feedback of their own for the pupil '
           'there', () async {
         evaluation(500003).feedback[1202]!.add(
@@ -830,42 +831,40 @@ void main() {
 
       tearDown(() {
         expect(skore.feedbackSaves, isEmpty);
-        expect(skore.calls, _toolReads, reason: 'the library was not asked');
-        expect(skore.feedbackReads, hasLength(1));
+        expect(skore.calls, [
+          ..._toolReads,
+          ..._libraryReads,
+        ], reason: 'the library refused it after its checks, saving nothing');
+        expect(
+          skore.feedbackReads,
+          hasLength(1),
+          reason: 'the library\'s read only',
+        );
       });
     });
 
-    test('the feedback changes between the tool\'s read and the library\'s: '
-        'the library refuses it, and its reason is passed on', () async {
-      var reads = 0;
-      skore.beforeAnswer = (rpc, params) {
-        if (rpc == 'getEvaluations' && ++reads == 2) {
-          evaluation(500003).feedback[1201] = [
-            const FakeSkoreFeedback(
-              '00000000-0000-4000-8000-000000000007',
-              'A',
-            ),
-            const FakeSkoreFeedback(
-              '00000000-0000-4000-8000-000000000008',
-              'B',
-            ),
-          ];
-        }
-      };
+    test('another refusal of the library\'s checks, such as a closed period: '
+        'its reason is passed on, with what to read again', () async {
+      final periods = book().periods;
+      final open = periods.single;
+      periods[0] = FakeSkoreGradebookPeriod(
+        open.id,
+        open.name,
+        open: false,
+        timestamp: open.timestamp,
+        note: open.note,
+      );
 
       expect(
         await refused('Goed gewerkt.'),
-        _refused(
-          'you gave pupil 1201 2 feedbacks on evaluation 500003 ("Toets 1") '
-          'in period DW1 (1704) of gradebook 32508 already '
-          '(00000000-0000-4000-8000-000000000007, '
-          '00000000-0000-4000-8000-000000000008): the library changes none of '
-          'them, as it cannot tell which one is meant. Keep one in '
-          'Smartschool.',
-        ),
+        _refused('period DW1 (1704) of gradebook 32508 is closed.'),
       );
       expect(skore.feedbackSaves, isEmpty);
-      expect(skore.calls, [..._toolReads, ..._libraryReads]);
+      expect(skore.feedbackReads, isEmpty);
+      expect(skore.calls, [
+        ..._toolReads,
+        ..._libraryReads.take(2),
+      ], reason: 'the library refused it once it read the period');
     });
 
     test('published between the tool\'s read and the library\'s: the '
@@ -1031,8 +1030,8 @@ void main() {
     expect(between, contains('POST /login'));
     expect(
       between.where((r) => r.startsWith('GET $fakeSkoreFeedbackPath')),
-      hasLength(2),
-      reason: 'the tool and the library read the feedback again',
+      hasLength(1),
+      reason: 'the library reads the feedback again',
     );
     expect([for (final f in feedbackOf(1201)) f.text], ['Goed gewerkt.']);
   });
