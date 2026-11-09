@@ -32,8 +32,9 @@ const _tool = 'save_skore_grades';
 /// the library does not save, and one the library could not read, are
 /// refused in the tool's own words before the library is asked
 /// ([_checkInPoints], #169). An evaluation its pupils see (published or
-/// scheduled) is refused unless `allow_published` is true
-/// ([checkSkoreWritePublication]). The library
+/// scheduled) is refused unless `allow_published` is true: the library
+/// refuses it right before the save, and the tool says what the pupils would
+/// see ([skorePublishedEvaluationToolError]). The library
 /// reads the gradebook again and refuses the whole list when one grade does
 /// not fit, saving nothing; it saves one pupil at a time and reads the
 /// period again to confirm them. Grades it cannot confirm are reported per
@@ -206,23 +207,23 @@ Future<CallToolResult> _save(
         // The library refuses both as well, after reading Skore again, in
         // words for a caller of the library (#169).
         _checkInPoints(to);
-        // The library refuses it as well, but its refusal cannot be told
-        // apart from the others (dartschool#157, #148).
-        checkSkoreWritePublication(
-          evaluation,
-          where: _where(to),
-          what: 'the grades',
-          tool: _tool,
-          allowPublished: allowPublished,
-        );
         target = to;
-        final saved = await gradebooks.saveGrades(
-          sheet.gradebook,
-          evaluation,
-          grades,
-          allowPublished: allowPublished,
-        );
-        return (to, saved);
+        try {
+          final saved = await gradebooks.saveGrades(
+            sheet.gradebook,
+            evaluation,
+            grades,
+            allowPublished: allowPublished,
+          );
+          return (to, saved);
+        } on SmartschoolSkoreEvaluationPublishedError catch (error) {
+          throw skorePublishedEvaluationToolError(
+            error,
+            where: _where(to),
+            what: 'the grades',
+            tool: _tool,
+          );
+        }
       },
     );
     return CallToolResult(

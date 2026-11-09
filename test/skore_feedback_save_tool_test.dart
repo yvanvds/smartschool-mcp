@@ -588,8 +588,8 @@ void main() {
     });
 
     group('a published or scheduled evaluation without allow_published: '
-        'refused before the feedback is read, saying what the pupil would '
-        'see and that the user must say yes to it', () {
+        'refused by the library right before the save, saying what the pupil '
+        'would see and that the user must say yes to it', () {
       test('published', () async {
         expect(
           await refused('Goed gewerkt.', {'evaluation_id': 500002}),
@@ -619,8 +619,13 @@ void main() {
 
       tearDown(() {
         expect(skore.feedbackSaves, isEmpty);
-        expect(skore.feedbackReads, isEmpty);
-        expect(skore.calls, _toolReads, reason: 'the library was not asked');
+        // The tool's own read of the pupil's feedback; the library refused
+        // before it read the feedback.
+        expect(skore.feedbackReads, hasLength(1));
+        expect(skore.calls, [
+          ..._toolReads,
+          ..._libraryReads,
+        ], reason: 'the library refused it after its checks, saving nothing');
       });
     });
 
@@ -858,6 +863,28 @@ void main() {
           'them, as it cannot tell which one is meant. Keep one in '
           'Smartschool.',
         ),
+      );
+      expect(skore.feedbackSaves, isEmpty);
+      expect(skore.calls, [..._toolReads, ..._libraryReads]);
+    });
+
+    test('published between the tool\'s read and the library\'s: the '
+        'library refuses it, and the tool says what the pupil would see, '
+        'from the evaluation as the library read it', () async {
+      var reads = 0;
+      skore.beforeAnswer = (rpc, params) {
+        if (rpc == 'getEvaluations' && ++reads == 2) {
+          evaluation(500003).public = '1';
+        }
+      };
+
+      expect(
+        await refused('Goed gewerkt.'),
+        'The $_toetsName in $_where is PUBLISHED: its pupils would see the '
+        'feedback at once, and the school sends them a notification. Tell '
+        'the user exactly that, and only if the user explicitly says yes to '
+        'it, call save_skore_feedback again with allow_published: true. '
+        'Nothing was changed in Skore.',
       );
       expect(skore.feedbackSaves, isEmpty);
       expect(skore.calls, [..._toolReads, ..._libraryReads]);
