@@ -353,7 +353,10 @@ void main() {
     ]);
     final recipientsSchema = tools['search_recipients']!['inputSchema'] as Map;
     expect(recipientsSchema['required'], ['query']);
-    expect((recipientsSchema['properties'] as Map).keys, ['query']);
+    expect((recipientsSchema['properties'] as Map).keys, [
+      'query',
+      'include_other_schools',
+    ]);
     // Like a reply: sending cannot be undone, so Claude Desktop asks for
     // approval.
     final send = tools['send_message'] as Map;

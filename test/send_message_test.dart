@@ -39,9 +39,30 @@ void _fill(FakeMailbox mailbox) => mailbox.directory.addAll([
   const FakeRecipient.user('An Claes', id: 1007),
   const FakeRecipient.user('Els Wouters', id: 1008),
   const FakeRecipient.user('Directie', id: 1050),
+  const FakeRecipient.user('Lies Maes', id: 1010),
   const FakeRecipient.group('5GZ', id: 298, description: '5 Grieks-Ziekenzorg'),
   const FakeRecipient.group('Directie', id: 320, description: 'Directieteam'),
+  // People of another school of the school group, whom the search finds
+  // only with the option "Toon personen van andere scholen" on.
+  const FakeRecipient.user(
+    'Ned Flanders',
+    id: 2231,
+    className: 'Klas: 4A',
+    school: _otherSchool,
+    platform: 5810,
+  ),
+  const FakeRecipient.user(
+    'Lies Maes',
+    id: 2010,
+    school: _otherSchool,
+    platform: 5810,
+  ),
 ]);
+
+const _otherSchool = 'Sint-Lodewijkscollege';
+const _ned = 'Ned Flanders (user 2231, platform 5810)';
+const _otherLies =
+    'Lies Maes (user 2010, platform 5810) | school: $_otherSchool';
 
 void main() {
   late FakeSmartschool server;
@@ -93,13 +114,32 @@ void main() {
     return text;
   }
 
-  Future<String> search(String query) async {
+  Future<String> search(String query, {bool? otherSchools}) async {
     final (result, text) = await callTool(connection, 'search_recipients', {
       'query': query,
+      'include_other_schools': ?otherSchools,
     });
     expect(result.isError, isNot(true), reason: text);
     return text;
   }
+
+  /// Calls search_recipients and expects an error result.
+  Future<String> searchError(Map<String, Object?> arguments) async {
+    final (result, text) = await callTool(
+      connection,
+      'search_recipients',
+      arguments,
+    );
+    expect(result.isError, isTrue, reason: text);
+    return text;
+  }
+
+  /// The searches and the switches of the option "Toon personen van andere
+  /// scholen", in order.
+  List<String> searchesAndSwitches() => [
+    for (final action in mailbox.actions)
+      if (action.startsWith('search ') || action.startsWith('switch ')) action,
+  ];
 
   List<String> sends() => [
     for (final action in mailbox.actions)
@@ -145,6 +185,17 @@ void main() {
         'description': isA<String>(),
         'minLength': 1,
       });
+      expect(search.inputSchema.properties!['include_other_schools'], {
+        'type': 'boolean',
+        'description': contains('Toon personen van andere scholen'),
+      });
+      expect(
+        search.description,
+        contains(
+          'With include_other_schools true, it also finds the people of the '
+          'other schools of the school group',
+        ),
+      );
     });
 
     test('send_message as destructive and not idempotent, telling Claude to '
@@ -304,6 +355,118 @@ void main() {
       expect(server.requests, isEmpty);
     });
 
+    test('with include_other_schools true, also lists the people of the '
+        'other schools, with their platform and school, and sets the option '
+        'back', () async {
+      expect(
+        await search('Maes', otherSchools: true),
+        'Smartschool finds 2 users for "Maes":\n'
+        '- Lies Maes (user 1010)\n'
+        '- $_otherLies',
+      );
+      expect(
+        await search('Ned', otherSchools: true),
+        'Smartschool finds 1 user for "Ned":\n'
+        '- $_ned | school: $_otherSchool, Klas: 4A',
+      );
+
+      expect(searchesAndSwitches(), [
+        'search val=Maes',
+        'switch other schools val=1',
+        'search val=Maes',
+        'switch other schools val=0',
+        'search val=Ned',
+        'switch other schools val=1',
+        'search val=Ned',
+        'switch other schools val=0',
+      ]);
+      expect(mailbox.otherSchools, isFalse);
+      expect(mailbox.submits, 0);
+    });
+
+    test('with include_other_schools false, the own school only, also when '
+        'the account has the option on, which it then sets back', () async {
+      mailbox.otherSchools = true;
+
+      expect(
+        await search('Maes', otherSchools: false),
+        'Smartschool finds 1 user for "Maes":\n'
+        '- Lies Maes (user 1010)',
+      );
+
+      expect(searchesAndSwitches(), [
+        'search val=Maes',
+        'switch other schools val=0',
+        'search val=Maes',
+        'switch other schools val=1',
+      ]);
+      expect(mailbox.otherSchools, isTrue);
+    });
+
+    test('without include_other_schools, searches as the account has the '
+        'option set and switches nothing', () async {
+      expect(
+        await search('Maes'),
+        'Smartschool finds 1 user for "Maes":\n'
+        '- Lies Maes (user 1010)',
+      );
+      mailbox.otherSchools = true;
+      expect(
+        await search('Maes'),
+        'Smartschool finds 2 users for "Maes":\n'
+        '- Lies Maes (user 1010)\n'
+        '- $_otherLies',
+      );
+
+      expect(searchesAndSwitches(), ['search val=Maes', 'search val=Maes']);
+    });
+
+    test('with include_other_schools true, says so when Smartschool does not '
+        'offer the option to the account, and switches nothing', () async {
+      mailbox.otherSchoolsOffered = false;
+
+      final text = await searchError({
+        'query': 'Maes',
+        'include_other_schools': true,
+      });
+
+      expect(
+        text,
+        startsWith(
+          'Smartschool could not look up recipients with its option "Toon '
+          'personen van andere scholen" on, and nothing was sent: Smartschool '
+          'does not offer the option "Toon personen van andere scholen" to '
+          'this account',
+        ),
+      );
+      expect(text, isNot(contains('#238')));
+      expect(searchesAndSwitches(), ['search val=Maes']);
+    });
+
+    test(
+      'says that the option may be left on when it cannot be set back',
+      () async {
+        mailbox.answerSwitches = false;
+
+        final text = await searchError({
+          'query': 'Maes',
+          'include_other_schools': true,
+        });
+
+        expect(
+          text,
+          startsWith(
+            'Smartschool could not look up recipients with its option "Toon '
+            'personen van andere scholen" on, and nothing was sent: the option '
+            '"Toon personen van andere scholen" could not be set back off',
+          ),
+        );
+        expect(text, contains('set it back with the checkbox'));
+        expect(text, isNot(contains('SmartschoolComposeError')));
+        expect(text, isNot(contains('#238')));
+      },
+    );
+
     test('says so when Smartschool does not open its compose form', () async {
       mailbox.composeTokens = false;
 
@@ -323,6 +486,32 @@ void main() {
 
   group('send_message sends a new message once, to exactly the recipients '
       'named', () {
+    test('a person of another school, by the reference with the platform: '
+        'every name is looked up with the people of the other schools, and '
+        'the option is set back', () async {
+      expect(
+        await ok({
+          'to': [_ned, 'An Claes'],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        'Sent the message.\n'
+        'To: Ned Flanders, An Claes\n'
+        'Subject: Uitstap',
+      );
+      expect(sends(), [
+        'send to=Ned Flanders,An Claes cc= bcc= subject=Uitstap',
+      ], reason: 'registered on the form with the platform of their school');
+      expect(searchesAndSwitches(), [
+        'search val=Ned Flanders',
+        'switch other schools val=1',
+        'search val=Ned Flanders',
+        'search val=An Claes',
+        'switch other schools val=0',
+      ]);
+      expect(mailbox.otherSchools, isFalse);
+    });
+
     test('a recipient whose name only one user has, by name', () async {
       expect(
         await ok({
@@ -492,6 +681,61 @@ void main() {
 
   group('nothing is sent when a recipient does not name exactly one user or '
       'group', () {
+    test(
+      'a name that a person of another school has too, when another '
+      'recipient has the people of the other schools looked up: both are '
+      'listed, and a reference without a platform names the own school',
+      () async {
+        expect(
+          await error({
+            'to': [_ned],
+            'cc': ['Lies Maes'],
+            'subject': 'Uitstap',
+            'body': 'Hallo',
+          }),
+          'Nothing was sent: not every recipient names exactly one user or '
+          'group.\n'
+          '- "Lies Maes": Smartschool finds 2 users with that name. They '
+          'are:\n'
+          '  - Lies Maes (user 1010)\n'
+          '  - $_otherLies\n'
+          '$_choose',
+        );
+        expect(mailbox.submits, 0);
+        expect(mailbox.otherSchools, isFalse);
+
+        expect(
+          await ok({
+            'to': [_ned],
+            'cc': ['Lies Maes (user 1010)'],
+            'subject': 'Uitstap',
+            'body': 'Hallo',
+          }),
+          startsWith('Sent the message.\nTo: Ned Flanders\nCC: Lies Maes\n'),
+        );
+        expect(sends(), [
+          'send to=Ned Flanders cc=Lies Maes #1010 bcc= subject=Uitstap',
+        ]);
+      },
+    );
+
+    test('a person of another school by name alone, while the account has '
+        'the option off: not found, and nothing is switched', () async {
+      expect(
+        await error({
+          'to': ['Ned Flanders'],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        'Nothing was sent: not every recipient names exactly one user or '
+        'group.\n'
+        '- "Ned Flanders": Smartschool finds no user or group with exactly '
+        'that name.\n'
+        '$_choose',
+      );
+      expect(searchesAndSwitches(), ['search val=Ned Flanders']);
+    });
+
     test('several users have the name: they are listed for the user to '
         'choose, and the one chosen gets the message', () async {
       expect(
@@ -646,6 +890,26 @@ void main() {
   });
 
   group('nothing is sent when', () {
+    test('a recipient of another school, and Smartschool does not offer '
+        'the account the people of other schools', () async {
+      mailbox.otherSchoolsOffered = false;
+
+      expect(
+        await error({
+          'to': [_ned],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        startsWith(
+          'Smartschool could not look up recipients with its option "Toon '
+          'personen van andere scholen" on, and nothing was sent: Smartschool '
+          'does not offer the option',
+        ),
+      );
+      expect(searchesAndSwitches(), ['search val=Ned Flanders']);
+      expect(mailbox.submits, 0);
+    });
+
     test('a recipient is in two fields', () async {
       expect(
         await error({

@@ -24,8 +24,12 @@ ServerTool searchRecipientsTool(SmartschoolSession session) => ServerTool(
         'before send_message to show the user exactly who a message will go '
         'to. When it finds several users or groups for a name, or none, ask '
         'the user who they mean: never choose for them. A message to a '
-        'group goes to all its members. Finding recipients changes nothing '
-        'in Smartschool.',
+        'group goes to all its members. With include_other_schools true, it '
+        'also finds the people of the other schools of the school group; '
+        'each of them is listed with ", platform <id>" in the brackets and '
+        'their school after the "|". Finding recipients changes nothing in '
+        'Smartschool: a switch of include_other_schools is set back after '
+        'the search.',
     inputSchema: Schema.object(
       properties: {
         'query': Schema.string(
@@ -33,6 +37,17 @@ ServerTool searchRecipientsTool(SmartschoolSession session) => ServerTool(
               'The name to look for: a first name, a last name or both, or '
               'the name of a group or class.',
           minLength: 1,
+        ),
+        'include_other_schools': Schema.bool(
+          description:
+              'true to also find the people of the other schools of the '
+              'school group, as the checkbox "Toon personen van andere '
+              'scholen" under the search results of Smartschool\'s compose '
+              'form does; false for the own school only. Leave it out to '
+              'search as that checkbox is set for the account. The checkbox '
+              'is a setting of the account: the tool switches it for the '
+              'search only when it differs, and sets it back afterwards. '
+              'Use true when the user asks for someone of another school.',
         ),
       },
       required: ['query'],
@@ -55,9 +70,15 @@ Future<CallToolResult> _search(
   if (query.isEmpty) {
     throw const ToolError('query is empty: pass the name to look for.');
   }
+  // The server checks the arguments against the input schema.
+  final includeOtherSchools = arguments['include_other_schools'] as bool?;
   final found = await withMessages(
     session,
-    (messages) => searchRecipients(messages, query),
+    (messages) => searchRecipients(
+      messages,
+      query,
+      includeOtherSchools: includeOtherSchools,
+    ),
   );
   return CallToolResult(
     content: [TextContent(text: formatRecipients(query, found))],

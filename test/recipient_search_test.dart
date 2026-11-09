@@ -14,6 +14,8 @@ UserRecipient _user(
   String? className,
   String? coaccountName,
   int ssId = 4069,
+  String schoolName = 'Sint-Jozefscollege',
+  String? platformName,
 }) => UserRecipient(
   MessageSearchUser(
     userId: id,
@@ -22,7 +24,29 @@ UserRecipient _user(
     userLt: userLt,
     className: className,
     coaccountName: coaccountName,
+    schoolName: schoolName,
+    platformName: platformName,
   ),
+);
+
+/// A person of another school of the school group, as a search with the
+/// people of other schools finds them: on that school's platform, which
+/// [MessageSearchUser.platformName] names (yvanvds/dartschool#238).
+UserRecipient _elsewhere(
+  String name,
+  int id, {
+  int userLt = 0,
+  String? className,
+  String? coaccountName,
+}) => _user(
+  name,
+  id,
+  userLt: userLt,
+  className: className,
+  coaccountName: coaccountName,
+  ssId: 5810,
+  schoolName: 'Sint-Lodewijkscollege',
+  platformName: 'Sint-Lodewijkscollege',
 );
 
 GroupRecipient _group(String name, int id, {String? description}) =>
@@ -61,6 +85,37 @@ void main() {
       );
     });
 
+    test('a person of another school with the platform in the brackets, and '
+        'the school first after the "|"', () {
+      final ned = _elsewhere('Ned Flanders', 2231, className: 'Klas: 4A');
+      expect(ned.platform, 5810);
+      expect(ned.reference, 'Ned Flanders (user 2231, platform 5810)');
+      expect(
+        ned.listing,
+        'Ned Flanders (user 2231, platform 5810) | '
+        'school: Sint-Lodewijkscollege, Klas: 4A',
+      );
+      expect(ned.label, 'Ned Flanders');
+
+      final parent = _elsewhere(
+        'Ned Flanders',
+        2231,
+        userLt: 1,
+        coaccountName: 'Vader',
+      );
+      expect(
+        parent.listing,
+        'Ned Flanders (user 2231, co-account 1, platform 5810) | '
+        'school: Sint-Lodewijkscollege, co-account: Vader',
+      );
+
+      expect(
+        _user('Sven Lamber', 146).platform,
+        isNull,
+        reason: 'the own school: Smartschool leaves ssPlName empty',
+      );
+    });
+
     test('a group by name and group id, said to be a group', () {
       final group = _group('5GZ', 298, description: '5 Grieks-Ziekenzorg');
       expect(group.reference, '5GZ (group 298)');
@@ -86,6 +141,21 @@ void main() {
       final group = RecipientRequest.parse('5GZ(group 298)');
       expect(group.name, '5GZ');
       expect((group.group, group.id), (true, 298));
+      expect((user.platform, user.otherSchool), (null, false));
+    });
+
+    test('reads the platform of a person of another school', () {
+      final ned = RecipientRequest.parse(
+        'Ned Flanders (user 2231, platform 5810)',
+      );
+      expect(ned.name, 'Ned Flanders');
+      expect((ned.id, ned.coaccount, ned.platform), (2231, 0, 5810));
+      expect(ned.otherSchool, isTrue);
+
+      final parent = RecipientRequest.parse(
+        'Ned Flanders (user 2231, co-account 1, Platform 5810)',
+      );
+      expect((parent.id, parent.coaccount, parent.platform), (2231, 1, 5810));
     });
 
     test('reads anything else as a name', () {
@@ -150,6 +220,17 @@ void main() {
       expect(matches('Sven (user 146)', found), isEmpty);
       expect(matches('Svenja Lamberts (user 146)', [...found, svenja]), []);
       expect(matches('Sven Lamber (user 146, co-account 2)', found), isEmpty);
+    });
+
+    test('a reference with a platform names the person of that other school; '
+        'one without names the own school', () {
+      final ned = _elsewhere('Sven Lamber', 146);
+      final found = [sven, ned, otherSven];
+      expect(matches('Sven Lamber (user 146, platform 5810)', found), [ned]);
+      expect(matches('Sven Lamber (user 146)', found), [sven]);
+      expect(matches('Sven Lamber (user 146, platform 6120)', found), isEmpty);
+      expect(matches('Sven Lamber (user 330, platform 5810)', found), isEmpty);
+      expect(matches('Sven Lamber', found), [sven, ned, otherSven]);
     });
 
     test('a reference finds several only when the search found the same id '

@@ -8,7 +8,9 @@ import '../tools/server_tool.dart';
 ///
 /// Each has a [reference], the text that names exactly this recipient for
 /// `send_message`: its name with what tells it apart from others with that
-/// name, like `Sven Lamber (user 146)` or `5GZ (group 298)`.
+/// name, like `Sven Lamber (user 146)` or `5GZ (group 298)`, and for a
+/// person of another school of the school group also that school's
+/// platform, like `Ned Flanders (user 2231, platform 5810)`.
 sealed class Recipient {
   const Recipient();
 
@@ -24,6 +26,11 @@ sealed class Recipient {
 
   /// How a send's result names it: [name], with `(group)` for a group.
   String get label;
+
+  /// For a person of another school of the school group, the platform of
+  /// that school ([MessageSearchUser.ssId]); null for the own school, and
+  /// for a group.
+  int? get platform;
 
   /// [reference], with [details] after a `|` when there are any: a line of
   /// `search_recipients`, and how an unclear recipient's candidates are
@@ -50,13 +57,27 @@ final class UserRecipient extends Recipient {
   String get name => user.displayName.trim();
 
   @override
-  String get reference => user.userLt == 0
-      ? '$name (user ${user.userId})'
-      : '$name (user ${user.userId}, co-account ${user.userLt})';
+  String get reference {
+    final ids = [
+      'user ${user.userId}',
+      if (user.userLt != 0) 'co-account ${user.userLt}',
+      if (platform case final platform?) 'platform $platform',
+    ];
+    return '$name (${ids.join(', ')})';
+  }
+
+  /// A person of another school of the school group has their school's
+  /// platform as [MessageSearchUser.ssId], and its name as
+  /// [MessageSearchUser.platformName], which Smartschool leaves empty for
+  /// the own school (yvanvds/dartschool#238, seen live on 2026-11-09).
+  @override
+  int? get platform => user.platformName == null ? null : user.ssId;
 
   @override
   String? get details {
     final parts = [
+      if (platform != null)
+        'school: ${_text(user.schoolName) ?? user.platformName}',
       ?_text(user.className),
       if (_text(user.coaccountName) case final coaccount?)
         'co-account: $coaccount',
@@ -93,6 +114,9 @@ final class GroupRecipient extends Recipient {
   String get label => '$name (group)';
 
   @override
+  int? get platform => null;
+
+  @override
   Object get _key => ('group', group.groupId, group.ssId);
 }
 
@@ -105,11 +129,14 @@ String? _text(String? value) {
 /// form finds for [query], in Smartschool's order, each once:
 /// [searchRecipientsAll] with one query, which makes the requests of the
 /// library's [MessagesService.searchRecipientsForCompose] (one compose form
-/// and one search).
+/// and one search). [includeOtherSchools] is as for [searchRecipientsAll].
 Future<List<Recipient>> searchRecipients(
   MessagesService messages,
-  String query,
-) async => (await searchRecipientsAll(messages, [query]))[query]!;
+  String query, {
+  bool? includeOtherSchools,
+}) async => (await searchRecipientsAll(messages, [
+  query,
+], includeOtherSchools: includeOtherSchools))[query]!;
 
 /// For each of [queries], the users and then the groups that the search of
 /// Smartschool's compose form finds for it, in Smartschool's order, each
@@ -126,6 +153,19 @@ Future<List<Recipient>> searchRecipients(
 /// [SmartschoolComposeError]), for instance for an account that may not send
 /// messages.
 ///
+/// With [includeOtherSchools] `true`, the searches also find the people of
+/// the other schools of the school group, as the compose form's checkbox
+/// "Toon personen van andere scholen" does; `false` finds the own school
+/// only; `null` searches with the account's setting of that checkbox, as
+/// before (yvanvds/dartschool#238). The setting belongs to the account, so
+/// for `true` or `false` the library switches it only when it differs and
+/// sets it back after the searches. Its [SmartschoolComposeError]s then
+/// also say that Smartschool does not offer the option to the account, or
+/// that the setting could not be set back; the [ToolError] passes the
+/// library's message on, a workaround: the library does not tell them apart
+/// by type (yvanvds/dartschool#241, removal tracked in
+/// yvanvds/smartschool-mcp#213).
+///
 /// A search goes out only in the session of the compose form whose token it
 /// sends (yvanvds/dartschool#97): when Smartschool refuses the session for
 /// it, or the client logged in again since the form was loaded, the library
@@ -136,18 +176,37 @@ Future<List<Recipient>> searchRecipients(
 /// of another session.
 Future<Map<String, List<Recipient>>> searchRecipientsAll(
   MessagesService messages,
-  Iterable<String> queries,
-) async {
+  Iterable<String> queries, {
+  bool? includeOtherSchools,
+}) async {
   final Map<String, (List<MessageSearchUser>, List<MessageSearchGroup>)>
   results;
   try {
-    results = await messages.searchRecipientsForComposeAll(queries);
+    results = await messages.searchRecipientsForComposeAll(
+      queries,
+      includeOtherSchools: includeOtherSchools,
+    );
   } on SmartschoolComposeError catch (error) {
     log('recipient search: compose form refused: $error');
-    throw const ToolError(
-      'Smartschool did not open its compose form, so recipients cannot be '
-      'looked up, and nothing was sent. The account may not be allowed to '
-      'send messages; the details are in the server log.',
+    if (includeOtherSchools == null) {
+      throw const ToolError(
+        'Smartschool did not open its compose form, so recipients cannot be '
+        'looked up, and nothing was sent. The account may not be allowed to '
+        'send messages; the details are in the server log.',
+      );
+    }
+    // Without the library's own markers: the method's name, the type of the
+    // errors it names, and its issue numbers.
+    final message = error.message.replaceAll(
+      RegExp(
+        r'SmartschoolComposeError: |searchRecipientsForCompose: | \(#\d+\)',
+      ),
+      '',
+    );
+    throw ToolError(
+      'Smartschool could not look up recipients with its option "Toon '
+      'personen van andere scholen" ${includeOtherSchools ? 'on' : 'off'}, '
+      'and nothing was sent: $message',
     );
   }
   return {
@@ -187,7 +246,8 @@ bool sameRecipient(Recipient a, Recipient b) => a._key == b._key;
 /// A recipient as `send_message` takes it: a name, or a [Recipient.reference]
 /// (the name with its kind and id in brackets).
 final class RecipientRequest {
-  /// Reads [text]: `Name (user 146)`, `Name (user 146, co-account 1)` and
+  /// Reads [text]: `Name (user 146)`, `Name (user 146, co-account 1)`,
+  /// `Name (user 2231, platform 5810)` (a person of another school) and
   /// `Name (group 298)` name one recipient; anything else is a name.
   factory RecipientRequest.parse(String text) {
     final trimmed = text.trim();
@@ -199,6 +259,7 @@ final class RecipientRequest {
       group: match[2]!.toLowerCase() == 'group',
       id: int.parse(match[3]!),
       coaccount: int.parse(match[4] ?? '0'),
+      platform: match[5] == null ? null : int.parse(match[5]!),
     );
   }
 
@@ -208,10 +269,12 @@ final class RecipientRequest {
     this.group = false,
     this.id,
     this.coaccount = 0,
+    this.platform,
   });
 
   static final _reference = RegExp(
-    r'^(.*\S)\s*\((user|group)\s+(\d+)(?:\s*,\s*co-account\s+(\d+))?\)$',
+    r'^(.*\S)\s*\((user|group)\s+(\d+)(?:\s*,\s*co-account\s+(\d+))?'
+    r'(?:\s*,\s*platform\s+(\d+))?\)$',
     caseSensitive: false,
   );
 
@@ -230,9 +293,18 @@ final class RecipientRequest {
   /// The co-account number given with a user id (0: none, the main account).
   final int coaccount;
 
+  /// The platform given with a user id: that of a person of another school
+  /// of the school group ([Recipient.platform]). Null for the own school.
+  final int? platform;
+
+  /// Whether it names a person of another school, whom only a search with
+  /// the people of the other schools finds.
+  bool get otherSchool => platform != null;
+
   /// The recipients among [found] (what the search for [name] found) that
   /// this request names: those with exactly [name] (ignoring case and extra
-  /// spaces) and, when it gives one, the kind and id in brackets.
+  /// spaces) and, when it gives one, the kind and id in brackets, and the
+  /// platform: a reference without one names someone of the own school.
   List<Recipient> matches(List<Recipient> found) => [
     for (final recipient in found)
       if (normalName(recipient.name) == normalName(name) && _sameId(recipient))
@@ -243,8 +315,12 @@ final class RecipientRequest {
     if (id == null) return true;
     return switch (recipient) {
       UserRecipient(:final user) =>
-        !group && user.userId == id && user.userLt == coaccount,
-      GroupRecipient(group: final g) => group && g.groupId == id,
+        !group &&
+            user.userId == id &&
+            user.userLt == coaccount &&
+            recipient.platform == platform,
+      GroupRecipient(group: final g) =>
+        group && g.groupId == id && platform == null,
     };
   }
 }
