@@ -89,19 +89,37 @@ class FakeFolder {
 /// [FakeMailbox.directory].
 class FakeRecipient {
   /// A user; with the user id [FakeMailbox.userId] gives [name], unless
-  /// [id] is given (for a second user with the same name).
-  const FakeRecipient.user(this.name, {this.id, this.className})
-    : isGroup = false,
-      description = null;
+  /// [id] is given (for a second user with the same name). With a [school],
+  /// a person of another school of the school group, on its own [platform],
+  /// whom the search finds only with the option "Toon personen van andere
+  /// scholen" on ([FakeMailbox.otherSchools]).
+  const FakeRecipient.user(
+    this.name, {
+    this.id,
+    this.className,
+    this.school,
+    this.platform,
+  }) : isGroup = false,
+       description = null,
+       assert((school == null) == (platform == null));
 
   /// A group, such as a class.
   const FakeRecipient.group(this.name, {required int this.id, this.description})
     : isGroup = true,
-      className = null;
+      className = null,
+      school = null,
+      platform = null;
 
   final String name;
   final int? id;
   final bool isGroup;
+
+  /// For a person of another school: the name of that school, which the
+  /// search gives as `schoolname` and `ssPlName`.
+  final String? school;
+
+  /// For a person of another school: the platform (`ssID`) of that school.
+  final int? platform;
 
   /// A user's class, as Smartschool shows it (`Klas: 5GZ`).
   final String? className;
@@ -315,6 +333,24 @@ class FakeMailbox {
   /// does not have (yvanvds/dartschool#42).
   final Set<String> notRemovable = {};
 
+  /// The account's setting "Toon personen van andere scholen", the checkbox
+  /// under the search results of the compose form: whether the search also
+  /// finds the people of other schools of the [directory]. Each answer to a
+  /// search says it (`<dosgrsearch>`), and the checkbox switches it
+  /// (`changesgr`, recorded in [actions] as `switch other schools val=1`).
+  /// It belongs to the account, not to a session (yvanvds/dartschool#238).
+  bool otherSchools = false;
+
+  /// Whether Smartschool offers that option to the account: each answer to
+  /// a search says it (`<sgrselect>`, `1` or `0`).
+  bool otherSchoolsOffered = true;
+
+  /// Whether a switch of [otherSchools] is answered as Smartschool does,
+  /// with an empty `200`; without it, the switch changes nothing and is
+  /// answered with an error page (what Smartschool answers then has not
+  /// been seen).
+  bool answerSwitches = true;
+
   /// Whether compose forms carry their `uniqueUsc`. Without it the library
   /// cannot search recipients on a form or send it, which it says is what
   /// an account that may not send messages gets (not seen live).
@@ -468,6 +504,11 @@ class FakeMailbox {
         ),
         'text/xml',
       );
+    }
+    if (options.method == 'GET' &&
+        query['file'] == 'searchUsers' &&
+        query['function'] == 'changesgr') {
+      return _response(_switchOtherSchools(query['val']), 'text/html');
     }
     if (options.method == 'POST' &&
         query['file'] == 'searchUsers' &&
@@ -978,7 +1019,9 @@ ${spans(bcc, '3')}
       ..removeWhere((word) => word.isEmpty);
     final found = [
       for (final recipient in directory)
-        if (words.every(recipient.name.toLowerCase().contains)) recipient,
+        if (words.every(recipient.name.toLowerCase().contains) &&
+            (otherSchools || recipient.school == null))
+          recipient,
     ];
     String element(String tag, String? value) =>
         value == null ? '<$tag />' : '<$tag>${_escape(value)}</$tag>';
@@ -987,9 +1030,11 @@ ${spans(bcc, '3')}
         '<user><userID>${_idOf(user)}</userID>'
             '<text>${_escape(user.name)}</text>'
             '<value>${_escape(user.name)}</value><selectable>on</selectable>'
-            '<ssID>$platformId</ssID><ssPlName /><userLT>0</userLT>'
+            '<ssID>${user.platform ?? platformId}</ssID>'
+            '${element('ssPlName', user.school)}<userLT>0</userLT>'
             '<coaccountname />${element('classname', user.className)}'
-            '<schoolname>Sint-Jozefscollege</schoolname>'
+            '<schoolname>${_escape(user.school ?? 'Sint-Jozefscollege')}'
+            '</schoolname>'
             '<picture>https://userpicture20.smartschool.be/User/x</picture>'
             '</user>',
     ];
@@ -1013,10 +1058,23 @@ ${spans(bcc, '3')}
 ${list('groups', groups)}
 ${list('users', users)}
 <sgrdetails>
-<sgrselect>1</sgrselect>
-<dosgrsearch>0</dosgrsearch>
+<sgrselect>${otherSchoolsOffered ? 1 : 0}</sgrselect>
+<dosgrsearch>${otherSchools ? 1 : 0}</dosgrsearch>
 </sgrdetails>
 </results>''';
+  }
+
+  /// Switches [otherSchools] to [value] (`1` on, `0` off), as the checkbox
+  /// "Toon personen van andere scholen" does, answered with an empty `200`;
+  /// or, without [answerSwitches], leaves it and answers with an error page.
+  String _switchOtherSchools(String? value) {
+    if (value != '0' && value != '1') {
+      throw UnsupportedError('fake mailbox: switch other schools to $value');
+    }
+    actions.add('switch other schools val=$value');
+    if (!answerSwitches) return '<html><body>Fout</body></html>';
+    otherSchools = value == '1';
+    return '';
   }
 
   /// Adds a recipient, a user or a group, to the compose form named by
@@ -1026,9 +1084,12 @@ ${list('users', users)}
     final form = _forms[usc];
     final id = int.parse(fields['id']!);
     final typeId = fields['typeId'];
+    final platform = typeId == 'users'
+        ? _directoryUser(id)?.platform ?? platformId
+        : platformId;
     if (form == null ||
         (typeId != 'users' && typeId != 'groups') ||
-        fields['ssid'] != '$platformId') {
+        fields['ssid'] != '$platform') {
       throw UnsupportedError('fake mailbox: cannot add user $id to $fields');
     }
     final group = typeId == 'groups';

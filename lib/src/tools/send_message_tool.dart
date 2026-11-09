@@ -49,10 +49,12 @@ ServerTool sendMessageTool(
         'name, or none, ask the user who they mean: never choose for them. A '
         'message to a group goes to all its members. Pass each recipient as '
         'search_recipients lists it before the "|", like "Sven Lamber (user '
-        '146)" or "5GZ (group 298)"; a name alone is enough when exactly one '
-        'user or group has that name. The tool looks every recipient up '
-        'again, and sends nothing when one does not name exactly one user or '
-        'group: it then lists who Smartschool finds. Write body as plain '
+        '146)" or "5GZ (group 298)", and a person of another school with '
+        'the platform, like "Ned Flanders (user 2231, platform 5810)"; a '
+        'name alone is enough when exactly one user or group has that name. '
+        'The tool looks every recipient up again, and sends nothing when one '
+        'does not name exactly one user or group: it then lists who '
+        'Smartschool finds. Write body as plain '
         'text or simple Markdown: a blank line between paragraphs, lines '
         'starting with "- " or "1. " for lists, **bold**, *italic* and '
         '[text](https://...) links. HTML in body is not interpreted: it is '
@@ -274,7 +276,11 @@ Future<String> _send(
 /// The recipient each of [requests] names, by field, each once.
 ///
 /// Every name is searched once (in its first spelling, ignoring case and
-/// extra spaces), all on one compose form ([searchRecipientsAll]).
+/// extra spaces), all on one compose form ([searchRecipientsAll]). When a
+/// request names a person of another school ([RecipientRequest.otherSchool]),
+/// all are searched with the people of the other schools, who the search
+/// finds only then (yvanvds/dartschool#238); otherwise with the account's
+/// setting, as before.
 ///
 /// Throws a [ToolError] that lists every request that names no user or
 /// group, or several, with who the search does find, or that names a
@@ -288,7 +294,14 @@ Future<Map<_Field, List<Recipient>>> _lookUp(
   for (final request in requests.values.expand((requests) => requests)) {
     names.putIfAbsent(normalName(request.name), () => request.name);
   }
-  final searches = await searchRecipientsAll(messages, names.values);
+  final otherSchools = requests.values.any(
+    (requests) => requests.any((request) => request.otherSchool),
+  );
+  final searches = await searchRecipientsAll(
+    messages,
+    names.values,
+    includeOtherSchools: otherSchools ? true : null,
+  );
   final unclear = <String>[];
   final found = <_Field, List<Recipient>>{};
   for (final MapEntry(key: field, value: fieldRequests) in requests.entries) {

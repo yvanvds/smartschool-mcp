@@ -93,7 +93,8 @@ text, the recipients and every file with its size first. A reply is
 
 Finds the users and groups (such as a class) a new message can go to, by
 name, with what tells namesakes apart: a class, a co-account, a group's
-description.
+description. With `include_other_schools` it also finds the people of the
+other schools of the school group, each with their school.
 
 ### `send_message`
 
@@ -101,7 +102,8 @@ Sends a new message to users and groups, in To, CC and BCC, optionally with
 1 to 10 files from this PC. Each recipient must name exactly one user or
 group: a name that no one has, or that several have, stops the send before
 anything is sent, with who the search finds, for you to choose. The tool
-never picks one. Asks for approval; Claude looks up every recipient and
+never picks one. A person of another school of the school group can be a
+recipient too, once `search_recipients` found them. Asks for approval; Claude looks up every recipient and
 shows you the recipients, the subject, the text and every file with its size
 first. A message is [never sent twice](../../README.md#changes-and-approval).
 
@@ -197,6 +199,30 @@ It searches with the search of Smartschool's compose form (the library's
 apart. It changes nothing in Smartschool: the compose form it searches on is
 left unused.
 
+`include_other_schools` is the checkbox "Toon personen van andere scholen"
+under the search results of Smartschool's compose form (flutter_smartschool
+0.4.3, yvanvds/dartschool#238). `true` also finds the people of the other
+schools of the school group, `false` the own school only. Left out, the
+search goes as the checkbox is set for the account, which is off unless the
+user turned it on in Smartschool. The checkbox is a setting of the account,
+shared with the web interface and every session. The library therefore
+switches it only when it differs from what was asked, and sets it back after
+the search, also when the search fails.
+
+A person of another school is on that school's own platform. The search
+names it (`ssPlName`), and leaves that name empty for the own school. Such a
+person is listed with the platform in the brackets and their school first
+after the `|`, like `Ned Flanders (user 2231, platform 5810) | school:
+Sint-Lodewijkscollege`. The same user id can belong to someone else at
+another school, so the platform belongs in the reference.
+
+When Smartschool does not offer the option to the account (a school without
+a school group, or an account without the right), the result is an error
+and nothing is switched. When the library cannot set the checkbox back, the
+error says so, and the user has to set it back in Smartschool. The error
+passes on the library's message for both. The library does not tell these
+cases apart by type yet (yvanvds/dartschool#241, #213).
+
 ### How `send_message` works
 
 The text is plain text or simple Markdown, as for `reply_to_message`.
@@ -206,7 +232,12 @@ first; the tool is marked destructive, so Claude Desktop asks for approval
 every time. Each recipient is a name or a reference as `search_recipients`
 lists it; the tool looks each one up again and sends only when each names
 exactly one user or group (the name exactly, ignoring case and extra spaces,
-and the kind and id of a reference). A name that no one has exactly, or that
+and the kind and id of a reference). A reference with a platform names a
+person of another school. When there is one, every recipient is looked up
+with `include_other_schools` on, since only then does the search find that
+person. A reference without a platform names someone of the own school. A
+name alone can then also find a namesake at another school, and stops the
+send with both listed. A name that no one has exactly, or that
 several users or groups have (also a user and a group), stops the send
 before anything is sent, with who the search finds, for the user to choose:
 the tool never picks one. It sends once, as `reply_to_message` does
