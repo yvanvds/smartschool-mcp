@@ -216,12 +216,22 @@ after the `|`, like `Ned Flanders (user 2231, platform 5810) | school:
 Sint-Lodewijkscollege`. The same user id can belong to someone else at
 another school, so the platform belongs in the reference.
 
-When Smartschool does not offer the option to the account (a school without
-a school group, or an account without the right), the result is an error
-and nothing is switched. When the library cannot set the checkbox back, the
-error says so, and the user has to set it back in Smartschool. The error
-passes on the library's message for both. The library does not tell these
-cases apart by type yet (yvanvds/dartschool#241, #213).
+The library tells two refusals apart by type (flutter_smartschool 0.4.4,
+yvanvds/dartschool#241), and the error words each in its own way. When
+Smartschool does not offer the option to the account
+(`SmartschoolOtherSchoolsNotOfferedError`: a school without a school group,
+or an account without the right), the error says so, and that nothing was
+switched. When the library cannot set the checkbox back
+(`SmartschoolOtherSchoolsNotRestoredError`), the account may be left
+switched, so the error starts with what the user has to do: turn the
+checkbox back on or off under the search results of a new message in
+Smartschool. It then says what the setting may be left at (its `leftOn`)
+and what the search of a new message finds until then. For the other
+refusals, which leave the setting as it was found (an answer that does not
+say whether the option is on, a switch Smartschool does not answer as it
+does, a setting switched elsewhere meanwhile), the error passes on the
+library's message. `send_message` looks recipients up with the option on
+when one of them is a person of another school, and gives the same errors.
 
 ### How `send_message` works
 

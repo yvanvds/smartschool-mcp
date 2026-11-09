@@ -64,6 +64,26 @@ const _ned = 'Ned Flanders (user 2231, platform 5810)';
 const _otherLies =
     'Lies Maes (user 2010, platform 5810) | school: $_otherSchool';
 
+/// What the tools say when Smartschool does not offer the people of other
+/// schools to the account.
+const _notOffered =
+    'Smartschool does not offer the people of other schools to this account '
+    '(its option "Toon personen van andere scholen"): the school has no '
+    'school group, or the account does not have the right. Nothing was '
+    'switched in Smartschool, and nothing was sent.';
+
+/// What the tools say when the option "Toon personen van andere scholen",
+/// turned on for the search, cannot be turned back off: the user has to.
+const _leftOn =
+    'Tell the user to turn the checkbox "Toon personen van andere scholen" '
+    'back off in Smartschool: it is under the search results when a name is '
+    'looked up in a new message. The option was turned on for this search '
+    'and could not be turned back off, so the account may be left with it '
+    'on, in Smartschool\'s web interface and in every session: until it is '
+    'off again, the search of a new message also finds the people of the '
+    'other schools of the school group. The recipients were not looked up, '
+    'and nothing was sent.';
+
 void main() {
   late FakeSmartschool server;
   late FakeMailbox mailbox;
@@ -421,9 +441,61 @@ void main() {
       expect(searchesAndSwitches(), ['search val=Maes', 'search val=Maes']);
     });
 
-    test('with include_other_schools true, says so when Smartschool does not '
-        'offer the option to the account, and switches nothing', () async {
+    test('with include_other_schools true, says that Smartschool does not '
+        'offer the people of other schools to the account, and switches '
+        'nothing', () async {
       mailbox.otherSchoolsOffered = false;
+
+      expect(
+        await searchError({'query': 'Maes', 'include_other_schools': true}),
+        _notOffered,
+      );
+      expect(searchesAndSwitches(), ['search val=Maes']);
+      expect(mailbox.otherSchools, isFalse);
+    });
+
+    test('when the option cannot be turned back off, first tells the user to '
+        'turn it off in Smartschool, and says it may be left on', () async {
+      mailbox.answerSwitches = false;
+
+      expect(
+        await searchError({'query': 'Maes', 'include_other_schools': true}),
+        _leftOn,
+      );
+      expect(searchesAndSwitches(), [
+        'search val=Maes',
+        'switch other schools val=1',
+        'switch other schools val=0',
+      ]);
+    });
+
+    test('when the option cannot be turned back on, first tells the user to '
+        'turn it on in Smartschool, and says it may be left off', () async {
+      mailbox
+        ..otherSchools = true
+        ..answerSwitches = false;
+
+      expect(
+        await searchError({'query': 'Maes', 'include_other_schools': false}),
+        'Tell the user to turn the checkbox "Toon personen van andere '
+        'scholen" back on in Smartschool: it is under the search results '
+        'when a name is looked up in a new message. The option was turned '
+        'off for this search and could not be turned back on, so the account '
+        'may be left with it off, in Smartschool\'s web interface and in '
+        'every session: until it is on again, the search of a new message '
+        'finds the people of the own school only. The recipients were not '
+        'looked up, and nothing was sent.',
+      );
+      expect(searchesAndSwitches(), [
+        'search val=Maes',
+        'switch other schools val=0',
+        'switch other schools val=1',
+      ]);
+    });
+
+    test('with include_other_schools, passes on the library\'s message for '
+        'another refusal, which leaves the option as it was', () async {
+      mailbox.otherSchoolsInAnswers = false;
 
       final text = await searchError({
         'query': 'Maes',
@@ -434,38 +506,13 @@ void main() {
         text,
         startsWith(
           'Smartschool could not look up recipients with its option "Toon '
-          'personen van andere scholen" on, and nothing was sent: Smartschool '
-          'does not offer the option "Toon personen van andere scholen" to '
-          'this account',
+          'personen van andere scholen" on, and nothing was sent: ',
         ),
       );
-      expect(text, isNot(contains('#238')));
+      expect(text, contains('does not say whether its option'));
+      expect(text, contains('Nothing was switched.'));
       expect(searchesAndSwitches(), ['search val=Maes']);
     });
-
-    test(
-      'says that the option may be left on when it cannot be set back',
-      () async {
-        mailbox.answerSwitches = false;
-
-        final text = await searchError({
-          'query': 'Maes',
-          'include_other_schools': true,
-        });
-
-        expect(
-          text,
-          startsWith(
-            'Smartschool could not look up recipients with its option "Toon '
-            'personen van andere scholen" on, and nothing was sent: the option '
-            '"Toon personen van andere scholen" could not be set back off',
-          ),
-        );
-        expect(text, contains('set it back with the checkbox'));
-        expect(text, isNot(contains('SmartschoolComposeError')));
-        expect(text, isNot(contains('#238')));
-      },
-    );
 
     test('says so when Smartschool does not open its compose form', () async {
       mailbox.composeTokens = false;
@@ -900,13 +947,30 @@ void main() {
           'subject': 'Uitstap',
           'body': 'Hallo',
         }),
-        startsWith(
-          'Smartschool could not look up recipients with its option "Toon '
-          'personen van andere scholen" on, and nothing was sent: Smartschool '
-          'does not offer the option',
-        ),
+        _notOffered,
       );
       expect(searchesAndSwitches(), ['search val=Ned Flanders']);
+      expect(mailbox.submits, 0);
+    });
+
+    test('a recipient of another school, and the option "Toon personen van '
+        'andere scholen" cannot be turned back off after the lookup: the '
+        'user is told to turn it off', () async {
+      mailbox.answerSwitches = false;
+
+      expect(
+        await error({
+          'to': [_ned],
+          'subject': 'Uitstap',
+          'body': 'Hallo',
+        }),
+        _leftOn,
+      );
+      expect(searchesAndSwitches(), [
+        'search val=Ned Flanders',
+        'switch other schools val=1',
+        'switch other schools val=0',
+      ]);
       expect(mailbox.submits, 0);
     });
 
