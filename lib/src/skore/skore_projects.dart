@@ -14,14 +14,15 @@ import 'skore_gradebook_format.dart';
 //
 // A project gradebook has project periods instead of evaluation periods
 // (`getProjectPeriods`, Skore's `init` with the page `1`, which lists the
-// evaluation periods too: `scope` 1, against 2 for a project period, which
-// the library does not read yet, yvanvds/dartschool#236); a project period
-// has templates (`getProjectTemplates`), each with its rating scale, its
-// learning goals ("rubrieken", `getLearningGoals`) and its projects
-// (`getProjects`). A pupil's rating of a learning goal in a project is a
-// level of the template's scale (`getProjectRatings`). The library reads
-// and writes them as Skore's project sheet (`/Gradebook`) does, and never
-// makes, publishes or removes a project: that is done in Smartschool.
+// evaluation periods too: `scope` 1, against 2 for a project period, by
+// which the library gives only the project periods, flutter_smartschool
+// 0.4.5, yvanvds/dartschool#236); a project period has templates
+// (`getProjectTemplates`), each with its rating scale, its learning goals
+// ("rubrieken", `getLearningGoals`) and its projects (`getProjects`). A
+// pupil's rating of a learning goal in a project is a level of the
+// template's scale (`getProjectRatings`). The library reads and writes them
+// as Skore's project sheet (`/Gradebook`) does, and never makes, publishes
+// or removes a project: that is done in Smartschool.
 
 /// A project of a gradebook found by its id ([findSkoreProject]): its
 /// project period, its template (with the scale) and the project as Skore
@@ -35,11 +36,10 @@ typedef FoundSkoreProject = ({
 /// The project periods of [gradebook] ([SkoreGradebookService.
 /// getProjectPeriods]), or only the one with [periodId].
 ///
-/// Skore's answer lists the evaluation periods too, and the library does
-/// not tell them apart (yvanvds/dartschool#236): only the periods its
-/// `init` marks as project periods are kept
-/// ([SkoreGradebooks.readingProjectPeriodIds], a workaround, #207). When
-/// that mark cannot be read, the library's list is kept as it is.
+/// Skore's answer lists the evaluation periods too; the library keeps only
+/// the periods Skore marks as project periods (`scope` 2,
+/// [SkoreGradebookPeriod.isProject], yvanvds/dartschool#236), so a normal
+/// gradebook has none.
 ///
 /// Throws a [ToolError] for a gradebook without project periods (it is not a
 /// project gradebook: its evaluations are read with list_skore_evaluations),
@@ -49,14 +49,7 @@ Future<List<SkoreGradebookPeriod>> readSkoreProjectPeriods(
   SkoreGradebook gradebook, {
   int? periodId,
 }) async {
-  final (listed, projectPeriodIds) = await gradebooks.readingProjectPeriodIds(
-    gradebook.gradebookId,
-    () => gradebooks.getProjectPeriods(gradebook),
-  );
-  final periods = [
-    for (final period in listed)
-      if (projectPeriodIds?.contains(period.id) ?? true) period,
-  ];
+  final periods = await gradebooks.getProjectPeriods(gradebook);
   final name = formatSkoreGradebookName(gradebook);
   if (periods.isEmpty) {
     throw ToolError(

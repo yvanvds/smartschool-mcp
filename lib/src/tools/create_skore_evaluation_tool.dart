@@ -155,53 +155,44 @@ Future<CallToolResult> _create(
   var where = 'gradebook id $gradebookId';
   var target = periodId;
   try {
-    final (
-      gradebook,
-      period,
-      created,
-    ) = await withSkoreGradebookWrite(session, reread: _reread, (
-      gradebooks,
-    ) async {
-      final found = await years.findInCurrentYear(gradebooks, gradebookId);
-      _checkOwn(found.gradebook);
-      final (:sheet, :projectPeriods) = await readSkoreEvaluationSheet(
-        gradebooks,
-        found.gradebook,
-      );
-      final period = skoreGradebookPeriod(
-        sheet,
-        periodId,
-        projectPeriods: projectPeriods,
-      );
-      if (period == null) {
-        throw ToolError(
-          'The ${formatSkoreGradebookName(sheet.gradebook)} has '
-          '${formatSkoreMissingPeriods(sheet, projectPeriods: projectPeriods)}, '
-          'so no evaluation can be created in it.',
+    final (gradebook, period, created) = await withSkoreGradebookWrite(
+      session,
+      reread: _reread,
+      (gradebooks) async {
+        final found = await years.findInCurrentYear(gradebooks, gradebookId);
+        _checkOwn(found.gradebook);
+        final sheet = await gradebooks.getGradebook(found.gradebook);
+        final period = skoreGradebookPeriod(sheet, periodId);
+        if (period == null) {
+          throw ToolError(
+            'The ${formatSkoreGradebookName(sheet.gradebook)} has '
+            '${formatSkoreMissingPeriods(sheet)}, so no evaluation can be '
+            'created in it.',
+          );
+        }
+        where =
+            'period ${formatSkorePeriodName(period)} of the '
+            '${formatSkoreGradebookName(sheet.gradebook)}';
+        target = period.id;
+        final componentId = component == null
+            ? null
+            : _component(
+                await gradebooks.getComponents(sheet.gradebook, period.id),
+                component,
+                where,
+              ).id;
+        final created = await gradebooks.createEvaluation(
+          sheet.gradebook,
+          period.id,
+          title: title,
+          shortName: shortName,
+          date: date,
+          max: max,
+          componentId: componentId,
         );
-      }
-      where =
-          'period ${formatSkorePeriodName(period)} of the '
-          '${formatSkoreGradebookName(sheet.gradebook)}';
-      target = period.id;
-      final componentId = component == null
-          ? null
-          : _component(
-              await gradebooks.getComponents(sheet.gradebook, period.id),
-              component,
-              where,
-            ).id;
-      final created = await gradebooks.createEvaluation(
-        sheet.gradebook,
-        period.id,
-        title: title,
-        shortName: shortName,
-        date: date,
-        max: max,
-        componentId: componentId,
-      );
-      return (sheet.gradebook, period, created);
-    });
+        return (sheet.gradebook, period, created);
+      },
+    );
     return CallToolResult(
       content: [
         TextContent(

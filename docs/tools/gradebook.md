@@ -169,8 +169,9 @@ in a project (see [Project gradebooks](#project-gradebooks)).
 A gradebook's project periods are never taken for evaluation periods
 (#208): every tool that reads a gradebook's periods (`read_skore_gradebook`,
 `list_skore_evaluations`, `read_skore_feedback`, `create_skore_evaluation`,
-`save_skore_grades`, `save_skore_feedback`, through `readSkoreEvaluationSheet`
-in `lib/src/skore/skore_gradebook_access.dart`) splits them off, as
+`save_skore_grades`, `save_skore_feedback`) takes its evaluation periods
+from the library's `SkoreGradebookSheet.periods` and its project periods
+from `SkoreGradebookSheet.projectPeriods`, as
 [read_skore_gradebook](#how-read_skore_gradebook-works) tells them apart,
 without an extra request. So a project gradebook has no evaluation periods
 for them: they say so and point to `list_skore_projects`, and a project
@@ -230,21 +231,14 @@ periods together, in `periods`, whatever its page, and tells them apart by
 the period's `scope`: `1` an evaluation period, `2` a project period (seen
 live, 2026-11-02, #205: the project gradebook "Digitale vaardigheden" of
 5WW1 gave its project period with `scope` 2; `categoryMode` is 1 in both).
-flutter_smartschool 0.4.2 does not read `scope`, so its `getGradebook`
-gives a project period as an evaluation period (yvanvds/dartschool#236).
-As a workaround (removal tracked in #207), the tool reads `scope` from the
-raw answer of the `init` the library sends anyway, with a Dio interceptor
-on the client for the length of the read
-(`lib/src/skore/skore_period_scopes.dart`,
-`SkoreGradebooks.readingProjectPeriodIds`, used by `readSkoreEvaluationSheet`,
-which the evaluation tools share): no gradebook costs an extra request.
-flutter_smartschool 0.4.5 reads `scope` itself and gives the project periods
-apart (`SkoreGradebookSheet.projectPeriods`), which
-`readSkoreEvaluationSheet` then takes as they are (#220); a project
-gradebook no longer has an active period, so the library no longer sends
-`getGradebookContext` for it.
-When that answer cannot be read, the periods are shown as the library gives
-them.
+flutter_smartschool reads `scope` since 0.4.5 (yvanvds/dartschool#236): its
+`getGradebook` gives the evaluation periods as `SkoreGradebookSheet.periods`
+and the project periods apart, as `SkoreGradebookSheet.projectPeriods`
+(`SkoreGradebookPeriod.isProject`), from the same `init`, so no gradebook
+costs an extra request; the tools take them as they are (#207, which
+removed the server's own reading of `scope`, the workaround of #205). A
+project gradebook has no active period, so the library sends no
+`getGradebookContext` for it, and it is not `writable`.
 
 A gradebook with project periods says that it is a project gradebook, that
 its pupils are rated per learning goal in projects, which tools read and
@@ -608,9 +602,9 @@ or removes a project: the user does that in Smartschool. The helpers are in
 `lib/src/skore/skore_projects.dart`: `readSkoreProjectPeriods` (the project
 periods, or the one of a `period_id`; a gradebook without any is an error
 that says it is not a project gradebook; the library's `getProjectPeriods`
-also lists the evaluation periods, so only the periods with Skore's
-project `scope` are kept, the workaround of
-[How `read_skore_gradebook` works](#how-read_skore_gradebook-works), #207), `findSkoreProject` (a
+gives only the periods with Skore's project `scope`, as
+[How `read_skore_gradebook` works](#how-read_skore_gradebook-works) says,
+so it is empty for a normal gradebook), `findSkoreProject` (a
 `project_id`, period by period and template by template, with
 `getProjectTemplates` and `getProjects`), `skoreProjectLevel` (a level by
 name or symbol, ignoring case and accents; one not on the scale is an error
