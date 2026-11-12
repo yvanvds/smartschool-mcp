@@ -1,6 +1,6 @@
 # smartschool-mcp
 
-Local MCP server in Dart that gives Claude Desktop access to Smartschool (messages, Intradesk). It is built on the `flutter_smartschool` library from [yvanvds/dartschool](https://github.com/yvanvds/dartschool), which is maintained by the same author.
+Local MCP server in Dart that gives Claude Desktop and the ChatGPT app (Codex) access to Smartschool; the README's "Tool areas" table lists what it covers. It is built on the `flutter_smartschool` library from [yvanvds/dartschool](https://github.com/yvanvds/dartschool), which is maintained by the same author.
 
 ## Problems in the library: file an issue in dartschool
 
